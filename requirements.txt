@@ -1,0 +1,13 @@
+tensorflow>=2.15.0
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn
+jupyterlab
+mlflow
+shap
+tqdm
+keras
+scipy
+Pillow

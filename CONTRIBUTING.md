@@ -12,7 +12,7 @@
 3. Add tests for new features
 ```
 
-**LICENSE** (if you haven't already):
+**LICENSE**:
 ```
 MIT License
 

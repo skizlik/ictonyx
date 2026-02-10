@@ -485,7 +485,8 @@ def plot_comparison_forest(
     fig, ax = plt.subplots(figsize=(8, len(models) * 0.8 + 2))
 
     y_pos = np.arange(len(models))
-    ax.errorbar(diff_means, y_pos, xerr=cis, fmt='o', color='black', ecolor=colors, capsize=5)
+    for i, (dm, yp, ci, col) in enumerate(zip(diff_means, y_pos, cis, colors)):
+        ax.errorbar(dm, yp, xerr=ci, fmt='o', color='black', ecolor=col, capsize=5)
 
     ax.axvline(0, color=settings.THEME['baseline'], linestyle='--')
 

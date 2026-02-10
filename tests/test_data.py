@@ -4,6 +4,7 @@ import tempfile
 import pandas as pd
 import numpy as np
 import os
+from ictonyx.core import TENSORFLOW_AVAILABLE
 from ictonyx.data import (
     TabularDataHandler,
     ImageDataHandler,
@@ -139,6 +140,7 @@ class TestAutoResolveHandler:
             if os.path.exists(path):
                 os.remove(path)
 
+    @pytest.mark.skipif(not TENSORFLOW_AVAILABLE, reason="TensorFlow not available")
     def test_resolve_image_dir(self):
         """Test resolving directory to ImageDataHandler."""
         with tempfile.TemporaryDirectory() as tmp_dir:

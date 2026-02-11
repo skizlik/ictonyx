@@ -2,197 +2,169 @@
 
 **Iteration Comparison Testing Over N-runs: Yield eXamination**
 
-*Stop comparing lucky runs.*
+A Python framework for assessing machine learning model variability and performing rigorous statistical comparisons.
 
 ![CI/CD](https://github.com/skizlik/ictonyx/actions/workflows/test.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Ictonyx is a Python framework for rigorous statistical comparison of machine learning models. It automates multi-run experiments, performs proper hypothesis testing, and reports effect sizes—so you know whether Model A is *actually* better than Model B, or whether you just got lucky.
-
----
-
 ## The Problem
 
-You train Model A. Accuracy: 94.2%. You train Model B. Accuracy: 93.8%. Model A wins.
+Machine learning models are typically trained once on a given data set. We use a variety of metrics to assess and compare these models - but generally, on one training run.
 
-**Retrain a week later:** Model A: 93.1%, Model B: 94.5%.
+But training a model involves stochastic factors: random initialization, data shuffling, dropout. Training the same model on the same data will often produce different predicted values and different assessment metrics. Our model parameters aren't constants; they are random variables, and we should treat them that way.
 
-Machine learning training is stochastic. Random initialization, data shuffling, dropout—every run differs. Comparing single runs is like flipping a coin once and calling it biased.
-
-## The Solution
-
-```python
-import ictonyx
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import DecisionTreeClassifier
-
-comparison = ictonyx.compare_models(
-    models=[RandomForestClassifier, DecisionTreeClassifier],
-    data="dataset.csv",
-    target_column="target",
-    runs=10
-)
-
-print(comparison['overall_test'].conclusion)
-# "Mann-Whitney U test indicates a statistically significant difference
-#  (p=0.003). Effect size: d=1.31 (large)."
-```
-
----
+Ictonyx runs your model multiple times and provides complete distributions for your model metrics, along with measures of center and dispersion. This allows inferences to be made about the models we're training.
 
 ## Installation
 
 ```bash
-# From GitHub
-pip install git+https://github.com/skizlik/ictonyx.git
-
-# With optional dependencies (TensorFlow, MLflow, SHAP)
-pip install "ictonyx[all] @ git+https://github.com/skizlik/ictonyx.git"
-
-# Development
-git clone https://github.com/skizlik/ictonyx.git
-cd ictonyx
-pip install -e ".[all]"
+pip install ictonyx
 ```
 
----
-
-## Quick Start
-
-### Variability Study
+## Quick Start: sklearn
 
 ```python
-import ictonyx
+import ictonyx as ix
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import load_iris
+import pandas as pd
 
-results = ictonyx.variability_study(
+iris = load_iris()
+df = pd.DataFrame(iris.data, columns=iris.feature_names)
+df['target'] = iris.target
+
+results = ix.variability_study(
     model=RandomForestClassifier,
-    data="dataset.csv",
-    target_column="target",
-    runs=10
+    data=df,
+    target_column='target',
+    runs=20
 )
 
 print(results.summarize())
-# Mean: 0.942, Std: 0.018, Min: 0.910, Max: 0.971
-
-ictonyx.plot_variability_summary(results.all_runs_metrics, results.final_val_accuracies)
 ```
 
-### Model Comparison
+Output:
+```
+Study Summary:
+  Successful runs: 20/20
+  Val accuracy: 0.8800 (SD = 0.0267)
+```
+
+## Comparing Two Models
 
 ```python
-comparison = ictonyx.compare_models(
-    models=[ModelA, ModelB, ModelC],
-    data="dataset.csv",
-    target_column="target",
-    runs=10
+import ictonyx as ix
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.datasets import load_iris
+import pandas as pd
+
+iris = load_iris()
+df = pd.DataFrame(iris.data, columns=iris.feature_names)
+df['target'] = iris.target
+
+comparison = ix.compare_models(
+    models=[RandomForestClassifier, GradientBoostingClassifier],
+    data=df,
+    target_column='target',
+    runs=20
 )
 
-ictonyx.plot_comparison_boxplots(comparison)
-ictonyx.plot_comparison_forest(comparison)  # Effect sizes with CIs
+print(comparison['overall_test'].conclusion)
 ```
 
-### Deep Learning with GPU Isolation
+Output:
+```
+Kruskal-Wallis test indicates significant differences between group 
+distributions (H=26.000, p=0.0000) with large effect size (epsilon-squared=0.658)
+```
 
-Keras training in a loop leaks GPU memory. Ictonyx runs each session in an isolated subprocess:
+## Deep Learning: MNIST Example with Visualization
+
+The library was originally built for TensorFlow/Keras workflows. This example trains a CNN 10 times and plots the variability:
 
 ```python
-results = ictonyx.variability_study(
-    model=create_keras_model,
-    data="dataset.csv",
-    target_column="target",
-    runs=10,
-    epochs=50,
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras import Sequential, layers, Input
+
+import ictonyx as ix
+from ictonyx import (
+    ModelConfig,
+    KerasModelWrapper,
+    ArraysDataHandler,
+    run_variability_study,
+    plot_variability_summary
+)
+
+# Load MNIST
+(X_train, y_train), _ = tf.keras.datasets.mnist.load_data()
+X_train = X_train.astype('float32') / 255.0
+X_train = X_train[..., np.newaxis]
+
+# Use subset for speed
+X = X_train[:5000]
+y = y_train[:5000]
+
+def create_cnn(config: ModelConfig) -> KerasModelWrapper:
+    model = Sequential([
+        Input(shape=(28, 28, 1)),
+        layers.Conv2D(32, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Flatten(),
+        layers.Dense(64, activation='relu'),
+        layers.Dense(10, activation='softmax')
+    ])
+    model.compile(
+        optimizer='adam',
+        loss='sparse_categorical_crossentropy',
+        metrics=['accuracy']
+    )
+    return KerasModelWrapper(model)
+
+config = ModelConfig({'epochs': 10, 'batch_size': 64, 'verbose': 0})
+data_handler = ArraysDataHandler(X, y)
+
+results = run_variability_study(
+    model_builder=create_cnn,
+    data_handler=data_handler,
+    model_config=config,
+    num_runs=10
+)
+
+print(results.summarize())
+
+plot_variability_summary(
+    all_runs_metrics_list=results.all_runs_metrics,
+    final_metrics_series=results.final_val_accuracies,
+    metric='accuracy'
+)
+```
+
+## GPU Memory Isolation
+
+Training Keras models in a loop leaks GPU memory. Ictonyx can run each training session in an isolated subprocess:
+
+```python
+results = run_variability_study(
+    model_builder=create_cnn,
+    data_handler=data_handler,
+    model_config=config,
+    num_runs=10,
     use_process_isolation=True,
     gpu_memory_limit=4096
 )
 ```
 
----
+## What It Does
 
-## Key Features
-
-**Statistical Analysis**
-- Automatic test selection (t-test, Mann-Whitney, ANOVA, Kruskal-Wallis)
-- Effect sizes (Cohen's d, rank-biserial correlation, eta-squared)
-- Multiple comparison corrections (Bonferroni, Holm, Benjamini-Hochberg)
-
-**Visualizations**
-- `plot_variability_summary()` — Training curves + metric distributions
-- `plot_comparison_boxplots()` — Side-by-side model comparison
-- `plot_comparison_forest()` — Effect sizes with confidence intervals
-- `plot_confusion_matrix()`, `plot_roc_curve()`, `plot_training_history()`
-
-**Data Handling**
-- CSV files, DataFrames, NumPy arrays, image directories
-- Automatic format detection via `auto_resolve_handler()`
-
-**Memory Management**
-- Process isolation for GPU workloads
-- `cleanup_gpu_memory()`, `get_memory_info()`, `managed_memory()` context manager
-
----
-
-## GPU Development Environment
-
-Ictonyx includes a Docker environment with CUDA 12.9, cuDNN, and TensorFlow pre-configured.
-
-```bash
-# Build the image
-./build-gpu.sh
-
-# Verify GPU access
-./test-gpu.sh
-
-# Launch JupyterLab
-./run-gpu.sh
-# Access at http://localhost:8888
-
-# Run tests in container
-./run-gpu.sh pytest tests/ -v
-```
-
-The container runs as your user ID—no root-owned files.
-
----
-
-## Configuration
-
-```python
-import ictonyx
-
-ictonyx.set_verbose(False)        # Suppress console output
-ictonyx.set_display_plots(False)  # Non-blocking plots for scripts
-
-# Check available features
-print(ictonyx.get_feature_availability())
-```
-
----
-
-## Comparison with Other Tools
-
-| Tool | Experiment Tracking | Statistical Comparison | Effect Sizes | GPU Isolation |
-|------|---------------------|------------------------|--------------|---------------|
-| MLflow | Yes | No | No | No |
-| W&B | Yes | No | No | No |
-| Optuna | No | No | No | No |
-| **Ictonyx** | Via MLflow | Yes | Yes | Yes |
-
-Ictonyx complements tracking tools. Use MLflow to log experiments, Ictonyx to determine if differences are real.
-
----
-
-## Contributing
-
-1. Fork and clone
-2. `pip install -e ".[all]"`
-3. `pytest tests/ -v`
-4. `black ictonyx/ && isort ictonyx/`
-5. Open a PR
-
----
+- Runs N training iterations of the same model
+- Computes mean, standard deviation, min, max of your chosen metric
+- Performs statistical tests (Mann-Whitney, Kruskal-Wallis) to compare models
+- Reports effect sizes so you know if differences are practically significant
+- Visualizes training curves and metric distributions
 
 ## License
 

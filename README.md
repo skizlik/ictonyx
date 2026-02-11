@@ -143,6 +143,23 @@ plot_variability_summary(
 )
 ```
 
+Output:
+
+```
+Study Summary:
+  Successful runs: 10/10
+  Val accuracy: 0.9592 (SD = 0.0050)
+Variability Study Results
+==============================
+Successful runs: 10
+Final validation accuracy:
+  Mean: 0.9592
+  Std:  0.0050
+  Min:  0.9520
+  Max:  0.9700
+```
+![plot](images/variability_plot_1.png)
+
 ## GPU Memory Isolation
 
 Training Keras models in a loop leaks GPU memory. Ictonyx can run each training session in an isolated subprocess:

@@ -146,6 +146,7 @@ class TestExperimentRunner:
     
     def test_failure_handling(self):
         """Test handling of failed runs."""
+        np.random.seed(42)
         
         def failing_model_builder(config):
             if np.random.random() > 0.5:

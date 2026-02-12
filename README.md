@@ -4,7 +4,8 @@
 
 A Python framework for assessing machine learning model variability and performing rigorous statistical comparisons.
 
-![CI/CD](https://github.com/skizlik/ictonyx/actions/workflows/test.yml/badge.svg)
+[![CI/CD](https://github.com/skizlik/ictonyx/actions/workflows/test.yml/badge.svg)](https://github.com/skizlik/ictonyx/actions/workflows/test.yml)
+[![PyPI](https://img.shields.io/pypi/v/ictonyx)](https://pypi.org/project/ictonyx/)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -21,6 +22,9 @@ Ictonyx runs your model multiple times and provides complete distributions for y
 ```bash
 pip install ictonyx
 ```
+
+Requires Python 3.10+. Current release: **0.1.0**
+([changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/))
 
 ## Quick Start: sklearn
 
@@ -70,14 +74,25 @@ comparison = ix.compare_models(
     runs=20
 )
 
-print(comparison['overall_test'].conclusion)
+print(comparison['overall_test'].get_summary())
 ```
 
 Output:
 ```
-Kruskal-Wallis test indicates significant differences between group 
-distributions (H=26.000, p=0.0000) with large effect size (epsilon-squared=0.658)
+Kruskal-Wallis: 26.000, p=0.0000 ***, eta-squared=0.658, 95% CI [0.0312, 0.1088]
 ```
+
+## Intelligent Statistical Analysis
+
+When you compare models, Ictonyx doesn't just run a single test. It builds a complete statistical argument:
+
+1. **Assumption checking** — tests both groups for normality (Shapiro-Wilk) and equal variance (Levene's test)
+2. **Automatic test selection** — routes to Student's t-test, Welch's t-test, or Mann-Whitney U based on what the data actually supports
+3. **Effect sizes** — reports Cohen's d or rank-biserial correlation so you know if the difference is practically meaningful, not just statistically significant
+4. **Bootstrap confidence intervals** — computes BCa (bias-corrected and accelerated) 95% CIs for both the mean difference and the effect size, giving you a plausible range for the true performance gap
+5. **Multiple comparison correction** — applies Bonferroni, Holm, or Benjamini-Hochberg when comparing 3+ models
+
+All of this happens automatically inside `compare_models()` and `compare_two_models()`. No configuration needed.
 
 ## Deep Learning: MNIST Example with Visualization
 
@@ -175,13 +190,14 @@ results = run_variability_study(
 )
 ```
 
-## What It Does
+## Features
 
-- Runs N training iterations of the same model
-- Computes mean, standard deviation, min, max of your chosen metric
-- Performs statistical tests (Mann-Whitney, Kruskal-Wallis) to compare models
-- Reports effect sizes so you know if differences are practically significant
-- Visualizes training curves and metric distributions
+- **Variability studies** — run N training iterations, get full metric distributions with mean, SD, min, max
+- **Statistical model comparison** — assumption-driven test selection, effect sizes, bootstrap confidence intervals, multiple comparison correction
+- **Framework support** — scikit-learn and TensorFlow/Keras, with model wrappers that handle the training loop
+- **GPU memory isolation** — subprocess-based training to prevent memory leaks in repeated Keras runs
+- **Visualization** — training curves, metric distributions, forest plots, comparison boxplots
+- **High-level API** — `variability_study()` and `compare_models()` for single-function usage
 
 ## License
 

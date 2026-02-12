@@ -454,7 +454,6 @@ def wilcoxon_signed_rank_test(model_metrics: pd.Series, null_value: float = 0.5,
 
         result.assumption_details['skewness'] = skewness
 
-    # Perform test
         # Perform test
         try:
             if len(non_zero_data) < 6:
@@ -465,20 +464,20 @@ def wilcoxon_signed_rank_test(model_metrics: pd.Series, null_value: float = 0.5,
             result.p_value = float(p_value)
 
             # Effect size (r = Z / sqrt(N))
-        n = len(non_zero_data)
-        if n > 0:
-            z_score = (statistic - n * (n + 1) / 4) / np.sqrt(n * (n + 1) * (2 * n + 1) / 24)
-            r = abs(z_score) / np.sqrt(n)
+            n = len(non_zero_data)
+            if n > 0:
+                z_score = (statistic - n * (n + 1) / 4) / np.sqrt(n * (n + 1) * (2 * n + 1) / 24)
+                r = abs(z_score) / np.sqrt(n)
 
-            result.effect_size = r
-            result.effect_size_name = "r (effect size)"
-            result.effect_size_interpretation = _interpret_wilcoxon_r(r)
+                result.effect_size = r
+                result.effect_size_name = "r (effect size)"
+                result.effect_size_interpretation = _interpret_wilcoxon_r(r)
 
-    except Exception as e:
-        result.warnings.append(f"Test failed: {str(e)}")
-        result.statistic = float('nan')
-        result.p_value = float('nan')
-        return result
+        except Exception as e:
+            result.warnings.append(f"Test failed: {str(e)}")
+            result.statistic = float('nan')
+            result.p_value = float('nan')
+            return result
 
     # Generate interpretation
     result.conclusion = _generate_wilcoxon_conclusion(result, null_value, alpha)

@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "ictonyx"
-version = "0.0.5"
+version = "0.1.0"
 description = "Ictonyx: Iteration Comparison Testing Over N-runs: Yield eXamination"
 authors = ["Stephen Kizlik <stephen.kizlik@gmail.com>"]
 license = "MIT"
@@ -13,7 +13,7 @@ homepage = "https://github.com/skizlik/ictonyx"
 repository = "https://github.com/skizlik/ictonyx"
 keywords = ["machine-learning", "variability", "statistics", "model-analysis"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",

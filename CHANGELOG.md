@@ -8,9 +8,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- PyPI publication
+- 5×2cv paired t-test for classifier comparison
+- PyTorch model wrapper
+- Regression task support
 - Sphinx documentation hosted on ReadTheDocs
-- Additional real-world dataset examples
+
+---
+
+## [0.1.0] - 2026-02-12
+
+### Added
+- **Bootstrap confidence intervals** — new `ictonyx.bootstrap` module with:
+  - `bootstrap_ci()`: general-purpose engine for arbitrary statistics
+  - `bootstrap_mean_difference_ci()`: CI for difference in means between groups
+  - `bootstrap_effect_size_ci()`: CI for Cohen's d
+  - `bootstrap_paired_difference_ci()`: CI for paired comparisons
+  - Both BCa (bias-corrected and accelerated) and percentile methods
+- `compare_two_models()` now automatically computes 95% BCa confidence intervals
+  for both the mean difference and Cohen's d effect size
+- New fields on `StatisticalTestResult`: `confidence_interval`, `ci_confidence_level`,
+  `ci_method`, `ci_effect_size`
+- CI data included in `get_summary()`, `generate_statistical_summary()`,
+  and `create_results_dataframe()` output
+- 52 new bootstrap tests, 7 CI integration tests
+- Expanded `analysis.py` test coverage from ~42% to 84%
+
+### Fixed
+- `mann_whitney_test` and `wilcoxon_signed_rank_test` silently overwrote
+  `sample_sizes` and `assumptions_met` when constructing results
+- `anova_test` and `shapiro_wilk_test` crashed on every call due to missing
+  required `statistic` and `p_value` arguments in `StatisticalTestResult` constructor
+- Indentation bug in `wilcoxon_signed_rank_test` that misaligned warning logic
+- Misleading inline comment in `mann_whitney_test` that described wrong test direction
+- `ScikitLearnModelWrapper` mock loss history produced constant values instead of
+  realistic decaying loss curves
 
 ---
 

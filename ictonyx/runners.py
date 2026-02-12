@@ -309,7 +309,15 @@ class ExperimentRunner:
                   epochs_per_run: Optional[int] = None,
                   stop_on_failure_rate: float = 0.5) -> Tuple[
         List[pd.DataFrame], List[float], List[Dict[str, Any]]]:
+
         """Execute the complete variability study."""
+
+        # Reset state from any previous run
+        self.all_runs_metrics = []
+        self.final_val_accuracies = []
+        self.final_test_metrics = []
+        self.failed_runs = []
+        
         if epochs_per_run is None:
             epochs_per_run = self.model_config.get('epochs', 10)
 

@@ -52,7 +52,7 @@ __all__ = [
     # Core classes
     'ModelConfig',
     'BaseModelWrapper',
-    'TrainingResult'
+    'TrainingResult',
     'BaseLogger',
 
     # Settings

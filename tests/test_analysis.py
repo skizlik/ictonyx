@@ -449,11 +449,6 @@ class TestWilcoxonSignedRankTest:
 
 
 class TestAnovaTest:
-
-    # NOTE: anova_test has a bug — it calls StatisticalTestResult(test_name=...)
-    # without the required statistic and p_value args. These tests document
-    # the expected behavior for when that's fixed.
-
     def test_significant_difference(self):
         groups = {
             'A': pd.Series([10, 11, 12, 10, 11, 12, 10, 11]),
@@ -515,10 +510,6 @@ class TestKruskalWallisTest:
 
 
 class TestShapiroWilkTest:
-
-    # NOTE: shapiro_wilk_test has the same bug as anova_test — it calls
-    # StatisticalTestResult(test_name=...) without required positional args.
-
     def test_normal_data(self):
         rng = np.random.RandomState(42)
         data = pd.Series(rng.normal(0, 1, 50))
@@ -584,6 +575,56 @@ class TestCompareTwoModels:
         m2 = pd.Series(rng.exponential(2, 30))
         result = compare_two_models(m1, m2, paired=False)
         assert "Mann-Whitney" in result.test_name
+
+    # --- Bootstrap CI integration tests ---
+
+    def test_independent_comparison_has_ci(self):
+        """compare_two_models should auto-populate CI fields."""
+        m1 = pd.Series([0.80, 0.82, 0.79, 0.81, 0.83, 0.80, 0.82, 0.79])
+        m2 = pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69])
+        result = compare_two_models(m1, m2, paired=False)
+        assert result.confidence_interval is not None
+        lo, hi = result.confidence_interval
+        assert lo < hi
+        assert result.ci_method == 'bca'
+        assert result.ci_confidence_level == 0.95
+
+    def test_paired_comparison_has_ci(self):
+        m1 = pd.Series([0.80, 0.82, 0.79, 0.81, 0.83, 0.80, 0.82, 0.79])
+        m2 = pd.Series([0.75, 0.77, 0.74, 0.76, 0.78, 0.75, 0.77, 0.74])
+        result = compare_two_models(m1, m2, paired=True)
+        assert result.confidence_interval is not None
+        lo, hi = result.confidence_interval
+        assert lo > 0  # clear positive difference
+
+    def test_ci_excludes_zero_for_clear_difference(self):
+        m1 = pd.Series([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89])
+        m2 = pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69])
+        result = compare_two_models(m1, m2, paired=False)
+        lo, hi = result.confidence_interval
+        assert lo > 0  # entire CI above zero
+
+    def test_effect_size_ci_populated(self):
+        m1 = pd.Series([0.80, 0.82, 0.79, 0.81, 0.83, 0.80, 0.82, 0.79])
+        m2 = pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69])
+        result = compare_two_models(m1, m2, paired=False)
+        assert result.ci_effect_size is not None
+        es_lo, es_hi = result.ci_effect_size
+        assert es_lo < es_hi
+
+    def test_ci_in_get_summary(self):
+        m1 = pd.Series([0.80, 0.82, 0.79, 0.81, 0.83, 0.80, 0.82, 0.79])
+        m2 = pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69])
+        result = compare_two_models(m1, m2, paired=False)
+        summary = result.get_summary()
+        assert "95% CI" in summary
+
+    def test_insufficient_data_no_ci(self):
+        """Insufficient data should not crash the CI code."""
+        m1 = pd.Series([0.80, 0.82])
+        m2 = pd.Series([0.75, 0.77])
+        result = compare_two_models(m1, m2, paired=False)
+        assert result.confidence_interval is None
 
 
 class TestCompareMultipleModels:

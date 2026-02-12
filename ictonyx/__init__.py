@@ -204,6 +204,27 @@ try:
 except ImportError:
     _has_statistical_functions = False
 
+# Bootstrap confidence intervals
+try:
+    from .bootstrap import (
+        BootstrapCIResult,
+        bootstrap_ci,
+        bootstrap_mean_difference_ci,
+        bootstrap_effect_size_ci,
+        bootstrap_paired_difference_ci,
+    )
+
+    __all__.extend([
+        'BootstrapCIResult',
+        'bootstrap_ci',
+        'bootstrap_mean_difference_ci',
+        'bootstrap_effect_size_ci',
+        'bootstrap_paired_difference_ci',
+    ])
+    _has_bootstrap = True
+except ImportError:
+    _has_bootstrap = False
+
 # Plotting functions
 try:
     from .plotting import (
@@ -307,6 +328,7 @@ def get_feature_availability() -> dict:
         'tensorflow_support': TENSORFLOW_AVAILABLE,
         'sklearn_support': SKLEARN_AVAILABLE,
         'statistical_functions': _has_statistical_functions,
+        'bootstrap_ci': _has_bootstrap,
         'plotting_functions': _has_plotting_functions,
         'mlflow_logger': _has_mlflow_logger,
         'hyperparameter_tuning': _has_hyperparameter_tuning,

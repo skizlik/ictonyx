@@ -4,6 +4,18 @@ import pandas as pd
 from dataclasses import dataclass, field
 import warnings
 
+# Bootstrap confidence intervals
+try:
+    from .bootstrap import (
+        BootstrapCIResult,
+        bootstrap_mean_difference_ci,
+        bootstrap_effect_size_ci,
+        bootstrap_paired_difference_ci,
+    )
+    HAS_BOOTSTRAP = True
+except ImportError:
+    HAS_BOOTSTRAP = False
+
 # Optional scipy imports
 try:
     from scipy.stats import (
@@ -57,6 +69,12 @@ class StatisticalTestResult:
     conclusion: str = ""
     detailed_interpretation: str = ""
 
+    # Confidence intervals (populated by bootstrap)
+    confidence_interval: Optional[Tuple[float, float]] = None
+    ci_confidence_level: Optional[float] = None
+    ci_method: Optional[str] = None
+    ci_effect_size: Optional[Tuple[float, float]] = None
+
     def is_significant(self, alpha: float = 0.05) -> bool:
         """Check if result is statistically significant."""
         p_val = self.corrected_p_value if self.corrected_p_value is not None else self.p_value
@@ -71,6 +89,10 @@ class StatisticalTestResult:
 
         if self.effect_size is not None:
             summary += f", {self.effect_size_name}={self.effect_size:.3f}"
+
+        if self.confidence_interval is not None:
+            lo, hi = self.confidence_interval
+            summary += f", {self.ci_confidence_level*100:.0f}% CI [{lo:.4f}, {hi:.4f}]"
 
         if self.warnings:
             summary += f" (⚠ {len(self.warnings)} warnings)"
@@ -828,6 +850,38 @@ def compare_two_models(model1_results: pd.Series, model2_results: pd.Series,
         # Add assumption info to the final result
         result.assumptions_met.update(assumptions_met)
         result.assumption_details.update(assumption_details)
+
+    # --- Bootstrap confidence intervals ---
+    if HAS_BOOTSTRAP and not np.isnan(result.p_value):
+        try:
+            if paired:
+                ci_result = bootstrap_paired_difference_ci(
+                    clean1, clean2,
+                    n_bootstrap=10000, confidence=1 - alpha, method='bca'
+                )
+            else:
+                ci_result = bootstrap_mean_difference_ci(
+                    clean1, clean2,
+                    n_bootstrap=10000, confidence=1 - alpha, method='bca'
+                )
+
+            result.confidence_interval = (ci_result.ci_lower, ci_result.ci_upper)
+            result.ci_confidence_level = ci_result.confidence_level
+            result.ci_method = ci_result.method
+
+            # Also compute CI for the effect size (Cohen's d)
+            if result.effect_size is not None:
+                es_ci = bootstrap_effect_size_ci(
+                    clean1, clean2,
+                    n_bootstrap=10000, confidence=1 - alpha, method='bca',
+                    pooled=True
+                )
+                result.ci_effect_size = (es_ci.ci_lower, es_ci.ci_upper)
+
+        except Exception:
+            # Bootstrap is best-effort — never break an otherwise valid result
+            pass
+
     return result
 
 
@@ -1200,6 +1254,15 @@ def generate_statistical_summary(results: List[StatisticalTestResult]) -> str:
             effect_context = f"  Effect size ({result.effect_size_name}): {result.effect_size:.3f} ({result.effect_size_interpretation})"
             summary_lines.append(effect_context)
 
+        # Add confidence interval
+        if result.confidence_interval is not None:
+            lo, hi = result.confidence_interval
+            ci_line = f"  {result.ci_confidence_level*100:.0f}% CI for difference: [{lo:.4f}, {hi:.4f}] ({result.ci_method})"
+            summary_lines.append(ci_line)
+            if result.ci_effect_size is not None:
+                es_lo, es_hi = result.ci_effect_size
+                summary_lines.append(f"  {result.ci_confidence_level*100:.0f}% CI for effect size: [{es_lo:.4f}, {es_hi:.4f}]")
+
         # Add major warnings
         if result.warnings:
             major_warnings = [w for w in result.warnings if "assumption" in w.lower() or "insufficient" in w.lower()]
@@ -1275,6 +1338,15 @@ def create_results_dataframe(results: List[StatisticalTestResult]) -> pd.DataFra
         if result.corrected_p_value is not None:
             row['corrected_p_value'] = result.corrected_p_value
             row['correction_method'] = result.correction_method
+
+        # Add confidence interval if available
+        if result.confidence_interval is not None:
+            row['ci_lower'] = result.confidence_interval[0]
+            row['ci_upper'] = result.confidence_interval[1]
+            row['ci_method'] = result.ci_method
+        if result.ci_effect_size is not None:
+            row['ci_effect_size_lower'] = result.ci_effect_size[0]
+            row['ci_effect_size_upper'] = result.ci_effect_size[1]
 
         data.append(row)
 

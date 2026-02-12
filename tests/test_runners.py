@@ -143,16 +143,15 @@ class TestExperimentRunner:
         assert results.n_runs == 3
         assert 'val_accuracy' in results.final_metrics
         assert len(results.final_metrics['val_accuracy']) == 3
-    
+
     def test_failure_handling(self):
         """Test handling of failed runs."""
-        np.random.seed(42)
-        
+
         def failing_model_builder(config):
-            if np.random.random() > 0.5:
+            if np.random.random() > 0.2:
                 raise ValueError("Random failure")
             return MockModel(config)
-        
+
         runner = ExperimentRunner(
             model_builder=failing_model_builder,
             data_handler=MockDataHandler(),
@@ -165,9 +164,11 @@ class TestExperimentRunner:
             stop_on_failure_rate=0.8
         )
 
-        assert results.n_runs > 0
-        assert len(runner.failed_runs) >= 0
-    
+        # Some runs may fail — that's the point. Verify the runner
+        # tracked everything correctly regardless of outcome.
+        assert results.n_runs + len(runner.failed_runs) == 5
+        assert results.n_runs == len(results.all_runs_metrics)
+
     def test_summary_stats(self):
         """Test getting summary statistics."""
         

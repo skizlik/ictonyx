@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Dict, Any, Callable
 import warnings
+from .settings import logger
 
 # Optional hyperopt dependency
 try:
@@ -57,7 +58,7 @@ class HyperparameterTuner:
         self.trials = Trials()
 
         # Load data once during initialization
-        print("Loading data for hyperparameter tuning...")
+        logger.info("Loading data for hyperparameter tuning...")
         try:
             data_dict = self.data_handler.load()
             self.train_data = data_dict['train_data']
@@ -67,7 +68,7 @@ class HyperparameterTuner:
                 raise ValueError("Validation data is required for hyperparameter tuning. "
                                  "Ensure your data handler provides 'val_data'.")
 
-            print(f"Data loaded successfully. Training on: {type(self.train_data)}")
+            logger.info(f"Data loaded successfully. Training on: {type(self.train_data)}")
 
         except Exception as e:
             raise RuntimeError(f"Failed to load data for hyperparameter tuning: {e}")
@@ -89,9 +90,9 @@ class HyperparameterTuner:
         if max_evals <= 0:
             raise ValueError("max_evals must be positive")
 
-        print(f"Starting hyperparameter optimization with {max_evals} evaluations...")
-        print(f"Optimizing metric: {self.metric}")
-        print(f"Search space: {list(param_space.keys())}")
+        logger.info(f"Starting hyperparameter optimization with {max_evals} evaluations...")
+        logger.info(f"Optimizing metric: {self.metric}")
+        logger.info(f"Search space: {list(param_space.keys())}")
 
         def objective(params: Dict[str, Any]) -> Dict[str, Any]:
             """
@@ -104,7 +105,7 @@ class HyperparameterTuner:
                 Dictionary with 'loss' (value to minimize) and 'status'
             """
             trial_num = len(self.trials.trials) + 1
-            print(f"\nTrial {trial_num}/{max_evals}: {params}")
+            logger.info(f"\nTrial {trial_num}/{max_evals}: {params}")
 
             try:
                 # Suppress warnings during optimization
@@ -158,7 +159,7 @@ class HyperparameterTuner:
                         # For metrics we want to minimize (loss, error)
                         loss = float(final_metric_value)
 
-                    print(f"  Result: {self.metric} = {final_metric_value:.4f}")
+                    logger.info(f"  Result: {self.metric} = {final_metric_value:.4f}")
 
                     return {
                         'loss': loss,
@@ -168,7 +169,7 @@ class HyperparameterTuner:
                     }
 
             except Exception as e:
-                print(f"  Trial failed: {str(e)}")
+                logger.warning(f"  Trial failed: {str(e)}")
                 # Return a high loss value for failed trials
                 return {
                     'loss': float('inf'),
@@ -197,18 +198,18 @@ class HyperparameterTuner:
             else:
                 best_metric_value = best_loss
 
-            print(f"\nOptimization completed!")
-            print(f"Best {self.metric}: {best_metric_value:.4f}")
-            print(f"Best parameters: {best_params}")
+            logger.info(f"\nOptimization completed!")
+            logger.info(f"Best {self.metric}: {best_metric_value:.4f}")
+            logger.info(f"Best parameters: {best_params}")
 
             return best_params
 
         except KeyboardInterrupt:
-            print("\nOptimization interrupted by user.")
+            logger.warning("\nOptimization interrupted by user.")
             if self.trials.trials:
                 # Return the best parameters found so far
                 best_params = self.trials.argmin
-                print(f"Returning best parameters found in {len(self.trials.trials)} trials: {best_params}")
+                logger.info(f"Returning best parameters found in {len(self.trials.trials)} trials: {best_params}")
                 return best_params
             else:
                 raise RuntimeError("No trials completed before interruption")

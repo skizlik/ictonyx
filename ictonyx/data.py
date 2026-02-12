@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from abc import ABC, abstractmethod
 from typing import Optional, List, Tuple, Dict, Any, Union
+from .settings import logger
 
 # Define public API
 __all__ = [
@@ -181,7 +182,7 @@ class ImageDataHandler(DataHandler):
         if not self.class_names:
             raise ValueError(f"No class subdirectories found in {self.data_path}")
 
-        print(f"Found {len(self.class_names)} classes: {self.class_names}")
+        logger.info(f"Found {len(self.class_names)} classes: {self.class_names}")
 
     def _get_image_paths_and_labels(self) -> Tuple[List[str], List[int]]:
         """Helper to collect all file paths and their corresponding integer labels."""
@@ -207,7 +208,7 @@ class ImageDataHandler(DataHandler):
             ]
 
             if not image_files:
-                print(f"Warning: No valid image files found in {class_path}")
+                logger.warning(f"No valid image files found in {class_path}")
                 continue
 
             image_paths = [os.path.join(class_path, fname) for fname in image_files]
@@ -247,7 +248,7 @@ class ImageDataHandler(DataHandler):
 
         except Exception as e:
             # Create a placeholder image if loading fails
-            print(f"Warning: Failed to load image {file_path}: {e}")
+            logger.warning(f"Failed to load image {file_path}: {e}")
             placeholder = tf.zeros((*self.image_size, 3), dtype=tf.float32)
             return placeholder, label
 
@@ -276,13 +277,13 @@ class ImageDataHandler(DataHandler):
         all_image_paths, all_labels = self._get_image_paths_and_labels()
         total_files = len(all_image_paths)
 
-        print(f"Total images found: {total_files}")
+        logger.info(f"Total images found: {total_files}")
 
         # Check class distribution
         unique_labels, counts = np.unique(all_labels, return_counts=True)
         for class_idx, count in zip(unique_labels, counts):
             class_name = self.class_names[class_idx]
-            print(f"  {class_name}: {count} images")
+            logger.info(f"  {class_name}: {count} images")
 
         # Split into training and test sets first, with stratification
         if test_split > 0:
@@ -330,7 +331,7 @@ class ImageDataHandler(DataHandler):
         val_ds = create_tf_dataset(X_val, y_val, shuffle=False) if X_val else None
         test_ds = create_tf_dataset(X_test, y_test, shuffle=False) if X_test else None
 
-        print(f"Data splits created - Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
+        logger.info(f"Data splits created - Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
 
         return {
             'train_data': train_ds,
@@ -459,7 +460,7 @@ class TabularDataHandler(DataHandler):
             if missing:
                 raise ValueError(f"Features not found in data: {missing}")
 
-        print(f"Loaded tabular data: {len(self.data)} rows, {len(self.data.columns)} columns")
+        logger.info(f"Loaded tabular data: {len(self.data)} rows, {len(self.data.columns)} columns")
 
     # ... (Keep existing load() and get_data_info() methods identical to previous version) ...
     def load(self, test_split: float = 0.2, val_split: float = 0.1,
@@ -487,7 +488,7 @@ class TabularDataHandler(DataHandler):
             # print(f"Warning: Missing values in features")
 
         if y.isnull().any():
-            print(f"Warning: {y.isnull().sum()} missing values in target column")
+            logger.warning(f"{y.isnull().sum()} missing values in target column")
 
         # Split data
         if test_split > 0:
@@ -587,7 +588,7 @@ class TextDataHandler(DataHandler):
         # Check for missing values
         if self.data[self.text_column].isnull().any():
             null_count = self.data[self.text_column].isnull().sum()
-            print(f"Warning: {null_count} missing values in text column")
+            logger.warning(f"{null_count} missing values in text column")
             # Fill with empty strings
             self.data[self.text_column] = self.data[self.text_column].fillna("")
 
@@ -595,7 +596,7 @@ class TextDataHandler(DataHandler):
             null_count = self.data[self.label_column].isnull().sum()
             raise ValueError(f"{null_count} missing values in label column - cannot proceed")
 
-        print(f"Loaded text data: {len(self.data)} samples")
+        logger.info(f"Loaded text data: {len(self.data)} samples")
 
     def load(self, test_split: float = 0.2, val_split: float = 0.1,
              random_state: int = 42) -> Dict[str, Any]:
@@ -625,8 +626,8 @@ class TextDataHandler(DataHandler):
         except Exception as e:
             raise RuntimeError(f"Text preprocessing failed: {e}")
 
-        print(f"Vocabulary size: {len(self.tokenizer.word_index)}")
-        print(f"Sequence length: {self.max_len}")
+        logger.info(f"Vocabulary size: {len(self.tokenizer.word_index)}")
+        logger.info(f"Sequence length: {self.max_len}")
 
         # Split data
         if test_split > 0:
@@ -742,7 +743,7 @@ class TimeSeriesDataHandler(DataHandler):
         if len(self.data) < self.sequence_length + 1:
             raise ValueError(f"Dataset too short ({len(self.data)} samples) for sequence_length={self.sequence_length}")
 
-        print(f"Loaded time series: {len(self.data)} time points")
+        logger.info(f"Loaded time series: {len(self.data)} time points")
 
     def load(self, test_split: float = 0.2, val_split: float = 0.1,
              random_state: int = 42) -> Dict[str, Any]:
@@ -792,7 +793,7 @@ class TimeSeriesDataHandler(DataHandler):
         val_gen = create_generator(val_data)
         test_gen = create_generator(test_data)
 
-        print(f"Data splits - Train: {len(train_data) if train_data is not None else 0}, "
+        logger.info(f"Data splits - Train: {len(train_data) if train_data is not None else 0}, "
               f"Val: {len(val_data) if val_data is not None else 0}, "
               f"Test: {len(test_data) if test_data is not None else 0}")
 
@@ -866,7 +867,7 @@ class ArraysDataHandler(DataHandler):
                     X_train, y_train, test_size=adj_val_split, random_state=random_state
                 )
 
-        print(
+        logger.info(
             f"Array splits - Train: {len(X_train)}, Val: {len(X_val) if X_val is not None else 0}, Test: {len(X_test) if X_test is not None else 0}")
 
         return {

@@ -15,7 +15,7 @@ from .core import BaseModelWrapper, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE
 from .utils import load_object, save_object, train_val_test_split
 
 # Global settings
-from .settings import set_verbose, set_display_plots
+from .settings import set_verbose, set_display_plots, logger
 
 # Exception classes (always available)
 from .exceptions import (
@@ -263,7 +263,7 @@ try:
 except ImportError as e:
     _has_plotting_functions = False
     if os.getenv('DEBUG'):
-        print(f"Plotting functions not available: {e}")
+        logger.debug(f"Plotting functions not available: {e}")
 
 # MLflow logger and utilities
 try:

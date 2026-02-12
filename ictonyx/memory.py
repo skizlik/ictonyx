@@ -18,6 +18,7 @@ import traceback
 from typing import Optional, Dict, Any, Callable, Tuple, Union
 from dataclasses import dataclass, field
 from contextlib import contextmanager
+from .settings import logger
 import multiprocessing as mp
 
 # Core dependencies
@@ -110,12 +111,10 @@ class MemoryManager:
         # Check serialization capability
         if not HAS_CLOUDPICKLE:
             if self.verbose:
-                print("=" * 60)
-                print("PROCESS ISOLATION NOTE:")
-                print("CloudPickle not found. Installing it will enable")
-                print("notebook-defined functions to work with process isolation:")
-                print("  pip install cloudpickle")
-                print("=" * 60)
+                logger.info(
+                    "CloudPickle not found. Install it to enable notebook-defined "
+                    "functions with process isolation: pip install cloudpickle"
+                )
 
         # Setup multiprocessing context (spawn for clean isolation)
         try:
@@ -171,7 +170,7 @@ class MemoryManager:
                             )]
                         )
                         if self.verbose:
-                            print(f"Set GPU memory limit: {self.gpu_memory_limit}MB")
+                            logger.debug(f"Set GPU memory limit: {self.gpu_memory_limit}MB")
                     elif self.allow_memory_growth:
                         # Growth mode
                         tf.config.experimental.set_memory_growth(gpu, True)
@@ -206,7 +205,7 @@ class MemoryManager:
                     torch.cuda.set_per_process_memory_fraction(fraction, i)
 
                 if self.verbose:
-                    print(f"Set PyTorch memory fraction: {fraction:.2f}")
+                    logger.debug(f"Set PyTorch memory fraction: {fraction:.2f}")
 
             return True
 
@@ -499,7 +498,7 @@ def _setup_subprocess_gpu(gpu_memory_limit):
                 else:
                     tf.config.experimental.set_memory_growth(gpu, True)
         except Exception as e:
-            print(f"GPU setup warning in subprocess: {e}", file=sys.stderr)
+            logger.warning(f"GPU setup warning in subprocess: {e}")
 
 
 def _cleanup_subprocess():

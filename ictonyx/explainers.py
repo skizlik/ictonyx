@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Optional, List, Any, TYPE_CHECKING
+from .settings import logger
 
 # Optional SHAP dependency
 try:
@@ -61,7 +62,7 @@ def plot_shap_summary(model_wrapper: 'BaseModelWrapper',
 
     elif hasattr(model_wrapper.model, 'layers'):
         # For neural networks (Keras/TensorFlow models)
-        print("Note: Using DeepExplainer for neural network. This may take some time...")
+        logger.info("Using DeepExplainer for neural network. This may take some time...")
         try:
             # Use a subset of the data as background for efficiency
             background_size = min(100, len(X_data))
@@ -69,8 +70,8 @@ def plot_shap_summary(model_wrapper: 'BaseModelWrapper',
             explainer = shap.DeepExplainer(model_wrapper.model, background)
             shap_values = explainer.shap_values(X_data)
         except Exception as e:
-            print(f"DeepExplainer failed: {e}")
-            print("Falling back to KernelExplainer (this will be slower)...")
+            logger.warning(f"DeepExplainer failed: {e}")
+            logger.warning("Falling back to KernelExplainer (this will be slower)...")
             # Fallback to KernelExplainer
             background_size = min(50, len(X_data))
             explainer = shap.KernelExplainer(model_wrapper.model.predict, X_data[:background_size])
@@ -78,8 +79,7 @@ def plot_shap_summary(model_wrapper: 'BaseModelWrapper',
 
     else:
         # For other models, use KernelExplainer
-        print("Using KernelExplainer, which can be very slow for large datasets.")
-        print("Consider using a smaller sample of your data for faster results.")
+        logger.info("Using KernelExplainer, which can be very slow for large datasets. Consider using a smaller sample of your data for faster results.")
 
         # Use model's predict_proba if available, otherwise predict
         if hasattr(model_wrapper, 'predict_proba'):
@@ -97,8 +97,8 @@ def plot_shap_summary(model_wrapper: 'BaseModelWrapper',
         # Multi-class models return a list of arrays (one per class)
         # Plot the first class by default
         if len(shap_values) > 1:
-            print(f"Multi-class model detected. Plotting SHAP values for class 0.")
-            print(f"Model has {len(shap_values)} classes. You may want to plot other classes separately.")
+            logger.info(f"Multi-class model detected. Plotting SHAP values for class 0.")
+            logger.info(f"Model has {len(shap_values)} classes. You may want to plot other classes separately.")
         shap.summary_plot(shap_values[0], X_data, feature_names=feature_names, plot_type=plot_type)
     else:
         # Single output (binary classification or regression)
@@ -165,7 +165,7 @@ def plot_shap_waterfall(model_wrapper: 'BaseModelWrapper',
         shap.waterfall_plot(explanation)
     else:
         # Older SHAP versions - use force plot as fallback
-        print("Waterfall plot not available in this SHAP version. Using force plot instead.")
+        logger.info("Waterfall plot not available in this SHAP version. Using force plot instead.")
         base_value = explainer.expected_value[class_index] if isinstance(explainer.expected_value,
                                                                          list) else explainer.expected_value
         shap.force_plot(base_value, shap_values_to_plot, sample_data[0], feature_names=feature_names)

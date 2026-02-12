@@ -11,7 +11,7 @@ from typing import Union, Callable, Any, Optional, List, Dict, Tuple
 import pandas as pd
 import numpy as np
 
-from .core import BaseModelWrapper, KerasModelWrapper, ScikitLearnModelWrapper
+from .core import BaseModelWrapper, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE
 from .config import ModelConfig
 from .data import auto_resolve_handler, DataHandler
 from .runners import run_variability_study as _run_study
@@ -133,20 +133,31 @@ def _get_model_builder(model: Any) -> Callable:
 
 
 def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
-    """Ensures the object is wrapped in a Ictonyx wrapper."""
+    """Ensures the object is wrapped in an Ictonyx wrapper."""
     if isinstance(obj, BaseModelWrapper):
         return obj
 
     # Duck typing checks are Pythonic and readable
     if hasattr(obj, 'fit') and hasattr(obj, 'predict'):
+        if not SKLEARN_AVAILABLE:
+            raise ImportError(
+                "scikit-learn is required to auto-wrap models with fit/predict. "
+                "Install with: pip install scikit-learn"
+            )
+        from .core import ScikitLearnModelWrapper
         return ScikitLearnModelWrapper(obj)
 
     # String check avoids hard import of TensorFlow
     if 'keras' in str(type(obj)) or 'tensorflow' in str(type(obj)):
+        if not TENSORFLOW_AVAILABLE:
+            raise ImportError(
+                "TensorFlow is required to auto-wrap Keras models. "
+                "Install with: pip install tensorflow"
+            )
+        from .core import KerasModelWrapper
         return KerasModelWrapper(obj)
 
     raise TypeError(f"Cannot wrap model of type: {type(obj)}")
-
 
 def _get_model_name(obj: Any) -> str:
     """Extracts a readable name from a model object/class/function."""

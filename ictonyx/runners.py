@@ -296,7 +296,7 @@ class ExperimentRunner:
                     if hasattr(wrapped_model, 'cleanup'):
                         wrapped_model.cleanup()
                     del wrapped_model
-                except:
+                except Exception:
                     pass
 
             # Perform memory cleanup

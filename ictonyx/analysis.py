@@ -455,18 +455,16 @@ def wilcoxon_signed_rank_test(model_metrics: pd.Series, null_value: float = 0.5,
         result.assumption_details['skewness'] = skewness
 
     # Perform test
-    try:
-        if len(non_zero_data) < 6:
-            raise ValueError("Insufficient non-zero differences for Wilcoxon test")
+        # Perform test
+        try:
+            if len(non_zero_data) < 6:
+                raise ValueError("Insufficient non-zero differences for Wilcoxon test")
 
-        statistic, p_value = wilcoxon(non_zero_data, alternative=alternative)
-        result = StatisticalTestResult(
-            test_name="Wilcoxon Signed-Rank Test",
-            statistic=float(statistic),
-            p_value=float(p_value)
-        )
+            statistic, p_value = wilcoxon(non_zero_data, alternative=alternative)
+            result.statistic = float(statistic)
+            result.p_value = float(p_value)
 
-        # Effect size (r = Z / sqrt(N))
+            # Effect size (r = Z / sqrt(N))
         n = len(non_zero_data)
         if n > 0:
             z_score = (statistic - n * (n + 1) / 4) / np.sqrt(n * (n + 1) * (2 * n + 1) / 24)

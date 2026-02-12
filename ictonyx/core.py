@@ -8,6 +8,7 @@ from sklearn.metrics import confusion_matrix, accuracy_score
 from typing import Dict, Any, Optional, Tuple, Union
 from abc import ABC, abstractmethod
 from .memory import get_memory_manager
+from .settings import logger
 
 # Optional TensorFlow imports
 try:
@@ -53,7 +54,7 @@ class BaseModelWrapper(ABC):
         """Automatic cleanup when object is destroyed."""
         try:
             self.cleanup()
-        except:
+        except Exception:
             pass
 
     def cleanup(self):
@@ -67,13 +68,14 @@ class BaseModelWrapper(ABC):
 
             # Report significant cleanup events
             if cleanup_result.memory_freed_mb and cleanup_result.memory_freed_mb > 10:
-                print(f"Model cleanup freed {cleanup_result.memory_freed_mb:.1f}MB")
+                logger.info(f"Model cleanup freed {cleanup_result.memory_freed_mb:.1f}MB")
 
             if cleanup_result.errors:
-                print(f"Model cleanup had {len(cleanup_result.errors)} warnings")
+                logger.warning(f"Model cleanup had {len(cleanup_result.errors)} warnings")
+
 
         except Exception as e:
-            print(f"Cleanup warning: {e}")
+            logger.warning(f"Cleanup warning: {e}")
 
     @abstractmethod
     def fit(self, train_data: Any, validation_data: Optional[Any] = None, **kwargs):
@@ -280,7 +282,7 @@ if TENSORFLOW_AVAILABLE:
             if hasattr(self, 'model'):
                 try:
                     del self.model
-                except:
+                except Exception:
                     pass
 
             # Perform TensorFlow cleanup
@@ -561,7 +563,7 @@ if TENSORFLOW_AVAILABLE:
 
         def save_model(self, path: str):
             self.model.save(path)
-            print(f"Model saved to {path}")
+            logger.info(f"Model saved to {path}")
 
         @classmethod
         def load_model(cls, path: str) -> 'KerasModelWrapper':
@@ -689,7 +691,7 @@ if SKLEARN_AVAILABLE:
         def save_model(self, path: str):
             with open(path, 'wb') as f:
                 pickle.dump(self.model, f)
-            print(f"Model saved to {path}")
+            logger.info(f"Model saved to {path}")
 
         @classmethod
         def load_model(cls, path: str) -> 'ScikitLearnModelWrapper':

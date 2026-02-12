@@ -10,7 +10,7 @@ from ictonyx import (
     compare_two_models,
     assess_training_stability,
 )
-from ictonyx.core import BaseModelWrapper
+from ictonyx.core import BaseModelWrapper, TrainingResult
 from ictonyx.data import TabularDataHandler
 
 
@@ -25,17 +25,19 @@ class SimpleModel(BaseModelWrapper):
     
     def _cleanup_implementation(self):
         pass
-    
+
     def fit(self, train_data, validation_data=None, **kwargs):
-        # Simulate training with some randomness
         epochs = self.config.get('epochs', 5)
         base = 0.5 + np.random.random() * 0.3
-        
-        self.history = {
+
+        history = {
             'train_accuracy': np.linspace(0.4, base + 0.1, epochs).tolist(),
-            'val_accuracy': np.linspace(0.35, base, epochs).tolist() if validation_data else None,
             'loss': np.linspace(1.0, 0.2, epochs).tolist()
         }
+        if validation_data is not None:
+            history['val_accuracy'] = np.linspace(0.35, base, epochs).tolist()
+
+        self.training_result = TrainingResult(history=history)
     
     def predict(self, data, **kwargs):
         X = data[0] if isinstance(data, tuple) else data
@@ -106,7 +108,7 @@ class TestEndToEndWorkflow:
             
             # 3. Check results
             assert results.n_runs == 5
-            assert len(results.final_val_accuracies) == 5
+            assert len(results.final_metrics['val_accuracy']) == 5
             
             # 4. Assess stability
             stability = assess_training_stability(
@@ -120,8 +122,9 @@ class TestEndToEndWorkflow:
             
             # 5. Statistical comparison
             # Split results into two "models" for comparison
-            model1_data = pd.Series(results.final_val_accuracies[:3])
-            model2_data = pd.Series(results.final_val_accuracies[3:])
+            val_accs = results.final_metrics['val_accuracy']
+            model1_data = pd.Series(val_accs[:3])
+            model2_data = pd.Series(val_accs[3:])
             
             if len(model1_data) >= 2 and len(model2_data) >= 2:
                 comparison = compare_two_models(

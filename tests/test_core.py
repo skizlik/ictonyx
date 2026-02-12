@@ -2,7 +2,7 @@
 import pytest
 import numpy as np
 import pandas as pd
-from ictonyx.core import BaseModelWrapper, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE
+from ictonyx.core import BaseModelWrapper, TrainingResult, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE
 from ictonyx.config import ModelConfig
 
 
@@ -34,11 +34,10 @@ class TestableWrapper(BaseModelWrapper):
     def fit(self, train_data, validation_data=None, **kwargs):
         X, y = train_data
         self.model.fit(X, y)
-        # Create mock history
-        self.history = {
+        self.training_result = TrainingResult(history={
             'loss': [0.5, 0.3, 0.1],
             'accuracy': [0.5, 0.7, 0.9]
-        }
+        })
     
     def predict(self, data, **kwargs):
         self.predictions = self.model.predict(data)
@@ -79,7 +78,7 @@ class TestBaseModelWrapper:
         
         assert wrapper.model is model
         assert wrapper.model_id == "test_model"
-        assert wrapper.history is None
+        assert wrapper.training_result is None
         assert wrapper.predictions is None
     
     def test_wrapper_repr(self):
@@ -92,7 +91,7 @@ class TestBaseModelWrapper:
         assert "is_trained=No" in repr_str
         
         # After training
-        wrapper.history = {'loss': [0.1]}
+        wrapper.training_result = TrainingResult(history={'loss': [0.1]})
         repr_str = repr(wrapper)
         assert "is_trained=Yes" in repr_str
     
@@ -106,9 +105,9 @@ class TestBaseModelWrapper:
         wrapper.fit((X, y))
         
         assert wrapper.model.trained
-        assert wrapper.history is not None
-        assert 'loss' in wrapper.history
-        assert len(wrapper.history['loss']) == 3
+        assert wrapper.training_result is not None
+        assert 'loss' in wrapper.training_result.history
+        assert len(wrapper.training_result.history['loss']) == 3
     
     def test_prediction(self):
         """Test model prediction."""
@@ -223,22 +222,42 @@ class TestScikitLearnWrapper:
         """Test that ScikitLearnModelWrapper can be imported."""
         from ictonyx.core import ScikitLearnModelWrapper
         assert ScikitLearnModelWrapper is not None
-    
-    def test_sklearn_mock_history(self):
-        """Test sklearn creates mock history for compatibility."""
+
+    def test_sklearn_training_result(self):
+        """Test sklearn creates TrainingResult."""
         from ictonyx.core import ScikitLearnModelWrapper
         from sklearn.linear_model import LogisticRegression
-        
+
         model = LogisticRegression()
         wrapper = ScikitLearnModelWrapper(model)
-        
+
         X = np.random.rand(50, 5)
         y = np.random.randint(0, 2, 50)
-        
+
         wrapper.fit((X, y))
-        
-        # Should have mock history
-        assert wrapper.history is not None
-        assert hasattr(wrapper.history, 'history')
-        assert 'accuracy' in wrapper.history.history
-        assert 'val_accuracy' in wrapper.history.history
+
+        assert wrapper.training_result is not None
+        assert isinstance(wrapper.training_result, TrainingResult)
+        assert 'accuracy' in wrapper.training_result.history
+        assert 'val_accuracy' in wrapper.training_result.history
+
+    def test_sklearn_evaluate_full_metrics(self):
+        """Test sklearn evaluate returns multiple metrics."""
+        from ictonyx.core import ScikitLearnModelWrapper
+        from sklearn.linear_model import LogisticRegression
+
+        model = LogisticRegression()
+        wrapper = ScikitLearnModelWrapper(model)
+
+        X = np.random.rand(50, 5)
+        y = np.random.randint(0, 2, 50)
+        wrapper.fit((X, y))
+
+        result = wrapper.evaluate((X, y))
+
+        assert 'accuracy' in result
+        assert 'precision' in result
+        assert 'recall' in result
+        assert 'f1' in result
+        for value in result.values():
+            assert 0.0 <= value <= 1.0

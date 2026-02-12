@@ -6,6 +6,7 @@ import gc
 import pickle
 from sklearn.metrics import confusion_matrix, accuracy_score
 from typing import Dict, Any, Optional, Tuple, Union
+from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from .memory import get_memory_manager
 from .settings import logger
@@ -30,6 +31,22 @@ except ImportError:
     BaseEstimator = None
     SKLEARN_AVAILABLE = False
 
+@dataclass
+class TrainingResult:
+    """Standardized training output from any model wrapper.
+
+    Every wrapper's fit() method must produce one of these.
+    Replaces the Keras-specific .history.history probing pattern.
+
+    Attributes:
+        history: Dict mapping metric names to lists of per-epoch values.
+                 Keys follow the convention: 'loss', 'accuracy', 'val_loss',
+                 'val_accuracy', or any custom metric name.
+        params: Training parameters (epochs, batch_size, etc.)
+    """
+    history: Dict[str, list]
+    params: Dict[str, Any] = field(default_factory=dict)
+
 # Abstract Base Class for ModelWrappers
 
 class BaseModelWrapper(ABC):
@@ -41,13 +58,13 @@ class BaseModelWrapper(ABC):
     def __init__(self, model: Any, model_id: str = ""):
         self.model = model
         self.model_id = model_id
-        self.history: Optional[Any] = None
+        self.training_result: Optional[TrainingResult] = None
         self.predictions: Optional[np.ndarray] = None
         self._resource_manager = get_memory_manager(use_process_isolation=False)
 
     def __repr__(self) -> str:
         model_type = self.model.__class__.__name__
-        is_trained = "Yes" if self.history is not None else "No"
+        is_trained = "Yes" if self.training_result is not None else "No"
         return f"Ictonyx BaseModelWrapper(id='{self.model_id}', type='{model_type}', is_trained={is_trained})"
 
     def __del__(self):
@@ -86,7 +103,7 @@ class BaseModelWrapper(ABC):
         (e.g., KerasModelWrapper, ScikitLearnModelWrapper). The implementation
         is responsible for handling its specific data format (e.g.,
         tf.data.Dataset vs. numpy arrays) and storing the training
-        history (if any) in the `self.history` attribute.
+        history (if any) in the `self.training_result` attribute.
 
         Args:
             train_data (Any): The data to train the model on. The required
@@ -274,7 +291,6 @@ if TENSORFLOW_AVAILABLE:
     class KerasModelWrapper(BaseModelWrapper):
         def __init__(self, model: KerasModel, model_id: str = ""):
             super().__init__(model, model_id)
-            self.history: Optional[tf.keras.callbacks.History] = None
 
         def _cleanup_implementation(self):
             """TensorFlow/Keras specific cleanup."""
@@ -315,8 +331,8 @@ if TENSORFLOW_AVAILABLE:
                         2.  A `tf.keras.utils.Sequence` object (a data generator).
                         3.  A tuple of `(X, y)` numpy arrays.
 
-                        The resulting `tf.keras.callbacks.History` object is stored
-                        in the `self.history` attribute.
+                        The training metrics are stored in `self.training_result`
+                        as a `TrainingResult` object.
 
                         Args:
                             train_data (Any): The training data. Can be a `tf.data.Dataset`,
@@ -331,16 +347,20 @@ if TENSORFLOW_AVAILABLE:
                                 supported formats.
                         """
             if isinstance(train_data, (tf.data.Dataset, Sequence)):
-                self.history = self.model.fit(train_data, validation_data=validation_data, **kwargs)
+                keras_history = self.model.fit(train_data, validation_data=validation_data, **kwargs)
             elif isinstance(train_data, tuple) and len(train_data) == 2:
                 X_train, y_train = train_data
-                self.history = self.model.fit(x=X_train, y=y_train, validation_data=validation_data, **kwargs)
+                keras_history = self.model.fit(x=X_train, y=y_train, validation_data=validation_data, **kwargs)
             else:
                 raise TypeError(
                     "train_data must be a tuple of (X, y), a tf.data.Dataset, or a Sequence."
                 )
 
-        # REVISION: Improved prediction logic to handle binary and multi-class models correctly
+            self.training_result = TrainingResult(
+                history=dict(keras_history.history),
+                params=getattr(keras_history, 'params', {})
+            )
+
         def predict(self, data: np.ndarray, **kwargs) -> np.ndarray:
             """
             Generates predictions and stores them.
@@ -598,10 +618,10 @@ if SKLEARN_AVAILABLE:
             1.  Fits the model using `model.fit()`.
             2.  Calculates training accuracy (and validation accuracy if
                 `validation_data` is provided).
-            3.  Creates a **mock history object** containing a single "epoch"
+            3.  Creates a `TrainingResult` containing a single "epoch"
                 with these metrics (e.g., `{'accuracy': [0.95],
                 'val_accuracy': [0.92]}`).
-            4.  Stores this mock history in `self.history`.
+            4.  Stores the result in `self.training_result`.
 
             Args:
                 train_data: The training data, must be a tuple of
@@ -654,15 +674,7 @@ if SKLEARN_AVAILABLE:
                     history_dict['val_accuracy'] = [train_accuracy]
                     history_dict['val_loss'] = [1.0 - train_accuracy]
 
-                # Create a mock history object that mimics Keras History
-                class MockHistory:
-                    """Mock Keras History object for sklearn compatibility."""
-
-                    def __init__(self, history_dict):
-                        self.history = history_dict
-                        self.params = {}  # Empty params dict like Keras
-
-                self.history = MockHistory(history_dict)
+                self.training_result = TrainingResult(history=history_dict)
 
             else:
                 raise ValueError("ScikitLearnModelWrapper.fit() expects train_data as a tuple of (X_train, y_train)")
@@ -678,9 +690,33 @@ if SKLEARN_AVAILABLE:
                 raise NotImplementedError("The scikit-learn model does not have a predict_proba method.")
 
         def evaluate(self, data: Union[Tuple[np.ndarray, np.ndarray], Any], **kwargs) -> Dict[str, Any]:
+            """Evaluate sklearn model, returning all applicable metrics."""
             X_test, y_test = data
-            results = self.model.score(X_test, y_test, **kwargs)
-            return {'accuracy': results}
+            y_pred = self.model.predict(X_test)
+
+            metrics: Dict[str, Any] = {
+                'accuracy': accuracy_score(y_test, y_pred)
+            }
+
+            try:
+                from sklearn.metrics import precision_score, recall_score, f1_score
+                average = 'binary' if len(np.unique(y_test)) == 2 else 'weighted'
+                metrics['precision'] = precision_score(y_test, y_pred, average=average, zero_division=0)
+                metrics['recall'] = recall_score(y_test, y_pred, average=average, zero_division=0)
+                metrics['f1'] = f1_score(y_test, y_pred, average=average, zero_division=0)
+            except Exception:
+                pass
+
+            try:
+                from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+                if not hasattr(self.model, 'predict_proba'):
+                    metrics['r2'] = r2_score(y_test, y_pred)
+                    metrics['mse'] = mean_squared_error(y_test, y_pred)
+                    metrics['mae'] = mean_absolute_error(y_test, y_pred)
+            except Exception:
+                pass
+
+            return metrics
 
         def assess(self, true_labels: np.ndarray) -> Dict[str, float]:
             if self.predictions is None:

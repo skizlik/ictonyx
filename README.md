@@ -153,7 +153,7 @@ print(results.summarize())
 
 plot_variability_summary(
     all_runs_metrics_list=results.all_runs_metrics,
-    final_metrics_series=results.final_val_accuracies,
+    final_metrics_series=results.results.final_metrics['val_accuracy'],
     metric='accuracy'
 )
 ```
@@ -163,11 +163,11 @@ Output:
 ```
 Study Summary:
   Successful runs: 10/10
-  Val accuracy: 0.9592 (SD = 0.0050)
+  val_accuracy: 0.9592 (SD = 0.0050)
 Variability Study Results
 ==============================
 Successful runs: 10
-Final validation accuracy:
+val_accuracy:
   Mean: 0.9592
   Std:  0.0050
   Min:  0.9520

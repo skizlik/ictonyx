@@ -96,7 +96,7 @@ class ExperimentRunner:
 
         # Initialize result storage
         self.all_runs_metrics: List[pd.DataFrame] = []
-        self.final_val_accuracies: List[float] = []
+        self.final_metrics: Dict[str, List[float]] = {}
         self.final_test_metrics: List[Dict[str, Any]] = []
         self.failed_runs: List[int] = []
 
@@ -182,11 +182,14 @@ class ExperimentRunner:
                     'loss': 'train_loss'
                 }, inplace=True)
 
-                # Store validation accuracy
-                if 'val_accuracy' in history_df.columns:
-                    final_val_acc = float(history_df['val_accuracy'].iloc[-1])
-                    self.final_val_accuracies.append(final_val_acc)
-                    self.tracker.log_metric('final_val_accuracy', final_val_acc, step=run_id)
+                # Store final values for ALL tracked metrics
+                for col in history_df.columns:
+                    if col not in ('run_num', 'epoch'):
+                        final_value = float(history_df[col].iloc[-1])
+                        if col not in self.final_metrics:
+                            self.final_metrics[col] = []
+                        self.final_metrics[col].append(final_value)
+                        self.tracker.log_metric(f'final_{col}', final_value, step=run_id)
 
                 # Store test metrics
                 test_metrics = result['result'].get('test_metrics')
@@ -238,18 +241,14 @@ class ExperimentRunner:
                 verbose=self.model_config.get('verbose', 0)
             )
 
-            # Extract history
-            if not hasattr(wrapped_model, 'history') or wrapped_model.history is None:
+            # Extract training result
+            if wrapped_model.training_result is None:
                 if self.verbose:
-                    logger.warning(f" - Run {run_id}: No training history produced")
+                    logger.warning(f" - Run {run_id}: No training result produced")
                 self.failed_runs.append(run_id)
                 return None
 
-            # Create DataFrame from history
-            if hasattr(wrapped_model.history, 'history'):
-                history_dict = wrapped_model.history.history
-            else:
-                history_dict = wrapped_model.history
+            history_dict = wrapped_model.training_result.history
 
             history_df = pd.DataFrame(history_dict)
             history_df['run_num'] = run_id
@@ -261,11 +260,14 @@ class ExperimentRunner:
                 'loss': 'train_loss'
             }, inplace=True)
 
-            # Store validation accuracy
-            if self.val_data is not None and 'val_accuracy' in history_df.columns:
-                final_val_acc = float(history_df['val_accuracy'].iloc[-1])
-                self.final_val_accuracies.append(final_val_acc)
-                self.tracker.log_metric('final_val_accuracy', final_val_acc, step=run_id)
+            # Store final values for ALL tracked metrics
+            for col in history_df.columns:
+                if col not in ('run_num', 'epoch'):
+                    final_value = float(history_df[col].iloc[-1])
+                    if col not in self.final_metrics:
+                        self.final_metrics[col] = []
+                    self.final_metrics[col].append(final_value)
+                    self.tracker.log_metric(f'final_{col}', final_value, step=run_id)
 
             # Evaluate on test data
             if self.test_data is not None:
@@ -307,14 +309,13 @@ class ExperimentRunner:
 
     def run_study(self, num_runs: int = 5,
                   epochs_per_run: Optional[int] = None,
-                  stop_on_failure_rate: float = 0.5) -> Tuple[
-        List[pd.DataFrame], List[float], List[Dict[str, Any]]]:
+                  stop_on_failure_rate: float = 0.5) -> 'VariabilityStudyResults':
 
         """Execute the complete variability study."""
 
         # Reset state from any previous run
         self.all_runs_metrics = []
-        self.final_val_accuracies = []
+        self.final_metrics = {}
         self.final_test_metrics = []
         self.failed_runs = []
 
@@ -383,12 +384,17 @@ class ExperimentRunner:
             logger.info(f"  Successful runs: {successful}/{num_runs}")
             if self.failed_runs:
                 logger.warning(f"  Failed runs: {self.failed_runs}")
-            if self.final_val_accuracies:
-                mean_acc = np.mean(self.final_val_accuracies)
-                std_acc = np.std(self.final_val_accuracies)
-                logger.info(f"  Val accuracy: {mean_acc:.4f} (SD = {std_acc:.4f})")
+            for metric_name, values in self.final_metrics.items():
+                if values:
+                    mean_val = np.mean(values)
+                    std_val = np.std(values)
+                    logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {std_val:.4f})")
 
-        return self.all_runs_metrics, self.final_val_accuracies, self.final_test_metrics
+        return VariabilityStudyResults(
+            all_runs_metrics=self.all_runs_metrics,
+            final_metrics=self.final_metrics,
+            final_test_metrics=self.final_test_metrics
+        )
 
     def get_summary_stats(self) -> Dict[str, Any]:
         """Get summary statistics for the completed study."""
@@ -399,13 +405,12 @@ class ExperimentRunner:
             'failure_rate': len(self.failed_runs) / max(1, len(self.all_runs_metrics) + len(self.failed_runs))
         }
 
-        if self.final_val_accuracies:
-            stats.update({
-                'val_accuracy_mean': np.mean(self.final_val_accuracies),
-                'val_accuracy_std': np.std(self.final_val_accuracies),
-                'val_accuracy_min': np.min(self.final_val_accuracies),
-                'val_accuracy_max': np.max(self.final_val_accuracies)
-            })
+        for metric_name, values in self.final_metrics.items():
+            if values:
+                stats[f'{metric_name}_mean'] = np.mean(values)
+                stats[f'{metric_name}_std'] = np.std(values)
+                stats[f'{metric_name}_min'] = np.min(values)
+                stats[f'{metric_name}_max'] = np.max(values)
 
         return stats
 
@@ -433,13 +438,8 @@ def _isolated_training_function(model_builder, config, train_data,
 
         # Extract history
         history = {}
-        if hasattr(model, 'history'):
-            if hasattr(model.history, 'history'):
-                # Keras History object
-                history = dict(model.history.history)
-            else:
-                # Already a dict
-                history = dict(model.history)
+        if model.training_result is not None:
+            history = dict(model.training_result.history)
 
         # Evaluate on test data if available
         test_metrics = {}
@@ -478,14 +478,11 @@ def _isolated_training_function(model_builder, config, train_data,
             'traceback': traceback.format_exc()
         }
 
-
 @dataclass
 class VariabilityStudyResults:
-    """
-    Container for variability study results with analysis methods.
-    """
+    """Container for variability study results with analysis methods."""
     all_runs_metrics: List[pd.DataFrame]
-    final_val_accuracies: List[float]
+    final_metrics: Dict[str, List[float]]
     final_test_metrics: List[Dict[str, Any]]
 
     @property
@@ -493,8 +490,30 @@ class VariabilityStudyResults:
         """Number of successful runs."""
         return len(self.all_runs_metrics)
 
+    def get_metric_values(self, metric_name: str) -> List[float]:
+        """Get collected final values for a specific metric.
+
+        Args:
+            metric_name: Metric key, e.g. 'val_accuracy', 'train_loss', 'val_f1'
+
+        Returns:
+            List of final-epoch values, one per run.
+
+        Raises:
+            KeyError: If metric was not tracked.
+        """
+        if metric_name not in self.final_metrics:
+            available = sorted(self.final_metrics.keys())
+            raise KeyError(
+                f"Metric '{metric_name}' not found. Available: {available}"
+            )
+        return self.final_metrics[metric_name]
+
     def get_final_metrics(self, metric_name: str = 'val_accuracy') -> Dict[str, float]:
-        """Extract final metric values for each run."""
+        """Extract final metric values for each run (labeled run_1, run_2, ...).
+
+        For backward compatibility with plotting and statistical comparison code.
+        """
         metrics = {}
         for i, df in enumerate(self.all_runs_metrics):
             if metric_name in df.columns:
@@ -503,19 +522,7 @@ class VariabilityStudyResults:
 
     def get_available_metrics(self) -> List[str]:
         """Get list of all available metrics across all runs."""
-        if not self.all_runs_metrics:
-            return []
-
-        # Get all unique column names from all DataFrames
-        all_columns = set()
-        for df in self.all_runs_metrics:
-            all_columns.update(df.columns)
-
-        # Exclude non-metric columns
-        exclude = {'run_num', 'epoch', 'run_id'}
-        metrics = sorted([col for col in all_columns if col not in exclude])
-
-        return metrics
+        return sorted(self.final_metrics.keys())
 
     def to_dataframe(self) -> pd.DataFrame:
         """Convert results to a summary DataFrame with one row per run."""
@@ -526,12 +533,10 @@ class VariabilityStudyResults:
         for i, df in enumerate(self.all_runs_metrics):
             row = {'run_id': i + 1}
 
-            # Get final values for all metrics
             for col in df.columns:
                 if col not in {'run_num', 'epoch', 'run_id'}:
                     row[f'final_{col}'] = float(df[col].iloc[-1])
 
-            # Add test metrics if available
             if i < len(self.final_test_metrics):
                 for key, value in self.final_test_metrics[i].items():
                     row[f'test_{key}'] = value
@@ -548,16 +553,15 @@ class VariabilityStudyResults:
             f"Successful runs: {self.n_runs}",
         ]
 
-        if self.final_val_accuracies:
-            mean_acc = np.mean(self.final_val_accuracies)
-            std_acc = np.std(self.final_val_accuracies)
-            lines.extend([
-                f"Final validation accuracy:",
-                f"  Mean: {mean_acc:.4f}",
-                f"  Std:  {std_acc:.4f}",
-                f"  Min:  {np.min(self.final_val_accuracies):.4f}",
-                f"  Max:  {np.max(self.final_val_accuracies):.4f}"
-            ])
+        for metric_name, values in sorted(self.final_metrics.items()):
+            if values:
+                lines.extend([
+                    f"{metric_name}:",
+                    f"  Mean: {np.mean(values):.4f}",
+                    f"  Std:  {np.std(values):.4f}",
+                    f"  Min:  {np.min(values):.4f}",
+                    f"  Max:  {np.max(values):.4f}"
+                ])
 
         return "\n".join(lines)
 
@@ -565,15 +569,12 @@ class VariabilityStudyResults:
                                      metric_name: str = 'val_accuracy',
                                      alpha: float = 0.05,
                                      correction_method: str = 'holm') -> Dict[str, Any]:
-        """
-        Perform statistical comparison of runs for the specified metric.
-        """
+        """Perform statistical comparison of runs for the specified metric."""
         from .analysis import compare_multiple_models
 
         if not self.all_runs_metrics:
             raise ValueError("No run metrics available for statistical comparison")
 
-        # Extract the specified metric for each run
         final_metrics = self.get_final_metrics(metric_name)
 
         if not final_metrics:
@@ -583,11 +584,9 @@ class VariabilityStudyResults:
                 f"Available metrics: {available}"
             )
 
-        # Convert to the format expected by compare_multiple_models
         metrics_dict = {}
         for run_name, value in final_metrics.items():
             run_idx = int(run_name.split('_')[-1]) - 1
-
             if run_idx < len(self.all_runs_metrics):
                 df = self.all_runs_metrics[run_idx]
                 if metric_name in df.columns:
@@ -597,43 +596,35 @@ class VariabilityStudyResults:
             else:
                 metrics_dict[run_name] = pd.Series([value], name=run_name)
 
-        # Perform statistical comparison
-        comparison_results = compare_multiple_models(
+        return compare_multiple_models(
             model_results=metrics_dict,
             alpha=alpha,
             correction_method=correction_method
         )
 
-        return comparison_results
 
-
-# Convenience function
 def run_variability_study(
         model_builder: Callable[[ModelConfig], BaseModelWrapper],
         data_handler: DataHandler,
         model_config: ModelConfig,
         num_runs: int = 5,
         epochs_per_run: Optional[int] = None,
-        tracker: Optional[BaseLogger] = None,  # <--- RENAMED
+        tracker: Optional[BaseLogger] = None,
         use_process_isolation: bool = False,
         gpu_memory_limit: Optional[int] = None,
         verbose: bool = True) -> VariabilityStudyResults:
-    """
-    Run a complete variability study.
-    """
+    """Run a complete variability study."""
     runner = ExperimentRunner(
         model_builder=model_builder,
         data_handler=data_handler,
         model_config=model_config,
-        tracker=tracker,  # <--- RENAMED
+        tracker=tracker,
         use_process_isolation=use_process_isolation,
         gpu_memory_limit=gpu_memory_limit,
         verbose=verbose
     )
 
-    all_metrics, final_accs, test_metrics = runner.run_study(
+    return runner.run_study(
         num_runs=num_runs,
         epochs_per_run=epochs_per_run
     )
-
-    return VariabilityStudyResults(all_metrics, final_accs, test_metrics)

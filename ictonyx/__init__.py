@@ -11,7 +11,7 @@ import os
 
 # Core imports (always available)
 from .config import ModelConfig
-from .core import BaseModelWrapper, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE
+from .core import BaseModelWrapper, TrainingResult, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE
 from .utils import load_object, save_object, train_val_test_split
 
 # Global settings
@@ -52,6 +52,7 @@ __all__ = [
     # Core classes
     'ModelConfig',
     'BaseModelWrapper',
+    'TrainingResult'
     'BaseLogger',
 
     # Settings

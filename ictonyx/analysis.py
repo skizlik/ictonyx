@@ -491,7 +491,7 @@ def anova_test(model_metrics: Dict[str, pd.Series],
     """One-way ANOVA test with comprehensive validation, effect sizes, and interpretation."""
     _check_scipy()
 
-    result = StatisticalTestResult(test_name="One-Way ANOVA")
+    result = StatisticalTestResult(test_name="One-Way ANOVA", statistic=float('nan'), p_value=float('nan'))
 
     if len(model_metrics) < 2:
         raise ValueError("ANOVA requires at least two groups to compare.")
@@ -675,7 +675,7 @@ def shapiro_wilk_test(model_metrics: pd.Series, alpha: float = 0.05) -> Statisti
     """Shapiro-Wilk test for normality with comprehensive validation."""
     _check_scipy()
 
-    result = StatisticalTestResult(test_name="Shapiro-Wilk Normality Test")
+    result = StatisticalTestResult(test_name="Shapiro-Wilk Normality Test", statistic=float('nan'), p_value=float('nan'))
 
     if not isinstance(model_metrics, pd.Series):
         raise TypeError("Input must be a pandas Series.")

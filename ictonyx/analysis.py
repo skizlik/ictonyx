@@ -386,11 +386,8 @@ def mann_whitney_test(model1_metrics: pd.Series, model2_metrics: pd.Series,
     # Perform test
     try:
         statistic, p_value = mannwhitneyu(clean1, clean2, alternative=alternative)
-        result = StatisticalTestResult(
-            test_name="Mann-Whitney U Test",
-            statistic=float(statistic),
-            p_value=float(p_value)
-        )
+        result.statistic = float(statistic)
+        result.p_value = float(p_value)
 
         # Effect size
         r, r_interpretation = rank_biserial_correlation(clean1, clean2)

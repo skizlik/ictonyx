@@ -317,7 +317,7 @@ class ExperimentRunner:
         self.final_val_accuracies = []
         self.final_test_metrics = []
         self.failed_runs = []
-        
+
         if epochs_per_run is None:
             epochs_per_run = self.model_config.get('epochs', 10)
 

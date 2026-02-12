@@ -233,7 +233,7 @@ class MemoryManager:
             try:
                 process = psutil.Process()
                 result.memory_before_mb = process.memory_info().rss / (1024 ** 2)
-            except:
+            except Exception:
                 pass
 
         # TensorFlow cleanup
@@ -246,7 +246,7 @@ class MemoryManager:
                 try:
                     tf.compat.v1.reset_default_graph()
                     result.actions.append('tf_reset_graph')
-                except:
+                except Exception:
                     pass
 
                 # GPU stats reset
@@ -254,7 +254,7 @@ class MemoryManager:
                     try:
                         tf.config.experimental.reset_memory_stats(gpu.name.split(':')[-1])
                         result.actions.append(f'tf_reset_{gpu.name}_stats')
-                    except:
+                    except Exception:
                         pass
 
             except Exception as e:
@@ -280,7 +280,7 @@ class MemoryManager:
                 result.memory_after_mb = process.memory_info().rss / (1024 ** 2)
                 if result.memory_before_mb:
                     result.memory_freed_mb = result.memory_before_mb - result.memory_after_mb
-            except:
+            except Exception:
                 pass
 
         result.success = len(result.errors) == 0
@@ -331,7 +331,7 @@ class MemoryManager:
         try:
             pickle.dumps((func, args, kwargs))
             return True
-        except:
+        except Exception:
             return False
 
     def _run_with_cloudpickle(self, func, args, kwargs):
@@ -389,7 +389,7 @@ class MemoryManager:
             if HAS_TENSORFLOW:
                 try:
                     tf.keras.backend.clear_session()
-                except:
+                except Exception:
                     pass
             gc.collect()
 
@@ -418,7 +418,7 @@ class MemoryManager:
 
             try:
                 return result_queue.get(timeout=5)
-            except:
+            except Exception:
                 return {
                     'success': False,
                     'error': 'No result from subprocess'
@@ -507,7 +507,7 @@ def _cleanup_subprocess():
     if HAS_TENSORFLOW:
         try:
             tf.keras.backend.clear_session()
-        except:
+        except Exception:
             pass
     gc.collect()
 
@@ -573,7 +573,7 @@ def get_memory_info() -> Dict[str, Any]:
             vm = psutil.virtual_memory()
             info['system_available_mb'] = vm.available / (1024 ** 2)
             info['system_percent'] = vm.percent
-        except:
+        except Exception:
             pass
 
     if HAS_TENSORFLOW:
@@ -581,7 +581,7 @@ def get_memory_info() -> Dict[str, Any]:
             for i, gpu in enumerate(tf.config.list_physical_devices('GPU')):
                 stats = tf.config.experimental.get_memory_info(f'GPU:{i}')
                 info[f'gpu{i}_current_mb'] = stats.get('current', 0) / (1024 ** 2)
-        except:
+        except Exception:
             pass
 
     return info
@@ -604,5 +604,5 @@ def check_isolation_capability(func: Callable) -> Tuple[bool, str]:
         try:
             pickle.dumps(func)
             return True, "standard pickle works"
-        except:
+        except Exception:
             return False, "install cloudpickle for notebook functions"

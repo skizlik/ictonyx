@@ -8,14 +8,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- 5×2cv paired t-test for classifier comparison
-- PyTorch model wrapper
-- Regression task support
+- PyTorch model wrapper (`PyTorchModelWrapper`)
+- Regression task support (MSE, MAE, R² as first-class metrics)
 - Sphinx documentation hosted on ReadTheDocs
+- Parallel execution for non-GPU models via `joblib`
+- Seed tracking and control for individual runs
+- Progress bars via `tqdm`
+- `VariabilityStudyResults.bootstrap_ci()` convenience method
+- `VariabilityStudyResults.report()` for self-contained summaries
+- Paired/blocked experimental designs for model comparison
+
+---
+
+## [0.2.0] - 2026-02-12
+
+### Breaking Changes
+- **Metric-agnostic pipeline**: `ExperimentRunner` now tracks all metrics per run
+  in `final_metrics: Dict[str, List[float]]`, replacing the hardcoded
+  `final_val_accuracies: List[float]`. Code that accessed `final_val_accuracies`
+  directly must switch to `final_metrics['val_accuracy']` or use
+  `VariabilityStudyResults.get_metric_values('val_accuracy')`.
+- **`TrainingResult` dataclass**: All model wrappers now set `self.training_result`
+  (a `TrainingResult` with a `.history` dict) instead of `self.history`.
+  `MockHistory` is deleted.
+- **`run_study()` return type**: Returns `VariabilityStudyResults` directly instead
+  of an unnamed `(List, List, List)` tuple.
+
+### Added
+- `TrainingResult` dataclass as the universal training output for all wrappers
+- `VariabilityStudyResults.get_metric_values()` for direct metric access
+- `ScikitLearnModelWrapper.evaluate()` now returns precision, recall, and F1
+  in addition to accuracy; regression models get R², MSE, and MAE
+- Python 3.12 added to CI test matrix and PyPI classifiers
+
+### Changed
+- Replaced all `print()` calls with structured `logger` output across
+  `data.py`, `explainers.py`, `memory.py`, and `tuning.py`
+- Replaced bare `except:` clauses with `except Exception:` in `memory.py`
+- Bumped seaborn dependency to `^0.13.0`
+
+### Fixed
+- `ExperimentRunner.run_study()` now resets all accumulators at the start of
+  each call; previously, calling `run_study()` twice on the same runner silently
+  appended to existing results
 
 ---
 
 ## [0.1.0] - 2026-02-12
+
+First release to PyPI.
 
 ### Added
 - **Bootstrap confidence intervals** — new `ictonyx.bootstrap` module with:

@@ -5,11 +5,12 @@ Supports both standard and process-isolated execution modes.
 """
 
 import gc
+import random
 import warnings
 import numpy as np
 import pandas as pd
 from typing import Callable, Dict, Any, List, Optional, Tuple, Union
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .core import BaseModelWrapper
 from .config import ModelConfig
@@ -39,9 +40,10 @@ class ExperimentRunner:
                  model_builder: Callable[[ModelConfig], BaseModelWrapper],
                  data_handler: DataHandler,
                  model_config: ModelConfig,
-                 tracker: Optional[BaseLogger] = None,  # <--- RENAMED
+                 tracker: Optional[BaseLogger] = None,
                  use_process_isolation: bool = False,
                  gpu_memory_limit: Optional[int] = None,
+                 seed: Optional[int] = None,
                  verbose: bool = True):
         """
         Initialize experiment runner.
@@ -49,10 +51,14 @@ class ExperimentRunner:
         Args:
             tracker: Object to track experiment metrics (e.g. MLflowLogger).
                      If None, uses basic BaseLogger.
+            seed: Base random seed for reproducibility. Each run uses
+                  seed + run_id. If None, a random seed is generated and
+                  stored so the study can still be reproduced after the fact.
         """
         self.model_builder = model_builder
         self.data_handler = data_handler
         self.model_config = model_config
+        self.seed = seed if seed is not None else int(np.random.default_rng().integers(0, 2 ** 31))
 
         # The Experiment Tracker (Records results/metrics)
         self.tracker = tracker or BaseLogger()  # <--- RENAMED ATTR
@@ -131,6 +137,30 @@ class ExperimentRunner:
                 "with non-picklable data types like tf.data.Dataset"
             )
 
+    @staticmethod
+    def _set_seeds(seed: int):
+        """Set all relevant RNGs for reproducibility.
+
+        Called before each run with a unique per-run seed (base_seed + run_id).
+        This controls the environment's randomness; model-internal RNGs
+        (e.g. sklearn's random_state) remain the user's responsibility.
+        """
+        random.seed(seed)
+        np.random.seed(seed)
+
+        # TensorFlow
+        if HAS_TENSORFLOW:
+            tf.random.set_seed(seed)
+
+        # PyTorch (will require revision when full PyTorch support is added)
+        try:
+            import torch
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+        except ImportError:
+            pass
+
     def _run_single_fit(self, run_id: int, epochs: int) -> Optional[pd.DataFrame]:
         """Run a single training iteration."""
         if self.use_process_isolation:
@@ -156,7 +186,8 @@ class ExperimentRunner:
                 self.val_data,
                 self.test_data,
                 epochs,
-                run_id
+                run_id,
+                self.seed + run_id
             )
         )
 
@@ -223,6 +254,9 @@ class ExperimentRunner:
         """Execute training in standard mode (in-process)."""
         if self.verbose:
             logger.info(f" - Run {run_id}: Training...")
+
+        # Set deterministic seeds for this run
+        self._set_seeds(self.seed + run_id)
 
         # Log run start (Metric Tracker)
         self.tracker.log_params({'run_id': run_id, 'mode': 'standard'})
@@ -327,7 +361,8 @@ class ExperimentRunner:
             'num_runs': num_runs,
             'epochs_per_run': epochs_per_run,
             'use_process_isolation': self.use_process_isolation,
-            'gpu_memory_limit': self.gpu_memory_limit
+            'gpu_memory_limit': self.gpu_memory_limit,
+            'seed': self.seed
         })
         self.tracker.log_params(self.model_config.params)
 
@@ -338,6 +373,7 @@ class ExperimentRunner:
             logger.info(f"  Runs: {num_runs}")
             logger.info(f"  Epochs per run: {epochs_per_run}")
             logger.info(f"  Execution mode: {mode}")
+            logger.info(f"  Seed: {self.seed}")
             if self.gpu_memory_limit:
                 logger.info(f"  GPU memory limit: {self.gpu_memory_limit}MB")
             logger.info("")
@@ -393,7 +429,8 @@ class ExperimentRunner:
         return VariabilityStudyResults(
             all_runs_metrics=self.all_runs_metrics,
             final_metrics=self.final_metrics,
-            final_test_metrics=self.final_test_metrics
+            final_test_metrics=self.final_test_metrics,
+            seed=self.seed
         )
 
     def get_summary_stats(self) -> Dict[str, Any]:
@@ -417,13 +454,30 @@ class ExperimentRunner:
 
 # Module-level function for subprocess execution (must be picklable)
 def _isolated_training_function(model_builder, config, train_data,
-                                val_data, test_data, epochs, run_id):
+                                val_data, test_data, epochs, run_id,
+                                run_seed=None):
     """
     Training function executed in isolated subprocess.
     """
     import gc
 
     try:
+        # Set seeds in subprocess
+        if run_seed is not None:
+            import random
+            random.seed(run_seed)
+            np.random.seed(run_seed)
+            try:
+                import tensorflow as tf
+                tf.random.set_seed(run_seed)
+            except ImportError:
+                pass
+            try:
+                import torch
+                torch.manual_seed(run_seed)
+            except ImportError:
+                pass
+
         # Build model in subprocess
         model = model_builder(config)
 
@@ -484,6 +538,7 @@ class VariabilityStudyResults:
     all_runs_metrics: List[pd.DataFrame]
     final_metrics: Dict[str, List[float]]
     final_test_metrics: List[Dict[str, Any]]
+    seed: Optional[int] = None
 
     @property
     def n_runs(self) -> int:
@@ -551,6 +606,7 @@ class VariabilityStudyResults:
             "Variability Study Results",
             "=" * 30,
             f"Successful runs: {self.n_runs}",
+            f"Seed: {self.seed}",
         ]
 
         for metric_name, values in sorted(self.final_metrics.items()):
@@ -612,8 +668,14 @@ def run_variability_study(
         tracker: Optional[BaseLogger] = None,
         use_process_isolation: bool = False,
         gpu_memory_limit: Optional[int] = None,
+        seed: Optional[int] = None,
         verbose: bool = True) -> VariabilityStudyResults:
-    """Run a complete variability study."""
+    """Run a complete variability study.
+
+    Args:
+        seed: Base random seed. Each run uses seed + run_id. If None,
+              a random seed is generated automatically.
+    """
     runner = ExperimentRunner(
         model_builder=model_builder,
         data_handler=data_handler,
@@ -621,6 +683,7 @@ def run_variability_study(
         tracker=tracker,
         use_process_isolation=use_process_isolation,
         gpu_memory_limit=gpu_memory_limit,
+        seed=seed,
         verbose=verbose
     )
 

@@ -30,6 +30,7 @@ def variability_study(
         batch_size: int = 32,
         tracker: Optional[BaseLogger] = None,
         use_process_isolation: bool = False,
+        seed: Optional[int] = None,
         **kwargs
 ) -> VariabilityStudyResults:
     """
@@ -61,7 +62,8 @@ def variability_study(
         epochs_per_run=epochs,
         tracker=tracker,
         use_process_isolation=use_process_isolation,
-        gpu_memory_limit=kwargs.get('gpu_memory_limit')
+        gpu_memory_limit=kwargs.get('gpu_memory_limit'),
+        seed=seed
     )
 
 

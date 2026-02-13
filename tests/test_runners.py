@@ -190,6 +190,71 @@ class TestExperimentRunner:
         assert 'successful_runs' in stats
         assert stats['successful_runs'] == 2
 
+    def test_seed_reproducibility(self):
+        """Test that same seed produces identical results."""
+
+        def model_builder(config):
+            return MockModel(config)
+
+        def run_with_seed(seed):
+            runner = ExperimentRunner(
+                model_builder=model_builder,
+                data_handler=MockDataHandler(),
+                model_config=ModelConfig({'epochs': 3}),
+                seed=seed,
+                verbose=False
+            )
+            results = runner.run_study(num_runs=3, epochs_per_run=3)
+            return results.final_metrics['val_accuracy']
+
+        # Same seed → same results
+        run_a = run_with_seed(42)
+        run_b = run_with_seed(42)
+        assert run_a == run_b, f"Same seed produced different results: {run_a} vs {run_b}"
+
+        # Different seed → different results
+        run_c = run_with_seed(99)
+        assert run_a != run_c, "Different seeds produced identical results"
+
+    def test_seed_stored_in_results(self):
+        """Test that seed is stored in VariabilityStudyResults."""
+
+        def model_builder(config):
+            return MockModel(config)
+
+        # Explicit seed
+        runner = ExperimentRunner(
+            model_builder=model_builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig({'epochs': 2}),
+            seed=42,
+            verbose=False
+        )
+        results = runner.run_study(num_runs=2)
+        assert results.seed == 42
+
+        # Auto-generated seed
+        runner2 = ExperimentRunner(
+            model_builder=model_builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig({'epochs': 2}),
+            verbose=False
+        )
+        results2 = runner2.run_study(num_runs=2)
+        assert results2.seed is not None
+        assert isinstance(results2.seed, int)
+
+    def test_seed_in_summary(self):
+        """Test that seed appears in summarize() output."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[pd.DataFrame({'a': [1]})],
+            final_metrics={'val_accuracy': [0.8]},
+            final_test_metrics=[],
+            seed=42
+        )
+        summary = results.summarize()
+        assert "Seed: 42" in summary
+
 
 class TestVariabilityStudyResults:
     """Test VariabilityStudyResults class."""
@@ -364,3 +429,20 @@ class TestConvenienceFunction:
         assert 'val_loss' in results.final_metrics
         assert 'val_f1' in results.final_metrics
         assert len(results.final_metrics['val_f1']) == 3
+
+    def test_seed_passthrough(self):
+        """Test that seed passes through the convenience function."""
+
+        def model_builder(config):
+            return MockModel(config)
+
+        results = run_variability_study(
+            model_builder=model_builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig({'epochs': 2}),
+            num_runs=2,
+            seed=123,
+            verbose=False
+        )
+
+        assert results.seed == 123

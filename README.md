@@ -6,7 +6,7 @@ A Python framework for assessing machine learning model variability and performi
 
 [![CI/CD](https://github.com/skizlik/ictonyx/actions/workflows/test.yml/badge.svg)](https://github.com/skizlik/ictonyx/actions/workflows/test.yml)
 [![PyPI](https://img.shields.io/pypi/v/ictonyx)](https://pypi.org/project/ictonyx/)
-![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue)
+![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## The Problem
@@ -23,7 +23,7 @@ Ictonyx runs your model multiple times and provides complete distributions for y
 pip install ictonyx
 ```
 
-Requires Python 3.10+. Current release: **0.1.0**
+Requires Python 3.10+. Current release: **0.2.0**
 ([changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/))
 
 ## Quick Start: sklearn
@@ -153,7 +153,7 @@ print(results.summarize())
 
 plot_variability_summary(
     all_runs_metrics_list=results.all_runs_metrics,
-    final_metrics_series=results.results.final_metrics['val_accuracy'],
+    final_metrics_series=results.final_metrics['val_accuracy'],
     metric='accuracy'
 )
 ```
@@ -164,9 +164,11 @@ Output:
 Study Summary:
   Successful runs: 10/10
   val_accuracy: 0.9592 (SD = 0.0050)
+  Seed: 42
 Variability Study Results
 ==============================
 Successful runs: 10
+Seed: 42
 val_accuracy:
   Mean: 0.9592
   Std:  0.0050

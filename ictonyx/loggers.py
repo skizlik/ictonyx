@@ -141,10 +141,10 @@ class MLflowLogger(BaseLogger):
         self._run_id = self._run.info.run_id
 
         if self.verbose:
-            print(f"Started MLflow run: {self._run_id}")
-            print(f"Experiment: {experiment_name}")
+            logger.info(f"Started MLflow run: {self._run_id}")
+            logger.info(f"Experiment: {experiment_name}")
             if tracking_uri:
-                print(f"Tracking URI: {tracking_uri}")
+                logger.info(f"Tracking URI: {tracking_uri}")
 
     @property
     def run_id(self) -> str:
@@ -180,7 +180,7 @@ class MLflowLogger(BaseLogger):
         # Handle NaN values
         if np.isnan(value) or np.isinf(value):
             if self.verbose:
-                print(f"Warning: Skipping invalid metric value for {key}: {value}")
+                logger.warning(f"Skipping invalid metric value for {key}: {value}")
             return
 
         mlflow.log_metric(key, value, step=step)
@@ -193,7 +193,7 @@ class MLflowLogger(BaseLogger):
             if not (np.isnan(value) or np.isinf(value)):
                 valid_metrics[key] = value
             elif self.verbose:
-                print(f"Warning: Skipping invalid metric value for {key}: {value}")
+                logger.warning(f"Skipping invalid metric value for {key}: {value}")
 
         if valid_metrics:
             mlflow.log_metrics(valid_metrics, step=step)
@@ -245,12 +245,12 @@ class MLflowLogger(BaseLogger):
                 mlflow.pyfunc.log_model(artifact_path, python_model=model, **kwargs)
 
             if self.verbose:
-                print(f"Logged model of type {type(model).__name__} to {artifact_path}")
+                logger.info(f"Logged model of type {type(model).__name__} to {artifact_path}")
 
         except Exception as e:
             if self.verbose:
-                print(f"Warning: Failed to log model: {e}")
-                print("Attempting to save as pickle...")
+                logger.warning(f"Failed to log model: {e}")
+                logger.info("Attempting to save as pickle...")
 
             # Fallback: save as pickle artifact
             with tempfile.NamedTemporaryFile(suffix='.pkl', delete=False) as tmp_file:
@@ -331,7 +331,7 @@ class MLflowLogger(BaseLogger):
                 "memory_gb": str(round(psutil.virtual_memory().total / (1024 ** 3), 2))
             })
         elif self.verbose:
-            print("Warning: platform/psutil not available, logging basic system info only")
+            logger.warning("platform/psutil not available, logging basic system info only")
 
         # Try to get GPU info if TensorFlow available
         try:
@@ -351,8 +351,8 @@ class MLflowLogger(BaseLogger):
         mlflow.end_run()
 
         if self.verbose:
-            print(f"Ended MLflow run: {self._run_id}")
-            print(f"View results at: {mlflow.get_tracking_uri()}")
+            logger.info(f"Ended MLflow run: {self._run_id}")
+            logger.info(f"View results at: {mlflow.get_tracking_uri()}")
 
     def get_run_url(self) -> str:
         """Gets the URL to view this run in MLflow UI."""

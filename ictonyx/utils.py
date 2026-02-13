@@ -6,18 +6,21 @@ from sklearn.model_selection import train_test_split
 import pickle
 import os
 from typing import Union, Tuple, List, Any, Optional
+from . import settings
+
+logger = settings.logger
 
 def save_object(obj: Any, path: str):
     """Saves a Python object to a file using pickle."""
     with open(path, 'wb') as f:
         pickle.dump(obj, f)
-    print(f"Object saved to {path}")
+    logger.info(f"Object saved to {path}")
 
 def load_object(path: str) -> Any:
     """Loads a Python object from a file using pickle."""
     with open(path, 'rb') as f:
         obj = pickle.load(f)
-    print(f"Object loaded from {path}")
+    logger.info(f"Object loaded from {path}")
     return obj
 
 def train_val_test_split(X: Union[pd.DataFrame, np.ndarray], y: Union[pd.Series, np.ndarray],
@@ -52,9 +55,9 @@ def setup_mlflow(experiment_name: str = "ictonyx_experiment",
 
     try:
         experiment_id = mlflow.create_experiment(experiment_name)
-        print(f"Created new MLflow experiment: {experiment_name}")
+        logger.info(f"Created new MLflow experiment: {experiment_name}")
     except mlflow.exceptions.MlflowException:
         experiment_id = mlflow.get_experiment_by_name(experiment_name).experiment_id
-        print(f"Using existing MLflow experiment: {experiment_name}")
+        logger.info(f"Using existing MLflow experiment: {experiment_name}")
 
     return experiment_id

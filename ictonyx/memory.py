@@ -175,7 +175,7 @@ class MemoryManager:
                         # Growth mode
                         tf.config.experimental.set_memory_growth(gpu, True)
                         if self.verbose:
-                            print("Enabled GPU memory growth")
+                            logger.debug("Enabled GPU memory growth")
                 except RuntimeError as e:
                     if "visible devices" in str(e).lower():
                         warnings.warn(

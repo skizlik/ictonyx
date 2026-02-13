@@ -11,7 +11,7 @@ from typing import Union, Callable, Any, Optional, List, Dict, Tuple
 import pandas as pd
 import numpy as np
 
-from .core import BaseModelWrapper, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE
+from .core import BaseModelWrapper, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE, PYTORCH_AVAILABLE
 from .config import ModelConfig
 from .data import auto_resolve_handler, DataHandler
 from .runners import run_variability_study as _run_study
@@ -158,6 +158,17 @@ def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
             )
         from .core import KerasModelWrapper
         return KerasModelWrapper(obj)
+
+    # PyTorch nn.Module detection
+    if 'torch' in str(type(obj).__mro__):
+        if not PYTORCH_AVAILABLE:
+            raise ImportError(
+                "PyTorch is required to auto-wrap torch.nn.Module models. "
+                "Install with: pip install torch"
+            )
+        from .core import PyTorchModelWrapper
+        return PyTorchModelWrapper(obj)
+
 
     raise TypeError(f"Cannot wrap model of type: {type(obj)}")
 

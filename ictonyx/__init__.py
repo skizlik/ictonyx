@@ -1,5 +1,5 @@
 # ictonyx/__init__.py
-# v.0.2.0
+# v.0.3.0
 
 """
 Ictonyx: A Machine Learning Framework for Variability and Reproducibility Analysis
@@ -11,7 +11,7 @@ import os
 
 # Core imports (always available)
 from .config import ModelConfig
-from .core import BaseModelWrapper, TrainingResult, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE
+from .core import BaseModelWrapper, TrainingResult, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE, PYTORCH_AVAILABLE
 from .utils import load_object, save_object, train_val_test_split
 
 # Global settings
@@ -90,6 +90,7 @@ __all__ = [
     # Feature availability flags
     'TENSORFLOW_AVAILABLE',
     'SKLEARN_AVAILABLE',
+    'PYTORCH_AVAILABLE',
     '__version__',
 ]
 
@@ -103,6 +104,11 @@ if SKLEARN_AVAILABLE:
     from .core import ScikitLearnModelWrapper
 
     __all__.append('ScikitLearnModelWrapper')
+
+if PYTORCH_AVAILABLE:
+    from .core import PyTorchModelWrapper
+
+    __all__.append('PyTorchModelWrapper')
 
 # Data handlers with their dependencies
 _data_handlers_loaded = []
@@ -313,7 +319,7 @@ except ImportError:
     pass
 
 # Library version
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 
 # Feature availability summary

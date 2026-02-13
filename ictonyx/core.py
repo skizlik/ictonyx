@@ -31,6 +31,19 @@ except ImportError:
     BaseEstimator = None
     SKLEARN_AVAILABLE = False
 
+# Optional PyTorch imports
+try:
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import DataLoader, TensorDataset
+    PYTORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    nn = None
+    DataLoader = None
+    TensorDataset = None
+    PYTORCH_AVAILABLE = False
+
 @dataclass
 class TrainingResult:
     """Standardized training output from any model wrapper.
@@ -737,3 +750,354 @@ if SKLEARN_AVAILABLE:
 
 else:
     ScikitLearnModelWrapper = None
+
+# Concrete class for PyTorch models
+if PYTORCH_AVAILABLE:
+    class PyTorchModelWrapper(BaseModelWrapper):
+        """Wrapper for PyTorch nn.Module models.
+
+        Provides a complete training loop, metric tracking, and device
+        management. Designed to integrate seamlessly with Ictonyx's
+        ExperimentRunner and variability study pipeline.
+
+        The optimizer is specified as a class + params dict (not an instance)
+        because a fresh optimizer must be bound to each new model's
+        parameters when the ExperimentRunner rebuilds the model per run.
+
+        Args:
+            model: A PyTorch nn.Module instance.
+            criterion: A PyTorch loss function instance (e.g., nn.CrossEntropyLoss()).
+            optimizer_class: Optimizer class (e.g., torch.optim.Adam). Default: Adam.
+            optimizer_params: Dict of optimizer kwargs (e.g., {'lr': 0.001}).
+                Default: {'lr': 0.001}.
+            device: 'cuda', 'cpu', or 'auto'. Default: 'auto' (uses CUDA if available).
+            task: 'classification' or 'regression'. Default: 'classification'.
+                Controls which metrics are computed during training and evaluation.
+            model_id: Optional string identifier.
+
+        Example:
+            >>> model = nn.Sequential(nn.Linear(10, 2))
+            >>> wrapper = PyTorchModelWrapper(
+            ...     model,
+            ...     criterion=nn.CrossEntropyLoss(),
+            ...     optimizer_class=torch.optim.Adam,
+            ...     optimizer_params={'lr': 0.001}
+            ... )
+            >>> wrapper.fit((X_train, y_train), validation_data=(X_val, y_val), epochs=10)
+        """
+
+        def __init__(self,
+                     model: 'nn.Module',
+                     criterion: Any = None,
+                     optimizer_class: Any = None,
+                     optimizer_params: Optional[Dict[str, Any]] = None,
+                     device: str = 'auto',
+                     task: str = 'classification',
+                     model_id: str = ""):
+            super().__init__(model, model_id)
+            self.criterion = criterion or nn.CrossEntropyLoss()
+            self.optimizer_class = optimizer_class or torch.optim.Adam
+            self.optimizer_params = optimizer_params or {'lr': 0.001}
+            self.task = task
+
+            # Resolve device
+            if device == 'auto':
+                self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            else:
+                self.device = torch.device(device)
+
+            self.model.to(self.device)
+
+        def _cleanup_implementation(self):
+            """PyTorch-specific cleanup."""
+            if hasattr(self, 'model') and self.model is not None:
+                try:
+                    self.model.cpu()
+                    del self.model
+                except Exception:
+                    pass
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+
+        def _to_tensor(self, data: np.ndarray, dtype=None) -> 'torch.Tensor':
+            """Convert numpy array to tensor on the correct device."""
+            if dtype is None:
+                # Float for features, long for classification labels, float for regression labels
+                dtype = torch.float32
+            return torch.tensor(data, dtype=dtype).to(self.device)
+
+        def _make_dataloader(self, X: np.ndarray, y: np.ndarray, batch_size: int,
+                             shuffle: bool = True) -> 'DataLoader':
+            """Create a DataLoader from numpy arrays."""
+            X_t = self._to_tensor(X, dtype=torch.float32)
+            if self.task == 'classification':
+                y_t = self._to_tensor(y, dtype=torch.long)
+            else:
+                y_t = self._to_tensor(y, dtype=torch.float32)
+            dataset = TensorDataset(X_t, y_t)
+            return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+        def fit(self, train_data: Any, validation_data: Optional[Any] = None, **kwargs):
+            """
+            Trains the PyTorch model with a standard training loop.
+
+            Accepts (X, y) numpy array tuples or PyTorch DataLoaders. Tracks
+            loss and accuracy (classification) or MSE (regression) per epoch,
+            storing results in self.training_result as a TrainingResult.
+
+            Args:
+                train_data: Tuple of (X, y) numpy arrays, or a PyTorch DataLoader.
+                validation_data: Optional tuple of (X_val, y_val) or DataLoader.
+                **kwargs: Accepts 'epochs' (default 10), 'batch_size' (default 32),
+                    'verbose' (default 0). Other kwargs are ignored for
+                    compatibility with ExperimentRunner.
+            """
+            epochs = kwargs.get('epochs', 10)
+            batch_size = kwargs.get('batch_size', 32)
+
+            # Build DataLoaders
+            if isinstance(train_data, DataLoader):
+                train_loader = train_data
+            elif isinstance(train_data, tuple) and len(train_data) == 2:
+                X_train, y_train = train_data
+                train_loader = self._make_dataloader(X_train, y_train, batch_size, shuffle=True)
+            else:
+                raise TypeError(
+                    "train_data must be a tuple of (X, y) numpy arrays or a PyTorch DataLoader."
+                )
+
+            val_loader = None
+            if validation_data is not None:
+                if isinstance(validation_data, DataLoader):
+                    val_loader = validation_data
+                elif isinstance(validation_data, tuple) and len(validation_data) == 2:
+                    X_val, y_val = validation_data
+                    val_loader = self._make_dataloader(X_val, y_val, batch_size, shuffle=False)
+
+            # Create optimizer bound to this model's parameters
+            optimizer = self.optimizer_class(self.model.parameters(), **self.optimizer_params)
+
+            # History tracking
+            history = {
+                'loss': [],
+            }
+            if self.task == 'classification':
+                history['accuracy'] = []
+
+            if val_loader is not None:
+                history['val_loss'] = []
+                if self.task == 'classification':
+                    history['val_accuracy'] = []
+                else:
+                    history['val_mse'] = []
+
+            # Training loop
+            for epoch in range(epochs):
+                # --- Train phase ---
+                self.model.train()
+                running_loss = 0.0
+                correct = 0
+                total = 0
+
+                for X_batch, y_batch in train_loader:
+                    optimizer.zero_grad()
+                    outputs = self.model(X_batch)
+
+                    # Squeeze for regression with single output
+                    if self.task == 'regression' and outputs.dim() > 1 and outputs.shape[-1] == 1:
+                        outputs = outputs.squeeze(-1)
+
+                    loss = self.criterion(outputs, y_batch)
+                    loss.backward()
+                    optimizer.step()
+
+                    running_loss += loss.item() * X_batch.size(0)
+                    total += X_batch.size(0)
+
+                    if self.task == 'classification':
+                        _, predicted = torch.max(outputs, 1)
+                        correct += (predicted == y_batch).sum().item()
+
+                epoch_loss = running_loss / total
+                history['loss'].append(epoch_loss)
+
+                if self.task == 'classification':
+                    epoch_acc = correct / total
+                    history['accuracy'].append(epoch_acc)
+
+                # --- Validation phase ---
+                if val_loader is not None:
+                    val_loss, val_metric = self._evaluate_loader(val_loader)
+                    history['val_loss'].append(val_loss)
+                    if self.task == 'classification':
+                        history['val_accuracy'].append(val_metric)
+                    else:
+                        history['val_mse'].append(val_metric)
+
+            self.training_result = TrainingResult(
+                history=history,
+                params={'epochs': epochs, 'batch_size': batch_size, 'device': str(self.device)}
+            )
+
+        def _evaluate_loader(self, loader: 'DataLoader') -> Tuple[float, float]:
+            """Evaluate model on a DataLoader. Returns (loss, metric).
+
+            For classification, metric is accuracy. For regression, metric is MSE.
+            """
+            self.model.eval()
+            running_loss = 0.0
+            correct = 0
+            total = 0
+
+            with torch.no_grad():
+                for X_batch, y_batch in loader:
+                    outputs = self.model(X_batch)
+
+                    if self.task == 'regression' and outputs.dim() > 1 and outputs.shape[-1] == 1:
+                        outputs = outputs.squeeze(-1)
+
+                    loss = self.criterion(outputs, y_batch)
+                    running_loss += loss.item() * X_batch.size(0)
+                    total += X_batch.size(0)
+
+                    if self.task == 'classification':
+                        _, predicted = torch.max(outputs, 1)
+                        correct += (predicted == y_batch).sum().item()
+
+            avg_loss = running_loss / total
+            if self.task == 'classification':
+                metric = correct / total
+            else:
+                metric = avg_loss  # MSE is the loss itself for regression
+
+            return avg_loss, metric
+
+        def predict(self, data: np.ndarray, **kwargs) -> np.ndarray:
+            """
+            Generates predictions from numpy input.
+
+            For classification, returns class indices (integers).
+            For regression, returns predicted values (floats).
+
+            Args:
+                data: Input numpy array of shape (n_samples, n_features).
+
+            Returns:
+                np.ndarray: Predictions.
+            """
+            self.model.eval()
+            X_t = self._to_tensor(data, dtype=torch.float32)
+
+            with torch.no_grad():
+                outputs = self.model(X_t)
+
+            if self.task == 'classification':
+                _, predicted = torch.max(outputs, 1)
+                self.predictions = predicted.cpu().numpy()
+            else:
+                if outputs.dim() > 1 and outputs.shape[-1] == 1:
+                    outputs = outputs.squeeze(-1)
+                self.predictions = outputs.cpu().numpy()
+
+            return self.predictions
+
+        def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
+            """
+            Generates class probability predictions.
+
+            Applies softmax to the model's raw logits. Only valid for
+            classification models.
+
+            Args:
+                data: Input numpy array.
+
+            Returns:
+                np.ndarray: Probabilities of shape (n_samples, n_classes).
+
+            Raises:
+                ValueError: If task is 'regression'.
+            """
+            if self.task != 'classification':
+                raise ValueError("predict_proba() is only available for classification models.")
+
+            self.model.eval()
+            X_t = self._to_tensor(data, dtype=torch.float32)
+
+            with torch.no_grad():
+                outputs = self.model(X_t)
+                probabilities = torch.softmax(outputs, dim=1)
+
+            return probabilities.cpu().numpy()
+
+        def evaluate(self, data: Any, **kwargs) -> Dict[str, Any]:
+            """
+            Evaluates the model on labeled data.
+
+            Args:
+                data: Tuple of (X, y) numpy arrays, or a DataLoader.
+
+            Returns:
+                Dict with 'loss' and task-specific metrics:
+                - Classification: 'accuracy', 'correct', 'total'
+                - Regression: 'mse'
+            """
+            if isinstance(data, DataLoader):
+                loader = data
+            elif isinstance(data, tuple) and len(data) == 2:
+                X_test, y_test = data
+                loader = self._make_dataloader(X_test, y_test, batch_size=256, shuffle=False)
+            else:
+                raise TypeError(
+                    "Evaluation data must be a tuple of (X, y) or a DataLoader."
+                )
+
+            loss, metric = self._evaluate_loader(loader)
+            metrics: Dict[str, Any] = {'loss': loss}
+
+            if self.task == 'classification':
+                metrics['accuracy'] = metric
+            else:
+                metrics['mse'] = metric
+
+            return metrics
+
+        def assess(self, true_labels: np.ndarray) -> Dict[str, float]:
+            """Quick assessment using stored predictions."""
+            if self.predictions is None:
+                raise ValueError("Model has not generated predictions yet. Call predict() first.")
+
+            if self.task == 'classification':
+                accuracy = float(np.mean(self.predictions == true_labels))
+                return {'accuracy': accuracy}
+            else:
+                mse = float(np.mean((self.predictions - true_labels) ** 2))
+                return {'mse': mse}
+
+        def save_model(self, path: str):
+            """Save model state dict to disk."""
+            torch.save({
+                'model_state_dict': self.model.state_dict(),
+                'task': self.task,
+                'device': str(self.device),
+            }, path)
+            logger.info(f"PyTorch model saved to {path}")
+
+        @classmethod
+        def load_model(cls, path: str) -> 'PyTorchModelWrapper':
+            """Load model from a state dict checkpoint.
+
+            Note: This requires the model architecture to be recreated
+            separately, since PyTorch state dicts don't store architecture.
+            This method loads the checkpoint and returns the raw dict.
+            For full reconstruction, use torch.save/load on the entire model.
+            """
+            checkpoint = torch.load(path, map_location='cpu', weights_only=False)
+            logger.info(f"Loaded PyTorch checkpoint from {path}")
+            # Return the checkpoint dict — caller must reconstruct model
+            # This is a known PyTorch pattern; full model save/load requires
+            # the architecture definition to be available.
+            return checkpoint
+
+else:
+    PyTorchModelWrapper = None

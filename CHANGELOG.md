@@ -8,15 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- PyTorch model wrapper (`PyTorchModelWrapper`)
 - Regression task support (MSE, MAE, R² as first-class metrics)
 - Sphinx documentation hosted on ReadTheDocs
 - Parallel execution for non-GPU models via `joblib`
-- Seed tracking and control for individual runs
 - Progress bars via `tqdm`
 - `VariabilityStudyResults.bootstrap_ci()` convenience method
 - `VariabilityStudyResults.report()` for self-contained summaries
 - Paired/blocked experimental designs for model comparison
+
+---
+
+## [0.3.0] - 2026-02-13
+
+### Added
+- `PyTorchModelWrapper` for PyTorch `nn.Module` models with built-in training
+  loop, device management, and metric tracking for classification and regression
+- `PYTORCH_AVAILABLE` flag for conditional import detection
+- Auto-wrapping support for `nn.Module` in the high-level `variability_study()` API
+- PyTorch CPU added to CI test matrix (all platforms)
+- Two example notebooks demonstraing basic PyTorch use
+
+### Changed
+- `core.py` now conditionally imports PyTorch alongside TensorFlow and sklearn
+- `validate_imports.py` checks `PyTorchModelWrapper` when torch is available
 
 ---
 

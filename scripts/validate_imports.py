@@ -47,6 +47,7 @@ def test_common_imports():
     # Optional imports (depend on optional dependencies)
     optional = [
         ("KerasModelWrapper", "from ictonyx import KerasModelWrapper", ictonyx.TENSORFLOW_AVAILABLE),
+        ("PyTorchModelWrapper", "from ictonyx import PyTorchModelWrapper", ictonyx.PYTORCH_AVAILABLE),
     ]
 
     success = 0

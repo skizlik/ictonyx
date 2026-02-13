@@ -305,7 +305,7 @@ if TENSORFLOW_AVAILABLE:
             try:
                 import tensorflow as tf
                 tf.keras.backend.clear_session()
-            except:
+            except Exception:
                 pass
 
             # Basic garbage collection

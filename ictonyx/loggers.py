@@ -4,6 +4,9 @@ import tempfile
 import os
 from typing import Dict, Any, List, Optional, Union
 from pathlib import Path
+from . import settings
+
+logger = settings.logger
 
 # Optional MLflow dependency
 try:
@@ -337,7 +340,7 @@ class MLflowLogger(BaseLogger):
             system_tags["gpu_count"] = str(len(gpus))
             if gpus:
                 system_tags["gpu_names"] = str([gpu.name for gpu in gpus])
-        except:
+        except Exception:
             system_tags["gpu_count"] = "0"
 
         self.set_tags(system_tags)

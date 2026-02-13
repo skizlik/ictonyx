@@ -40,6 +40,7 @@ RUN pip --default-timeout=120 install \
     "protobuf<4.0.0" \
     "tensorflow==2.15.0" \
     "mlflow<2.11.0" \
+    "torch>=2.0.0" \
     jupyterlab \
     poetry \
     numpy \

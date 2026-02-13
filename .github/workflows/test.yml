@@ -55,7 +55,9 @@ jobs:
       continue-on-error: true
       run: pip install tensorflow
 
-    - name: { continue-on-error: true, run: "pip install torch --index-url https://download.pytorch.org/whl/cpu" }
+    - name: Install PyTorch (CPU only)
+      continue-on-error: true
+      run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
     - name: Validate imports
       run: python scripts/validate_imports.py

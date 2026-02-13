@@ -15,7 +15,7 @@ Machine learning models are typically trained once on a given data set. We use a
 
 But training a model involves stochastic factors: random initialization, data shuffling, dropout. Training the same model on the same data will often produce different predicted values and different assessment metrics. Our model parameters aren't constants; they are random variables, and we should treat them that way.
 
-Ictonyx runs your model multiple times and provides complete distributions for your model metrics, along with measures of center and dispersion. This allows inferences to be made about the models we're training.
+Ictonyx runs a model multiple times and provides complete distributions for model metrics, along with measures of center and dispersion. This allows formal statistical inferences to be made about the models being trained.
 
 ## Installation
 

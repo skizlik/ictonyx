@@ -40,6 +40,7 @@ except ImportError:
     tqdm = None
     HAS_TQDM = False
 
+
 class ExperimentRunner:
     """
     Engine for running variability studies with memory management.

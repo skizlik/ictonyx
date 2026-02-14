@@ -54,7 +54,6 @@ def set_display_plots(display: bool):
 
 def set_theme(theme_name: str):
     """Quickly switch between color presets."""
-    global THEME
     if theme_name == "dark":
         THEME.update(
             {

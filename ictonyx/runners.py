@@ -31,6 +31,14 @@ except ImportError:
     tf = None
     HAS_TENSORFLOW = False
 
+# Optional progress bar
+try:
+    from tqdm import tqdm
+
+    HAS_TQDM = True
+except ImportError:
+    tqdm = None
+    HAS_TQDM = False
 
 class ExperimentRunner:
     """
@@ -69,6 +77,7 @@ class ExperimentRunner:
         self.use_process_isolation = use_process_isolation
         self.gpu_memory_limit = gpu_memory_limit
         self.verbose = verbose
+        self._progress_bar = HAS_TQDM and verbose
 
         # Initialize memory manager
         self.memory_manager = get_memory_manager(
@@ -163,6 +172,38 @@ class ExperimentRunner:
         except ImportError:
             pass
 
+    def _run_log(self, msg: str, level: str = "info"):
+        """Log a per-run message, respecting tqdm when active.
+
+        Info messages are suppressed when the progress bar is active (the bar
+        replaces them). Warnings and errors always print, routed through
+        tqdm.write() to avoid colliding with the progress bar.
+        """
+        if not self.verbose:
+            return
+        if self._progress_bar:
+            if level == "info":
+                return  # progress bar replaces routine info
+            tqdm.write(f"{level.upper()}: {msg}")
+        else:
+            getattr(logger, level)(msg)
+
+    def _update_progress_postfix(self, pbar, metrics_df):
+        """Show the most informative metric on the progress bar."""
+        exclude = {"run_num", "epoch"}
+        columns = [c for c in metrics_df.columns if c not in exclude]
+
+        # Prefer: val metric that isn't loss > any val metric > first metric
+        val_metrics = [c for c in columns if "val" in c and "loss" not in c]
+        if val_metrics:
+            col = val_metrics[0]
+        elif columns:
+            col = columns[0]
+        else:
+            return
+
+        pbar.set_postfix({col: f"{metrics_df[col].iloc[-1]:.4f}"})
+
     def _run_single_fit(self, run_id: int, epochs: int) -> Optional[pd.DataFrame]:
         """Run a single training iteration."""
         if self.use_process_isolation:
@@ -172,8 +213,7 @@ class ExperimentRunner:
 
     def _run_single_fit_isolated(self, run_id: int, epochs: int) -> Optional[pd.DataFrame]:
         """Execute training in isolated subprocess."""
-        if self.verbose:
-            logger.info(f" - Run {run_id}: Starting in isolated process...")
+        self._run_log(f" - Run {run_id}: Starting in isolated process...")
 
         # Log run start (Metric Tracker)
         self.tracker.log_params({"run_id": run_id, "mode": "isolated"})
@@ -199,8 +239,7 @@ class ExperimentRunner:
                 # Extract history
                 history_data = result["result"]["history"]
                 if not history_data:
-                    if self.verbose:
-                        logger.warning(f" - Run {run_id}: No training history returned")
+                    self._run_log(f" - Run {run_id}: No training history returned", level="warning")
                     self.failed_runs.append(run_id)
                     return None
 
@@ -231,30 +270,27 @@ class ExperimentRunner:
                         self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
 
                 if self.verbose:
-                    logger.info(f" - Run {run_id}: Completed successfully (isolated)")
+                    self._run_log(f" - Run {run_id}: Completed successfully (isolated)")
 
                 return history_df
 
             except Exception as e:
-                if self.verbose:
-                    logger.error(f" - Run {run_id}: Failed to process results: {e}")
+                self._run_log(f" - Run {run_id}: Failed to process results: {e}", level="error")
                 self.failed_runs.append(run_id)
                 return None
         else:
             # Training failed
             error_msg = result.get("error", "Unknown error")
-            if self.verbose:
-                logger.error(f" - Run {run_id}: Failed - {error_msg}")
-                if "traceback" in result and self.verbose:
-                    logger.info(f"   Traceback: {result['traceback'][:500]}...")
+            self._run_log(f" - Run {run_id}: Failed - {error_msg}", level="error")
+            if "traceback" in result:
+                self._run_log(f"   Traceback: {result['traceback'][:500]}...", level="error")
 
             self.failed_runs.append(run_id)
             return None
 
     def _run_single_fit_standard(self, run_id: int, epochs: int) -> Optional[pd.DataFrame]:
         """Execute training in standard mode (in-process)."""
-        if self.verbose:
-            logger.info(f" - Run {run_id}: Training...")
+        self._run_log(f" - Run {run_id}: Training...")
 
         # Set deterministic seeds for this run
         self._set_seeds(self.seed + run_id)
@@ -278,8 +314,7 @@ class ExperimentRunner:
 
             # Extract training result
             if wrapped_model.training_result is None:
-                if self.verbose:
-                    logger.warning(f" - Run {run_id}: No training result produced")
+                self._run_log(f" - Run {run_id}: No training result produced", level="warning")
                 self.failed_runs.append(run_id)
                 return None
 
@@ -311,17 +346,14 @@ class ExperimentRunner:
                     for key, value in test_metrics.items():
                         self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
                 except Exception as e:
-                    if self.verbose:
-                        logger.warning(f"   Warning: Test evaluation failed: {e}")
+                    self._run_log(f"   Warning: Test evaluation failed: {e}", level="warning")
 
-            if self.verbose:
-                logger.info(f" - Run {run_id}: Completed successfully")
+            self._run_log(f" - Run {run_id}: Completed successfully")
 
             return history_df
 
         except Exception as e:
-            if self.verbose:
-                logger.error(f" - Run {run_id}: Failed with error: {e}")
+            self._run_log(f" - Run {run_id}: Failed with error: {e}", level="error")
             self.failed_runs.append(run_id)
             return None
 
@@ -337,9 +369,8 @@ class ExperimentRunner:
 
             # Perform memory cleanup
             cleanup_result = self.memory_manager.cleanup()
-            if self.verbose and cleanup_result.memory_freed_mb:
-                if cleanup_result.memory_freed_mb > 10:  # Only report significant cleanup
-                    logger.info(f"   Freed {cleanup_result.memory_freed_mb:.1f}MB")
+            if cleanup_result.memory_freed_mb and cleanup_result.memory_freed_mb > 10:
+                self._run_log(f"   Freed {cleanup_result.memory_freed_mb:.1f}MB")
 
     def run_study(
         self,
@@ -383,24 +414,32 @@ class ExperimentRunner:
             logger.info("")
 
         # Execute runs
+        run_iter = range(num_runs)
+        if self._progress_bar:
+            run_iter = tqdm(run_iter, desc="Variability Study", unit="run")
+
         try:
-            for i in range(num_runs):
+            for i in run_iter:
                 # Check failure rate
                 if i > 0:
                     completed = i  # runs 0..i-1 have completed
                     failure_rate = len(self.failed_runs) / completed
                     if failure_rate >= stop_on_failure_rate:
-                        if self.verbose:
-                            logger.error(f"\nStopping due to high failure rate: {failure_rate:.1%}")
+                        self._run_log(
+                            f"Stopping due to high failure rate: {failure_rate:.1%}",
+                            level="error",
+                        )
                         break
 
                 # Run single training
                 metrics_df = self._run_single_fit(run_id=i + 1, epochs=epochs_per_run)
                 if metrics_df is not None:
                     self.all_runs_metrics.append(metrics_df)
+                    if self._progress_bar:
+                        self._update_progress_postfix(run_iter, metrics_df)
 
-                # Log memory info periodically
-                if (i + 1) % 10 == 0 and self.verbose:
+                # Log memory info periodically (suppressed when progress bar is active)
+                if (i + 1) % 10 == 0 and self.verbose and not self._progress_bar:
                     memory_info = get_memory_info()
                     if "process_rss_mb" in memory_info:
                         logger.info(f"  Memory check: {memory_info['process_rss_mb']:.1f}MB")

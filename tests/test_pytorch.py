@@ -303,9 +303,15 @@ class TestPyTorchUtilities:
         save_path = str(tmp_path / "model.pt")
         wrapper.save_model(save_path)
 
-        checkpoint = PyTorchModelWrapper.load_model(save_path)
-        assert 'model_state_dict' in checkpoint
-        assert checkpoint['task'] == 'classification'
+        loaded = PyTorchModelWrapper.load_model(save_path, model=make_classifier())
+        assert isinstance(loaded, PyTorchModelWrapper)
+        assert loaded.task == 'classification'
+
+        # Verify loaded model produces same predictions as original
+        X_test = train[0]
+        original_preds = wrapper.predict(X_test)
+        loaded_preds = loaded.predict(X_test)
+        assert np.array_equal(original_preds, loaded_preds)
 
     def test_repr(self):
         wrapper = PyTorchModelWrapper(make_classifier(), model_id="my_net")

@@ -1084,20 +1084,15 @@ if PYTORCH_AVAILABLE:
             logger.info(f"PyTorch model saved to {path}")
 
         @classmethod
-        def load_model(cls, path: str) -> 'PyTorchModelWrapper':
-            """Load model from a state dict checkpoint.
-
-            Note: This requires the model architecture to be recreated
-            separately, since PyTorch state dicts don't store architecture.
-            This method loads the checkpoint and returns the raw dict.
-            For full reconstruction, use torch.save/load on the entire model.
+        def load_model(cls, path: str, model: 'nn.Module',
+                       task: str = 'classification') -> 'PyTorchModelWrapper':
+            """
+            Load model from a state dict checkpoint.  Return model wrapper.
             """
             checkpoint = torch.load(path, map_location='cpu', weights_only=False)
-            logger.info(f"Loaded PyTorch checkpoint from {path}")
-            # Return the checkpoint dict — caller must reconstruct model
-            # This is a known PyTorch pattern; full model save/load requires
-            # the architecture definition to be available.
-            return checkpoint
+            model.load_state_dict(checkpoint['model_state_dict'])
+            wrapper = cls(model, task=checkpoint.get('task', task))
+            return wrapper
 
 else:
     PyTorchModelWrapper = None

@@ -383,8 +383,9 @@ class ExperimentRunner:
             for i in range(num_runs):
                 # Check failure rate
                 if i > 0:
-                    failure_rate = len(self.failed_runs) / (i + 1)
-                    if failure_rate > stop_on_failure_rate:
+                    completed = i  # runs 0..i-1 have completed
+                    failure_rate = len(self.failed_runs) / completed
+                    if failure_rate >= stop_on_failure_rate:
                         if self.verbose:
                             logger.error(f"\nStopping due to high failure rate: {failure_rate:.1%}")
                         break

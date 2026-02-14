@@ -910,7 +910,7 @@ def auto_resolve_handler(
     if isinstance(data, tuple) and len(data) == 2:
         # Simple heuristic: check if elements have shape or length
         if hasattr(data[0], 'shape') or hasattr(data[0], '__len__'):
-            return ArraysDataHandler(data[0], data[1], **kwargs)
+            return ArraysDataHandler(data[0], data[1])
 
     # 2. Handle Pandas DataFrame -> Tabular
     if isinstance(data, pd.DataFrame):

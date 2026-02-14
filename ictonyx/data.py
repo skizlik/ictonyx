@@ -1,22 +1,24 @@
 # ictonyx/data.py
 
 import os
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from abc import ABC, abstractmethod
-from typing import Optional, List, Tuple, Dict, Any, Union
+
 from .settings import logger
 
 # Define public API
 __all__ = [
-    'DataHandler',
-    'ImageDataHandler',
-    'TabularDataHandler',
-    'TextDataHandler',
-    'TimeSeriesDataHandler',
-    'ArraysDataHandler',      # NEW
-    'auto_resolve_handler'    # NEW
+    "DataHandler",
+    "ImageDataHandler",
+    "TabularDataHandler",
+    "TextDataHandler",
+    "TimeSeriesDataHandler",
+    "ArraysDataHandler",  # NEW
+    "auto_resolve_handler",  # NEW
 ]
 
 # Optional TensorFlow imports
@@ -30,9 +32,8 @@ except ImportError:
 
 # Optional TensorFlow preprocessing imports
 try:
-    from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
+    from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator, pad_sequences
     from tensorflow.keras.preprocessing.text import Tokenizer
-    from tensorflow.keras.preprocessing.sequence import pad_sequences
 
     HAS_TF_PREPROCESSING = True
 except ImportError:
@@ -123,10 +124,10 @@ class DataHandler(ABC):
             Dict with dataset statistics and properties
         """
         return {
-            'data_path': self.data_path,
-            'data_type': self.data_type,
-            'return_format': self.return_format,
-            'path_exists': os.path.exists(self.data_path)
+            "data_path": self.data_path,
+            "data_type": self.data_type,
+            "return_format": self.return_format,
+            "path_exists": os.path.exists(self.data_path),
         }
 
 
@@ -146,8 +147,9 @@ class ImageDataHandler(DataHandler):
     def return_format(self) -> str:
         return "tf_datasets"
 
-    def __init__(self, data_path: str, image_size: Tuple[int, int],
-                 batch_size: int = 32, seed: int = 42):
+    def __init__(
+        self, data_path: str, image_size: Tuple[int, int], batch_size: int = 32, seed: int = 42
+    ):
         """
         Initialize the image data handler.
 
@@ -158,8 +160,10 @@ class ImageDataHandler(DataHandler):
             seed: Random seed for reproducibility
         """
         if not HAS_TENSORFLOW:
-            raise ImportError("TensorFlow is required for ImageDataHandler. "
-                              "Install with: pip install tensorflow")
+            raise ImportError(
+                "TensorFlow is required for ImageDataHandler. "
+                "Install with: pip install tensorflow"
+            )
 
         super().__init__(data_path)
 
@@ -172,10 +176,13 @@ class ImageDataHandler(DataHandler):
 
         # Discover class names
         try:
-            self.class_names = sorted([
-                d for d in os.listdir(self.data_path)
-                if os.path.isdir(os.path.join(self.data_path, d)) and not d.startswith('.')
-            ])
+            self.class_names = sorted(
+                [
+                    d
+                    for d in os.listdir(self.data_path)
+                    if os.path.isdir(os.path.join(self.data_path, d)) and not d.startswith(".")
+                ]
+            )
         except PermissionError:
             raise PermissionError(f"Cannot read directory: {self.data_path}")
 
@@ -191,7 +198,7 @@ class ImageDataHandler(DataHandler):
         class_to_idx = {name: i for i, name in enumerate(self.class_names)}
 
         # Common image extensions
-        valid_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'}
+        valid_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"}
 
         for class_name in self.class_names:
             class_path = os.path.join(self.data_path, class_name)
@@ -202,10 +209,7 @@ class ImageDataHandler(DataHandler):
                 raise PermissionError(f"Cannot read class directory: {class_path}")
 
             # Filter for valid image files
-            image_files = [
-                f for f in files
-                if os.path.splitext(f.lower())[1] in valid_extensions
-            ]
+            image_files = [f for f in files if os.path.splitext(f.lower())[1] in valid_extensions]
 
             if not image_files:
                 logger.warning(f"No valid image files found in {class_path}")
@@ -265,8 +269,10 @@ class ImageDataHandler(DataHandler):
             Dict with 'train_data', 'val_data', 'test_data' as tf.data.Dataset objects
         """
         if not HAS_SKLEARN:
-            raise ImportError("scikit-learn is required for data splitting. "
-                              "Install with: pip install scikit-learn")
+            raise ImportError(
+                "scikit-learn is required for data splitting. "
+                "Install with: pip install scikit-learn"
+            )
 
         if validation_split + test_split >= 1.0:
             raise ValueError("Sum of validation_split and test_split must be < 1.0")
@@ -288,10 +294,11 @@ class ImageDataHandler(DataHandler):
         # Split into training and test sets first, with stratification
         if test_split > 0:
             X_train, X_test, y_train, y_test = train_test_split(
-                all_image_paths, all_labels,
+                all_image_paths,
+                all_labels,
                 test_size=test_split,
                 random_state=self.seed,
-                stratify=all_labels
+                stratify=all_labels,
             )
         else:
             X_train, X_test, y_train, y_test = all_image_paths, [], all_labels, []
@@ -300,14 +307,17 @@ class ImageDataHandler(DataHandler):
         X_val, y_val = [], []
         if validation_split > 0 and len(X_train) > 1:
             # Recalculate validation split based on remaining training data
-            adj_val_split = validation_split / (1 - test_split) if test_split > 0 else validation_split
+            adj_val_split = (
+                validation_split / (1 - test_split) if test_split > 0 else validation_split
+            )
 
             if adj_val_split < 1.0:  # Only split if we won't take everything
                 X_train, X_val, y_train, y_val = train_test_split(
-                    X_train, y_train,
+                    X_train,
+                    y_train,
                     test_size=adj_val_split,
                     random_state=self.seed,
-                    stratify=y_train
+                    stratify=y_train,
                 )
 
         # Convert the lists of paths and labels into TensorFlow datasets
@@ -331,13 +341,11 @@ class ImageDataHandler(DataHandler):
         val_ds = create_tf_dataset(X_val, y_val, shuffle=False) if X_val else None
         test_ds = create_tf_dataset(X_test, y_test, shuffle=False) if X_test else None
 
-        logger.info(f"Data splits created - Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
+        logger.info(
+            f"Data splits created - Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}"
+        )
 
-        return {
-            'train_data': train_ds,
-            'val_data': val_ds,
-            'test_data': test_ds
-        }
+        return {"train_data": train_ds, "val_data": val_ds, "test_data": test_ds}
 
     def get_data_info(self) -> Dict[str, Any]:
         """Get comprehensive information about the image dataset."""
@@ -348,20 +356,21 @@ class ImageDataHandler(DataHandler):
             unique_labels, counts = np.unique(all_labels, return_counts=True)
 
             class_distribution = {
-                self.class_names[label]: count
-                for label, count in zip(unique_labels, counts)
+                self.class_names[label]: count for label, count in zip(unique_labels, counts)
             }
 
-            info.update({
-                'num_classes': len(self.class_names),
-                'class_names': self.class_names,
-                'total_images': len(all_paths),
-                'class_distribution': class_distribution,
-                'image_size': self.image_size,
-                'batch_size': self.batch_size
-            })
+            info.update(
+                {
+                    "num_classes": len(self.class_names),
+                    "class_names": self.class_names,
+                    "total_images": len(all_paths),
+                    "class_distribution": class_distribution,
+                    "image_size": self.image_size,
+                    "batch_size": self.batch_size,
+                }
+            )
         except Exception as e:
-            info['error'] = f"Could not analyze dataset: {e}"
+            info["error"] = f"Could not analyze dataset: {e}"
 
         return info
 
@@ -380,9 +389,15 @@ class TabularDataHandler(DataHandler):
     def return_format(self) -> str:
         return "split_arrays"
 
-    def __init__(self, data: Union[str, pd.DataFrame] = None, target_column: str = None,
-                 features: Optional[List[str]] = None,
-                 sep: str = ',', header: int = 0, **kwargs):
+    def __init__(
+        self,
+        data: Union[str, pd.DataFrame] = None,
+        target_column: str = None,
+        features: Optional[List[str]] = None,
+        sep: str = ",",
+        header: int = 0,
+        **kwargs,
+    ):
         """
         Initialize the tabular data handler.
 
@@ -397,8 +412,8 @@ class TabularDataHandler(DataHandler):
         # ------------------------------------------------------------------
         # FIX: Backward Compatibility for data_path keyword argument
         # ------------------------------------------------------------------
-        if data is None and 'data_path' in kwargs:
-            data = kwargs['data_path']
+        if data is None and "data_path" in kwargs:
+            data = kwargs["data_path"]
 
         if data is None:
             raise ValueError("Must provide 'data' (or legacy 'data_path') argument.")
@@ -426,7 +441,7 @@ class TabularDataHandler(DataHandler):
     def _validate_data_path(self):
         """Override validation to skip file check if using DataFrame."""
         # Check if we are in DataFrame mode (input_df set in __init__)
-        if hasattr(self, 'input_df') and self.input_df is not None:
+        if hasattr(self, "input_df") and self.input_df is not None:
             return  # Skip check, data is already in memory
 
         # Otherwise, perform standard file check
@@ -451,8 +466,10 @@ class TabularDataHandler(DataHandler):
 
         # 2. Validate Columns
         if self.target_column not in self.data.columns:
-            raise ValueError(f"Target column '{self.target_column}' not found. "
-                             f"Available: {list(self.data.columns)}")
+            raise ValueError(
+                f"Target column '{self.target_column}' not found. "
+                f"Available: {list(self.data.columns)}"
+            )
 
         # 3. Validate Features
         if self.features:
@@ -463,8 +480,9 @@ class TabularDataHandler(DataHandler):
         logger.info(f"Loaded tabular data: {len(self.data)} rows, {len(self.data.columns)} columns")
 
     # ... (Keep existing load() and get_data_info() methods identical to previous version) ...
-    def load(self, test_split: float = 0.2, val_split: float = 0.1,
-             random_state: int = 42) -> Dict[str, Any]:
+    def load(
+        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42
+    ) -> Dict[str, Any]:
         if not HAS_SKLEARN:
             raise ImportError("scikit-learn is required for data splitting.")
 
@@ -507,9 +525,9 @@ class TabularDataHandler(DataHandler):
                 )
 
         return {
-            'train_data': (X_train, y_train),
-            'val_data': (X_val, y_val) if X_val is not None else None,
-            'test_data': (X_test, y_test) if X_test is not None else None
+            "train_data": (X_train, y_train),
+            "val_data": (X_val, y_val) if X_val is not None else None,
+            "test_data": (X_test, y_test) if X_test is not None else None,
         }
 
     def get_data_info(self) -> Dict[str, Any]:
@@ -518,13 +536,15 @@ class TabularDataHandler(DataHandler):
             if self.data is None:
                 self._load_and_validate_data()
 
-            info.update({
-                'num_rows': len(self.data),
-                'num_columns': len(self.data.columns),
-                'target_column': self.target_column
-            })
+            info.update(
+                {
+                    "num_rows": len(self.data),
+                    "num_columns": len(self.data.columns),
+                    "target_column": self.target_column,
+                }
+            )
         except Exception as e:
-            info['error'] = str(e)
+            info["error"] = str(e)
         return info
 
 
@@ -541,9 +561,14 @@ class TextDataHandler(DataHandler):
     def return_format(self) -> str:
         return "split_arrays"
 
-    def __init__(self, data_path: str, text_column: str = 'text',
-                 label_column: str = 'label', max_words: int = 10000,
-                 max_len: int = 100):
+    def __init__(
+        self,
+        data_path: str,
+        text_column: str = "text",
+        label_column: str = "label",
+        max_words: int = 10000,
+        max_len: int = 100,
+    ):
         """
         Initialize the text data handler.
 
@@ -555,8 +580,10 @@ class TextDataHandler(DataHandler):
             max_len: Maximum sequence length
         """
         if not HAS_TF_PREPROCESSING:
-            raise ImportError("TensorFlow preprocessing is required for TextDataHandler. "
-                              "Install with: pip install tensorflow")
+            raise ImportError(
+                "TensorFlow preprocessing is required for TextDataHandler. "
+                "Install with: pip install tensorflow"
+            )
 
         super().__init__(data_path)
 
@@ -578,12 +605,16 @@ class TextDataHandler(DataHandler):
             raise RuntimeError(f"Failed to load text data: {e}")
 
         if self.text_column not in self.data.columns:
-            raise ValueError(f"Text column '{self.text_column}' not found. "
-                             f"Available columns: {list(self.data.columns)}")
+            raise ValueError(
+                f"Text column '{self.text_column}' not found. "
+                f"Available columns: {list(self.data.columns)}"
+            )
 
         if self.label_column not in self.data.columns:
-            raise ValueError(f"Label column '{self.label_column}' not found. "
-                             f"Available columns: {list(self.data.columns)}")
+            raise ValueError(
+                f"Label column '{self.label_column}' not found. "
+                f"Available columns: {list(self.data.columns)}"
+            )
 
         # Check for missing values
         if self.data[self.text_column].isnull().any():
@@ -598,8 +629,9 @@ class TextDataHandler(DataHandler):
 
         logger.info(f"Loaded text data: {len(self.data)} samples")
 
-    def load(self, test_split: float = 0.2, val_split: float = 0.1,
-             random_state: int = 42) -> Dict[str, Any]:
+    def load(
+        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42
+    ) -> Dict[str, Any]:
         """
         Load and split the text data.
 
@@ -608,8 +640,10 @@ class TextDataHandler(DataHandler):
             where X contains tokenized and padded sequences
         """
         if not HAS_SKLEARN:
-            raise ImportError("scikit-learn is required for data splitting. "
-                              "Install with: pip install scikit-learn")
+            raise ImportError(
+                "scikit-learn is required for data splitting. "
+                "Install with: pip install scikit-learn"
+            )
 
         if test_split + val_split >= 1.0:
             raise ValueError("Sum of test_split and val_split must be < 1.0")
@@ -632,8 +666,10 @@ class TextDataHandler(DataHandler):
         # Split data
         if test_split > 0:
             X_train, X_test, y_train, y_test = train_test_split(
-                padded_sequences, self.data[self.label_column],
-                test_size=test_split, random_state=random_state
+                padded_sequences,
+                self.data[self.label_column],
+                test_size=test_split,
+                random_state=random_state,
             )
         else:
             X_train, X_test = padded_sequences, None
@@ -644,14 +680,13 @@ class TextDataHandler(DataHandler):
             adj_val_split = val_split / (1 - test_split) if test_split > 0 else val_split
             if adj_val_split < 1.0:
                 X_train, X_val, y_train, y_val = train_test_split(
-                    X_train, y_train,
-                    test_size=adj_val_split, random_state=random_state
+                    X_train, y_train, test_size=adj_val_split, random_state=random_state
                 )
 
         return {
-            'train_data': (X_train, y_train),
-            'val_data': (X_val, y_val) if X_val is not None else None,
-            'test_data': (X_test, y_test) if X_test is not None else None
+            "train_data": (X_train, y_train),
+            "val_data": (X_val, y_val) if X_val is not None else None,
+            "test_data": (X_test, y_test) if X_test is not None else None,
         }
 
     def get_data_info(self) -> Dict[str, Any]:
@@ -662,21 +697,23 @@ class TextDataHandler(DataHandler):
             if self.data is None:
                 self._load_and_validate_data()
 
-            info.update({
-                'num_samples': len(self.data),
-                'text_column': self.text_column,
-                'label_column': self.label_column,
-                'max_words': self.max_words,
-                'max_len': self.max_len,
-                'avg_text_length': self.data[self.text_column].str.len().mean(),
-                'label_distribution': self.data[self.label_column].value_counts().to_dict()
-            })
+            info.update(
+                {
+                    "num_samples": len(self.data),
+                    "text_column": self.text_column,
+                    "label_column": self.label_column,
+                    "max_words": self.max_words,
+                    "max_len": self.max_len,
+                    "avg_text_length": self.data[self.text_column].str.len().mean(),
+                    "label_distribution": self.data[self.label_column].value_counts().to_dict(),
+                }
+            )
 
             if self.tokenizer:
-                info['vocab_size'] = len(self.tokenizer.word_index)
+                info["vocab_size"] = len(self.tokenizer.word_index)
 
         except Exception as e:
-            info['error'] = f"Could not analyze dataset: {e}"
+            info["error"] = f"Could not analyze dataset: {e}"
 
         return info
 
@@ -694,8 +731,13 @@ class TimeSeriesDataHandler(DataHandler):
     def return_format(self) -> str:
         return "generators"
 
-    def __init__(self, data_path: str, sequence_length: int = 10,
-                 value_column: str = 'value', batch_size: int = 32):
+    def __init__(
+        self,
+        data_path: str,
+        sequence_length: int = 10,
+        value_column: str = "value",
+        batch_size: int = 32,
+    ):
         """
         Initialize the time series data handler.
 
@@ -706,8 +748,10 @@ class TimeSeriesDataHandler(DataHandler):
             batch_size: Batch size for generators
         """
         if not HAS_TF_PREPROCESSING:
-            raise ImportError("TensorFlow preprocessing is required for TimeSeriesDataHandler. "
-                              "Install with: pip install tensorflow")
+            raise ImportError(
+                "TensorFlow preprocessing is required for TimeSeriesDataHandler. "
+                "Install with: pip install tensorflow"
+            )
 
         super().__init__(data_path)
 
@@ -727,12 +771,16 @@ class TimeSeriesDataHandler(DataHandler):
             raise RuntimeError(f"Failed to load time series data: {e}")
 
         if self.value_column not in self.data.columns:
-            raise ValueError(f"Value column '{self.value_column}' not found. "
-                             f"Available columns: {list(self.data.columns)}")
+            raise ValueError(
+                f"Value column '{self.value_column}' not found. "
+                f"Available columns: {list(self.data.columns)}"
+            )
 
         # Validate data types
         try:
-            self.data[self.value_column] = pd.to_numeric(self.data[self.value_column], errors='coerce')
+            self.data[self.value_column] = pd.to_numeric(
+                self.data[self.value_column], errors="coerce"
+            )
         except Exception:
             raise ValueError(f"Cannot convert '{self.value_column}' to numeric values")
 
@@ -741,12 +789,15 @@ class TimeSeriesDataHandler(DataHandler):
             raise ValueError(f"{null_count} non-numeric or missing values in '{self.value_column}'")
 
         if len(self.data) < self.sequence_length + 1:
-            raise ValueError(f"Dataset too short ({len(self.data)} samples) for sequence_length={self.sequence_length}")
+            raise ValueError(
+                f"Dataset too short ({len(self.data)} samples) for sequence_length={self.sequence_length}"
+            )
 
         logger.info(f"Loaded time series: {len(self.data)} time points")
 
-    def load(self, test_split: float = 0.2, val_split: float = 0.1,
-             random_state: int = 42) -> Dict[str, Any]:
+    def load(
+        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42
+    ) -> Dict[str, Any]:
         """
         Load and split the time series data.
 
@@ -773,9 +824,9 @@ class TimeSeriesDataHandler(DataHandler):
         test_data = None
 
         if val_size > 0:
-            val_data = data[train_size:train_size + val_size]
+            val_data = data[train_size : train_size + val_size]
             if test_split > 0:
-                test_data = data[train_size + val_size:]
+                test_data = data[train_size + val_size :]
         elif test_split > 0:
             test_data = data[train_size:]
 
@@ -784,24 +835,20 @@ class TimeSeriesDataHandler(DataHandler):
             if data_array is None or len(data_array) < self.sequence_length + 1:
                 return None
             return TimeseriesGenerator(
-                data_array, data_array,
-                length=self.sequence_length,
-                batch_size=self.batch_size
+                data_array, data_array, length=self.sequence_length, batch_size=self.batch_size
             )
 
         train_gen = create_generator(train_data)
         val_gen = create_generator(val_data)
         test_gen = create_generator(test_data)
 
-        logger.info(f"Data splits - Train: {len(train_data) if train_data is not None else 0}, "
-              f"Val: {len(val_data) if val_data is not None else 0}, "
-              f"Test: {len(test_data) if test_data is not None else 0}")
+        logger.info(
+            f"Data splits - Train: {len(train_data) if train_data is not None else 0}, "
+            f"Val: {len(val_data) if val_data is not None else 0}, "
+            f"Test: {len(test_data) if test_data is not None else 0}"
+        )
 
-        return {
-            'train_data': train_gen,
-            'val_data': val_gen,
-            'test_data': test_gen
-        }
+        return {"train_data": train_gen, "val_data": val_gen, "test_data": test_gen}
 
 
 class ArraysDataHandler(DataHandler):
@@ -818,8 +865,7 @@ class ArraysDataHandler(DataHandler):
     def return_format(self) -> str:
         return "split_arrays"
 
-    def __init__(self, X: Union[np.ndarray, List, Any],
-                 y: Union[np.ndarray, List, Any]):
+    def __init__(self, X: Union[np.ndarray, List, Any], y: Union[np.ndarray, List, Any]):
         """
         Initialize with existing arrays.
 
@@ -840,8 +886,9 @@ class ArraysDataHandler(DataHandler):
         """Skip path validation for in-memory arrays."""
         pass
 
-    def load(self, test_split: float = 0.2, val_split: float = 0.1,
-             random_state: int = 42) -> Dict[str, Any]:
+    def load(
+        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42
+    ) -> Dict[str, Any]:
         """Split the pre-loaded arrays."""
         if not HAS_SKLEARN:
             raise ImportError("scikit-learn required for splitting.")
@@ -868,19 +915,20 @@ class ArraysDataHandler(DataHandler):
                 )
 
         logger.info(
-            f"Array splits - Train: {len(X_train)}, Val: {len(X_val) if X_val is not None else 0}, Test: {len(X_test) if X_test is not None else 0}")
+            f"Array splits - Train: {len(X_train)}, Val: {len(X_val) if X_val is not None else 0}, Test: {len(X_test) if X_test is not None else 0}"
+        )
 
         return {
-            'train_data': (X_train, y_train),
-            'val_data': (X_val, y_val) if X_val is not None else None,
-            'test_data': (X_test, y_test) if X_test is not None else None
+            "train_data": (X_train, y_train),
+            "val_data": (X_val, y_val) if X_val is not None else None,
+            "test_data": (X_test, y_test) if X_test is not None else None,
         }
 
 
 def auto_resolve_handler(
-        data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray], Any],
-        target_column: Optional[str] = None,
-        **kwargs
+    data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray], Any],
+    target_column: Optional[str] = None,
+    **kwargs,
 ) -> DataHandler:
     """
     Factory function to automatically detect and initialize the appropriate DataHandler.
@@ -909,7 +957,7 @@ def auto_resolve_handler(
     # 1. Handle Tuple (X, y) -> Arrays
     if isinstance(data, tuple) and len(data) == 2:
         # Simple heuristic: check if elements have shape or length
-        if hasattr(data[0], 'shape') or hasattr(data[0], '__len__'):
+        if hasattr(data[0], "shape") or hasattr(data[0], "__len__"):
             return ArraysDataHandler(data[0], data[1])
 
     # 2. Handle Pandas DataFrame -> Tabular
@@ -925,7 +973,7 @@ def auto_resolve_handler(
 
         # Directory -> Images
         if os.path.isdir(data):
-            if 'image_size' not in kwargs:
+            if "image_size" not in kwargs:
                 raise ValueError("image_size=(H, W) is required for image data directories.")
             return ImageDataHandler(data, **kwargs)
 
@@ -934,11 +982,11 @@ def auto_resolve_handler(
             # Heuristic: Check kwargs for specific handler signals
 
             # Text
-            if 'text_column' in kwargs:
+            if "text_column" in kwargs:
                 return TextDataHandler(data, **kwargs)
 
             # TimeSeries
-            if 'value_column' in kwargs or 'sequence_length' in kwargs:
+            if "value_column" in kwargs or "sequence_length" in kwargs:
                 return TimeSeriesDataHandler(data, **kwargs)
 
             # Default to Tabular if target provided
@@ -954,4 +1002,6 @@ def auto_resolve_handler(
             )
 
     # 4. Fallback
-    raise TypeError(f"Unsupported data type: {type(data)}. Expected str, DataFrame, or (X, y) tuple.")
+    raise TypeError(
+        f"Unsupported data type: {type(data)}. Expected str, DataFrame, or (X, y) tuple."
+    )

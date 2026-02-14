@@ -1,28 +1,39 @@
+import warnings
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass, field
-import warnings
 
 # Bootstrap confidence intervals
 try:
     from .bootstrap import (
         BootstrapCIResult,
-        bootstrap_mean_difference_ci,
         bootstrap_effect_size_ci,
+        bootstrap_mean_difference_ci,
         bootstrap_paired_difference_ci,
     )
+
     HAS_BOOTSTRAP = True
 except ImportError:
     HAS_BOOTSTRAP = False
 
 # Optional scipy imports
 try:
-    from scipy.stats import (
-        beta, f_oneway, kruskal, mannwhitneyu, shapiro, wilcoxon,
-        ttest_ind, ttest_rel, levene, normaltest, jarque_bera
-    )
     from scipy import stats
+    from scipy.stats import (
+        beta,
+        f_oneway,
+        jarque_bera,
+        kruskal,
+        levene,
+        mannwhitneyu,
+        normaltest,
+        shapiro,
+        ttest_ind,
+        ttest_rel,
+        wilcoxon,
+    )
 
     HAS_SCIPY = True
 except ImportError:
@@ -82,8 +93,11 @@ class StatisticalTestResult:
 
     def get_summary(self) -> str:
         """Get a concise summary of the test result."""
-        sig_marker = "***" if self.is_significant(0.001) else "**" if self.is_significant(
-            0.01) else "*" if self.is_significant(0.05) else "ns"
+        sig_marker = (
+            "***"
+            if self.is_significant(0.001)
+            else "**" if self.is_significant(0.01) else "*" if self.is_significant(0.05) else "ns"
+        )
 
         summary = f"{self.test_name}: {self.statistic:.3f}, p={self.p_value:.4f} {sig_marker}"
 
@@ -109,13 +123,17 @@ def _check_scipy():
 def _check_sklearn():
     """Check sklearn availability."""
     if not HAS_SKLEARN:
-        raise ImportError("sklearn required for confusion matrix. Install with: pip install scikit-learn")
+        raise ImportError(
+            "sklearn required for confusion matrix. Install with: pip install scikit-learn"
+        )
 
 
 # VALIDATION FUNCTIONS
 
-def validate_sample_sizes(data: Union[pd.Series, List[pd.Series]],
-                          min_size: int, test_name: str) -> Tuple[bool, List[str]]:
+
+def validate_sample_sizes(
+    data: Union[pd.Series, List[pd.Series]], min_size: int, test_name: str
+) -> Tuple[bool, List[str]]:
     """Validate sample sizes are adequate for statistical testing."""
     warnings_list = []
 
@@ -149,7 +167,7 @@ def check_normality(data: pd.Series, alpha: float = 0.05) -> Tuple[bool, Dict[st
     if len(data) <= 5000:  # Shapiro-Wilk has sample size limits
         try:
             shapiro_stat, shapiro_p = shapiro(data)
-            results['shapiro'] = {'statistic': shapiro_stat, 'p_value': shapiro_p}
+            results["shapiro"] = {"statistic": shapiro_stat, "p_value": shapiro_p}
         except Exception:
             pass
 
@@ -157,7 +175,7 @@ def check_normality(data: pd.Series, alpha: float = 0.05) -> Tuple[bool, Dict[st
     if len(data) >= 20:
         try:
             dagostino_stat, dagostino_p = normaltest(data)
-            results['dagostino'] = {'statistic': dagostino_stat, 'p_value': dagostino_p}
+            results["dagostino"] = {"statistic": dagostino_stat, "p_value": dagostino_p}
         except Exception:
             pass
 
@@ -165,13 +183,14 @@ def check_normality(data: pd.Series, alpha: float = 0.05) -> Tuple[bool, Dict[st
         return False, {"error": "Could not perform normality tests"}
 
     # Consider normal if any test fails to reject normality
-    is_normal = all(test['p_value'] > alpha for test in results.values())
+    is_normal = all(test["p_value"] > alpha for test in results.values())
 
     return is_normal, results
 
 
-def check_equal_variances(data1: pd.Series, data2: pd.Series,
-                          alpha: float = 0.05) -> Tuple[bool, Dict[str, Any]]:
+def check_equal_variances(
+    data1: pd.Series, data2: pd.Series, alpha: float = 0.05
+) -> Tuple[bool, Dict[str, Any]]:
     """Test for equal variances using Levene's test."""
     _check_scipy()
 
@@ -180,16 +199,17 @@ def check_equal_variances(data1: pd.Series, data2: pd.Series,
         equal_vars = p_val > alpha
 
         return equal_vars, {
-            'levene_statistic': stat,
-            'levene_p': p_val,
-            'conclusion': 'equal' if equal_vars else 'unequal'
+            "levene_statistic": stat,
+            "levene_p": p_val,
+            "conclusion": "equal" if equal_vars else "unequal",
         }
     except Exception as e:
-        return False, {'error': str(e)}
+        return False, {"error": str(e)}
 
 
-def check_independence(data: pd.Series, max_lag: int = 5,
-                       alpha: float = 0.05) -> Tuple[bool, Dict[str, Any]]:
+def check_independence(
+    data: pd.Series, max_lag: int = 5, alpha: float = 0.05
+) -> Tuple[bool, Dict[str, Any]]:
     """Check for autocorrelation that suggests non-independence."""
 
     autocorr_results = {}
@@ -199,7 +219,7 @@ def check_independence(data: pd.Series, max_lag: int = 5,
         try:
             autocorr = data.autocorr(lag)
             if not np.isnan(autocorr):
-                autocorr_results[f'lag_{lag}'] = autocorr
+                autocorr_results[f"lag_{lag}"] = autocorr
 
                 # Rough significance test (assuming normal distribution)
                 se = 1.0 / np.sqrt(len(data))
@@ -211,9 +231,9 @@ def check_independence(data: pd.Series, max_lag: int = 5,
     is_independent = len(significant_lags) == 0
 
     details = {
-        'autocorrelations': autocorr_results,
-        'significant_lags': significant_lags,
-        'max_autocorr': max(autocorr_results.values()) if autocorr_results else 0
+        "autocorrelations": autocorr_results,
+        "significant_lags": significant_lags,
+        "max_autocorr": max(autocorr_results.values()) if autocorr_results else 0,
     }
 
     return is_independent, details
@@ -221,8 +241,8 @@ def check_independence(data: pd.Series, max_lag: int = 5,
 
 # EFFECT SIZE CALCULATIONS
 
-def cohens_d(group1: pd.Series, group2: pd.Series,
-             pooled: bool = True) -> Tuple[float, str]:
+
+def cohens_d(group1: pd.Series, group2: pd.Series, pooled: bool = True) -> Tuple[float, str]:
     """Calculate Cohen's d effect size."""
 
     mean1, mean2 = group1.mean(), group2.mean()
@@ -262,7 +282,7 @@ def rank_biserial_correlation(group1: pd.Series, group2: pd.Series) -> Tuple[flo
     n1, n2 = len(group1), len(group2)
 
     try:
-        U, _ = mannwhitneyu(group1, group2, alternative='two-sided')
+        U, _ = mannwhitneyu(group1, group2, alternative="two-sided")
         # Convert to rank-biserial correlation
         r = 1 - (2 * U) / (n1 * n2)
     except Exception:
@@ -319,19 +339,21 @@ def _interpret_eta_squared(eta_sq: float) -> str:
 
 # MULTIPLE COMPARISON CORRECTIONS
 
-def apply_multiple_comparison_correction(p_values: List[float],
-                                         method: str = 'holm') -> Tuple[List[float], str]:
+
+def apply_multiple_comparison_correction(
+    p_values: List[float], method: str = "holm"
+) -> Tuple[List[float], str]:
     """Apply multiple comparison correction."""
 
     p_array = np.array(p_values)
     n = len(p_array)
 
-    if method == 'bonferroni':
+    if method == "bonferroni":
         corrected = p_array * n
         corrected = np.minimum(corrected, 1.0)
         description = f"Bonferroni correction (α adjusted by factor of {n})"
 
-    elif method == 'holm':
+    elif method == "holm":
         # Sort p-values with original indices
         sorted_indices = np.argsort(p_array)
         sorted_p = p_array[sorted_indices]
@@ -346,7 +368,7 @@ def apply_multiple_comparison_correction(p_values: List[float],
 
         description = "Holm step-down correction (less conservative than Bonferroni)"
 
-    elif method == 'fdr_bh':  # Benjamini-Hochberg FDR
+    elif method == "fdr_bh":  # Benjamini-Hochberg FDR
         sorted_indices = np.argsort(p_array)
         sorted_p = p_array[sorted_indices]
 
@@ -368,18 +390,20 @@ def apply_multiple_comparison_correction(p_values: List[float],
 
 # STATISTICAL TESTS
 
-def mann_whitney_test(model1_metrics: pd.Series, model2_metrics: pd.Series,
-                      alternative: str = 'two-sided',
-                      alpha: float = 0.05) -> StatisticalTestResult:
+
+def mann_whitney_test(
+    model1_metrics: pd.Series,
+    model2_metrics: pd.Series,
+    alternative: str = "two-sided",
+    alpha: float = 0.05,
+) -> StatisticalTestResult:
     """Mann-Whitney U test with comprehensive validation, effect sizes, and interpretation."""
     _check_scipy()
 
     result = StatisticalTestResult(
-        test_name="Mann-Whitney U Test",
-        statistic=float('nan'),
-        p_value=float('nan')
+        test_name="Mann-Whitney U Test", statistic=float("nan"), p_value=float("nan")
     )
-    
+
     # Validate inputs
     if not isinstance(model1_metrics, pd.Series) or not isinstance(model2_metrics, pd.Series):
         raise TypeError("Inputs must be pandas Series.")
@@ -388,22 +412,24 @@ def mann_whitney_test(model1_metrics: pd.Series, model2_metrics: pd.Series,
     clean1 = model1_metrics.dropna()
     clean2 = model2_metrics.dropna()
 
-    result.sample_sizes = {'group1': len(clean1), 'group2': len(clean2)}
+    result.sample_sizes = {"group1": len(clean1), "group2": len(clean2)}
 
     # Sample size validation
     adequate_size, size_warnings = validate_sample_sizes([clean1, clean2], 5, "Mann-Whitney U test")
     result.warnings.extend(size_warnings)
-    result.assumptions_met['adequate_sample_size'] = adequate_size
+    result.assumptions_met["adequate_sample_size"] = adequate_size
 
     # Independence check
     is_indep1, indep_details1 = check_independence(clean1)
     is_indep2, indep_details2 = check_independence(clean2)
 
     if not is_indep1 or not is_indep2:
-        result.warnings.append("Data shows evidence of autocorrelation, violating independence assumption")
+        result.warnings.append(
+            "Data shows evidence of autocorrelation, violating independence assumption"
+        )
 
-    result.assumptions_met['independence'] = is_indep1 and is_indep2
-    result.assumption_details['independence'] = {'group1': indep_details1, 'group2': indep_details2}
+    result.assumptions_met["independence"] = is_indep1 and is_indep2
+    result.assumption_details["independence"] = {"group1": indep_details1, "group2": indep_details2}
 
     # Perform test
     try:
@@ -419,8 +445,8 @@ def mann_whitney_test(model1_metrics: pd.Series, model2_metrics: pd.Series,
 
     except Exception as e:
         result.warnings.append(f"Test failed: {str(e)}")
-        result.statistic = float('nan')
-        result.p_value = float('nan')
+        result.statistic = float("nan")
+        result.p_value = float("nan")
         return result
 
     # Generate interpretation
@@ -431,21 +457,24 @@ def mann_whitney_test(model1_metrics: pd.Series, model2_metrics: pd.Series,
     if not adequate_size:
         result.recommendations.append("Collect more data for more reliable results")
     if result.effect_size is not None and abs(result.effect_size) < 0.1:
-        result.recommendations.append("Consider if this small effect size is practically meaningful")
+        result.recommendations.append(
+            "Consider if this small effect size is practically meaningful"
+        )
 
     return result
 
 
-def wilcoxon_signed_rank_test(model_metrics: pd.Series, null_value: float = 0.5,
-                              alternative: str = 'two-sided',
-                              alpha: float = 0.05) -> StatisticalTestResult:
+def wilcoxon_signed_rank_test(
+    model_metrics: pd.Series,
+    null_value: float = 0.5,
+    alternative: str = "two-sided",
+    alpha: float = 0.05,
+) -> StatisticalTestResult:
     """Wilcoxon signed-rank test with comprehensive validation and effect sizes."""
     _check_scipy()
 
     result = StatisticalTestResult(
-        test_name="Wilcoxon Signed-Rank Test",
-        statistic=float('nan'),
-        p_value=float('nan')
+        test_name="Wilcoxon Signed-Rank Test", statistic=float("nan"), p_value=float("nan")
     )
 
     if not isinstance(model_metrics, pd.Series):
@@ -458,23 +487,25 @@ def wilcoxon_signed_rank_test(model_metrics: pd.Series, null_value: float = 0.5,
     # Remove zeros (ties at the null hypothesis value)
     non_zero_data = centered_data[centered_data != 0]
 
-    result.sample_sizes = {'total': len(clean_data), 'non_zero': len(non_zero_data)}
+    result.sample_sizes = {"total": len(clean_data), "non_zero": len(non_zero_data)}
 
     # Sample size validation
-    adequate_size, size_warnings = validate_sample_sizes([non_zero_data], 6, "Wilcoxon signed-rank test")
+    adequate_size, size_warnings = validate_sample_sizes(
+        [non_zero_data], 6, "Wilcoxon signed-rank test"
+    )
     result.warnings.extend(size_warnings)
-    result.assumptions_met['adequate_sample_size'] = adequate_size
+    result.assumptions_met["adequate_sample_size"] = adequate_size
 
     # Symmetry assumption check (approximate)
     if len(centered_data) > 0:
         skewness = centered_data.skew()
         if abs(skewness) > 1:
             result.warnings.append("Data appears highly skewed, violating symmetry assumption")
-            result.assumptions_met['symmetry'] = False
+            result.assumptions_met["symmetry"] = False
         else:
-            result.assumptions_met['symmetry'] = True
+            result.assumptions_met["symmetry"] = True
 
-        result.assumption_details['skewness'] = skewness
+        result.assumption_details["skewness"] = skewness
 
         # Perform test
         try:
@@ -497,8 +528,8 @@ def wilcoxon_signed_rank_test(model_metrics: pd.Series, null_value: float = 0.5,
 
         except Exception as e:
             result.warnings.append(f"Test failed: {str(e)}")
-            result.statistic = float('nan')
-            result.p_value = float('nan')
+            result.statistic = float("nan")
+            result.p_value = float("nan")
             return result
 
     # Generate interpretation
@@ -508,12 +539,13 @@ def wilcoxon_signed_rank_test(model_metrics: pd.Series, null_value: float = 0.5,
     return result
 
 
-def anova_test(model_metrics: Dict[str, pd.Series],
-               alpha: float = 0.05) -> StatisticalTestResult:
+def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> StatisticalTestResult:
     """One-way ANOVA test with comprehensive validation, effect sizes, and interpretation."""
     _check_scipy()
 
-    result = StatisticalTestResult(test_name="One-Way ANOVA", statistic=float('nan'), p_value=float('nan'))
+    result = StatisticalTestResult(
+        test_name="One-Way ANOVA", statistic=float("nan"), p_value=float("nan")
+    )
 
     if len(model_metrics) < 2:
         raise ValueError("ANOVA requires at least two groups to compare.")
@@ -532,7 +564,7 @@ def anova_test(model_metrics: Dict[str, pd.Series],
     # Validation
     adequate_size, size_warnings = validate_sample_sizes(clean_groups, 3, "ANOVA")
     result.warnings.extend(size_warnings)
-    result.assumptions_met['adequate_sample_size'] = adequate_size
+    result.assumptions_met["adequate_sample_size"] = adequate_size
 
     # Normality check for each group
     normality_results = {}
@@ -543,21 +575,23 @@ def anova_test(model_metrics: Dict[str, pd.Series],
         if not is_normal:
             all_normal = False
 
-    result.assumptions_met['normality'] = all_normal
-    result.assumption_details['normality'] = normality_results
+    result.assumptions_met["normality"] = all_normal
+    result.assumption_details["normality"] = normality_results
 
     if not all_normal:
-        result.warnings.append("Some groups violate normality assumption - consider Kruskal-Wallis test")
+        result.warnings.append(
+            "Some groups violate normality assumption - consider Kruskal-Wallis test"
+        )
         result.recommendations.append("Consider using Kruskal-Wallis test for non-normal data")
 
     # Equal variance check (Levene's test for multiple groups)
     try:
         levene_stat, levene_p = levene(*clean_groups)
         equal_vars = levene_p > alpha
-        result.assumptions_met['equal_variances'] = equal_vars
-        result.assumption_details['variance_test'] = {
-            'levene_statistic': levene_stat,
-            'levene_p': levene_p
+        result.assumptions_met["equal_variances"] = equal_vars
+        result.assumption_details["variance_test"] = {
+            "levene_statistic": levene_stat,
+            "levene_p": levene_p,
         }
 
         if not equal_vars:
@@ -579,8 +613,8 @@ def anova_test(model_metrics: Dict[str, pd.Series],
 
     except Exception as e:
         result.warnings.append(f"ANOVA failed: {str(e)}")
-        result.statistic = float('nan')
-        result.p_value = float('nan')
+        result.statistic = float("nan")
+        result.p_value = float("nan")
         return result
 
     # Generate interpretation
@@ -590,8 +624,9 @@ def anova_test(model_metrics: Dict[str, pd.Series],
     return result
 
 
-def kruskal_wallis_test(model_metrics: Dict[str, pd.Series],
-                        alpha: float = 0.05) -> StatisticalTestResult:
+def kruskal_wallis_test(
+    model_metrics: Dict[str, pd.Series], alpha: float = 0.05
+) -> StatisticalTestResult:
     """
     Kruskal-Wallis H-test with comprehensive validation and effect sizes.
 
@@ -632,11 +667,7 @@ def kruskal_wallis_test(model_metrics: Dict[str, pd.Series],
         )
 
     # Validate sample sizes
-    adequate_size, size_warnings = validate_sample_sizes(
-        clean_groups,
-        3,
-        "Kruskal-Wallis test"
-    )
+    adequate_size, size_warnings = validate_sample_sizes(clean_groups, 3, "Kruskal-Wallis test")
 
     try:
         # Perform the Kruskal-Wallis test
@@ -644,20 +675,15 @@ def kruskal_wallis_test(model_metrics: Dict[str, pd.Series],
 
         # Create result object with required parameters
         result = StatisticalTestResult(
-            test_name="Kruskal-Wallis H-Test",
-            statistic=float(statistic),
-            p_value=float(p_value)
+            test_name="Kruskal-Wallis H-Test", statistic=float(statistic), p_value=float(p_value)
         )
 
         # Add sample size information
-        result.sample_sizes = {
-            name: len(group)
-            for name, group in zip(group_names, clean_groups)
-        }
+        result.sample_sizes = {name: len(group) for name, group in zip(group_names, clean_groups)}
 
         # Add validation warnings
         result.warnings.extend(size_warnings)
-        result.assumptions_met['adequate_sample_size'] = adequate_size
+        result.assumptions_met["adequate_sample_size"] = adequate_size
 
         # Calculate effect size (epsilon-squared)
         N = sum(len(group) for group in clean_groups)
@@ -665,7 +691,7 @@ def kruskal_wallis_test(model_metrics: Dict[str, pd.Series],
 
         if N > k:
             epsilon_sq = (statistic - k + 1) / (N - k)
-            epsilon_sq = max(0.0, min(1.0, epsilon_sq))   # Ensure non-negative
+            epsilon_sq = max(0.0, min(1.0, epsilon_sq))  # Ensure non-negative
         else:
             epsilon_sq = 0
 
@@ -676,15 +702,10 @@ def kruskal_wallis_test(model_metrics: Dict[str, pd.Series],
     except Exception as e:
         # Create a failure result object for consistent return type
         result = StatisticalTestResult(
-            test_name="Kruskal-Wallis H-Test",
-            statistic=float('nan'),
-            p_value=float('nan')
+            test_name="Kruskal-Wallis H-Test", statistic=float("nan"), p_value=float("nan")
         )
         result.warnings.append(f"Kruskal-Wallis test failed: {str(e)}")
-        result.sample_sizes = {
-            name: len(group)
-            for name, group in zip(group_names, clean_groups)
-        }
+        result.sample_sizes = {name: len(group) for name, group in zip(group_names, clean_groups)}
         return result
 
     # Generate interpretation
@@ -693,26 +714,31 @@ def kruskal_wallis_test(model_metrics: Dict[str, pd.Series],
 
     return result
 
+
 def shapiro_wilk_test(model_metrics: pd.Series, alpha: float = 0.05) -> StatisticalTestResult:
     """Shapiro-Wilk test for normality with comprehensive validation."""
     _check_scipy()
 
-    result = StatisticalTestResult(test_name="Shapiro-Wilk Normality Test", statistic=float('nan'), p_value=float('nan'))
+    result = StatisticalTestResult(
+        test_name="Shapiro-Wilk Normality Test", statistic=float("nan"), p_value=float("nan")
+    )
 
     if not isinstance(model_metrics, pd.Series):
         raise TypeError("Input must be a pandas Series.")
 
     clean_data = model_metrics.dropna()
-    result.sample_sizes = {'total': len(clean_data)}
+    result.sample_sizes = {"total": len(clean_data)}
 
     if len(clean_data) < 3:
         result.warnings.append("Shapiro-Wilk test requires at least 3 observations")
-        result.statistic = float('nan')
-        result.p_value = float('nan')
+        result.statistic = float("nan")
+        result.p_value = float("nan")
         return result
 
     if len(clean_data) > 5000:
-        result.warnings.append("Shapiro-Wilk test may not be reliable for very large samples (n>5000)")
+        result.warnings.append(
+            "Shapiro-Wilk test may not be reliable for very large samples (n>5000)"
+        )
 
     try:
         statistic, p_value = shapiro(clean_data)
@@ -721,8 +747,8 @@ def shapiro_wilk_test(model_metrics: pd.Series, alpha: float = 0.05) -> Statisti
 
     except Exception as e:
         result.warnings.append(f"Shapiro-Wilk test failed: {str(e)}")
-        result.statistic = float('nan')
-        result.p_value = float('nan')
+        result.statistic = float("nan")
+        result.p_value = float("nan")
         return result
 
     # Generate interpretation
@@ -731,53 +757,58 @@ def shapiro_wilk_test(model_metrics: pd.Series, alpha: float = 0.05) -> Statisti
 
     # Add recommendation about sample size
     if len(clean_data) < 20:
-        result.recommendations.append("Consider collecting more data for more reliable normality assessment")
+        result.recommendations.append(
+            "Consider collecting more data for more reliable normality assessment"
+        )
     elif len(clean_data) > 1000:
         result.recommendations.append(
-            "For large samples, consider visual methods (Q-Q plots) alongside statistical tests")
+            "For large samples, consider visual methods (Q-Q plots) alongside statistical tests"
+        )
 
     return result
 
 
 # HIGH-LEVEL COMPARISON FUNCTIONS
 
-def compare_two_models(model1_results: pd.Series, model2_results: pd.Series,
-                       paired: bool = False, alpha: float = 0.05) -> StatisticalTestResult:
+
+def compare_two_models(
+    model1_results: pd.Series, model2_results: pd.Series, paired: bool = False, alpha: float = 0.05
+) -> StatisticalTestResult:
     """
-        Compares two models using intelligent, assumption-driven test selection.
+    Compares two models using intelligent, assumption-driven test selection.
 
-        This function automatically selects the correct statistical test based
-        on the data's properties and whether the samples are paired.
+    This function automatically selects the correct statistical test based
+    on the data's properties and whether the samples are paired.
 
-        - If `paired=True`, performs a Wilcoxon signed-rank test on the differences.
-        - If `paired=False`, it performs an "intelligent independent test":
-            1. Checks for normality in both groups (using `check_normality`).
-            2. If both are normal, checks for equal variance (using `check_equal_variances`).
-            3.  - Normal + Equal Variance: Runs a Student's t-test.
-            4.  - Normal + Unequal Variance: Runs a Welch's t-test.
-            5.  - Not Normal: Runs a Mann-Whitney U test.
+    - If `paired=True`, performs a Wilcoxon signed-rank test on the differences.
+    - If `paired=False`, it performs an "intelligent independent test":
+        1. Checks for normality in both groups (using `check_normality`).
+        2. If both are normal, checks for equal variance (using `check_equal_variances`).
+        3.  - Normal + Equal Variance: Runs a Student's t-test.
+        4.  - Normal + Unequal Variance: Runs a Welch's t-test.
+        5.  - Not Normal: Runs a Mann-Whitney U test.
 
-        Args:
-            model1_results (pd.Series): A Series of metric results for model 1.
-            model2_results (pd.Series): A Series of metric results for model 2.
-            paired (bool, optional): Whether the samples are paired (e.g.,
-                results from the same k-folds). Defaults to False.
-            alpha (float, optional): Significance level used for assumption checks
-                (normality, variance). Defaults to 0.05.
+    Args:
+        model1_results (pd.Series): A Series of metric results for model 1.
+        model2_results (pd.Series): A Series of metric results for model 2.
+        paired (bool, optional): Whether the samples are paired (e.g.,
+            results from the same k-folds). Defaults to False.
+        alpha (float, optional): Significance level used for assumption checks
+            (normality, variance). Defaults to 0.05.
 
-        Returns:
-            StatisticalTestResult: A rich object containing the test name,
-            statistic, p-value, effect size, and details on which
-            assumptions were met.
-        """
+    Returns:
+        StatisticalTestResult: A rich object containing the test name,
+        statistic, p-value, effect size, and details on which
+        assumptions were met.
+    """
 
     # Clean data first
     if paired:
         # For paired data, remove rows where either value is missing
-        combined = pd.DataFrame({'model1': model1_results, 'model2': model2_results})
+        combined = pd.DataFrame({"model1": model1_results, "model2": model2_results})
         combined_clean = combined.dropna()
-        clean1 = combined_clean['model1']
-        clean2 = combined_clean['model2']
+        clean1 = combined_clean["model1"]
+        clean2 = combined_clean["model2"]
     else:
         clean1 = model1_results.dropna()
         clean2 = model2_results.dropna()
@@ -786,8 +817,8 @@ def compare_two_models(model1_results: pd.Series, model2_results: pd.Series,
     if len(clean1) < 6 or len(clean2) < 6:
         result = StatisticalTestResult(
             test_name="Insufficient Data",
-            statistic=float('nan'),  # Required argument
-            p_value=float('nan')  # Required argument
+            statistic=float("nan"),  # Required argument
+            p_value=float("nan"),  # Required argument
         )
         result.warnings.append("Insufficient data for reliable statistical testing")
         result.recommendations.append("Collect more data (at least 6 samples per group)")
@@ -805,20 +836,14 @@ def compare_two_models(model1_results: pd.Series, model2_results: pd.Series,
         is_normal1, norm_details1 = check_normality(clean1, alpha=alpha)
         is_normal2, norm_details2 = check_normality(clean2, alpha=alpha)
 
-        assumptions_met = {
-            'normality_group1': is_normal1,
-            'normality_group2': is_normal2
-        }
-        assumption_details = {
-            'normality_group1': norm_details1,
-            'normality_group2': norm_details2
-        }
+        assumptions_met = {"normality_group1": is_normal1, "normality_group2": is_normal2}
+        assumption_details = {"normality_group1": norm_details1, "normality_group2": norm_details2}
 
         if is_normal1 and is_normal2:
             # 2. Both are normal: Check variances
             equal_vars, var_details = check_equal_variances(clean1, clean2, alpha=alpha)
-            assumptions_met['equal_variances'] = equal_vars
-            assumption_details['variance_test'] = var_details
+            assumptions_met["equal_variances"] = equal_vars
+            assumption_details["variance_test"] = var_details
 
             if equal_vars:
                 # 3a. Normal + Equal Variance = Student's t-test
@@ -839,7 +864,7 @@ def compare_two_models(model1_results: pd.Series, model2_results: pd.Series,
                 p_value=p_value,
                 effect_size=effect_size,
                 effect_size_name=es_name,
-                effect_size_interpretation=es_interp
+                effect_size_interpretation=es_interp,
             )
 
         else:
@@ -856,13 +881,11 @@ def compare_two_models(model1_results: pd.Series, model2_results: pd.Series,
         try:
             if paired:
                 ci_result = bootstrap_paired_difference_ci(
-                    clean1, clean2,
-                    n_bootstrap=10000, confidence=1 - alpha, method='bca'
+                    clean1, clean2, n_bootstrap=10000, confidence=1 - alpha, method="bca"
                 )
             else:
                 ci_result = bootstrap_mean_difference_ci(
-                    clean1, clean2,
-                    n_bootstrap=10000, confidence=1 - alpha, method='bca'
+                    clean1, clean2, n_bootstrap=10000, confidence=1 - alpha, method="bca"
                 )
 
             result.confidence_interval = (ci_result.ci_lower, ci_result.ci_upper)
@@ -872,9 +895,12 @@ def compare_two_models(model1_results: pd.Series, model2_results: pd.Series,
             # Also compute CI for the effect size (Cohen's d)
             if result.effect_size is not None:
                 es_ci = bootstrap_effect_size_ci(
-                    clean1, clean2,
-                    n_bootstrap=10000, confidence=1 - alpha, method='bca',
-                    pooled=True
+                    clean1,
+                    clean2,
+                    n_bootstrap=10000,
+                    confidence=1 - alpha,
+                    method="bca",
+                    pooled=True,
                 )
                 result.ci_effect_size = (es_ci.ci_lower, es_ci.ci_upper)
 
@@ -885,9 +911,9 @@ def compare_two_models(model1_results: pd.Series, model2_results: pd.Series,
     return result
 
 
-def compare_multiple_models(model_results: Dict[str, pd.Series],
-                            alpha: float = 0.05,
-                            correction_method: str = 'holm') -> Dict[str, Any]:
+def compare_multiple_models(
+    model_results: Dict[str, pd.Series], alpha: float = 0.05, correction_method: str = "holm"
+) -> Dict[str, Any]:
     """
     Compares three or more models using a robust, two-step procedure.
 
@@ -944,11 +970,11 @@ def compare_multiple_models(model_results: Dict[str, pd.Series],
     overall_result = kruskal_wallis_test(model_results, alpha=alpha)
 
     results = {
-        'overall_test': overall_result,
-        'pairwise_comparisons': {},
-        'correction_method': correction_method,
-        'family_wise_error_rate': alpha,
-        'n_comparisons': n_models * (n_models - 1) // 2
+        "overall_test": overall_result,
+        "pairwise_comparisons": {},
+        "correction_method": correction_method,
+        "family_wise_error_rate": alpha,
+        "n_comparisons": n_models * (n_models - 1) // 2,
     }
 
     if overall_result.is_significant(alpha):
@@ -962,15 +988,13 @@ def compare_multiple_models(model_results: Dict[str, pd.Series],
                 comparison_name = f"{name1}_vs_{name2}"
 
                 pairwise_result = mann_whitney_test(
-                    model_results[name1],
-                    model_results[name2],
-                    alpha=alpha
+                    model_results[name1], model_results[name2], alpha=alpha
                 )
 
                 pairwise_tests.append(pairwise_result)
                 pairwise_names.append(comparison_name)
 
-                results['pairwise_comparisons'][comparison_name] = pairwise_result
+                results["pairwise_comparisons"][comparison_name] = pairwise_result
 
         # Apply multiple comparison correction
         p_values = [test.p_value for test in pairwise_tests]
@@ -983,17 +1007,21 @@ def compare_multiple_models(model_results: Dict[str, pd.Series],
             test.corrected_p_value = corrected_p_values[i]
             test.correction_method = correction_method
 
-        results['correction_description'] = correction_description
-        results['significant_comparisons'] = [name for name, test in results['pairwise_comparisons'].items()
-            if test.is_significant(alpha)]
+        results["correction_description"] = correction_description
+        results["significant_comparisons"] = [
+            name
+            for name, test in results["pairwise_comparisons"].items()
+            if test.is_significant(alpha)
+        ]
     else:
-        results['message'] = "Overall test not significant - no pairwise comparisons performed"
-        results['significant_comparisons'] = []
+        results["message"] = "Overall test not significant - no pairwise comparisons performed"
+        results["significant_comparisons"] = []
 
     return results
 
 
 # UTILITY FUNCTIONS FOR INTERPRETATION
+
 
 def _generate_mann_whitney_conclusion(result: StatisticalTestResult, alpha: float) -> str:
     """Generate conclusion for Mann-Whitney test."""
@@ -1011,7 +1039,9 @@ def _generate_mann_whitney_conclusion(result: StatisticalTestResult, alpha: floa
     return conclusion
 
 
-def _generate_wilcoxon_conclusion(result: StatisticalTestResult, null_value: float, alpha: float) -> str:
+def _generate_wilcoxon_conclusion(
+    result: StatisticalTestResult, null_value: float, alpha: float
+) -> str:
     """Generate conclusion for Wilcoxon test."""
     p_val = result.corrected_p_value if result.corrected_p_value is not None else result.p_value
 
@@ -1088,7 +1118,9 @@ def _generate_detailed_interpretation(result: StatisticalTestResult, alpha: floa
 
     # Multiple comparison correction
     if result.corrected_p_value is not None:
-        interpretation.append(f"P-value corrected for multiple comparisons using {result.correction_method}")
+        interpretation.append(
+            f"P-value corrected for multiple comparisons using {result.correction_method}"
+        )
 
     # Recommendations
     if result.recommendations:
@@ -1113,6 +1145,7 @@ def _interpret_wilcoxon_r(r: float) -> str:
 
 # CONVERGENCE ASSESSMENT (enhanced existing functions)
 
+
 def calculate_autocorr(data: Union[pd.Series, List[float]], lag: int = 1) -> Optional[float]:
     """Calculate autocorrelation of a time series at a specific lag. Enhanced with better error handling."""
     if not isinstance(data, pd.Series):
@@ -1127,8 +1160,9 @@ def calculate_autocorr(data: Union[pd.Series, List[float]], lag: int = 1) -> Opt
         return None
 
 
-def calculate_averaged_autocorr(histories: List[pd.Series], max_lag: int = 20) -> Tuple[
-    List[float], List[float], List[float]]:
+def calculate_averaged_autocorr(
+    histories: List[pd.Series], max_lag: int = 20
+) -> Tuple[List[float], List[float], List[float]]:
     """Compute mean and standard deviation of autocorrelation functions across multiple histories. Enhanced with better validation."""
     if not histories:
         raise ValueError("The list of histories cannot be empty.")
@@ -1156,8 +1190,9 @@ def calculate_averaged_autocorr(histories: List[pd.Series], max_lag: int = 20) -
     return lags, mean_autocorr.tolist(), std_autocorr.tolist()
 
 
-def check_convergence(data: Union[pd.Series, List[float]], window_size: int = 5,
-                      autocorr_threshold: float = 0.1) -> bool:
+def check_convergence(
+    data: Union[pd.Series, List[float]], window_size: int = 5, autocorr_threshold: float = 0.1
+) -> bool:
     """Check for convergence using autocorrelation and variance criteria. Enhanced with multiple convergence indicators."""
     if not isinstance(data, pd.Series):
         data = pd.Series(data)
@@ -1192,8 +1227,10 @@ def check_convergence(data: Union[pd.Series, List[float]], window_size: int = 5,
 
 # CONFUSION MATRIX FUNCTION (enhanced)
 
-def get_confusion_matrix_df(predictions: np.ndarray, true_labels: np.ndarray,
-                            class_names: Dict[int, str]) -> pd.DataFrame:
+
+def get_confusion_matrix_df(
+    predictions: np.ndarray, true_labels: np.ndarray, class_names: Dict[int, str]
+) -> pd.DataFrame:
     """Generate confusion matrix DataFrame from predictions and true labels."""
     _check_sklearn()
 
@@ -1206,11 +1243,12 @@ def get_confusion_matrix_df(predictions: np.ndarray, true_labels: np.ndarray,
     return pd.DataFrame(
         cm,
         index=[class_names[i] for i in class_indices],
-        columns=[class_names[i] for i in class_indices]
+        columns=[class_names[i] for i in class_indices],
     )
 
 
 # SUMMARY AND REPORTING FUNCTIONS
+
 
 def generate_statistical_summary(results: List[StatisticalTestResult]) -> str:
     """
@@ -1242,7 +1280,8 @@ def generate_statistical_summary(results: List[StatisticalTestResult]) -> str:
 
     summary_lines.append(f"Tests performed: {len(results)}")
     summary_lines.append(
-        f"Significant results: {len(significant_results)} ({100 * len(significant_results) / len(results):.1f}%)")
+        f"Significant results: {len(significant_results)} ({100 * len(significant_results) / len(results):.1f}%)"
+    )
     summary_lines.append("")
 
     # Individual test summaries
@@ -1261,11 +1300,17 @@ def generate_statistical_summary(results: List[StatisticalTestResult]) -> str:
             summary_lines.append(ci_line)
             if result.ci_effect_size is not None:
                 es_lo, es_hi = result.ci_effect_size
-                summary_lines.append(f"  {result.ci_confidence_level*100:.0f}% CI for effect size: [{es_lo:.4f}, {es_hi:.4f}]")
+                summary_lines.append(
+                    f"  {result.ci_confidence_level*100:.0f}% CI for effect size: [{es_lo:.4f}, {es_hi:.4f}]"
+                )
 
         # Add major warnings
         if result.warnings:
-            major_warnings = [w for w in result.warnings if "assumption" in w.lower() or "insufficient" in w.lower()]
+            major_warnings = [
+                w
+                for w in result.warnings
+                if "assumption" in w.lower() or "insufficient" in w.lower()
+            ]
             for warning in major_warnings:
                 summary_lines.append(f"  ⚠ {warning}")
 
@@ -1318,35 +1363,37 @@ def create_results_dataframe(results: List[StatisticalTestResult]) -> pd.DataFra
     data = []
     for result in results:
         row = {
-            'test_name': result.test_name,
-            'statistic': result.statistic,
-            'p_value': result.p_value,
-            'significant': result.is_significant(),
-            'effect_size': result.effect_size,
-            'effect_size_name': result.effect_size_name,
-            'effect_size_interpretation': result.effect_size_interpretation,
-            'n_warnings': len(result.warnings),
-            'assumptions_met': all(result.assumptions_met.values()) if result.assumptions_met else None
+            "test_name": result.test_name,
+            "statistic": result.statistic,
+            "p_value": result.p_value,
+            "significant": result.is_significant(),
+            "effect_size": result.effect_size,
+            "effect_size_name": result.effect_size_name,
+            "effect_size_interpretation": result.effect_size_interpretation,
+            "n_warnings": len(result.warnings),
+            "assumptions_met": (
+                all(result.assumptions_met.values()) if result.assumptions_met else None
+            ),
         }
 
         # Add sample sizes
         if result.sample_sizes:
             for key, value in result.sample_sizes.items():
-                row[f'n_{key}'] = value
+                row[f"n_{key}"] = value
 
         # Add corrected p-value if available
         if result.corrected_p_value is not None:
-            row['corrected_p_value'] = result.corrected_p_value
-            row['correction_method'] = result.correction_method
+            row["corrected_p_value"] = result.corrected_p_value
+            row["correction_method"] = result.correction_method
 
         # Add confidence interval if available
         if result.confidence_interval is not None:
-            row['ci_lower'] = result.confidence_interval[0]
-            row['ci_upper'] = result.confidence_interval[1]
-            row['ci_method'] = result.ci_method
+            row["ci_lower"] = result.confidence_interval[0]
+            row["ci_upper"] = result.confidence_interval[1]
+            row["ci_method"] = result.ci_method
         if result.ci_effect_size is not None:
-            row['ci_effect_size_lower'] = result.ci_effect_size[0]
-            row['ci_effect_size_upper'] = result.ci_effect_size[1]
+            row["ci_effect_size_lower"] = result.ci_effect_size[0]
+            row["ci_effect_size_upper"] = result.ci_effect_size[1]
 
         data.append(row)
 
@@ -1355,8 +1402,10 @@ def create_results_dataframe(results: List[StatisticalTestResult]) -> pd.DataFra
 
 # TRAINING STABILITY ASSESSMENT
 
-def assess_training_stability(loss_histories: List[pd.Series],
-                              window_size: int = 10) -> Dict[str, Any]:
+
+def assess_training_stability(
+    loss_histories: List[pd.Series], window_size: int = 10
+) -> Dict[str, Any]:
     """
     Assesses training stability by analyzing loss histories from multiple runs.
 
@@ -1395,12 +1444,12 @@ def assess_training_stability(loss_histories: List[pd.Series],
               were still oscillating at the end.
     """
     if not loss_histories or len(loss_histories) < 2:
-        return {'error': 'Need at least 2 training histories for stability assessment'}
+        return {"error": "Need at least 2 training histories for stability assessment"}
 
     # Find common length (minimum across all histories)
     min_length = min(len(history) for history in loss_histories)
     if min_length < window_size:
-        return {'error': f'Training histories too short for window_size={window_size}'}
+        return {"error": f"Training histories too short for window_size={window_size}"}
 
     # Truncate all histories to same length
     truncated_histories = [history.iloc[:min_length] for history in loss_histories]
@@ -1413,15 +1462,23 @@ def assess_training_stability(loss_histories: List[pd.Series],
     final_window_losses = loss_array[:, -window_size:]
 
     results = {
-        'n_runs': len(loss_histories),
-        'common_length': min_length,
-        'final_loss_mean': np.mean(final_losses),
-        'final_loss_std': np.std(final_losses),
-        'final_loss_cv': np.std(final_losses) / np.mean(final_losses) if np.mean(final_losses) > 0 else float('inf'),
-        'final_window_std_mean': np.mean([np.std(run_window) for run_window in final_window_losses]),
-        'between_run_variance': np.var(np.mean(final_window_losses, axis=1)),
-        'within_run_variance_mean': np.mean([np.var(run_window) for run_window in final_window_losses]),
-        'final_losses_list': final_losses.tolist()
+        "n_runs": len(loss_histories),
+        "common_length": min_length,
+        "final_loss_mean": np.mean(final_losses),
+        "final_loss_std": np.std(final_losses),
+        "final_loss_cv": (
+            np.std(final_losses) / np.mean(final_losses)
+            if np.mean(final_losses) > 0
+            else float("inf")
+        ),
+        "final_window_std_mean": np.mean(
+            [np.std(run_window) for run_window in final_window_losses]
+        ),
+        "between_run_variance": np.var(np.mean(final_window_losses, axis=1)),
+        "within_run_variance_mean": np.mean(
+            [np.var(run_window) for run_window in final_window_losses]
+        ),
+        "final_losses_list": final_losses.tolist(),
     }
 
     # Convergence assessment for each run
@@ -1430,10 +1487,10 @@ def assess_training_stability(loss_histories: List[pd.Series],
         # Handle both Series and DataFrame inputs
         if isinstance(history, pd.DataFrame):
             # For DataFrames, use the loss column for convergence check
-            if 'loss' in history.columns:
-                converged = check_convergence(history['loss'], window_size=window_size)
-            elif 'val_loss' in history.columns:
-                converged = check_convergence(history['val_loss'], window_size=window_size)
+            if "loss" in history.columns:
+                converged = check_convergence(history["loss"], window_size=window_size)
+            elif "val_loss" in history.columns:
+                converged = check_convergence(history["val_loss"], window_size=window_size)
             else:
                 # No loss column found, can't check convergence
                 converged = False
@@ -1445,16 +1502,16 @@ def assess_training_stability(loss_histories: List[pd.Series],
             converged = False
         convergence_results.append(converged)
 
-    results['convergence_rate'] = sum(convergence_results) / len(convergence_results)
-    results['converged_runs'] = sum(convergence_results)
+    results["convergence_rate"] = sum(convergence_results) / len(convergence_results)
+    results["converged_runs"] = sum(convergence_results)
 
     # Stability interpretation
-    cv = results['final_loss_cv']
+    cv = results["final_loss_cv"]
     if cv < 0.05:
-        results['stability_assessment'] = 'high'
+        results["stability_assessment"] = "high"
     elif cv < 0.15:
-        results['stability_assessment'] = 'moderate'
+        results["stability_assessment"] = "moderate"
     else:
-        results['stability_assessment'] = 'low'
+        results["stability_assessment"] = "low"
 
     return results

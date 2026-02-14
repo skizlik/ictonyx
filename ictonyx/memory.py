@@ -9,20 +9,21 @@ functions, making it work seamlessly in Jupyter environments.
 """
 
 import gc
+import multiprocessing as mp
 import os
+import pickle
 import sys
 import time
-import warnings
-import pickle
 import traceback
-from typing import Optional, Dict, Any, Callable, Tuple, Union
-from dataclasses import dataclass, field
+import warnings
 from contextlib import contextmanager
-from .settings import logger
-import multiprocessing as mp
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 # Core dependencies
 import numpy as np
+
+from .settings import logger
 
 # Optional dependencies
 try:
@@ -62,6 +63,7 @@ except ImportError:
 @dataclass
 class MemoryResult:
     """Result of memory operations."""
+
     success: bool
     actions: list = field(default_factory=list)
     errors: list = field(default_factory=list)
@@ -79,12 +81,14 @@ class MemoryManager:
     Process isolation mode: Subprocess execution with guaranteed cleanup
     """
 
-    def __init__(self,
-                 use_process_isolation: bool = False,
-                 gpu_memory_limit: Optional[int] = None,
-                 process_timeout: int = 3600,
-                 allow_memory_growth: bool = True,
-                 verbose: bool = True):
+    def __init__(
+        self,
+        use_process_isolation: bool = False,
+        gpu_memory_limit: Optional[int] = None,
+        process_timeout: int = 3600,
+        allow_memory_growth: bool = True,
+        verbose: bool = True,
+    ):
         """
         Initialize memory manager.
 
@@ -119,12 +123,12 @@ class MemoryManager:
         # Setup multiprocessing context (spawn for clean isolation)
         try:
             current_method = mp.get_start_method(allow_none=True)
-            if current_method != 'spawn':
-                mp.set_start_method('spawn', force=True)
-            self.ctx = mp.get_context('spawn')
+            if current_method != "spawn":
+                mp.set_start_method("spawn", force=True)
+            self.ctx = mp.get_context("spawn")
         except RuntimeError:
             # Already set, just get context
-            self.ctx = mp.get_context('spawn')
+            self.ctx = mp.get_context("spawn")
         except Exception as e:
             warnings.warn(f"Could not setup spawn context: {e}")
             self.ctx = mp.get_context()
@@ -155,7 +159,7 @@ class MemoryManager:
     def _setup_tensorflow(self) -> bool:
         """Configure TensorFlow memory settings."""
         try:
-            gpus = tf.config.list_physical_devices('GPU')
+            gpus = tf.config.list_physical_devices("GPU")
             if not gpus:
                 return True  # CPU mode
 
@@ -165,9 +169,11 @@ class MemoryManager:
                         # Hard limit
                         tf.config.set_logical_device_configuration(
                             gpu,
-                            [tf.config.LogicalDeviceConfiguration(
-                                memory_limit=self.gpu_memory_limit
-                            )]
+                            [
+                                tf.config.LogicalDeviceConfiguration(
+                                    memory_limit=self.gpu_memory_limit
+                                )
+                            ],
                         )
                         if self.verbose:
                             logger.debug(f"Set GPU memory limit: {self.gpu_memory_limit}MB")
@@ -200,7 +206,7 @@ class MemoryManager:
             if self.gpu_memory_limit:
                 for i in range(torch.cuda.device_count()):
                     props = torch.cuda.get_device_properties(i)
-                    total_mb = props.total_memory / (1024 ** 2)
+                    total_mb = props.total_memory / (1024**2)
                     fraction = min(self.gpu_memory_limit / total_mb, 1.0)
                     torch.cuda.set_per_process_memory_fraction(fraction, i)
 
@@ -220,18 +226,16 @@ class MemoryManager:
         if self.use_process_isolation:
             # No cleanup needed - process will die
             return MemoryResult(
-                success=True,
-                actions=['process_isolation_no_cleanup'],
-                mode='isolated'
+                success=True, actions=["process_isolation_no_cleanup"], mode="isolated"
             )
 
-        result = MemoryResult(success=True, mode='standard')
+        result = MemoryResult(success=True, mode="standard")
 
         # Measure before
         if HAS_PSUTIL:
             try:
                 process = psutil.Process()
-                result.memory_before_mb = process.memory_info().rss / (1024 ** 2)
+                result.memory_before_mb = process.memory_info().rss / (1024**2)
             except Exception:
                 pass
 
@@ -239,44 +243,44 @@ class MemoryManager:
         if HAS_TENSORFLOW:
             try:
                 tf.keras.backend.clear_session()
-                result.actions.append('tf_clear_session')
+                result.actions.append("tf_clear_session")
 
                 # Reset graph
                 try:
                     tf.compat.v1.reset_default_graph()
-                    result.actions.append('tf_reset_graph')
+                    result.actions.append("tf_reset_graph")
                 except Exception:
                     pass
 
                 # GPU stats reset
-                for gpu in tf.config.list_physical_devices('GPU'):
+                for gpu in tf.config.list_physical_devices("GPU"):
                     try:
-                        tf.config.experimental.reset_memory_stats(gpu.name.split(':')[-1])
-                        result.actions.append(f'tf_reset_{gpu.name}_stats')
+                        tf.config.experimental.reset_memory_stats(gpu.name.split(":")[-1])
+                        result.actions.append(f"tf_reset_{gpu.name}_stats")
                     except Exception:
                         pass
 
             except Exception as e:
-                result.errors.append(f'TF cleanup: {str(e)[:100]}')
+                result.errors.append(f"TF cleanup: {str(e)[:100]}")
 
         # PyTorch cleanup
         if HAS_TORCH and torch.cuda.is_available():
             try:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
-                result.actions.append('torch_empty_cache')
+                result.actions.append("torch_empty_cache")
             except Exception as e:
-                result.errors.append(f'PyTorch cleanup: {str(e)[:100]}')
+                result.errors.append(f"PyTorch cleanup: {str(e)[:100]}")
 
         # Garbage collection
         collected = sum(gc.collect() for _ in range(3))
-        result.actions.append(f'gc_collected_{collected}')
+        result.actions.append(f"gc_collected_{collected}")
 
         # Measure after
         if HAS_PSUTIL:
             try:
                 process = psutil.Process()
-                result.memory_after_mb = process.memory_info().rss / (1024 ** 2)
+                result.memory_after_mb = process.memory_info().rss / (1024**2)
                 if result.memory_before_mb:
                     result.memory_freed_mb = result.memory_before_mb - result.memory_after_mb
             except Exception:
@@ -285,8 +289,9 @@ class MemoryManager:
         result.success = len(result.errors) == 0
         return result
 
-    def run_isolated(self, func: Callable, args: tuple = (),
-                     kwargs: Optional[Dict] = None) -> Dict[str, Any]:
+    def run_isolated(
+        self, func: Callable, args: tuple = (), kwargs: Optional[Dict] = None
+    ) -> Dict[str, Any]:
         """
         Run function in isolated subprocess with smart serialization.
 
@@ -341,15 +346,12 @@ class MemoryManager:
         try:
             serialized_payload = cloudpickle.dumps((func, args, kwargs))
         except Exception as e:
-            return {
-                'success': False,
-                'error': f'CloudPickle serialization failed: {e}'
-            }
+            return {"success": False, "error": f"CloudPickle serialization failed: {e}"}
 
         # Run subprocess
         process = self.ctx.Process(
             target=_cloudpickle_subprocess_worker,
-            args=(result_queue, serialized_payload, self.gpu_memory_limit)
+            args=(result_queue, serialized_payload, self.gpu_memory_limit),
         )
 
         return self._execute_subprocess(process, result_queue)
@@ -360,7 +362,7 @@ class MemoryManager:
 
         process = self.ctx.Process(
             target=_standard_subprocess_worker,
-            args=(result_queue, func, args, kwargs, self.gpu_memory_limit)
+            args=(result_queue, func, args, kwargs, self.gpu_memory_limit),
         )
 
         return self._execute_subprocess(process, result_queue)
@@ -372,14 +374,14 @@ class MemoryManager:
 
         try:
             result = func(*args, **kwargs)
-            return {'success': True, 'result': result, 'mode': 'fallback'}
+            return {"success": True, "result": result, "mode": "fallback"}
 
         except Exception as e:
             return {
-                'success': False,
-                'error': str(e),
-                'traceback': traceback.format_exc(),
-                'mode': 'fallback'
+                "success": False,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+                "mode": "fallback",
             }
 
         finally:
@@ -404,36 +406,28 @@ class MemoryManager:
                 if process.is_alive():
                     process.kill()
                     process.join()
-                return {
-                    'success': False,
-                    'error': f'Process timeout ({self.process_timeout}s)'
-                }
+                return {"success": False, "error": f"Process timeout ({self.process_timeout}s)"}
 
             if process.exitcode != 0:
                 return {
-                    'success': False,
-                    'error': f'Process crashed (exit code {process.exitcode})'
+                    "success": False,
+                    "error": f"Process crashed (exit code {process.exitcode})",
                 }
 
             try:
                 return result_queue.get(timeout=5)
             except Exception:
-                return {
-                    'success': False,
-                    'error': 'No result from subprocess'
-                }
+                return {"success": False, "error": "No result from subprocess"}
 
         except Exception as e:
-            return {
-                'success': False,
-                'error': f'Subprocess execution failed: {e}'
-            }
+            return {"success": False, "error": f"Subprocess execution failed: {e}"}
         finally:
             if process.is_alive():
                 process.terminate()
 
 
 # Subprocess worker functions (module-level for picklability)
+
 
 def _cloudpickle_subprocess_worker(queue, serialized_payload, gpu_memory_limit):
     """Worker using cloudpickle deserialization."""
@@ -450,14 +444,10 @@ def _cloudpickle_subprocess_worker(queue, serialized_payload, gpu_memory_limit):
         # Cleanup before sending result
         _cleanup_subprocess()
 
-        queue.put({'success': True, 'result': result})
+        queue.put({"success": True, "result": result})
 
     except Exception as e:
-        queue.put({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        })
+        queue.put({"success": False, "error": str(e), "traceback": traceback.format_exc()})
 
 
 def _standard_subprocess_worker(queue, func, args, kwargs, gpu_memory_limit):
@@ -472,28 +462,21 @@ def _standard_subprocess_worker(queue, func, args, kwargs, gpu_memory_limit):
         # Cleanup
         _cleanup_subprocess()
 
-        queue.put({'success': True, 'result': result})
+        queue.put({"success": True, "result": result})
 
     except Exception as e:
-        queue.put({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        })
+        queue.put({"success": False, "error": str(e), "traceback": traceback.format_exc()})
 
 
 def _setup_subprocess_gpu(gpu_memory_limit):
     """Configure GPU in subprocess."""
     if HAS_TENSORFLOW:
         try:
-            gpus = tf.config.list_physical_devices('GPU')
+            gpus = tf.config.list_physical_devices("GPU")
             for gpu in gpus:
                 if gpu_memory_limit:
                     tf.config.set_logical_device_configuration(
-                        gpu,
-                        [tf.config.LogicalDeviceConfiguration(
-                            memory_limit=gpu_memory_limit
-                        )]
+                        gpu, [tf.config.LogicalDeviceConfiguration(memory_limit=gpu_memory_limit)]
                     )
                 else:
                     tf.config.experimental.set_memory_growth(gpu, True)
@@ -512,6 +495,7 @@ def _cleanup_subprocess():
 
 
 # Public API
+
 
 def get_memory_manager(use_process_isolation: bool = False, **kwargs) -> MemoryManager:
     """
@@ -567,19 +551,19 @@ def get_memory_info() -> Dict[str, Any]:
     if HAS_PSUTIL:
         try:
             process = psutil.Process()
-            info['process_rss_mb'] = process.memory_info().rss / (1024 ** 2)
+            info["process_rss_mb"] = process.memory_info().rss / (1024**2)
 
             vm = psutil.virtual_memory()
-            info['system_available_mb'] = vm.available / (1024 ** 2)
-            info['system_percent'] = vm.percent
+            info["system_available_mb"] = vm.available / (1024**2)
+            info["system_percent"] = vm.percent
         except Exception:
             pass
 
     if HAS_TENSORFLOW:
         try:
-            for i, gpu in enumerate(tf.config.list_physical_devices('GPU')):
-                stats = tf.config.experimental.get_memory_info(f'GPU:{i}')
-                info[f'gpu{i}_current_mb'] = stats.get('current', 0) / (1024 ** 2)
+            for i, gpu in enumerate(tf.config.list_physical_devices("GPU")):
+                stats = tf.config.experimental.get_memory_info(f"GPU:{i}")
+                info[f"gpu{i}_current_mb"] = stats.get("current", 0) / (1024**2)
         except Exception:
             pass
 

@@ -1,9 +1,11 @@
+import os
+import tempfile
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
 import numpy as np
 import pandas as pd
-import tempfile
-import os
-from typing import Dict, Any, List, Optional, Union
-from pathlib import Path
+
 from . import settings
 
 logger = settings.logger
@@ -11,8 +13,8 @@ logger = settings.logger
 # Optional MLflow dependency
 try:
     import mlflow
-    import mlflow.tensorflow
     import mlflow.sklearn
+    import mlflow.tensorflow
 
     HAS_MLFLOW = True
 except ImportError:
@@ -22,6 +24,7 @@ except ImportError:
 # Optional system info dependencies
 try:
     import platform
+
     import psutil
 
     HAS_SYSTEM_INFO = True
@@ -39,24 +42,25 @@ class BaseLogger:
     print it to the console.
     """
 
-    def __init__(self, verbose: bool = True, print_params: bool = False,
-                 print_metrics: bool = False):
+    def __init__(
+        self, verbose: bool = True, print_params: bool = False, print_metrics: bool = False
+    ):
         self.verbose = verbose
         self.print_params = print_params
         self.print_metrics = print_metrics
-        self.history: Dict[str, Any] = {'params': {}, 'metrics': []}
+        self.history: Dict[str, Any] = {"params": {}, "metrics": []}
 
     def log_params(self, params: Dict[str, Any]):
         """Logs a dictionary of parameters and stores it in history."""
-        self.history['params'].update(params)
+        self.history["params"].update(params)
 
         if self.verbose and self.print_params:
             print(f"Parameters: {params}")
 
     def log_metric(self, key: str, value: float, step: int = 0):
         """Logs a single metric and stores it in history."""
-        metric_entry = {'key': key, 'value': value, 'step': step}
-        self.history['metrics'].append(metric_entry)
+        metric_entry = {"key": key, "value": value, "step": step}
+        self.history["metrics"].append(metric_entry)
 
         if self.verbose and self.print_metrics:
             print(f" - Step {step}: {key} = {value:.4f}")
@@ -101,11 +105,13 @@ class MLflowLogger(BaseLogger):
     An implementation of the BaseLogger for MLflow with comprehensive tracking capabilities.
     """
 
-    def __init__(self,
-                 run_name: Optional[str] = None,
-                 experiment_name: str = "ictonyx_experiment",
-                 tracking_uri: Optional[str] = None,
-                 verbose: bool = True):
+    def __init__(
+        self,
+        run_name: Optional[str] = None,
+        experiment_name: str = "ictonyx_experiment",
+        tracking_uri: Optional[str] = None,
+        verbose: bool = True,
+    ):
         """
         Initialize MLflow logger.
 
@@ -217,6 +223,7 @@ class MLflowLogger(BaseLogger):
 
                 # Copy file to temporary location with desired name
                 import shutil
+
                 shutil.copy2(artifact_path, dest_path)
                 mlflow.log_artifacts(tmp_dir)
         else:
@@ -234,10 +241,10 @@ class MLflowLogger(BaseLogger):
         super().log_model(model, artifact_path)
 
         try:
-            if hasattr(model, 'save') and 'keras' in str(type(model)).lower():
+            if hasattr(model, "save") and "keras" in str(type(model)).lower():
                 # TensorFlow/Keras model
                 mlflow.tensorflow.log_model(model, artifact_path, **kwargs)
-            elif hasattr(model, 'fit') and hasattr(model, 'predict'):
+            elif hasattr(model, "fit") and hasattr(model, "predict"):
                 # Scikit-learn model
                 mlflow.sklearn.log_model(model, artifact_path, **kwargs)
             else:
@@ -253,8 +260,9 @@ class MLflowLogger(BaseLogger):
                 logger.info("Attempting to save as pickle...")
 
             # Fallback: save as pickle artifact
-            with tempfile.NamedTemporaryFile(suffix='.pkl', delete=False) as tmp_file:
+            with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp_file:
                 import pickle
+
                 pickle.dump(model, tmp_file)
                 tmp_file.flush()
                 self.log_artifact(tmp_file.name, f"{artifact_path}/model.pkl")
@@ -264,26 +272,29 @@ class MLflowLogger(BaseLogger):
         """Logs a matplotlib figure as an artifact."""
         super().log_figure(figure, artifact_name)
 
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-            figure.savefig(tmp_file.name, dpi=150, bbox_inches='tight')
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+            figure.savefig(tmp_file.name, dpi=150, bbox_inches="tight")
             tmp_file.flush()
             self.log_artifact(tmp_file.name, artifact_name)
             os.unlink(tmp_file.name)
 
     def log_dataframe(self, df: pd.DataFrame, artifact_name: str):
         """Logs a pandas DataFrame as a CSV artifact."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as tmp_file:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as tmp_file:
             df.to_csv(tmp_file.name, index=False)
             tmp_file.flush()
             self.log_artifact(tmp_file.name, artifact_name)
             os.unlink(tmp_file.name)
 
-    def log_confusion_matrix(self, cm_df: pd.DataFrame, artifact_name: str = "confusion_matrix.csv"):
+    def log_confusion_matrix(
+        self, cm_df: pd.DataFrame, artifact_name: str = "confusion_matrix.csv"
+    ):
         """Logs a confusion matrix DataFrame."""
         self.log_dataframe(cm_df, artifact_name)
 
-    def log_training_history(self, history: Union[Dict, pd.DataFrame],
-                             artifact_name: str = "training_history.csv"):
+    def log_training_history(
+        self, history: Union[Dict, pd.DataFrame], artifact_name: str = "training_history.csv"
+    ):
         """Logs training history as both metrics and artifact."""
         if isinstance(history, dict):
             history_df = pd.DataFrame(history)
@@ -318,25 +329,31 @@ class MLflowLogger(BaseLogger):
 
         # Always available Python info
         import sys
-        system_tags.update({
-            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-            "python_platform": sys.platform
-        })
+
+        system_tags.update(
+            {
+                "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+                "python_platform": sys.platform,
+            }
+        )
 
         # Optional detailed system info
         if HAS_SYSTEM_INFO:
-            system_tags.update({
-                "system": platform.system(),
-                "cpu_count": str(psutil.cpu_count()),
-                "memory_gb": str(round(psutil.virtual_memory().total / (1024 ** 3), 2))
-            })
+            system_tags.update(
+                {
+                    "system": platform.system(),
+                    "cpu_count": str(psutil.cpu_count()),
+                    "memory_gb": str(round(psutil.virtual_memory().total / (1024**3), 2)),
+                }
+            )
         elif self.verbose:
             logger.warning("platform/psutil not available, logging basic system info only")
 
         # Try to get GPU info if TensorFlow available
         try:
             import tensorflow as tf
-            gpus = tf.config.list_physical_devices('GPU')
+
+            gpus = tf.config.list_physical_devices("GPU")
             system_tags["gpu_count"] = str(len(gpus))
             if gpus:
                 system_tags["gpu_names"] = str([gpu.name for gpu in gpus])
@@ -357,8 +374,9 @@ class MLflowLogger(BaseLogger):
     def get_run_url(self) -> str:
         """Gets the URL to view this run in MLflow UI."""
         tracking_uri = mlflow.get_tracking_uri()
-        if tracking_uri.startswith('file://'):
+        if tracking_uri.startswith("file://"):
             return f"http://localhost:5000/#/experiments/{self._run.info.experiment_id}/runs/{self._run_id}"
         else:
-            return f"{tracking_uri}/#/experiments/{self._run.info.experiment_id}/runs/{self._run_id}"
-
+            return (
+                f"{tracking_uri}/#/experiments/{self._run.info.experiment_id}/runs/{self._run_id}"
+            )

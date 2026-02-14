@@ -7,16 +7,17 @@ Supports both standard and process-isolated execution modes.
 import gc
 import random
 import warnings
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-from typing import Callable, Dict, Any, List, Optional, Tuple, Union
-from dataclasses import dataclass, field
 
-from .core import BaseModelWrapper
 from .config import ModelConfig
+from .core import BaseModelWrapper
 from .data import DataHandler
-from .memory import get_memory_manager, get_memory_info
 from .loggers import BaseLogger
+from .memory import get_memory_info, get_memory_manager
 
 # The SYSTEM Logger (Standard Python Convention)
 from .settings import logger
@@ -36,15 +37,17 @@ class ExperimentRunner:
     Engine for running variability studies with memory management.
     """
 
-    def __init__(self,
-                 model_builder: Callable[[ModelConfig], BaseModelWrapper],
-                 data_handler: DataHandler,
-                 model_config: ModelConfig,
-                 tracker: Optional[BaseLogger] = None,
-                 use_process_isolation: bool = False,
-                 gpu_memory_limit: Optional[int] = None,
-                 seed: Optional[int] = None,
-                 verbose: bool = True):
+    def __init__(
+        self,
+        model_builder: Callable[[ModelConfig], BaseModelWrapper],
+        data_handler: DataHandler,
+        model_config: ModelConfig,
+        tracker: Optional[BaseLogger] = None,
+        use_process_isolation: bool = False,
+        gpu_memory_limit: Optional[int] = None,
+        seed: Optional[int] = None,
+        verbose: bool = True,
+    ):
         """
         Initialize experiment runner.
 
@@ -58,7 +61,7 @@ class ExperimentRunner:
         self.model_builder = model_builder
         self.data_handler = data_handler
         self.model_config = model_config
-        self.seed = seed if seed is not None else int(np.random.default_rng().integers(0, 2 ** 31))
+        self.seed = seed if seed is not None else int(np.random.default_rng().integers(0, 2**31))
 
         # The Experiment Tracker (Records results/metrics)
         self.tracker = tracker or BaseLogger()  # <--- RENAMED ATTR
@@ -69,8 +72,7 @@ class ExperimentRunner:
 
         # Initialize memory manager
         self.memory_manager = get_memory_manager(
-            use_process_isolation=use_process_isolation,
-            gpu_memory_limit=gpu_memory_limit
+            use_process_isolation=use_process_isolation, gpu_memory_limit=gpu_memory_limit
         )
 
         # Setup memory constraints for standard mode
@@ -88,9 +90,9 @@ class ExperimentRunner:
 
         try:
             data_dict = self.data_handler.load()
-            self.train_data = data_dict['train_data']
-            self.val_data = data_dict.get('val_data')
-            self.test_data = data_dict.get('test_data')
+            self.train_data = data_dict["train_data"]
+            self.val_data = data_dict.get("val_data")
+            self.test_data = data_dict.get("test_data")
 
             if verbose:
                 logger.info(f"Data loaded successfully")
@@ -118,13 +120,12 @@ class ExperimentRunner:
         try:
             pickle.dumps(self.model_builder)
         except Exception as e:
-            raise ValueError(
-                f"model_builder must be picklable for process isolation: {e}"
-            )
+            raise ValueError(f"model_builder must be picklable for process isolation: {e}")
 
         # Check if data is picklable (warn if large)
         try:
             import sys
+
             data_size = sys.getsizeof(pickle.dumps(self.train_data))
             if data_size > 500_000_000:  # 500MB
                 warnings.warn(
@@ -155,6 +156,7 @@ class ExperimentRunner:
         # PyTorch (will require revision when full PyTorch support is added)
         try:
             import torch
+
             torch.manual_seed(seed)
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(seed)
@@ -174,7 +176,7 @@ class ExperimentRunner:
             logger.info(f" - Run {run_id}: Starting in isolated process...")
 
         # Log run start (Metric Tracker)
-        self.tracker.log_params({'run_id': run_id, 'mode': 'isolated'})
+        self.tracker.log_params({"run_id": run_id, "mode": "isolated"})
 
         # Execute in subprocess
         result = self.memory_manager.run_isolated(
@@ -187,15 +189,15 @@ class ExperimentRunner:
                 self.test_data,
                 epochs,
                 run_id,
-                self.seed + run_id
-            )
+                self.seed + run_id,
+            ),
         )
 
         # Process results
-        if result['success']:
+        if result["success"]:
             try:
                 # Extract history
-                history_data = result['result']['history']
+                history_data = result["result"]["history"]
                 if not history_data:
                     if self.verbose:
                         logger.warning(f" - Run {run_id}: No training history returned")
@@ -204,30 +206,29 @@ class ExperimentRunner:
 
                 # Create DataFrame
                 history_df = pd.DataFrame(history_data)
-                history_df['run_num'] = run_id
-                history_df['epoch'] = range(1, len(history_df) + 1)
+                history_df["run_num"] = run_id
+                history_df["epoch"] = range(1, len(history_df) + 1)
 
                 # Standardize column names
-                history_df.rename(columns={
-                    'accuracy': 'train_accuracy',
-                    'loss': 'train_loss'
-                }, inplace=True)
+                history_df.rename(
+                    columns={"accuracy": "train_accuracy", "loss": "train_loss"}, inplace=True
+                )
 
                 # Store final values for ALL tracked metrics
                 for col in history_df.columns:
-                    if col not in ('run_num', 'epoch'):
+                    if col not in ("run_num", "epoch"):
                         final_value = float(history_df[col].iloc[-1])
                         if col not in self.final_metrics:
                             self.final_metrics[col] = []
                         self.final_metrics[col].append(final_value)
-                        self.tracker.log_metric(f'final_{col}', final_value, step=run_id)
+                        self.tracker.log_metric(f"final_{col}", final_value, step=run_id)
 
                 # Store test metrics
-                test_metrics = result['result'].get('test_metrics')
+                test_metrics = result["result"].get("test_metrics")
                 if test_metrics:
                     self.final_test_metrics.append(test_metrics)
                     for key, value in test_metrics.items():
-                        self.tracker.log_metric(f'final_test_{key}', value, step=run_id)
+                        self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
 
                 if self.verbose:
                     logger.info(f" - Run {run_id}: Completed successfully (isolated)")
@@ -241,10 +242,10 @@ class ExperimentRunner:
                 return None
         else:
             # Training failed
-            error_msg = result.get('error', 'Unknown error')
+            error_msg = result.get("error", "Unknown error")
             if self.verbose:
                 logger.error(f" - Run {run_id}: Failed - {error_msg}")
-                if 'traceback' in result and self.verbose:
+                if "traceback" in result and self.verbose:
                     logger.info(f"   Traceback: {result['traceback'][:500]}...")
 
             self.failed_runs.append(run_id)
@@ -259,7 +260,7 @@ class ExperimentRunner:
         self._set_seeds(self.seed + run_id)
 
         # Log run start (Metric Tracker)
-        self.tracker.log_params({'run_id': run_id, 'mode': 'standard'})
+        self.tracker.log_params({"run_id": run_id, "mode": "standard"})
 
         wrapped_model = None
         try:
@@ -271,8 +272,8 @@ class ExperimentRunner:
                 train_data=self.train_data,
                 validation_data=self.val_data,
                 epochs=epochs,
-                batch_size=self.model_config.get('batch_size', 32),
-                verbose=self.model_config.get('verbose', 0)
+                batch_size=self.model_config.get("batch_size", 32),
+                verbose=self.model_config.get("verbose", 0),
             )
 
             # Extract training result
@@ -285,23 +286,22 @@ class ExperimentRunner:
             history_dict = wrapped_model.training_result.history
 
             history_df = pd.DataFrame(history_dict)
-            history_df['run_num'] = run_id
-            history_df['epoch'] = range(1, len(history_df) + 1)
+            history_df["run_num"] = run_id
+            history_df["epoch"] = range(1, len(history_df) + 1)
 
             # Standardize column names
-            history_df.rename(columns={
-                'accuracy': 'train_accuracy',
-                'loss': 'train_loss'
-            }, inplace=True)
+            history_df.rename(
+                columns={"accuracy": "train_accuracy", "loss": "train_loss"}, inplace=True
+            )
 
             # Store final values for ALL tracked metrics
             for col in history_df.columns:
-                if col not in ('run_num', 'epoch'):
+                if col not in ("run_num", "epoch"):
                     final_value = float(history_df[col].iloc[-1])
                     if col not in self.final_metrics:
                         self.final_metrics[col] = []
                     self.final_metrics[col].append(final_value)
-                    self.tracker.log_metric(f'final_{col}', final_value, step=run_id)
+                    self.tracker.log_metric(f"final_{col}", final_value, step=run_id)
 
             # Evaluate on test data
             if self.test_data is not None:
@@ -309,7 +309,7 @@ class ExperimentRunner:
                     test_metrics = wrapped_model.evaluate(data=self.test_data)
                     self.final_test_metrics.append(test_metrics)
                     for key, value in test_metrics.items():
-                        self.tracker.log_metric(f'final_test_{key}', value, step=run_id)
+                        self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
                 except Exception as e:
                     if self.verbose:
                         logger.warning(f"   Warning: Test evaluation failed: {e}")
@@ -329,7 +329,7 @@ class ExperimentRunner:
             # Cleanup
             if wrapped_model is not None:
                 try:
-                    if hasattr(wrapped_model, 'cleanup'):
+                    if hasattr(wrapped_model, "cleanup"):
                         wrapped_model.cleanup()
                     del wrapped_model
                 except Exception:
@@ -341,10 +341,12 @@ class ExperimentRunner:
                 if cleanup_result.memory_freed_mb > 10:  # Only report significant cleanup
                     logger.info(f"   Freed {cleanup_result.memory_freed_mb:.1f}MB")
 
-    def run_study(self, num_runs: int = 5,
-                  epochs_per_run: Optional[int] = None,
-                  stop_on_failure_rate: float = 0.5) -> 'VariabilityStudyResults':
-
+    def run_study(
+        self,
+        num_runs: int = 5,
+        epochs_per_run: Optional[int] = None,
+        stop_on_failure_rate: float = 0.5,
+    ) -> "VariabilityStudyResults":
         """Execute the complete variability study."""
 
         # Reset state from any previous run
@@ -354,16 +356,18 @@ class ExperimentRunner:
         self.failed_runs = []
 
         if epochs_per_run is None:
-            epochs_per_run = self.model_config.get('epochs', 10)
+            epochs_per_run = self.model_config.get("epochs", 10)
 
         # Log study parameters (Metric Tracker)
-        self.tracker.log_params({
-            'num_runs': num_runs,
-            'epochs_per_run': epochs_per_run,
-            'use_process_isolation': self.use_process_isolation,
-            'gpu_memory_limit': self.gpu_memory_limit,
-            'seed': self.seed
-        })
+        self.tracker.log_params(
+            {
+                "num_runs": num_runs,
+                "epochs_per_run": epochs_per_run,
+                "use_process_isolation": self.use_process_isolation,
+                "gpu_memory_limit": self.gpu_memory_limit,
+                "seed": self.seed,
+            }
+        )
         self.tracker.log_params(self.model_config.params)
 
         # Print study configuration (System Logger)
@@ -398,7 +402,7 @@ class ExperimentRunner:
                 # Log memory info periodically
                 if (i + 1) % 10 == 0 and self.verbose:
                     memory_info = get_memory_info()
-                    if 'process_rss_mb' in memory_info:
+                    if "process_rss_mb" in memory_info:
                         logger.info(f"  Memory check: {memory_info['process_rss_mb']:.1f}MB")
 
         except KeyboardInterrupt:
@@ -431,32 +435,33 @@ class ExperimentRunner:
             all_runs_metrics=self.all_runs_metrics,
             final_metrics=self.final_metrics,
             final_test_metrics=self.final_test_metrics,
-            seed=self.seed
+            seed=self.seed,
         )
 
     def get_summary_stats(self) -> Dict[str, Any]:
         """Get summary statistics for the completed study."""
         stats = {
-            'total_runs': len(self.all_runs_metrics) + len(self.failed_runs),
-            'successful_runs': len(self.all_runs_metrics),
-            'failed_runs': len(self.failed_runs),
-            'failure_rate': len(self.failed_runs) / max(1, len(self.all_runs_metrics) + len(self.failed_runs))
+            "total_runs": len(self.all_runs_metrics) + len(self.failed_runs),
+            "successful_runs": len(self.all_runs_metrics),
+            "failed_runs": len(self.failed_runs),
+            "failure_rate": len(self.failed_runs)
+            / max(1, len(self.all_runs_metrics) + len(self.failed_runs)),
         }
 
         for metric_name, values in self.final_metrics.items():
             if values:
-                stats[f'{metric_name}_mean'] = np.mean(values)
-                stats[f'{metric_name}_std'] = np.std(values)
-                stats[f'{metric_name}_min'] = np.min(values)
-                stats[f'{metric_name}_max'] = np.max(values)
+                stats[f"{metric_name}_mean"] = np.mean(values)
+                stats[f"{metric_name}_std"] = np.std(values)
+                stats[f"{metric_name}_min"] = np.min(values)
+                stats[f"{metric_name}_max"] = np.max(values)
 
         return stats
 
 
 # Module-level function for subprocess execution (must be picklable)
-def _isolated_training_function(model_builder, config, train_data,
-                                val_data, test_data, epochs, run_id,
-                                run_seed=None):
+def _isolated_training_function(
+    model_builder, config, train_data, val_data, test_data, epochs, run_id, run_seed=None
+):
     """
     Training function executed in isolated subprocess.
     """
@@ -466,15 +471,18 @@ def _isolated_training_function(model_builder, config, train_data,
         # Set seeds in subprocess
         if run_seed is not None:
             import random
+
             random.seed(run_seed)
             np.random.seed(run_seed)
             try:
                 import tensorflow as tf
+
                 tf.random.set_seed(run_seed)
             except ImportError:
                 pass
             try:
                 import torch
+
                 torch.manual_seed(run_seed)
             except ImportError:
                 pass
@@ -487,8 +495,8 @@ def _isolated_training_function(model_builder, config, train_data,
             train_data=train_data,
             validation_data=val_data,
             epochs=epochs,
-            batch_size=config.get('batch_size', 32),
-            verbose=config.get('verbose', 0)
+            batch_size=config.get("batch_size", 32),
+            verbose=config.get("verbose", 0),
         )
 
         # Extract history
@@ -508,34 +516,33 @@ def _isolated_training_function(model_builder, config, train_data,
                         for k, v in test_metrics.items()
                     }
             except Exception as e:
-                test_metrics = {'error': str(e)}
+                test_metrics = {"error": str(e)}
 
         # Cleanup before returning
-        if hasattr(model, 'cleanup'):
+        if hasattr(model, "cleanup"):
             model.cleanup()
         del model
         gc.collect()
 
-        return {
-            'history': history,
-            'test_metrics': test_metrics,
-            'run_id': run_id
-        }
+        return {"history": history, "test_metrics": test_metrics, "run_id": run_id}
 
     except Exception as e:
         # Return error information
         import traceback
+
         return {
-            'history': {},
-            'test_metrics': {},
-            'run_id': run_id,
-            'error': str(e),
-            'traceback': traceback.format_exc()
+            "history": {},
+            "test_metrics": {},
+            "run_id": run_id,
+            "error": str(e),
+            "traceback": traceback.format_exc(),
         }
+
 
 @dataclass
 class VariabilityStudyResults:
     """Container for variability study results with analysis methods."""
+
     all_runs_metrics: List[pd.DataFrame]
     final_metrics: Dict[str, List[float]]
     final_test_metrics: List[Dict[str, Any]]
@@ -560,12 +567,10 @@ class VariabilityStudyResults:
         """
         if metric_name not in self.final_metrics:
             available = sorted(self.final_metrics.keys())
-            raise KeyError(
-                f"Metric '{metric_name}' not found. Available: {available}"
-            )
+            raise KeyError(f"Metric '{metric_name}' not found. Available: {available}")
         return self.final_metrics[metric_name]
 
-    def get_final_metrics(self, metric_name: str = 'val_accuracy') -> Dict[str, float]:
+    def get_final_metrics(self, metric_name: str = "val_accuracy") -> Dict[str, float]:
         """Extract final metric values for each run (labeled run_1, run_2, ...).
 
         For backward compatibility with plotting and statistical comparison code.
@@ -573,7 +578,7 @@ class VariabilityStudyResults:
         metrics = {}
         for i, df in enumerate(self.all_runs_metrics):
             if metric_name in df.columns:
-                metrics[f'run_{i + 1}'] = float(df[metric_name].iloc[-1])
+                metrics[f"run_{i + 1}"] = float(df[metric_name].iloc[-1])
         return metrics
 
     def get_available_metrics(self) -> List[str]:
@@ -587,15 +592,15 @@ class VariabilityStudyResults:
 
         rows = []
         for i, df in enumerate(self.all_runs_metrics):
-            row = {'run_id': i + 1}
+            row = {"run_id": i + 1}
 
             for col in df.columns:
-                if col not in {'run_num', 'epoch', 'run_id'}:
-                    row[f'final_{col}'] = float(df[col].iloc[-1])
+                if col not in {"run_num", "epoch", "run_id"}:
+                    row[f"final_{col}"] = float(df[col].iloc[-1])
 
             if i < len(self.final_test_metrics):
                 for key, value in self.final_test_metrics[i].items():
-                    row[f'test_{key}'] = value
+                    row[f"test_{key}"] = value
 
             rows.append(row)
 
@@ -612,20 +617,24 @@ class VariabilityStudyResults:
 
         for metric_name, values in sorted(self.final_metrics.items()):
             if values:
-                lines.extend([
-                    f"{metric_name}:",
-                    f"  Mean: {np.mean(values):.4f}",
-                    f"  Std:  {np.std(values):.4f}",
-                    f"  Min:  {np.min(values):.4f}",
-                    f"  Max:  {np.max(values):.4f}"
-                ])
+                lines.extend(
+                    [
+                        f"{metric_name}:",
+                        f"  Mean: {np.mean(values):.4f}",
+                        f"  Std:  {np.std(values):.4f}",
+                        f"  Min:  {np.min(values):.4f}",
+                        f"  Max:  {np.max(values):.4f}",
+                    ]
+                )
 
         return "\n".join(lines)
 
-    def compare_models_statistically(self,
-                                     metric_name: str = 'val_accuracy',
-                                     alpha: float = 0.05,
-                                     correction_method: str = 'holm') -> Dict[str, Any]:
+    def compare_models_statistically(
+        self,
+        metric_name: str = "val_accuracy",
+        alpha: float = 0.05,
+        correction_method: str = "holm",
+    ) -> Dict[str, Any]:
         """Perform statistical comparison of runs for the specified metric."""
         from .analysis import compare_multiple_models
 
@@ -637,13 +646,12 @@ class VariabilityStudyResults:
         if not final_metrics:
             available = self.get_available_metrics()
             raise ValueError(
-                f"Metric '{metric_name}' not found in results. "
-                f"Available metrics: {available}"
+                f"Metric '{metric_name}' not found in results. " f"Available metrics: {available}"
             )
 
         metrics_dict = {}
         for run_name, value in final_metrics.items():
-            run_idx = int(run_name.split('_')[-1]) - 1
+            run_idx = int(run_name.split("_")[-1]) - 1
             if run_idx < len(self.all_runs_metrics):
                 df = self.all_runs_metrics[run_idx]
                 if metric_name in df.columns:
@@ -654,23 +662,22 @@ class VariabilityStudyResults:
                 metrics_dict[run_name] = pd.Series([value], name=run_name)
 
         return compare_multiple_models(
-            model_results=metrics_dict,
-            alpha=alpha,
-            correction_method=correction_method
+            model_results=metrics_dict, alpha=alpha, correction_method=correction_method
         )
 
 
 def run_variability_study(
-        model_builder: Callable[[ModelConfig], BaseModelWrapper],
-        data_handler: DataHandler,
-        model_config: ModelConfig,
-        num_runs: int = 5,
-        epochs_per_run: Optional[int] = None,
-        tracker: Optional[BaseLogger] = None,
-        use_process_isolation: bool = False,
-        gpu_memory_limit: Optional[int] = None,
-        seed: Optional[int] = None,
-        verbose: bool = True) -> VariabilityStudyResults:
+    model_builder: Callable[[ModelConfig], BaseModelWrapper],
+    data_handler: DataHandler,
+    model_config: ModelConfig,
+    num_runs: int = 5,
+    epochs_per_run: Optional[int] = None,
+    tracker: Optional[BaseLogger] = None,
+    use_process_isolation: bool = False,
+    gpu_memory_limit: Optional[int] = None,
+    seed: Optional[int] = None,
+    verbose: bool = True,
+) -> VariabilityStudyResults:
     """Run a complete variability study.
 
     Args:
@@ -685,10 +692,7 @@ def run_variability_study(
         use_process_isolation=use_process_isolation,
         gpu_memory_limit=gpu_memory_limit,
         seed=seed,
-        verbose=verbose
+        verbose=verbose,
     )
 
-    return runner.run_study(
-        num_runs=num_runs,
-        epochs_per_run=epochs_per_run
-    )
+    return runner.run_study(num_runs=num_runs, epochs_per_run=epochs_per_run)

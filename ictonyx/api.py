@@ -7,31 +7,32 @@ and model comparisons. It abstracts away the complexity of DataHandlers,
 ModelConfigs, and ExperimentRunners into single function calls.
 """
 
-from typing import Union, Callable, Any, Optional, List, Dict, Tuple
-import pandas as pd
-import numpy as np
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from .core import BaseModelWrapper, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE, PYTORCH_AVAILABLE
-from .config import ModelConfig
-from .data import auto_resolve_handler, DataHandler
-from .runners import run_variability_study as _run_study
-from .runners import VariabilityStudyResults
-from .loggers import BaseLogger
-from .analysis import compare_multiple_models as _stat_compare
+import numpy as np
+import pandas as pd
+
 from . import settings
+from .analysis import compare_multiple_models as _stat_compare
+from .config import ModelConfig
+from .core import PYTORCH_AVAILABLE, SKLEARN_AVAILABLE, TENSORFLOW_AVAILABLE, BaseModelWrapper
+from .data import DataHandler, auto_resolve_handler
+from .loggers import BaseLogger
+from .runners import VariabilityStudyResults
+from .runners import run_variability_study as _run_study
 
 
 def variability_study(
-        model: Any,
-        data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray]],
-        target_column: Optional[str] = None,
-        runs: int = 5,
-        epochs: int = 10,
-        batch_size: int = 32,
-        tracker: Optional[BaseLogger] = None,
-        use_process_isolation: bool = False,
-        seed: Optional[int] = None,
-        **kwargs
+    model: Any,
+    data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray]],
+    target_column: Optional[str] = None,
+    runs: int = 5,
+    epochs: int = 10,
+    batch_size: int = 32,
+    tracker: Optional[BaseLogger] = None,
+    use_process_isolation: bool = False,
+    seed: Optional[int] = None,
+    **kwargs,
 ) -> VariabilityStudyResults:
     """
     Run a variability study with a single function call.
@@ -46,12 +47,14 @@ def variability_study(
 
     # 3. Configure
     # We explicitly pass kwargs into the config, trusting ModelConfig to ignore/store extras.
-    config = ModelConfig({
-        'epochs': epochs,
-        'batch_size': batch_size,
-        'verbose': 1 if settings._VERBOSE else 0,
-        **kwargs
-    })
+    config = ModelConfig(
+        {
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "verbose": 1 if settings._VERBOSE else 0,
+            **kwargs,
+        }
+    )
 
     # 4. Execute
     return _run_study(
@@ -62,19 +65,19 @@ def variability_study(
         epochs_per_run=epochs,
         tracker=tracker,
         use_process_isolation=use_process_isolation,
-        gpu_memory_limit=kwargs.get('gpu_memory_limit'),
-        seed=seed
+        gpu_memory_limit=kwargs.get("gpu_memory_limit"),
+        seed=seed,
     )
 
 
 def compare_models(
-        models: List[Any],
-        data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray]],
-        target_column: Optional[str] = None,
-        runs: int = 5,
-        epochs: int = 10,
-        metric: str = 'val_accuracy',
-        **kwargs
+    models: List[Any],
+    data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray]],
+    target_column: Optional[str] = None,
+    runs: int = 5,
+    epochs: int = 10,
+    metric: str = "val_accuracy",
+    **kwargs,
 ) -> Dict[str, Any]:
     """
     Compare multiple models using rigorous statistical testing.
@@ -96,7 +99,7 @@ def compare_models(
             data=handler,  # Pass the already resolved handler
             runs=runs,
             epochs=epochs,
-            **kwargs
+            **kwargs,
         )
 
         # Extract metric
@@ -109,12 +112,13 @@ def compare_models(
 
     # Statistical Analysis
     if len(results_store) < 2:
-        return {'error': 'Insufficient valid results for comparison'}
+        return {"error": "Insufficient valid results for comparison"}
 
     return _stat_compare(results_store)
 
 
 # --- Clean Helpers ---
+
 
 def _get_model_builder(model: Any) -> Callable:
     """Standardizes model input into a factory function.
@@ -136,7 +140,7 @@ def _get_model_builder(model: Any) -> Callable:
         return lambda conf: _ensure_wrapper(model())
 
     # If it's an instance, we need to clone it per run for independence.
-    if hasattr(model, 'fit'):
+    if hasattr(model, "fit"):
         return _build_instance_cloner(model)
 
     raise ValueError(f"Invalid model input: {model}")
@@ -154,9 +158,10 @@ def _build_instance_cloner(model: Any) -> Callable:
     we raise an error guiding the user to pass a class or builder function.
     """
     # sklearn: clone() creates an unfitted copy with same hyperparameters
-    if hasattr(model, 'get_params'):
+    if hasattr(model, "get_params"):
         try:
             from sklearn.base import clone
+
             # Test that clone works before committing to this path
             clone(model)
             settings.logger.info(
@@ -170,7 +175,7 @@ def _build_instance_cloner(model: Any) -> Callable:
             )
 
     # Keras models: no clean clone path
-    if 'keras' in str(type(model)) or 'tensorflow' in str(type(model)):
+    if "keras" in str(type(model)) or "tensorflow" in str(type(model)):
         raise ValueError(
             "Passing a Keras model instance risks weight leakage between runs. "
             "Pass a builder function instead:\n"
@@ -182,7 +187,7 @@ def _build_instance_cloner(model: Any) -> Callable:
         )
 
     # PyTorch modules: no clean clone path
-    if 'torch' in str(type(model).__mro__):
+    if "torch" in str(type(model).__mro__):
         raise ValueError(
             "Passing a PyTorch model instance risks weight leakage between runs. "
             "Pass a builder function instead:\n"
@@ -206,40 +211,45 @@ def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
         return obj
 
     # Duck typing checks are Pythonic and readable
-    if hasattr(obj, 'fit') and hasattr(obj, 'predict'):
+    if hasattr(obj, "fit") and hasattr(obj, "predict"):
         if not SKLEARN_AVAILABLE:
             raise ImportError(
                 "scikit-learn is required to auto-wrap models with fit/predict. "
                 "Install with: pip install scikit-learn"
             )
         from .core import ScikitLearnModelWrapper
+
         return ScikitLearnModelWrapper(obj)
 
     # String check avoids hard import of TensorFlow
-    if 'keras' in str(type(obj)) or 'tensorflow' in str(type(obj)):
+    if "keras" in str(type(obj)) or "tensorflow" in str(type(obj)):
         if not TENSORFLOW_AVAILABLE:
             raise ImportError(
                 "TensorFlow is required to auto-wrap Keras models. "
                 "Install with: pip install tensorflow"
             )
         from .core import KerasModelWrapper
+
         return KerasModelWrapper(obj)
 
     # PyTorch nn.Module detection
-    if 'torch' in str(type(obj).__mro__):
+    if "torch" in str(type(obj).__mro__):
         if not PYTORCH_AVAILABLE:
             raise ImportError(
                 "PyTorch is required to auto-wrap torch.nn.Module models. "
                 "Install with: pip install torch"
             )
         from .core import PyTorchModelWrapper
-        return PyTorchModelWrapper(obj)
 
+        return PyTorchModelWrapper(obj)
 
     raise TypeError(f"Cannot wrap model of type: {type(obj)}")
 
+
 def _get_model_name(obj: Any) -> str:
     """Extracts a readable name from a model object/class/function."""
-    if hasattr(obj, '__name__'): return obj.__name__
-    if hasattr(obj, '__class__'): return obj.__class__.__name__
+    if hasattr(obj, "__name__"):
+        return obj.__name__
+    if hasattr(obj, "__class__"):
+        return obj.__class__.__name__
     return str(obj)

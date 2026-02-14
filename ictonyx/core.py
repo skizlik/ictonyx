@@ -1,13 +1,15 @@
 # ictonyx/core.py
 
-import pandas as pd
-import numpy as np
 import gc
 import pickle
-from sklearn.metrics import confusion_matrix, accuracy_score
-from typing import Dict, Any, Optional, Tuple, Union
-from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
+from sklearn.metrics import accuracy_score, confusion_matrix
+
 from .memory import get_memory_manager
 from .settings import logger
 
@@ -16,6 +18,7 @@ try:
     import tensorflow as tf
     from tensorflow.keras.models import Model as KerasModel
     from tensorflow.keras.utils import Sequence
+
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     tf = None
@@ -26,6 +29,7 @@ except ImportError:
 # Optional scikit-learn imports
 try:
     from sklearn.base import BaseEstimator
+
     SKLEARN_AVAILABLE = True
 except ImportError:
     BaseEstimator = None
@@ -36,6 +40,7 @@ try:
     import torch
     import torch.nn as nn
     from torch.utils.data import DataLoader, TensorDataset
+
     PYTORCH_AVAILABLE = True
 except ImportError:
     torch = None
@@ -43,6 +48,7 @@ except ImportError:
     DataLoader = None
     TensorDataset = None
     PYTORCH_AVAILABLE = False
+
 
 @dataclass
 class TrainingResult:
@@ -57,10 +63,13 @@ class TrainingResult:
                  'val_accuracy', or any custom metric name.
         params: Training parameters (epochs, batch_size, etc.)
     """
+
     history: Dict[str, list]
     params: Dict[str, Any] = field(default_factory=dict)
 
+
 # Abstract Base Class for ModelWrappers
+
 
 class BaseModelWrapper(ABC):
     """
@@ -102,7 +111,6 @@ class BaseModelWrapper(ABC):
 
             if cleanup_result.errors:
                 logger.warning(f"Model cleanup had {len(cleanup_result.errors)} warnings")
-
 
         except Exception as e:
             logger.warning(f"Cleanup warning: {e}")
@@ -258,7 +266,7 @@ class BaseModelWrapper(ABC):
 
     @classmethod
     @abstractmethod
-    def load_model(cls, path: str) -> 'BaseModelWrapper':
+    def load_model(cls, path: str) -> "BaseModelWrapper":
         """
         Loads a model from a file and wraps it in a new class instance.
 
@@ -285,6 +293,7 @@ class BaseModelWrapper(ABC):
     def get_memory_report(self) -> Dict[str, Any]:
         """Get comprehensive memory usage report (available on all model wrappers)."""
         from .memory import get_memory_info
+
         return get_memory_info()
 
     def check_memory_and_cleanup_if_needed(self) -> Optional[Dict[str, Any]]:
@@ -292,7 +301,7 @@ class BaseModelWrapper(ABC):
         # This method doesn't exist in new manager, just do cleanup
         cleanup_result = self._resource_manager.cleanup()
         if cleanup_result.memory_freed_mb and cleanup_result.memory_freed_mb > 50:
-            return {'cleaned': True, 'freed_mb': cleanup_result.memory_freed_mb}
+            return {"cleaned": True, "freed_mb": cleanup_result.memory_freed_mb}
         return None
 
 
@@ -301,6 +310,7 @@ class BaseModelWrapper(ABC):
 # Concrete class for TensorFlow/Keras models
 
 if TENSORFLOW_AVAILABLE:
+
     class KerasModelWrapper(BaseModelWrapper):
         def __init__(self, model: KerasModel, model_id: str = ""):
             super().__init__(model, model_id)
@@ -308,7 +318,7 @@ if TENSORFLOW_AVAILABLE:
         def _cleanup_implementation(self):
             """TensorFlow/Keras specific cleanup."""
             # Delete the model reference first
-            if hasattr(self, 'model'):
+            if hasattr(self, "model"):
                 try:
                     del self.model
                 except Exception:
@@ -317,17 +327,19 @@ if TENSORFLOW_AVAILABLE:
             # Perform TensorFlow cleanup
             try:
                 import tensorflow as tf
+
                 tf.keras.backend.clear_session()
             except Exception:
                 pass
 
             # Basic garbage collection
             import gc
+
             gc.collect()
 
         def _cleanup_model_references(self):
             """Clear model references."""
-            if hasattr(self, 'model'):
+            if hasattr(self, "model"):
                 del self.model
 
         def _cleanup_tensorflow_session(self):
@@ -337,41 +349,44 @@ if TENSORFLOW_AVAILABLE:
 
         def fit(self, train_data: Any, validation_data: Optional[Any] = None, **kwargs):
             """
-                        Fits the encapsulated Keras model.
+            Fits the encapsulated Keras model.
 
-                        This implementation handles three common Keras data formats:
-                        1.  A `tf.data.Dataset` object.
-                        2.  A `tf.keras.utils.Sequence` object (a data generator).
-                        3.  A tuple of `(X, y)` numpy arrays.
+            This implementation handles three common Keras data formats:
+            1.  A `tf.data.Dataset` object.
+            2.  A `tf.keras.utils.Sequence` object (a data generator).
+            3.  A tuple of `(X, y)` numpy arrays.
 
-                        The training metrics are stored in `self.training_result`
-                        as a `TrainingResult` object.
+            The training metrics are stored in `self.training_result`
+            as a `TrainingResult` object.
 
-                        Args:
-                            train_data (Any): The training data. Can be a `tf.data.Dataset`,
-                                a `Sequence`, or a tuple of (X, y) numpy arrays.
-                            validation_data (Optional[Any], optional): The validation data.
-                                Format must match `train_data`. Defaults to None.
-                            **kwargs: Additional arguments (e.g., `epochs`, `batch_size`,
-                                `callbacks`) passed directly to the `model.fit()` call.
+            Args:
+                train_data (Any): The training data. Can be a `tf.data.Dataset`,
+                    a `Sequence`, or a tuple of (X, y) numpy arrays.
+                validation_data (Optional[Any], optional): The validation data.
+                    Format must match `train_data`. Defaults to None.
+                **kwargs: Additional arguments (e.g., `epochs`, `batch_size`,
+                    `callbacks`) passed directly to the `model.fit()` call.
 
-                        Raises:
-                            TypeError: If `train_data` is not in one of the three
-                                supported formats.
-                        """
+            Raises:
+                TypeError: If `train_data` is not in one of the three
+                    supported formats.
+            """
             if isinstance(train_data, (tf.data.Dataset, Sequence)):
-                keras_history = self.model.fit(train_data, validation_data=validation_data, **kwargs)
+                keras_history = self.model.fit(
+                    train_data, validation_data=validation_data, **kwargs
+                )
             elif isinstance(train_data, tuple) and len(train_data) == 2:
                 X_train, y_train = train_data
-                keras_history = self.model.fit(x=X_train, y=y_train, validation_data=validation_data, **kwargs)
+                keras_history = self.model.fit(
+                    x=X_train, y=y_train, validation_data=validation_data, **kwargs
+                )
             else:
                 raise TypeError(
                     "train_data must be a tuple of (X, y), a tf.data.Dataset, or a Sequence."
                 )
 
             self.training_result = TrainingResult(
-                history=dict(keras_history.history),
-                params=getattr(keras_history, 'params', {})
+                history=dict(keras_history.history), params=getattr(keras_history, "params", {})
             )
 
         def predict(self, data: np.ndarray, **kwargs) -> np.ndarray:
@@ -411,8 +426,10 @@ if TENSORFLOW_AVAILABLE:
                 if n_outputs == 1:
                     # Binary classification with single output (sigmoid)
                     if not np.all((raw_predictions >= 0) & (raw_predictions <= 1)):
-                        raise ValueError("Binary classification model output not in [0,1] range. "
-                                         "Ensure final layer uses sigmoid activation.")
+                        raise ValueError(
+                            "Binary classification model output not in [0,1] range. "
+                            "Ensure final layer uses sigmoid activation."
+                        )
                     self.predictions = (raw_predictions.flatten() > 0.5).astype(int)
                 else:
                     # Multi-class classification (softmax)
@@ -435,8 +452,10 @@ if TENSORFLOW_AVAILABLE:
                            Always returns 2D array, even for binary classification
             """
             if not self._is_classification_model():
-                raise ValueError("predict_proba() is only available for classification models. "
-                                 "This appears to be a regression model.")
+                raise ValueError(
+                    "predict_proba() is only available for classification models. "
+                    "This appears to be a regression model."
+                )
 
             raw_predictions = self.model.predict(data, **kwargs)
 
@@ -456,8 +475,10 @@ if TENSORFLOW_AVAILABLE:
 
                 # Validate probabilities are in valid range
                 if not np.all((prob_positive >= 0) & (prob_positive <= 1)):
-                    raise ValueError("Binary classification model output not in [0,1] range. "
-                                     "Ensure final layer uses sigmoid activation.")
+                    raise ValueError(
+                        "Binary classification model output not in [0,1] range. "
+                        "Ensure final layer uses sigmoid activation."
+                    )
 
                 prob_negative = 1.0 - prob_positive
                 return np.column_stack([prob_negative, prob_positive])
@@ -466,8 +487,10 @@ if TENSORFLOW_AVAILABLE:
                 # Validate probabilities sum to approximately 1
                 row_sums = np.sum(raw_predictions, axis=1)
                 if not np.allclose(row_sums, 1.0, rtol=1e-3):
-                    raise ValueError("Multi-class model output doesn't sum to 1 across classes. "
-                                     "Ensure final layer uses softmax activation.")
+                    raise ValueError(
+                        "Multi-class model output doesn't sum to 1 across classes. "
+                        "Ensure final layer uses softmax activation."
+                    )
 
                 return raw_predictions
 
@@ -480,16 +503,16 @@ if TENSORFLOW_AVAILABLE:
             """
             try:
                 # Try to get the loss function
-                if not hasattr(self.model, 'loss') or self.model.loss is None:
+                if not hasattr(self.model, "loss") or self.model.loss is None:
                     # Model not compiled, assume classification (most common in this library)
                     return True
 
                 loss = self.model.loss
 
                 # Handle different loss function representations
-                if hasattr(loss, '__name__'):
+                if hasattr(loss, "__name__"):
                     loss_name = loss.__name__.lower()
-                elif hasattr(loss, 'name'):
+                elif hasattr(loss, "name"):
                     loss_name = loss.name.lower()
                 elif isinstance(loss, str):
                     loss_name = loss.lower()
@@ -498,16 +521,29 @@ if TENSORFLOW_AVAILABLE:
 
                 # Classification loss functions (comprehensive list)
                 classification_indicators = [
-                    'categorical_crossentropy', 'sparse_categorical_crossentropy',
-                    'binary_crossentropy', 'categorical_hinge', 'sparse_categorical_hinge',
-                    'hinge', 'squared_hinge', 'focal_loss', 'crossentropy'
+                    "categorical_crossentropy",
+                    "sparse_categorical_crossentropy",
+                    "binary_crossentropy",
+                    "categorical_hinge",
+                    "sparse_categorical_hinge",
+                    "hinge",
+                    "squared_hinge",
+                    "focal_loss",
+                    "crossentropy",
                 ]
 
                 # Regression loss functions
                 regression_indicators = [
-                    'mean_squared_error', 'mse', 'mean_absolute_error', 'mae',
-                    'mean_absolute_percentage_error', 'mape', 'huber_loss', 'huber',
-                    'log_cosh', 'logcosh'
+                    "mean_squared_error",
+                    "mse",
+                    "mean_absolute_error",
+                    "mae",
+                    "mean_absolute_percentage_error",
+                    "mape",
+                    "huber_loss",
+                    "huber",
+                    "log_cosh",
+                    "logcosh",
                 ]
 
                 # Check for regression first (more specific)
@@ -549,33 +585,33 @@ if TENSORFLOW_AVAILABLE:
 
         def evaluate(self, data: Any, **kwargs) -> Dict[str, Any]:
             """
-                        Evaluates the encapsulated Keras model on a given dataset.
+            Evaluates the encapsulated Keras model on a given dataset.
 
-                        This implementation handles three common Keras data formats:
-                        1.  A `tf.data.Dataset` object.
-                        2.  A `tf.keras.utils.Sequence` object (a data generator).
-                        3.  A tuple of `(X, y)` numpy arrays.
+            This implementation handles three common Keras data formats:
+            1.  A `tf.data.Dataset` object.
+            2.  A `tf.keras.utils.Sequence` object (a data generator).
+            3.  A tuple of `(X, y)` numpy arrays.
 
-                        It retrieves the metric names from `model.metrics_names` and
-                        zips them with the results from `model.evaluate()` to create
-                        a human-readable dictionary.
+            It retrieves the metric names from `model.metrics_names` and
+            zips them with the results from `model.evaluate()` to create
+            a human-readable dictionary.
 
-                        Args:
-                            data (Any): The data to evaluate on, including features
-                                and true labels. Can be a `tf.data.Dataset`,
-                                a `Sequence`, or a tuple of (X, y) numpy arrays.
-                            **kwargs: Additional arguments passed directly to the
-                                `model.evaluate()` call.
+            Args:
+                data (Any): The data to evaluate on, including features
+                    and true labels. Can be a `tf.data.Dataset`,
+                    a `Sequence`, or a tuple of (X, y) numpy arrays.
+                **kwargs: Additional arguments passed directly to the
+                    `model.evaluate()` call.
 
-                        Returns:
-                            Dict[str, Any]: A dictionary of metrics, where keys are the
-                            metric names (e.g., 'loss', 'accuracy') and values are the
-                            scalar metric values.
+            Returns:
+                Dict[str, Any]: A dictionary of metrics, where keys are the
+                metric names (e.g., 'loss', 'accuracy') and values are the
+                scalar metric values.
 
-                        Raises:
-                            TypeError: If `data` is not in one of the three
-                                supported formats.
-                        """
+            Raises:
+                TypeError: If `data` is not in one of the three
+                    supported formats.
+            """
             if isinstance(data, (tf.data.Dataset, Sequence)):
                 results = self.model.evaluate(data, **kwargs)
             elif isinstance(data, tuple) and len(data) == 2:
@@ -592,21 +628,23 @@ if TENSORFLOW_AVAILABLE:
             if self.predictions is None:
                 raise ValueError("Model has not generated predictions yet. Call predict() first.")
             accuracy = accuracy_score(true_labels, self.predictions)
-            return {'accuracy': accuracy}
+            return {"accuracy": accuracy}
 
         def save_model(self, path: str):
             self.model.save(path)
             logger.info(f"Model saved to {path}")
 
         @classmethod
-        def load_model(cls, path: str) -> 'KerasModelWrapper':
+        def load_model(cls, path: str) -> "KerasModelWrapper":
             loaded_model = tf.keras.models.load_model(path)
             return cls(loaded_model)
+
 else:
     KerasModelWrapper = None
 
 # Concrete class for Scikit-learn models
 if SKLEARN_AVAILABLE:
+
     class ScikitLearnModelWrapper(BaseModelWrapper):
         def __init__(self, model: BaseEstimator, model_id: str = ""):
             super().__init__(model, model_id)
@@ -614,14 +652,18 @@ if SKLEARN_AVAILABLE:
         def _cleanup_implementation(self):
             """Scikit-learn specific cleanup (minimal)."""
             import gc
+
             gc.collect()
 
-        def fit(self, train_data: Union[Tuple[np.ndarray, np.ndarray], Any],
-                validation_data: Optional[Any] = None,
-                epochs: Optional[int] = None,  # Accept but ignore
-                batch_size: Optional[int] = None,  # Accept but ignore
-                verbose: Optional[int] = None,  # Accept but ignore
-                **kwargs):
+        def fit(
+            self,
+            train_data: Union[Tuple[np.ndarray, np.ndarray], Any],
+            validation_data: Optional[Any] = None,
+            epochs: Optional[int] = None,  # Accept but ignore
+            batch_size: Optional[int] = None,  # Accept but ignore
+            verbose: Optional[int] = None,  # Accept but ignore
+            **kwargs,
+        ):
             """
             Fits the encapsulated scikit-learn model and creates a mock history.
 
@@ -660,7 +702,7 @@ if SKLEARN_AVAILABLE:
                 sklearn_kwargs = {}
                 for key, value in kwargs.items():
                     # Only pass through parameters that sklearn models typically accept
-                    if key in ['sample_weight', 'check_input', 'X_idx_sorted']:
+                    if key in ["sample_weight", "check_input", "X_idx_sorted"]:
                         sklearn_kwargs[key] = value
                     # Silently ignore other parameters (like validation_split, callbacks, etc.)
 
@@ -672,60 +714,72 @@ if SKLEARN_AVAILABLE:
 
                 # Create mock history dictionary (sklearn trains in one "epoch")
                 history_dict = {
-                    'accuracy': [train_accuracy],  # Training accuracy
-                    'loss': [1.0 - train_accuracy]  # Mock loss as 1 - accuracy
+                    "accuracy": [train_accuracy],  # Training accuracy
+                    "loss": [1.0 - train_accuracy],  # Mock loss as 1 - accuracy
                 }
 
                 # Add validation metrics if validation data provided
-                if validation_data is not None and isinstance(validation_data, tuple) and len(validation_data) == 2:
+                if (
+                    validation_data is not None
+                    and isinstance(validation_data, tuple)
+                    and len(validation_data) == 2
+                ):
                     X_val, y_val = validation_data
                     val_accuracy = self.model.score(X_val, y_val)
-                    history_dict['val_accuracy'] = [val_accuracy]
-                    history_dict['val_loss'] = [1.0 - val_accuracy]
+                    history_dict["val_accuracy"] = [val_accuracy]
+                    history_dict["val_loss"] = [1.0 - val_accuracy]
                 else:
                     # ExperimentRunner expects validation metrics - use training metrics as fallback
-                    history_dict['val_accuracy'] = [train_accuracy]
-                    history_dict['val_loss'] = [1.0 - train_accuracy]
+                    history_dict["val_accuracy"] = [train_accuracy]
+                    history_dict["val_loss"] = [1.0 - train_accuracy]
 
                 self.training_result = TrainingResult(history=history_dict)
 
             else:
-                raise ValueError("ScikitLearnModelWrapper.fit() expects train_data as a tuple of (X_train, y_train)")
+                raise ValueError(
+                    "ScikitLearnModelWrapper.fit() expects train_data as a tuple of (X_train, y_train)"
+                )
 
         def predict(self, data: np.ndarray, **kwargs) -> np.ndarray:
             self.predictions = self.model.predict(data, **kwargs)
             return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
-            if hasattr(self.model, 'predict_proba'):
+            if hasattr(self.model, "predict_proba"):
                 return self.model.predict_proba(data, **kwargs)
             else:
-                raise NotImplementedError("The scikit-learn model does not have a predict_proba method.")
+                raise NotImplementedError(
+                    "The scikit-learn model does not have a predict_proba method."
+                )
 
-        def evaluate(self, data: Union[Tuple[np.ndarray, np.ndarray], Any], **kwargs) -> Dict[str, Any]:
+        def evaluate(
+            self, data: Union[Tuple[np.ndarray, np.ndarray], Any], **kwargs
+        ) -> Dict[str, Any]:
             """Evaluate sklearn model, returning all applicable metrics."""
             X_test, y_test = data
             y_pred = self.model.predict(X_test)
 
-            metrics: Dict[str, Any] = {
-                'accuracy': accuracy_score(y_test, y_pred)
-            }
+            metrics: Dict[str, Any] = {"accuracy": accuracy_score(y_test, y_pred)}
 
             try:
-                from sklearn.metrics import precision_score, recall_score, f1_score
-                average = 'binary' if len(np.unique(y_test)) == 2 else 'weighted'
-                metrics['precision'] = precision_score(y_test, y_pred, average=average, zero_division=0)
-                metrics['recall'] = recall_score(y_test, y_pred, average=average, zero_division=0)
-                metrics['f1'] = f1_score(y_test, y_pred, average=average, zero_division=0)
+                from sklearn.metrics import f1_score, precision_score, recall_score
+
+                average = "binary" if len(np.unique(y_test)) == 2 else "weighted"
+                metrics["precision"] = precision_score(
+                    y_test, y_pred, average=average, zero_division=0
+                )
+                metrics["recall"] = recall_score(y_test, y_pred, average=average, zero_division=0)
+                metrics["f1"] = f1_score(y_test, y_pred, average=average, zero_division=0)
             except Exception:
                 pass
 
             try:
-                from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
-                if not hasattr(self.model, 'predict_proba'):
-                    metrics['r2'] = r2_score(y_test, y_pred)
-                    metrics['mse'] = mean_squared_error(y_test, y_pred)
-                    metrics['mae'] = mean_absolute_error(y_test, y_pred)
+                from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+                if not hasattr(self.model, "predict_proba"):
+                    metrics["r2"] = r2_score(y_test, y_pred)
+                    metrics["mse"] = mean_squared_error(y_test, y_pred)
+                    metrics["mae"] = mean_absolute_error(y_test, y_pred)
             except Exception:
                 pass
 
@@ -735,16 +789,16 @@ if SKLEARN_AVAILABLE:
             if self.predictions is None:
                 raise ValueError("Model has not generated predictions yet. Call predict() first.")
             accuracy = accuracy_score(true_labels, self.predictions)
-            return {'accuracy': accuracy}
+            return {"accuracy": accuracy}
 
         def save_model(self, path: str):
-            with open(path, 'wb') as f:
+            with open(path, "wb") as f:
                 pickle.dump(self.model, f)
             logger.info(f"Model saved to {path}")
 
         @classmethod
-        def load_model(cls, path: str) -> 'ScikitLearnModelWrapper':
-            with open(path, 'rb') as f:
+        def load_model(cls, path: str) -> "ScikitLearnModelWrapper":
+            with open(path, "rb") as f:
                 loaded_model = pickle.load(f)
             return cls(loaded_model)
 
@@ -753,6 +807,7 @@ else:
 
 # Concrete class for PyTorch models
 if PYTORCH_AVAILABLE:
+
     class PyTorchModelWrapper(BaseModelWrapper):
         """Wrapper for PyTorch nn.Module models.
 
@@ -786,23 +841,25 @@ if PYTORCH_AVAILABLE:
             >>> wrapper.fit((X_train, y_train), validation_data=(X_val, y_val), epochs=10)
         """
 
-        def __init__(self,
-                     model: 'nn.Module',
-                     criterion: Any = None,
-                     optimizer_class: Any = None,
-                     optimizer_params: Optional[Dict[str, Any]] = None,
-                     device: str = 'auto',
-                     task: str = 'classification',
-                     model_id: str = ""):
+        def __init__(
+            self,
+            model: "nn.Module",
+            criterion: Any = None,
+            optimizer_class: Any = None,
+            optimizer_params: Optional[Dict[str, Any]] = None,
+            device: str = "auto",
+            task: str = "classification",
+            model_id: str = "",
+        ):
             super().__init__(model, model_id)
             self.criterion = criterion or nn.CrossEntropyLoss()
             self.optimizer_class = optimizer_class or torch.optim.Adam
-            self.optimizer_params = optimizer_params or {'lr': 0.001}
+            self.optimizer_params = optimizer_params or {"lr": 0.001}
             self.task = task
 
             # Resolve device
-            if device == 'auto':
-                self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            if device == "auto":
+                self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             else:
                 self.device = torch.device(device)
 
@@ -810,7 +867,7 @@ if PYTORCH_AVAILABLE:
 
         def _cleanup_implementation(self):
             """PyTorch-specific cleanup."""
-            if hasattr(self, 'model') and self.model is not None:
+            if hasattr(self, "model") and self.model is not None:
                 try:
                     self.model.cpu()
                     del self.model
@@ -820,18 +877,19 @@ if PYTORCH_AVAILABLE:
                 torch.cuda.empty_cache()
             gc.collect()
 
-        def _to_tensor(self, data: np.ndarray, dtype=None) -> 'torch.Tensor':
+        def _to_tensor(self, data: np.ndarray, dtype=None) -> "torch.Tensor":
             """Convert numpy array to tensor on the correct device."""
             if dtype is None:
                 # Float for features, long for classification labels, float for regression labels
                 dtype = torch.float32
             return torch.tensor(data, dtype=dtype).to(self.device)
 
-        def _make_dataloader(self, X: np.ndarray, y: np.ndarray, batch_size: int,
-                             shuffle: bool = True) -> 'DataLoader':
+        def _make_dataloader(
+            self, X: np.ndarray, y: np.ndarray, batch_size: int, shuffle: bool = True
+        ) -> "DataLoader":
             """Create a DataLoader from numpy arrays."""
             X_t = self._to_tensor(X, dtype=torch.float32)
-            if self.task == 'classification':
+            if self.task == "classification":
                 y_t = self._to_tensor(y, dtype=torch.long)
             else:
                 y_t = self._to_tensor(y, dtype=torch.float32)
@@ -853,8 +911,8 @@ if PYTORCH_AVAILABLE:
                     'verbose' (default 0). Other kwargs are ignored for
                     compatibility with ExperimentRunner.
             """
-            epochs = kwargs.get('epochs', 10)
-            batch_size = kwargs.get('batch_size', 32)
+            epochs = kwargs.get("epochs", 10)
+            batch_size = kwargs.get("batch_size", 32)
 
             # Build DataLoaders
             if isinstance(train_data, DataLoader):
@@ -880,17 +938,17 @@ if PYTORCH_AVAILABLE:
 
             # History tracking
             history = {
-                'loss': [],
+                "loss": [],
             }
-            if self.task == 'classification':
-                history['accuracy'] = []
+            if self.task == "classification":
+                history["accuracy"] = []
 
             if val_loader is not None:
-                history['val_loss'] = []
-                if self.task == 'classification':
-                    history['val_accuracy'] = []
+                history["val_loss"] = []
+                if self.task == "classification":
+                    history["val_accuracy"] = []
                 else:
-                    history['val_mse'] = []
+                    history["val_mse"] = []
 
             # Training loop
             for epoch in range(epochs):
@@ -905,7 +963,7 @@ if PYTORCH_AVAILABLE:
                     outputs = self.model(X_batch)
 
                     # Squeeze for regression with single output
-                    if self.task == 'regression' and outputs.dim() > 1 and outputs.shape[-1] == 1:
+                    if self.task == "regression" and outputs.dim() > 1 and outputs.shape[-1] == 1:
                         outputs = outputs.squeeze(-1)
 
                     loss = self.criterion(outputs, y_batch)
@@ -915,32 +973,32 @@ if PYTORCH_AVAILABLE:
                     running_loss += loss.item() * X_batch.size(0)
                     total += X_batch.size(0)
 
-                    if self.task == 'classification':
+                    if self.task == "classification":
                         _, predicted = torch.max(outputs, 1)
                         correct += (predicted == y_batch).sum().item()
 
                 epoch_loss = running_loss / total
-                history['loss'].append(epoch_loss)
+                history["loss"].append(epoch_loss)
 
-                if self.task == 'classification':
+                if self.task == "classification":
                     epoch_acc = correct / total
-                    history['accuracy'].append(epoch_acc)
+                    history["accuracy"].append(epoch_acc)
 
                 # --- Validation phase ---
                 if val_loader is not None:
                     val_loss, val_metric = self._evaluate_loader(val_loader)
-                    history['val_loss'].append(val_loss)
-                    if self.task == 'classification':
-                        history['val_accuracy'].append(val_metric)
+                    history["val_loss"].append(val_loss)
+                    if self.task == "classification":
+                        history["val_accuracy"].append(val_metric)
                     else:
-                        history['val_mse'].append(val_metric)
+                        history["val_mse"].append(val_metric)
 
             self.training_result = TrainingResult(
                 history=history,
-                params={'epochs': epochs, 'batch_size': batch_size, 'device': str(self.device)}
+                params={"epochs": epochs, "batch_size": batch_size, "device": str(self.device)},
             )
 
-        def _evaluate_loader(self, loader: 'DataLoader') -> Tuple[float, float]:
+        def _evaluate_loader(self, loader: "DataLoader") -> Tuple[float, float]:
             """Evaluate model on a DataLoader. Returns (loss, metric).
 
             For classification, metric is accuracy. For regression, metric is MSE.
@@ -954,19 +1012,19 @@ if PYTORCH_AVAILABLE:
                 for X_batch, y_batch in loader:
                     outputs = self.model(X_batch)
 
-                    if self.task == 'regression' and outputs.dim() > 1 and outputs.shape[-1] == 1:
+                    if self.task == "regression" and outputs.dim() > 1 and outputs.shape[-1] == 1:
                         outputs = outputs.squeeze(-1)
 
                     loss = self.criterion(outputs, y_batch)
                     running_loss += loss.item() * X_batch.size(0)
                     total += X_batch.size(0)
 
-                    if self.task == 'classification':
+                    if self.task == "classification":
                         _, predicted = torch.max(outputs, 1)
                         correct += (predicted == y_batch).sum().item()
 
             avg_loss = running_loss / total
-            if self.task == 'classification':
+            if self.task == "classification":
                 metric = correct / total
             else:
                 metric = avg_loss  # MSE is the loss itself for regression
@@ -992,7 +1050,7 @@ if PYTORCH_AVAILABLE:
             with torch.no_grad():
                 outputs = self.model(X_t)
 
-            if self.task == 'classification':
+            if self.task == "classification":
                 _, predicted = torch.max(outputs, 1)
                 self.predictions = predicted.cpu().numpy()
             else:
@@ -1018,7 +1076,7 @@ if PYTORCH_AVAILABLE:
             Raises:
                 ValueError: If task is 'regression'.
             """
-            if self.task != 'classification':
+            if self.task != "classification":
                 raise ValueError("predict_proba() is only available for classification models.")
 
             self.model.eval()
@@ -1048,17 +1106,15 @@ if PYTORCH_AVAILABLE:
                 X_test, y_test = data
                 loader = self._make_dataloader(X_test, y_test, batch_size=256, shuffle=False)
             else:
-                raise TypeError(
-                    "Evaluation data must be a tuple of (X, y) or a DataLoader."
-                )
+                raise TypeError("Evaluation data must be a tuple of (X, y) or a DataLoader.")
 
             loss, metric = self._evaluate_loader(loader)
-            metrics: Dict[str, Any] = {'loss': loss}
+            metrics: Dict[str, Any] = {"loss": loss}
 
-            if self.task == 'classification':
-                metrics['accuracy'] = metric
+            if self.task == "classification":
+                metrics["accuracy"] = metric
             else:
-                metrics['mse'] = metric
+                metrics["mse"] = metric
 
             return metrics
 
@@ -1067,31 +1123,35 @@ if PYTORCH_AVAILABLE:
             if self.predictions is None:
                 raise ValueError("Model has not generated predictions yet. Call predict() first.")
 
-            if self.task == 'classification':
+            if self.task == "classification":
                 accuracy = float(np.mean(self.predictions == true_labels))
-                return {'accuracy': accuracy}
+                return {"accuracy": accuracy}
             else:
                 mse = float(np.mean((self.predictions - true_labels) ** 2))
-                return {'mse': mse}
+                return {"mse": mse}
 
         def save_model(self, path: str):
             """Save model state dict to disk."""
-            torch.save({
-                'model_state_dict': self.model.state_dict(),
-                'task': self.task,
-                'device': str(self.device),
-            }, path)
+            torch.save(
+                {
+                    "model_state_dict": self.model.state_dict(),
+                    "task": self.task,
+                    "device": str(self.device),
+                },
+                path,
+            )
             logger.info(f"PyTorch model saved to {path}")
 
         @classmethod
-        def load_model(cls, path: str, model: 'nn.Module',
-                       task: str = 'classification') -> 'PyTorchModelWrapper':
+        def load_model(
+            cls, path: str, model: "nn.Module", task: str = "classification"
+        ) -> "PyTorchModelWrapper":
             """
             Load model from a state dict checkpoint.  Return model wrapper.
             """
-            checkpoint = torch.load(path, map_location='cpu', weights_only=False)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            wrapper = cls(model, task=checkpoint.get('task', task))
+            checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+            model.load_state_dict(checkpoint["model_state_dict"])
+            wrapper = cls(model, task=checkpoint.get("task", task))
             return wrapper
 
 else:

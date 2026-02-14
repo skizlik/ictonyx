@@ -20,14 +20,16 @@ References:
       Statistical Science, 11(3), 189-228.
 """
 
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass
 
 try:
-    from scipy.stats import norm as _norm
     from scipy.special import ndtri as _ndtri
+    from scipy.stats import norm as _norm
+
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
@@ -36,6 +38,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 #  Result container
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class BootstrapCIResult:
@@ -52,6 +55,7 @@ class BootstrapCIResult:
         bootstrap_distribution: The full array of bootstrap replications
             (available for plotting or diagnostics).
     """
+
     ci_lower: float
     ci_upper: float
     point_estimate: float
@@ -74,12 +78,13 @@ class BootstrapCIResult:
 #  Core bootstrap engine
 # ---------------------------------------------------------------------------
 
+
 def bootstrap_ci(
     data: Union[np.ndarray, pd.Series, List[float]],
     statistic_fn: Callable[[np.ndarray], float],
     n_bootstrap: int = 10000,
     confidence: float = 0.95,
-    method: str = 'bca',
+    method: str = "bca",
     random_state: Optional[int] = None,
     return_distribution: bool = False,
 ) -> BootstrapCIResult:
@@ -117,26 +122,17 @@ def bootstrap_ci(
     data = _to_clean_array(data)
 
     if len(data) < 2:
-        raise ValueError(
-            f"Bootstrap requires at least 2 observations, got {len(data)}."
-        )
+        raise ValueError(f"Bootstrap requires at least 2 observations, got {len(data)}.")
     if not 0 < confidence < 1:
-        raise ValueError(
-            f"confidence must be between 0 and 1 exclusive, got {confidence}."
-        )
+        raise ValueError(f"confidence must be between 0 and 1 exclusive, got {confidence}.")
     if n_bootstrap < 100:
-        raise ValueError(
-            f"n_bootstrap must be >= 100 for meaningful CIs, got {n_bootstrap}."
-        )
+        raise ValueError(f"n_bootstrap must be >= 100 for meaningful CIs, got {n_bootstrap}.")
     method = method.lower()
-    if method not in ('percentile', 'bca'):
-        raise ValueError(
-            f"Unknown method '{method}'. Use 'percentile' or 'bca'."
-        )
-    if method == 'bca' and not HAS_SCIPY:
+    if method not in ("percentile", "bca"):
+        raise ValueError(f"Unknown method '{method}'. Use 'percentile' or 'bca'.")
+    if method == "bca" and not HAS_SCIPY:
         raise ImportError(
-            "scipy is required for BCa confidence intervals. "
-            "Install with: pip install scipy"
+            "scipy is required for BCa confidence intervals. " "Install with: pip install scipy"
         )
 
     rng = np.random.RandomState(random_state)
@@ -171,12 +167,10 @@ def bootstrap_ci(
     # --- Compute CI ---
     alpha = 1 - confidence
 
-    if method == 'percentile':
+    if method == "percentile":
         ci_lower, ci_upper = _percentile_ci(boot_stats_clean, alpha)
-    elif method == 'bca':
-        ci_lower, ci_upper = _bca_ci(
-            data, statistic_fn, boot_stats_clean, point_estimate, alpha
-        )
+    elif method == "bca":
+        ci_lower, ci_upper = _bca_ci(data, statistic_fn, boot_stats_clean, point_estimate, alpha)
 
     return BootstrapCIResult(
         ci_lower=float(ci_lower),
@@ -194,9 +188,8 @@ def bootstrap_ci(
 #  CI construction methods
 # ---------------------------------------------------------------------------
 
-def _percentile_ci(
-    boot_stats: np.ndarray, alpha: float
-) -> Tuple[float, float]:
+
+def _percentile_ci(boot_stats: np.ndarray, alpha: float) -> Tuple[float, float]:
     """Simple percentile confidence interval."""
     lower = np.percentile(boot_stats, 100 * alpha / 2)
     upper = np.percentile(boot_stats, 100 * (1 - alpha / 2))
@@ -251,12 +244,12 @@ def _bca_ci(
     jack_mean = np.mean(valid_jack)
     jack_diff = jack_mean - valid_jack
 
-    denom = np.sum(jack_diff ** 2)
+    denom = np.sum(jack_diff**2)
     if denom == 0:
         # All jackknife estimates identical — no acceleration needed
         a = 0.0
     else:
-        a = np.sum(jack_diff ** 3) / (6 * denom ** 1.5)
+        a = np.sum(jack_diff**3) / (6 * denom**1.5)
 
     # --- Adjusted percentiles ---
     z_alpha_lower = _ndtri(alpha / 2)
@@ -289,12 +282,13 @@ def _bca_ci(
 #  Two-sample convenience functions
 # ---------------------------------------------------------------------------
 
+
 def bootstrap_mean_difference_ci(
     group1: Union[np.ndarray, pd.Series, List[float]],
     group2: Union[np.ndarray, pd.Series, List[float]],
     n_bootstrap: int = 10000,
     confidence: float = 0.95,
-    method: str = 'bca',
+    method: str = "bca",
     random_state: Optional[int] = None,
     return_distribution: bool = False,
 ) -> BootstrapCIResult:
@@ -323,8 +317,7 @@ def bootstrap_mean_difference_ci(
 
     if len(g1) < 2 or len(g2) < 2:
         raise ValueError(
-            f"Both groups need at least 2 observations. "
-            f"Got {len(g1)} and {len(g2)}."
+            f"Both groups need at least 2 observations. " f"Got {len(g1)} and {len(g2)}."
         )
 
     # Stack into single array for the engine, with a length marker
@@ -340,7 +333,8 @@ def bootstrap_mean_difference_ci(
     # engine, because resampling the combined array would lose the group
     # structure.
     return _two_sample_bootstrap(
-        g1, g2,
+        g1,
+        g2,
         statistic_fn=lambda a, b: float(np.mean(a) - np.mean(b)),
         n_bootstrap=n_bootstrap,
         confidence=confidence,
@@ -355,7 +349,7 @@ def bootstrap_effect_size_ci(
     group2: Union[np.ndarray, pd.Series, List[float]],
     n_bootstrap: int = 10000,
     confidence: float = 0.95,
-    method: str = 'bca',
+    method: str = "bca",
     pooled: bool = True,
     random_state: Optional[int] = None,
     return_distribution: bool = False,
@@ -386,8 +380,7 @@ def bootstrap_effect_size_ci(
 
     if len(g1) < 2 or len(g2) < 2:
         raise ValueError(
-            f"Both groups need at least 2 observations. "
-            f"Got {len(g1)} and {len(g2)}."
+            f"Both groups need at least 2 observations. " f"Got {len(g1)} and {len(g2)}."
         )
 
     def _cohens_d(a: np.ndarray, b: np.ndarray) -> float:
@@ -402,7 +395,8 @@ def bootstrap_effect_size_ci(
         return float(mean_diff / denom) if denom > 0 else 0.0
 
     return _two_sample_bootstrap(
-        g1, g2,
+        g1,
+        g2,
         statistic_fn=_cohens_d,
         n_bootstrap=n_bootstrap,
         confidence=confidence,
@@ -417,7 +411,7 @@ def bootstrap_paired_difference_ci(
     group2: Union[np.ndarray, pd.Series, List[float]],
     n_bootstrap: int = 10000,
     confidence: float = 0.95,
-    method: str = 'bca',
+    method: str = "bca",
     random_state: Optional[int] = None,
     return_distribution: bool = False,
 ) -> BootstrapCIResult:
@@ -448,13 +442,10 @@ def bootstrap_paired_difference_ci(
 
     if len(g1) != len(g2):
         raise ValueError(
-            f"Paired bootstrap requires equal-length groups. "
-            f"Got {len(g1)} and {len(g2)}."
+            f"Paired bootstrap requires equal-length groups. " f"Got {len(g1)} and {len(g2)}."
         )
     if len(g1) < 2:
-        raise ValueError(
-            f"Need at least 2 paired observations, got {len(g1)}."
-        )
+        raise ValueError(f"Need at least 2 paired observations, got {len(g1)}.")
 
     differences = g1 - g2
 
@@ -473,13 +464,14 @@ def bootstrap_paired_difference_ci(
 #  Two-sample bootstrap engine (independent resampling)
 # ---------------------------------------------------------------------------
 
+
 def _two_sample_bootstrap(
     group1: np.ndarray,
     group2: np.ndarray,
     statistic_fn: Callable[[np.ndarray, np.ndarray], float],
     n_bootstrap: int = 10000,
     confidence: float = 0.95,
-    method: str = 'bca',
+    method: str = "bca",
     random_state: Optional[int] = None,
     return_distribution: bool = False,
 ) -> BootstrapCIResult:
@@ -489,22 +481,15 @@ def _two_sample_bootstrap(
     and is correct for independent (unpaired) comparisons.
     """
     if not 0 < confidence < 1:
-        raise ValueError(
-            f"confidence must be between 0 and 1 exclusive, got {confidence}."
-        )
+        raise ValueError(f"confidence must be between 0 and 1 exclusive, got {confidence}.")
     if n_bootstrap < 100:
-        raise ValueError(
-            f"n_bootstrap must be >= 100, got {n_bootstrap}."
-        )
+        raise ValueError(f"n_bootstrap must be >= 100, got {n_bootstrap}.")
     method = method.lower()
-    if method not in ('percentile', 'bca'):
-        raise ValueError(
-            f"Unknown method '{method}'. Use 'percentile' or 'bca'."
-        )
-    if method == 'bca' and not HAS_SCIPY:
+    if method not in ("percentile", "bca"):
+        raise ValueError(f"Unknown method '{method}'. Use 'percentile' or 'bca'.")
+    if method == "bca" and not HAS_SCIPY:
         raise ImportError(
-            "scipy is required for BCa confidence intervals. "
-            "Install with: pip install scipy"
+            "scipy is required for BCa confidence intervals. " "Install with: pip install scipy"
         )
 
     rng = np.random.RandomState(random_state)
@@ -528,19 +513,17 @@ def _two_sample_bootstrap(
 
     if n_valid < 100:
         raise ValueError(
-            f"Only {n_valid} of {n_bootstrap} bootstrap replicates produced "
-            f"finite values."
+            f"Only {n_valid} of {n_bootstrap} bootstrap replicates produced " f"finite values."
         )
 
     boot_stats_clean = boot_stats[valid_mask]
     alpha = 1 - confidence
 
-    if method == 'percentile':
+    if method == "percentile":
         ci_lower, ci_upper = _percentile_ci(boot_stats_clean, alpha)
-    elif method == 'bca':
+    elif method == "bca":
         ci_lower, ci_upper = _two_sample_bca_ci(
-            group1, group2, statistic_fn,
-            boot_stats_clean, point_estimate, alpha
+            group1, group2, statistic_fn, boot_stats_clean, point_estimate, alpha
         )
 
     return BootstrapCIResult(
@@ -598,12 +581,12 @@ def _two_sample_bca_ci(
 
     jack_mean = np.mean(valid_jack)
     jack_diff = jack_mean - valid_jack
-    denom = np.sum(jack_diff ** 2)
+    denom = np.sum(jack_diff**2)
 
     if denom == 0:
         a = 0.0
     else:
-        a = np.sum(jack_diff ** 3) / (6 * denom ** 1.5)
+        a = np.sum(jack_diff**3) / (6 * denom**1.5)
 
     # --- Adjusted percentiles ---
     z_alpha_lower = _ndtri(alpha / 2)
@@ -630,6 +613,7 @@ def _two_sample_bca_ci(
 #  Utilities
 # ---------------------------------------------------------------------------
 
+
 def _to_clean_array(data: Union[np.ndarray, pd.Series, List[float]]) -> np.ndarray:
     """Convert input to a clean 1-D numpy float array, dropping NaNs."""
     if isinstance(data, pd.Series):
@@ -641,7 +625,5 @@ def _to_clean_array(data: Union[np.ndarray, pd.Series, List[float]]) -> np.ndarr
         arr = data.astype(np.float64).ravel()
         arr = arr[np.isfinite(arr)]
     else:
-        raise TypeError(
-            f"Expected array-like, pd.Series, or list. Got {type(data).__name__}."
-        )
+        raise TypeError(f"Expected array-like, pd.Series, or list. Got {type(data).__name__}.")
     return arr

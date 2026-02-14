@@ -1,5 +1,7 @@
+from typing import TYPE_CHECKING, Any, List, Optional
+
 import numpy as np
-from typing import Optional, List, Any, TYPE_CHECKING
+
 from .settings import logger
 
 # Optional SHAP dependency
@@ -28,19 +30,25 @@ if TYPE_CHECKING:
 def _check_shap():
     """Check SHAP availability."""
     if not HAS_SHAP:
-        raise ImportError("SHAP is required for explainability features. Install with: pip install shap")
+        raise ImportError(
+            "SHAP is required for explainability features. Install with: pip install shap"
+        )
 
 
 def _check_matplotlib():
     """Check matplotlib availability."""
     if not HAS_MATPLOTLIB:
-        raise ImportError("matplotlib is required for SHAP plotting. Install with: pip install matplotlib")
+        raise ImportError(
+            "matplotlib is required for SHAP plotting. Install with: pip install matplotlib"
+        )
 
 
-def plot_shap_summary(model_wrapper: 'BaseModelWrapper',
-                      X_data: np.ndarray,
-                      feature_names: Optional[List[str]] = None,
-                      plot_type: str = "bar"):
+def plot_shap_summary(
+    model_wrapper: "BaseModelWrapper",
+    X_data: np.ndarray,
+    feature_names: Optional[List[str]] = None,
+    plot_type: str = "bar",
+):
     """
     Generates a SHAP summary plot for a model.
 
@@ -60,7 +68,7 @@ def plot_shap_summary(model_wrapper: 'BaseModelWrapper',
         explainer = shap.TreeExplainer(model_wrapper.model)
         shap_values = explainer.shap_values(X_data)
 
-    elif hasattr(model_wrapper.model, 'layers'):
+    elif hasattr(model_wrapper.model, "layers"):
         # For neural networks (Keras/TensorFlow models)
         logger.info("Using DeepExplainer for neural network. This may take some time...")
         try:
@@ -79,10 +87,12 @@ def plot_shap_summary(model_wrapper: 'BaseModelWrapper',
 
     else:
         # For other models, use KernelExplainer
-        logger.info("Using KernelExplainer, which can be very slow for large datasets. Consider using a smaller sample of your data for faster results.")
+        logger.info(
+            "Using KernelExplainer, which can be very slow for large datasets. Consider using a smaller sample of your data for faster results."
+        )
 
         # Use model's predict_proba if available, otherwise predict
-        if hasattr(model_wrapper, 'predict_proba'):
+        if hasattr(model_wrapper, "predict_proba"):
             predict_fn = model_wrapper.predict_proba
         else:
             predict_fn = model_wrapper.predict
@@ -98,18 +108,22 @@ def plot_shap_summary(model_wrapper: 'BaseModelWrapper',
         # Plot the first class by default
         if len(shap_values) > 1:
             logger.info(f"Multi-class model detected. Plotting SHAP values for class 0.")
-            logger.info(f"Model has {len(shap_values)} classes. You may want to plot other classes separately.")
+            logger.info(
+                f"Model has {len(shap_values)} classes. You may want to plot other classes separately."
+            )
         shap.summary_plot(shap_values[0], X_data, feature_names=feature_names, plot_type=plot_type)
     else:
         # Single output (binary classification or regression)
         shap.summary_plot(shap_values, X_data, feature_names=feature_names, plot_type=plot_type)
 
 
-def plot_shap_waterfall(model_wrapper: 'BaseModelWrapper',
-                        X_data: np.ndarray,
-                        sample_index: int = 0,
-                        feature_names: Optional[List[str]] = None,
-                        class_index: int = 0):
+def plot_shap_waterfall(
+    model_wrapper: "BaseModelWrapper",
+    X_data: np.ndarray,
+    sample_index: int = 0,
+    feature_names: Optional[List[str]] = None,
+    class_index: int = 0,
+):
     """
     Generates a SHAP waterfall plot for a single prediction.
 
@@ -124,59 +138,73 @@ def plot_shap_waterfall(model_wrapper: 'BaseModelWrapper',
     _check_matplotlib()
 
     if sample_index >= len(X_data):
-        raise ValueError(f"sample_index {sample_index} is out of range for data with {len(X_data)} samples")
+        raise ValueError(
+            f"sample_index {sample_index} is out of range for data with {len(X_data)} samples"
+        )
 
     model_type = type(model_wrapper.model).__name__
 
     # Get explainer (same logic as summary plot)
     if "Tree" in model_type:
         explainer = shap.TreeExplainer(model_wrapper.model)
-    elif hasattr(model_wrapper.model, 'layers'):
+    elif hasattr(model_wrapper.model, "layers"):
         background_size = min(100, len(X_data))
         background = X_data[:background_size]
         explainer = shap.DeepExplainer(model_wrapper.model, background)
     else:
-        predict_fn = getattr(model_wrapper, 'predict_proba', model_wrapper.predict)
+        predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
         background_size = min(50, len(X_data))
         explainer = shap.KernelExplainer(predict_fn, X_data[:background_size])
 
     # Get SHAP values for the specific sample
-    sample_data = X_data[sample_index:sample_index + 1]
+    sample_data = X_data[sample_index : sample_index + 1]
     shap_values = explainer.shap_values(sample_data)
 
     # Handle multi-class vs single output
     if isinstance(shap_values, list):
         if class_index >= len(shap_values):
-            raise ValueError(f"class_index {class_index} is out of range for model with {len(shap_values)} classes")
+            raise ValueError(
+                f"class_index {class_index} is out of range for model with {len(shap_values)} classes"
+            )
         shap_values_to_plot = shap_values[class_index][0]  # Get first (and only) sample
     else:
         shap_values_to_plot = shap_values[0]  # Get first (and only) sample
 
     # Create explanation object for waterfall plot
-    if hasattr(shap, 'Explanation'):
+    if hasattr(shap, "Explanation"):
         # Newer SHAP versions
         explanation = shap.Explanation(
             values=shap_values_to_plot,
-            base_values=explainer.expected_value[class_index] if isinstance(explainer.expected_value,
-                                                                            list) else explainer.expected_value,
+            base_values=(
+                explainer.expected_value[class_index]
+                if isinstance(explainer.expected_value, list)
+                else explainer.expected_value
+            ),
             data=sample_data[0],
-            feature_names=feature_names
+            feature_names=feature_names,
         )
         shap.waterfall_plot(explanation)
     else:
         # Older SHAP versions - use force plot as fallback
         logger.info("Waterfall plot not available in this SHAP version. Using force plot instead.")
-        base_value = explainer.expected_value[class_index] if isinstance(explainer.expected_value,
-                                                                         list) else explainer.expected_value
-        shap.force_plot(base_value, shap_values_to_plot, sample_data[0], feature_names=feature_names)
+        base_value = (
+            explainer.expected_value[class_index]
+            if isinstance(explainer.expected_value, list)
+            else explainer.expected_value
+        )
+        shap.force_plot(
+            base_value, shap_values_to_plot, sample_data[0], feature_names=feature_names
+        )
 
 
-def plot_shap_dependence(model_wrapper: 'BaseModelWrapper',
-                         X_data: np.ndarray,
-                         feature_name: str,
-                         feature_names: Optional[List[str]] = None,
-                         interaction_index: Optional[int] = None,
-                         class_index: int = 0):
+def plot_shap_dependence(
+    model_wrapper: "BaseModelWrapper",
+    X_data: np.ndarray,
+    feature_name: str,
+    feature_names: Optional[List[str]] = None,
+    interaction_index: Optional[int] = None,
+    class_index: int = 0,
+):
     """
     Generates a SHAP dependence plot showing how a feature affects predictions.
 
@@ -201,28 +229,37 @@ def plot_shap_dependence(model_wrapper: 'BaseModelWrapper',
         try:
             feature_index = int(feature_name)
         except (ValueError, TypeError):
-            raise ValueError(f"feature_name must be either a string (if feature_names provided) or an integer index")
+            raise ValueError(
+                f"feature_name must be either a string (if feature_names provided) or an integer index"
+            )
 
         if feature_index >= X_data.shape[1]:
-            raise ValueError(f"Feature index {feature_index} is out of range for data with {X_data.shape[1]} features")
+            raise ValueError(
+                f"Feature index {feature_index} is out of range for data with {X_data.shape[1]} features"
+            )
 
     model_type = type(model_wrapper.model).__name__
 
     try:
         # Get explainer
-        if "Tree" in model_type or "Forest" in model_type or "XGB" in model_type or "LGB" in model_type:
+        if (
+            "Tree" in model_type
+            or "Forest" in model_type
+            or "XGB" in model_type
+            or "LGB" in model_type
+        ):
             explainer = shap.TreeExplainer(model_wrapper.model)
-        elif hasattr(model_wrapper.model, 'layers'):
+        elif hasattr(model_wrapper.model, "layers"):
             try:
                 background_size = min(100, len(X_data))
                 background = X_data[:background_size]
                 explainer = shap.DeepExplainer(model_wrapper.model, background)
             except Exception:
-                predict_fn = getattr(model_wrapper, 'predict_proba', model_wrapper.predict)
+                predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
                 background_size = min(50, len(X_data))
                 explainer = shap.KernelExplainer(predict_fn, X_data[:background_size])
         else:
-            predict_fn = getattr(model_wrapper, 'predict_proba', model_wrapper.predict)
+            predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
             background_size = min(50, len(X_data))
             explainer = shap.KernelExplainer(predict_fn, X_data[:background_size])
 
@@ -232,7 +269,9 @@ def plot_shap_dependence(model_wrapper: 'BaseModelWrapper',
         # Handle multi-class vs single output
         if isinstance(shap_values, list):
             if class_index >= len(shap_values):
-                raise ValueError(f"class_index {class_index} is out of range for model with {len(shap_values)} classes")
+                raise ValueError(
+                    f"class_index {class_index} is out of range for model with {len(shap_values)} classes"
+                )
             shap_values_to_plot = shap_values[class_index]
         else:
             shap_values_to_plot = shap_values
@@ -244,7 +283,7 @@ def plot_shap_dependence(model_wrapper: 'BaseModelWrapper',
             X_data,
             feature_names=feature_names,
             interaction_index=interaction_index,
-            show=False
+            show=False,
         )
         plt.show()
 
@@ -252,10 +291,12 @@ def plot_shap_dependence(model_wrapper: 'BaseModelWrapper',
         raise RuntimeError(f"SHAP dependence plot failed: {e}")
 
 
-def get_shap_feature_importance(model_wrapper: 'BaseModelWrapper',
-                                X_data: np.ndarray,
-                                feature_names: Optional[List[str]] = None,
-                                class_index: int = 0) -> np.ndarray:
+def get_shap_feature_importance(
+    model_wrapper: "BaseModelWrapper",
+    X_data: np.ndarray,
+    feature_names: Optional[List[str]] = None,
+    class_index: int = 0,
+) -> np.ndarray:
     """
     Get feature importance scores based on mean absolute SHAP values.
 
@@ -275,12 +316,12 @@ def get_shap_feature_importance(model_wrapper: 'BaseModelWrapper',
     # Get explainer
     if "Tree" in model_type:
         explainer = shap.TreeExplainer(model_wrapper.model)
-    elif hasattr(model_wrapper.model, 'layers'):
+    elif hasattr(model_wrapper.model, "layers"):
         background_size = min(100, len(X_data))
         background = X_data[:background_size]
         explainer = shap.DeepExplainer(model_wrapper.model, background)
     else:
-        predict_fn = getattr(model_wrapper, 'predict_proba', model_wrapper.predict)
+        predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
         background_size = min(50, len(X_data))
         explainer = shap.KernelExplainer(predict_fn, X_data[:background_size])
 
@@ -290,7 +331,9 @@ def get_shap_feature_importance(model_wrapper: 'BaseModelWrapper',
     # Handle multi-class vs single output
     if isinstance(shap_values, list):
         if class_index >= len(shap_values):
-            raise ValueError(f"class_index {class_index} is out of range for model with {len(shap_values)} classes")
+            raise ValueError(
+                f"class_index {class_index} is out of range for model with {len(shap_values)} classes"
+            )
         shap_values_to_use = shap_values[class_index]
     else:
         shap_values_to_use = shap_values

@@ -18,6 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.1] - 2026-02-14
+
+### Fixed
+- `auto_resolve_handler` crashed when extra kwargs (e.g. `batch_size`) were
+  passed with tuple data, due to `**kwargs` forwarded to `ArraysDataHandler`
+- `PyTorchModelWrapper.load_model()` now returns a fully reconstructed
+  wrapper instead of a raw checkpoint dict, matching the `BaseModelWrapper`
+  contract
+- `_get_model_builder` now clones sklearn instances per run via
+  `sklearn.base.clone()`, preventing fitted weights from leaking between
+  runs and silently corrupting variability studies
+- Off-by-one in `ExperimentRunner.run_study()` failure rate calculation
+- Documented `compare_models` data handler reuse for identical splits
+
 ## [0.3.0] - 2026-02-13
 
 ### Added

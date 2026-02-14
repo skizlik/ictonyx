@@ -1,5 +1,5 @@
 # ictonyx/__init__.py
-# v.0.3.0
+# v.0.3.1
 
 """
 Ictonyx: A Machine Learning Framework for Variability and Reproducibility Analysis
@@ -319,7 +319,7 @@ except ImportError:
     pass
 
 # Library version
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 
 # Feature availability summary

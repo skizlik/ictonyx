@@ -90,6 +90,7 @@ def compare_models(
 
         # Run study for this specific model
         # We recurse into variability_study to avoid duplicating logic
+        # Pass the already-resolved handler so all models use identical data splits
         study_results = variability_study(
             model=model_input,
             data=handler,  # Pass the already resolved handler

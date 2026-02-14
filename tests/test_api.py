@@ -167,8 +167,14 @@ def test_compare_models_insufficient_data(mock_var_study, sample_df):
 
 class DummyClassifier:
     """A mock class that looks like an sklearn estimator."""
+    def __init__(self):
+        pass
     def fit(self, X, y): pass
     def predict(self, X): pass
+    def get_params(self, deep=True):
+        return {}
+    def set_params(self, **params):
+        return self
 
 def test_get_model_builder_class():
     """Test wrapping a raw class."""
@@ -177,13 +183,30 @@ def test_get_model_builder_class():
     model_instance = wrapper(ModelConfig({}))
     assert isinstance(model_instance, BaseModelWrapper)
 
-def test_get_model_builder_instance():
-    """Test wrapping an instance."""
+
+def test_get_model_builder_instance_clones():
+    """Test that passing an sklearn instance clones it per run."""
     instance = DummyClassifier()
-    # FIX: Updated function name
-    wrapper = api._get_model_builder(instance)
-    model_instance = wrapper(ModelConfig({}))
-    assert isinstance(model_instance, BaseModelWrapper)
+    builder = api._get_model_builder(instance)
+
+    model_a = builder(ModelConfig({}))
+    model_b = builder(ModelConfig({}))
+
+    # Each call should produce a distinct wrapper
+    assert model_a is not model_b
+    # And distinct underlying models (not the same object)
+    assert model_a.model is not model_b.model
+
+
+def test_get_model_builder_instance_preserves_params():
+    """Test that cloned instances keep the original hyperparameters."""
+    from sklearn.ensemble import RandomForestClassifier
+    instance = RandomForestClassifier(n_estimators=42, max_depth=7)
+    builder = api._get_model_builder(instance)
+
+    wrapped = builder(ModelConfig({}))
+    assert wrapped.model.n_estimators == 42
+    assert wrapped.model.max_depth == 7
 
 def test_get_model_builder_invalid():
     """Test rejection of invalid model inputs."""

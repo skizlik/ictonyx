@@ -116,22 +116,87 @@ def compare_models(
 # --- Clean Helpers ---
 
 def _get_model_builder(model: Any) -> Callable:
-    """Standardizes model input into a factory function."""
+    """Standardizes model input into a factory function.
+
+    Handles three input types:
+      - Callable (function): used directly as a builder. The user is
+        responsible for returning a fresh model each call.
+      - Class: instantiated fresh per run (e.g., RandomForestClassifier).
+      - Instance: cloned per run for sklearn models. Keras and PyTorch
+        instances are rejected because they cannot be cleanly cloned.
+    """
 
     # If it's already a function, trust it.
     if callable(model) and not isinstance(model, type):
         return lambda conf: _ensure_wrapper(model(conf))
 
-    # If it's a class (like RandomForestClassifier), instantiate it.
+    # If it's a class (like RandomForestClassifier), instantiate it per run.
     if isinstance(model, type):
         return lambda conf: _ensure_wrapper(model())
 
-    # If it's an instance, we must warn about state leakage.
+    # If it's an instance, we need to clone it per run for independence.
     if hasattr(model, 'fit'):
-        settings.logger.warning("Passed a model instance. Weights may persist between runs.")
-        return lambda conf: _ensure_wrapper(model)
+        return _build_instance_cloner(model)
 
     raise ValueError(f"Invalid model input: {model}")
+
+
+def _build_instance_cloner(model: Any) -> Callable:
+    """Creates a builder that produces independent copies of a model instance.
+
+    For sklearn estimators, uses sklearn.base.clone() which creates an
+    unfitted copy with the same hyperparameters. This preserves the user's
+    configuration (e.g., n_estimators=100) while ensuring each run starts
+    from scratch.
+
+    For Keras and PyTorch instances, cloning is not reliably possible, so
+    we raise an error guiding the user to pass a class or builder function.
+    """
+    # sklearn: clone() creates an unfitted copy with same hyperparameters
+    if hasattr(model, 'get_params'):
+        try:
+            from sklearn.base import clone
+            # Test that clone works before committing to this path
+            clone(model)
+            settings.logger.info(
+                f"Cloning {type(model).__name__} instance per run for independence."
+            )
+            return lambda conf: _ensure_wrapper(clone(model))
+        except Exception as e:
+            raise ValueError(
+                f"Cannot clone sklearn model instance: {e}. "
+                f"Pass the class instead: model={type(model).__name__}"
+            )
+
+    # Keras models: no clean clone path
+    if 'keras' in str(type(model)) or 'tensorflow' in str(type(model)):
+        raise ValueError(
+            "Passing a Keras model instance risks weight leakage between runs. "
+            "Pass a builder function instead:\n"
+            "  def build_model(config):\n"
+            "      model = Sequential([...])\n"
+            "      model.compile(...)\n"
+            "      return KerasModelWrapper(model)\n"
+            "  ix.variability_study(model=build_model, ...)"
+        )
+
+    # PyTorch modules: no clean clone path
+    if 'torch' in str(type(model).__mro__):
+        raise ValueError(
+            "Passing a PyTorch model instance risks weight leakage between runs. "
+            "Pass a builder function instead:\n"
+            "  def build_model(config):\n"
+            "      return PyTorchModelWrapper(MyNet(), ...)\n"
+            "  ix.variability_study(model=build_model, ...)"
+        )
+
+    # Unknown instance with a fit method — warn and allow, but this is risky
+    settings.logger.warning(
+        f"Passed an instance of {type(model).__name__}. Cannot clone — "
+        f"weights may persist between runs. Consider passing a class or "
+        f"builder function for independent runs."
+    )
+    return lambda conf: _ensure_wrapper(model)
 
 
 def _ensure_wrapper(obj: Any) -> BaseModelWrapper:

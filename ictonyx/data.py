@@ -61,12 +61,31 @@ except ImportError:
 
 
 class DataHandler(ABC):
-    """
-    An abstract base class for a data handler.
+    """Abstract base class for loading and splitting datasets.
 
-    This class defines a generic interface for loading, splitting, and preparing data.
-    Each concrete implementation returns a dictionary containing the different
-    data splits with consistent keys: 'train_data', 'val_data', 'test_data'.
+    Provides a consistent interface for all data formats. Concrete
+    subclasses handle specific formats:
+
+    * :class:`TabularDataHandler` — CSV files and DataFrames.
+    * :class:`ImageDataHandler` — Image directories with class subfolders.
+    * :class:`TextDataHandler` — Text datasets with a text column.
+    * :class:`TimeSeriesDataHandler` — Sequential data with windowing.
+    * :class:`ArraysDataHandler` — Pre-loaded ``(X, y)`` numpy arrays.
+
+    All subclasses return a dict from :meth:`load` with keys
+    ``'train_data'``, ``'val_data'``, and ``'test_data'``, each
+    containing a ``(X, y)`` tuple or ``None`` if that split was not
+    requested.
+
+    For automatic format detection, use
+    :func:`auto_resolve_handler` or pass data directly to
+    :func:`~ictonyx.api.variability_study`.
+
+    Args:
+        data_path: Path to the data source (file or directory).
+
+    Raises:
+        FileNotFoundError: If ``data_path`` does not exist.
     """
 
     def __init__(self, data_path: str):

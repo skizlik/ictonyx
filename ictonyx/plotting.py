@@ -116,7 +116,21 @@ def _find_metric_columns(df: pd.DataFrame, metric: str) -> Tuple[Optional[str], 
 def plot_confusion_matrix(
     cm_df: pd.DataFrame, title: str = "", show: Optional[bool] = None
 ) -> Optional["Figure"]:
-    """Plots a confusion matrix heatmap from a DataFrame."""
+    """Plot a confusion matrix as an annotated heatmap.
+
+    Args:
+        cm_df: A square ``pd.DataFrame`` where rows are true labels and
+            columns are predicted labels. Values are integer counts.
+            Typically produced by
+            :func:`~ictonyx.analysis.get_confusion_matrix_df`.
+        title: Plot title. Default: ``"Confusion Matrix"``.
+        show: If ``True``, call ``plt.show()``. If ``False``, return the
+            figure without displaying. If ``None`` (default), defer to
+            the global :func:`~ictonyx.settings.set_display_plots` setting.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
+    """
     _check_plotting()
 
     fig = plt.figure(figsize=(10, 8))
@@ -131,7 +145,24 @@ def plot_confusion_matrix(
 def plot_training_history(
     history: Any, title: str = None, metrics: List[str] = None, show: Optional[bool] = None
 ) -> Optional["Figure"]:
-    """Plot training and validation metrics."""
+    """Plot training and validation metrics over epochs.
+
+    Creates one subplot per metric, each showing train and validation
+    curves. Accepts DataFrames, dicts, lists of dicts, or Keras
+    ``History`` objects.
+
+    Args:
+        history: Training history in any of the supported formats.
+            Column/key naming convention: ``'train_accuracy'`` and
+            ``'val_accuracy'``, or ``'accuracy'`` and ``'val_accuracy'``.
+        title: Plot title. If ``None``, auto-generated from epoch count.
+        metrics: List of metric base names to plot (e.g. ``['accuracy',
+            'loss']``). If ``None``, auto-detected from available columns.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
+    """
     _check_plotting()
 
     # Convert various history formats to DataFrame
@@ -328,9 +359,30 @@ def plot_variability_summary(
     show_boxplot: bool = False,
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
+    """Plot a multi-panel variability summary for a completed study.
+
+    Generates a figure with:
+
+    * **Overlaid training curves** — all runs plotted together with a
+      mean line, showing epoch-by-epoch convergence and spread.
+    * **Final metric distribution** — boxplot of final-epoch values,
+      showing the spread of outcomes across runs.
+
+    Args:
+        all_runs_metrics: List of per-run DataFrames (one per successful
+            run), as stored in
+            :attr:`VariabilityStudyResults.all_runs_metrics`.
+        final_val_series: ``pd.Series`` of final-epoch validation metric
+            values across runs.
+        final_test_series: Optional ``pd.Series`` of test-set metric values.
+            If provided, a second boxplot is added.
+        metric: Base metric name for labeling (default ``'accuracy'``).
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
     """
-    Multi-panel plot showing training curves, final distribution, and summary boxplot.
-    """
+
     _check_plotting()
 
     if not all_runs_metrics_list:
@@ -436,9 +488,23 @@ def plot_variability_summary(
 def plot_comparison_boxplots(
     comparison_results: Dict[str, Any], metric: str = "Accuracy", show: Optional[bool] = None
 ) -> Optional["Figure"]:
-    """
-    OPTION A: Side-by-side boxplots with statistical annotations.
-    Shows the distribution of performance for each model.
+    """Side-by-side boxplots comparing metric distributions across models.
+
+    Each model's runs are shown as a boxplot with individual data points
+    overlaid. If pairwise statistical comparisons are present in the
+    input, significance annotations are added to the title.
+
+    Args:
+        comparison_results: Either a dict returned by
+            :func:`~ictonyx.api.compare_models` (must contain a
+            ``'raw_data'`` key), or a plain dict mapping model names
+            to lists/arrays of metric values.
+        metric: Label for the y-axis (default ``'Accuracy'``).
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if the raw data
+        cannot be extracted.
     """
     _check_plotting()
 
@@ -486,9 +552,23 @@ def plot_comparison_forest(
     metric: str = "Accuracy",
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
-    """
-    OPTION C: Forest Plot showing difference from baseline.
-    Visualizes: Mean(Model) - Mean(Baseline) with 95% Confidence Intervals.
+    """Forest plot of effect sizes relative to a baseline model.
+
+    For each non-baseline model, shows the mean difference from the
+    baseline with a 95% confidence interval, plotted as a horizontal
+    error bar. A vertical dashed line at zero marks no difference.
+
+    Args:
+        comparison_results: Dict with a ``'raw_data'`` key mapping model
+            names to arrays of metric values.
+        baseline_model: Name of the model to use as the reference. Must
+            be a key in ``raw_data``.
+        metric: Label for the x-axis (default ``'Accuracy'``).
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if the baseline
+        model is not found in the data.
     """
     _check_plotting()
 
@@ -694,7 +774,23 @@ def plot_training_stability(
     figsize: Tuple[int, int] = (12, 8),
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
-    """Visualizes training stability metrics."""
+    """Plot training stability diagnostics from a stability analysis.
+
+    Creates a multi-panel figure showing convergence behavior, loss
+    distributions, and coefficient of variation across runs.
+
+    Args:
+        stability_results: Dict produced by a stability analysis function,
+            containing keys such as ``'n_runs'``, ``'common_length'``,
+            ``'final_loss_mean'``, ``'final_loss_std'``, ``'final_loss_cv'``,
+            ``'stability_assessment'``, ``'converged_runs'``, and
+            ``'final_losses_list'``.
+        figsize: Figure dimensions in inches. Default ``(12, 8)``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
+    """
     _check_matplotlib()
 
     if "error" in stability_results:
@@ -789,7 +885,20 @@ def plot_autocorr_vs_lag(
     title: str = "Autocorrelation of Loss",
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
-    """Plots the autocorrelation of a time series as a function of lag."""
+    """Plot autocorrelation of a metric series as a function of lag.
+
+    Useful for diagnosing sequential dependence between runs — if
+    autocorrelation is high at lag 1, consecutive runs may not be
+    independent (e.g. due to incomplete GPU memory cleanup).
+
+    Args:
+        data: A ``pd.Series`` or list of metric values ordered by run.
+        max_lag: Maximum lag to compute. Default 20.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
+    """
     _check_matplotlib()
     if not isinstance(data, pd.Series):
         data = pd.Series(data)
@@ -817,7 +926,20 @@ def plot_averaged_autocorr(
     title: str = "Averaged Autocorrelation of Loss",
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
-    """Plots the mean autocorrelation across multiple runs."""
+    """Plot averaged autocorrelation with error bands across multiple studies.
+
+    Shows the mean autocorrelation at each lag with ±1 standard deviation
+    shaded, summarizing sequential dependence across repeated studies.
+
+    Args:
+        lags: List of integer lag values.
+        mean_autocorr: Mean autocorrelation at each lag.
+        std_autocorr: Standard deviation of autocorrelation at each lag.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
+    """
     _check_matplotlib()
     fig = plt.figure(figsize=(10, 6))
     plt.plot(lags, mean_autocorr, "b-", label="Mean Autocorrelation")

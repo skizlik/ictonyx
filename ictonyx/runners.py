@@ -42,8 +42,36 @@ except ImportError:
 
 
 class ExperimentRunner:
-    """
-    Engine for running variability studies with memory management.
+    """Core engine for running variability studies with memory management.
+
+    Trains a model multiple times with different random seeds, collecting
+    per-epoch metrics from each run. Supports standard in-process execution
+    and subprocess isolation for GPU memory cleanup.
+
+    This class is the low-level interface. Most users should prefer
+    :func:`~ictonyx.api.variability_study`, which handles data resolution
+    and model wrapping automatically.
+
+    Args:
+        model_builder: A callable ``f(ModelConfig) -> BaseModelWrapper``
+            that constructs a fresh model for each run.
+        data_handler: A :class:`~ictonyx.data.DataHandler` that provides
+            train/val/test splits via its ``load()`` method.
+        model_config: A :class:`~ictonyx.config.ModelConfig` containing
+            training hyperparameters (epochs, batch_size, learning_rate, etc.).
+        tracker: An optional :class:`~ictonyx.loggers.BaseLogger` for
+            experiment tracking. Defaults to a basic in-memory logger.
+        use_process_isolation: If ``True``, each run executes in a child
+            process, ensuring GPU memory is fully released between runs.
+            Required for long Keras/TF studies that would otherwise OOM.
+            Default ``False``.
+        gpu_memory_limit: Optional GPU memory cap in MB, applied per run
+            when using TensorFlow. Default ``None`` (no limit).
+        seed: Base random seed for reproducibility. Run *i* uses
+            ``seed + i``. If ``None``, a random seed is generated and stored.
+        verbose: If ``True``, log study progress to stdout. If ``tqdm`` is
+            installed, a progress bar replaces per-run log messages.
+            Default ``True``.
     """
 
     def __init__(
@@ -57,15 +85,9 @@ class ExperimentRunner:
         seed: Optional[int] = None,
         verbose: bool = True,
     ):
-        """
-        Initialize experiment runner.
+        """Initialize the experiment runner.
 
-        Args:
-            tracker: Object to track experiment metrics (e.g. MLflowLogger).
-                     If None, uses basic BaseLogger.
-            seed: Base random seed for reproducibility. Each run uses
-                  seed + run_id. If None, a random seed is generated and
-                  stored so the study can still be reproduced after the fact.
+        See class docstring for full parameter descriptions.
         """
         self.model_builder = model_builder
         self.data_handler = data_handler
@@ -206,14 +228,40 @@ class ExperimentRunner:
         pbar.set_postfix({col: f"{metrics_df[col].iloc[-1]:.4f}"})
 
     def _run_single_fit(self, run_id: int, epochs: int) -> Optional[pd.DataFrame]:
-        """Run a single training iteration."""
+        """Run a single training iteration.
+
+        Dispatches to :meth:`_run_single_fit_isolated` or
+        :meth:`_run_single_fit_standard` depending on the
+        ``use_process_isolation`` setting.
+
+        Args:
+            run_id: 1-based index of this run within the study.
+            epochs: Number of training epochs for this run.
+
+        Returns:
+            A ``pd.DataFrame`` of per-epoch metrics if the run succeeded,
+            or ``None`` if it failed. Failed runs are recorded in
+            :attr:`failed_runs`.
+        """
         if self.use_process_isolation:
             return self._run_single_fit_isolated(run_id, epochs)
         else:
             return self._run_single_fit_standard(run_id, epochs)
 
     def _run_single_fit_isolated(self, run_id: int, epochs: int) -> Optional[pd.DataFrame]:
-        """Execute training in isolated subprocess."""
+        """Execute a training run in an isolated subprocess.
+
+        Serializes the model builder, data handler, and config, then trains
+        in a child process. This guarantees that GPU memory (especially
+        TensorFlow session state) is fully released between runs.
+
+        Args:
+            run_id: 1-based run index.
+            epochs: Training epochs.
+
+        Returns:
+            ``pd.DataFrame`` of per-epoch metrics, or ``None`` on failure.
+        """
         self._run_log(f" - Run {run_id}: Starting in isolated process...")
 
         # Log run start (Metric Tracker)
@@ -290,7 +338,19 @@ class ExperimentRunner:
             return None
 
     def _run_single_fit_standard(self, run_id: int, epochs: int) -> Optional[pd.DataFrame]:
-        """Execute training in standard mode (in-process)."""
+        """Execute a training run in the current process.
+
+        Builds a fresh model, loads data, trains, evaluates on the test set
+        (if available), and collects metrics into a DataFrame. Cleans up
+        the model after each run via :meth:`BaseModelWrapper.cleanup`.
+
+        Args:
+            run_id: 1-based run index.
+            epochs: Training epochs.
+
+        Returns:
+            ``pd.DataFrame`` of per-epoch metrics, or ``None`` on failure.
+        """
         self._run_log(f" - Run {run_id}: Training...")
 
         # Set deterministic seeds for this run
@@ -379,7 +439,28 @@ class ExperimentRunner:
         epochs_per_run: Optional[int] = None,
         stop_on_failure_rate: float = 0.5,
     ) -> "VariabilityStudyResults":
-        """Execute the complete variability study."""
+        """Execute the complete variability study.
+
+        Trains the model ``num_runs`` times, collecting per-epoch training
+        metrics from each run. Resets all internal accumulators before
+        starting, so calling ``run_study()`` twice on the same runner is safe.
+
+        If ``tqdm`` is installed and ``verbose=True``, a progress bar is
+        displayed with a live postfix showing the most informative validation
+        metric from the latest completed run.
+
+        Args:
+            num_runs: Number of independent training runs. Default 5.
+            epochs_per_run: Epochs per run. If ``None``, uses the ``epochs``
+                value from :attr:`model_config`. Default ``None``.
+            stop_on_failure_rate: If the fraction of failed runs exceeds this
+                threshold, the study halts early. Set to ``1.0`` to never
+                stop early. Default ``0.8``.
+
+        Returns:
+            :class:`VariabilityStudyResults` with per-run DataFrames, final
+            metric distributions, and optional test-set metrics.
+        """
 
         # Reset state from any previous run
         self.all_runs_metrics = []
@@ -479,7 +560,17 @@ class ExperimentRunner:
         )
 
     def get_summary_stats(self) -> Dict[str, Any]:
-        """Get summary statistics for the completed study."""
+        """Get summary statistics for the completed study.
+
+        Returns:
+            Dict with keys:
+
+            * ``total_runs``, ``successful_runs``, ``failed_runs``,
+              ``failure_rate`` — run accounting.
+            * ``<metric>_mean``, ``<metric>_std``, ``<metric>_min``,
+              ``<metric>_max`` — descriptive statistics for each tracked
+              metric (e.g. ``val_accuracy_mean``).
+        """
         stats = {
             "total_runs": len(self.all_runs_metrics) + len(self.failed_runs),
             "successful_runs": len(self.all_runs_metrics),
@@ -581,7 +672,24 @@ def _isolated_training_function(
 
 @dataclass
 class VariabilityStudyResults:
-    """Container for variability study results with analysis methods."""
+    """Container for variability study results with analysis methods.
+
+    Returned by :func:`~ictonyx.api.variability_study` and
+    :meth:`ExperimentRunner.run_study`. Holds per-run training history
+    DataFrames, aggregated final-epoch metrics, and optional test-set
+    evaluation results.
+
+    Attributes:
+        all_runs_metrics: List of DataFrames, one per successful run. Each
+            DataFrame has one row per epoch and columns for every tracked
+            metric (e.g. ``train_accuracy``, ``val_loss``).
+        final_metrics: Dict mapping metric names to lists of final-epoch
+            values across runs. Example:
+            ``{'val_accuracy': [0.82, 0.85, 0.83]}``.
+        final_test_metrics: List of dicts, one per run, containing test-set
+            evaluation results (empty if no test set was used).
+        seed: The base random seed used for the study, for reproducibility.
+    """
 
     all_runs_metrics: List[pd.DataFrame]
     final_metrics: Dict[str, List[float]]
@@ -718,11 +826,27 @@ def run_variability_study(
     seed: Optional[int] = None,
     verbose: bool = True,
 ) -> VariabilityStudyResults:
-    """Run a complete variability study.
+    """Run a complete variability study (convenience function).
+
+    Creates an :class:`ExperimentRunner` and calls
+    :meth:`~ExperimentRunner.run_study`. This is the lower-level entry
+    point; most users should prefer :func:`~ictonyx.api.variability_study`.
 
     Args:
-        seed: Base random seed. Each run uses seed + run_id. If None,
-              a random seed is generated automatically.
+        model_builder: Callable ``f(ModelConfig) -> BaseModelWrapper``.
+        data_handler: A :class:`~ictonyx.data.DataHandler` instance.
+        model_config: A :class:`~ictonyx.config.ModelConfig` instance.
+        num_runs: Number of training runs. Default 5.
+        epochs_per_run: Epochs per run. Default ``None`` (uses config).
+        tracker: Optional experiment logger. Default ``None``.
+        use_process_isolation: Run each iteration in a subprocess.
+            Default ``False``.
+        gpu_memory_limit: Optional GPU memory cap in MB.
+        seed: Base random seed. If ``None``, one is generated.
+        verbose: Print progress to stdout. Default ``True``.
+
+    Returns:
+        :class:`VariabilityStudyResults`.
     """
     runner = ExperimentRunner(
         model_builder=model_builder,

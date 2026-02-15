@@ -34,9 +34,73 @@ def variability_study(
     seed: Optional[int] = None,
     **kwargs,
 ) -> VariabilityStudyResults:
+    """Run a variability study: train a model N times and collect distributions.
+
+    Trains the same model architecture on the same data ``runs`` times, each
+    with a different random seed, and returns the full distribution of
+    training metrics. This is the primary entry point for most users.
+
+    The function handles data resolution, model wrapping, configuration,
+    and execution automatically. For finer control, use
+    :class:`~ictonyx.runners.ExperimentRunner` directly.
+
+    Args:
+        model: What to train. Accepted forms:
+
+            * A **class** with ``fit``/``predict`` (e.g. ``RandomForestClassifier``) —
+              a fresh instance is created for each run.
+            * A **callable** ``f(config) -> BaseModelWrapper`` — called once per run.
+            * A **Keras Model** or **PyTorch nn.Module** — auto-wrapped.
+            * An **instance** with ``fit``/``predict`` — works, but a warning is
+              emitted because fitted state persists between runs.
+
+        data: The dataset. Accepted forms:
+
+            * ``pd.DataFrame`` — requires ``target_column``.
+            * ``(X, y)`` tuple of array-likes.
+            * ``str`` path to a CSV file (requires ``target_column``) or an
+              image directory (requires ``image_size`` in kwargs).
+            * An existing :class:`~ictonyx.data.DataHandler` instance.
+
+        target_column: Column name containing labels. Required when ``data``
+            is a DataFrame or CSV path.
+        runs: Number of independent training runs. Default 5.
+        epochs: Training epochs per run. Ignored by scikit-learn models.
+            Default 10.
+        batch_size: Batch size per run. Ignored by scikit-learn models.
+            Default 32.
+        tracker: Optional :class:`~ictonyx.loggers.BaseLogger` (or subclass
+            such as ``MLflowLogger``) for experiment tracking. If ``None``,
+            a basic in-memory logger is used.
+        use_process_isolation: If ``True``, each run executes in a subprocess
+            to guarantee GPU memory cleanup. Useful for Keras/TF models that
+            leak memory across runs. Default ``False``.
+        seed: Base random seed. Run *i* uses ``seed + i``, so every run is
+            different but the full study is reproducible. If ``None``, a
+            random seed is generated and stored in the results.
+        **kwargs: Additional arguments forwarded to both the
+            :class:`~ictonyx.config.ModelConfig` and the data handler
+            (e.g. ``image_size``, ``test_split``, ``val_split``).
+
+    Returns:
+        :class:`~ictonyx.runners.VariabilityStudyResults` containing
+        per-run metric DataFrames, final metric distributions, and
+        convenience methods for summarization and statistical analysis.
+
+    Example::
+
+        import ictonyx as ix
+        from sklearn.ensemble import RandomForestClassifier
+
+        results = ix.variability_study(
+            model=RandomForestClassifier,
+            data=df,
+            target_column='target',
+            runs=20,
+        )
+        print(results.summarize())
     """
-    Run a variability study with a single function call.
-    """
+
     # 1. Prepare Data
     handler = auto_resolve_handler(data, target_column=target_column, **kwargs)
 
@@ -79,9 +143,56 @@ def compare_models(
     metric: str = "val_accuracy",
     **kwargs,
 ) -> Dict[str, Any]:
+    """Run variability studies on multiple models and compare them statistically.
+
+    Each model is trained ``runs`` times on the same data, producing a
+    distribution of the chosen metric. The distributions are then compared
+    using non-parametric statistical tests with automatic test selection:
+
+    * **Two models**: Mann-Whitney U (or Wilcoxon signed-rank if paired).
+    * **Three or more**: Kruskal-Wallis with post-hoc pairwise comparisons
+      and multiple-comparison correction.
+
+    Effect sizes (Cohen's d, rank-biserial) and bootstrap confidence
+    intervals are included automatically.
+
+    Args:
+        models: List of models in any form accepted by
+            :func:`variability_study` (classes, callables, instances, etc.).
+        data: The dataset, in any form accepted by :func:`variability_study`.
+        target_column: Column name containing labels, if applicable.
+        runs: Number of independent training runs per model. Default 5.
+        epochs: Training epochs per run. Default 10.
+        metric: Metric name to compare across models. Must be a key in
+            the training history (e.g. ``'val_accuracy'``, ``'val_loss'``,
+            ``'val_f1'``). Default ``'val_accuracy'``.
+        **kwargs: Forwarded to each :func:`variability_study` call.
+
+    Returns:
+        Dict containing:
+
+        * ``'overall_test'``: :class:`~ictonyx.analysis.StatisticalTestResult`
+          for the omnibus test.
+        * ``'pairwise_comparisons'``: Dict of pairwise
+          :class:`~ictonyx.analysis.StatisticalTestResult` objects (if 3+
+          models).
+        * ``'raw_data'``: Dict mapping model names to ``pd.Series`` of
+          metric values.
+        * ``'error'``: Present only if fewer than 2 models produced valid
+          results.
+
+    Example::
+
+        results = ix.compare_models(
+            models=[RandomForestClassifier, GradientBoostingClassifier],
+            data=df,
+            target_column='target',
+            runs=20,
+            metric='val_accuracy',
+        )
+        print(results['overall_test'].get_summary())
     """
-    Compare multiple models using rigorous statistical testing.
-    """
+
     handler = auto_resolve_handler(data, target_column=target_column, **kwargs)
     results_store = {}
 
@@ -121,14 +232,22 @@ def compare_models(
 
 
 def _get_model_builder(model: Any) -> Callable:
-    """Standardizes model input into a factory function.
+    """Normalize diverse model inputs into a consistent factory function.
 
-    Handles three input types:
-      - Callable (function): used directly as a builder. The user is
-        responsible for returning a fresh model each call.
-      - Class: instantiated fresh per run (e.g., RandomForestClassifier).
-      - Instance: cloned per run for sklearn models. Keras and PyTorch
-        instances are rejected because they cannot be cleanly cloned.
+    Accepts classes, callables, and instances and returns a callable
+    with signature ``f(ModelConfig) -> BaseModelWrapper``. Instances
+    are wrapped with a warning about state leakage between runs.
+
+    Args:
+        model: A model class, callable, or fitted/unfitted instance.
+
+    Returns:
+        A callable that takes a :class:`~ictonyx.config.ModelConfig` and
+        returns a :class:`~ictonyx.core.BaseModelWrapper`.
+
+    Raises:
+        ValueError: If ``model`` is not a class, callable, or object with
+            a ``fit`` method.
     """
 
     # If it's already a function, trust it.
@@ -206,7 +325,27 @@ def _build_instance_cloner(model: Any) -> Callable:
 
 
 def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
-    """Ensures the object is wrapped in an Ictonyx wrapper."""
+    """Wrap a raw model object in the appropriate Ictonyx model wrapper.
+
+    If ``obj`` is already a :class:`~ictonyx.core.BaseModelWrapper`, it is
+    returned unchanged. Otherwise, the function inspects the object to
+    determine the correct wrapper:
+
+    * Objects with ``fit``/``predict`` → :class:`ScikitLearnModelWrapper`
+    * Keras models → :class:`KerasModelWrapper`
+    * PyTorch ``nn.Module`` → :class:`PyTorchModelWrapper`
+
+    Args:
+        obj: A model object to wrap.
+
+    Returns:
+        A :class:`~ictonyx.core.BaseModelWrapper` subclass instance.
+
+    Raises:
+        ImportError: If the required framework (sklearn, TF, or PyTorch)
+            is not installed.
+        TypeError: If the object cannot be identified as a supported model.
+    """
     if isinstance(obj, BaseModelWrapper):
         return obj
 
@@ -247,7 +386,17 @@ def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
 
 
 def _get_model_name(obj: Any) -> str:
-    """Extracts a readable name from a model object/class/function."""
+    """Extract a human-readable name from a model for logging and display.
+
+    Checks ``__name__`` (functions/classes), then ``__class__.__name__``
+    (instances), falling back to ``str(obj)``.
+
+    Args:
+        obj: A model class, function, or instance.
+
+    Returns:
+        A string suitable for use in log messages and result keys.
+    """
     if hasattr(obj, "__name__"):
         return obj.__name__
     if hasattr(obj, "__class__"):

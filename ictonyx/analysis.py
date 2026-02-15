@@ -50,7 +50,42 @@ except ImportError:
 
 @dataclass
 class StatisticalTestResult:
-    """Comprehensive statistical test result with validation, effect sizes, and interpretation."""
+    """Comprehensive result from a statistical comparison test.
+
+    Returned by all statistical test functions in this module. Contains
+    the test statistic, p-value, effect size, assumption checks, and
+    human-readable interpretation.
+
+    Attributes:
+        test_name: Name of the test performed (e.g. ``'Mann-Whitney U'``).
+        statistic: The test statistic value.
+        p_value: The raw (uncorrected) p-value.
+        effect_size: Effect size estimate (Cohen's d, rank-biserial, or
+            eta-squared, depending on the test).
+        effect_size_name: Label for the effect size metric.
+        effect_size_interpretation: Qualitative label (``'small'``,
+            ``'medium'``, ``'large'``) per conventional thresholds.
+        sample_sizes: Dict mapping group names to sample counts.
+        assumptions_met: Dict mapping assumption names (e.g.
+            ``'normality_group1'``) to boolean pass/fail.
+        assumption_details: Dict with detailed assumption check outputs
+            (e.g. Shapiro-Wilk statistics).
+        warnings: List of warning strings (e.g. small sample size caveats).
+        recommendations: List of suggested next steps.
+        corrected_p_value: P-value after multiple comparison correction,
+            if applicable.
+        correction_method: Name of correction (``'bonferroni'``, ``'holm'``,
+            ``'benjamini-hochberg'``), if applied.
+        conclusion: One-sentence summary of the result.
+        detailed_interpretation: Multi-sentence explanation suitable for
+            a report.
+        confidence_interval: Bootstrap CI for the mean difference, as a
+            ``(lower, upper)`` tuple.
+        ci_confidence_level: Confidence level (e.g. ``0.95``).
+        ci_method: CI construction method (``'bca'`` or ``'percentile'``).
+        ci_effect_size: Bootstrap CI for the effect size, as a
+            ``(lower, upper)`` tuple.
+    """
 
     test_name: str
     statistic: float

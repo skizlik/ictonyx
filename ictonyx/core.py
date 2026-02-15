@@ -84,9 +84,25 @@ class TrainingResult:
 
 
 class BaseModelWrapper(ABC):
-    """
-    A base class for wrapping a machine learning model.
-    It provides a standardized interface for common analysis tasks.
+    """Abstract base class for wrapping ML models with a common interface.
+
+    All model wrappers (Keras, scikit-learn, PyTorch) inherit from this
+    class and implement its abstract methods. The wrapper provides:
+
+    * A consistent ``fit`` / ``predict`` / ``evaluate`` / ``assess`` API.
+    * Automatic resource cleanup via :meth:`cleanup`.
+    * A standardized :class:`TrainingResult` output from ``fit()``.
+    * Memory tracking via :class:`~ictonyx.memory.MemoryManager`.
+
+    Subclasses must implement: :meth:`fit`, :meth:`predict`,
+    :meth:`predict_proba`, :meth:`evaluate`, :meth:`assess`,
+    :meth:`save_model`, :meth:`load_model`, and
+    :meth:`_cleanup_implementation`.
+
+    Args:
+        model: The underlying model object (Keras Model, sklearn estimator,
+            PyTorch Module, etc.).
+        model_id: An optional string identifier for logging and display.
     """
 
     def __init__(self, model: Any, model_id: str = ""):
@@ -767,7 +783,25 @@ if SKLEARN_AVAILABLE:
         def evaluate(
             self, data: Union[Tuple[np.ndarray, np.ndarray], Any], **kwargs
         ) -> Dict[str, Any]:
-            """Evaluate sklearn model, returning all applicable metrics."""
+            """Evaluate the model on a test set, returning all applicable metrics.
+
+            For classifiers (models with ``predict_proba`` or ``classes_``):
+            returns accuracy, precision, recall, and F1. For regressors:
+            returns R², MSE, and MAE.
+
+            Multiclass classification uses weighted averaging for precision,
+            recall, and F1. Binary classification uses binary averaging.
+
+            Args:
+                data: A tuple of ``(X_test, y_test)`` numpy arrays.
+                **kwargs: Unused, accepted for API compatibility.
+
+            Returns:
+                Dict mapping metric names to float values. Keys depend on
+                model type — classifiers get ``'accuracy'``, ``'precision'``,
+                ``'recall'``, ``'f1'``; regressors get ``'r2'``, ``'mse'``,
+                ``'mae'``.
+            """
             X_test, y_test = data
             y_pred = self.model.predict(X_test)
 

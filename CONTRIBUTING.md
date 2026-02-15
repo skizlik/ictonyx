@@ -6,7 +6,7 @@ Thanks for considering contributing. Here's how to get started.
 
 Fork and clone the repo, then install in dev mode:
 
-    git clone https://github.com/YOUR_USERNAME/ictonyx.git
+    git clone https://github.com/skizlik/ictonyx.git
     cd ictonyx
     pip install -e ".[sklearn]"
     pip install pytest pytest-cov black isort flake8 pre-commit

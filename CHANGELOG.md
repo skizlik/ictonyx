@@ -11,10 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Regression task support (MSE, MAE, R² as first-class metrics)
 - Sphinx documentation hosted on ReadTheDocs
 - Parallel execution for non-GPU models via `joblib`
-- Progress bars via `tqdm`
 - `VariabilityStudyResults.bootstrap_ci()` convenience method
 - `VariabilityStudyResults.report()` for self-contained summaries
 - Paired/blocked experimental designs for model comparison
+
+---
+
+## [0.3.2] - 2026-02-15
+
+### Added
+- tqdm progress bars for variability studies (optional dependency, graceful fallback)
+- Pre-commit hooks for black and isort
+
+### Changed
+- scikit-learn is now an optional dependency; install with `pip install ictonyx[sklearn]`
+- Linting (black, isort, flake8) now enforced in CI — previously ran but did not fail builds
+- Rewrote CONTRIBUTING.md with development setup, style guide, and project map
+
+### Fixed
+- `auto_resolve_handler` crashed when passing (X, y) tuples due to extra kwargs
+- `PyTorchModelWrapper.load_model()` returned a raw dict instead of a wrapper
+- `_get_model_builder` leaked fitted state between runs when given sklearn instances
+- Off-by-one in failure rate calculation in `ExperimentRunner.run_study()`
+- Undefined name `pd` in `tuning.py`
+- Unused `global THEME` declaration in `settings.py`
+- Seaborn `FutureWarning` in comparison boxplots (compatible with v0.14)
+- Pinned black version in CI to prevent formatting drift
 
 ---
 

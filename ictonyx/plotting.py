@@ -460,7 +460,7 @@ def plot_comparison_boxplots(
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Use themed palette if possible, else default
-    sn.boxplot(data=df, x="Model", y=metric, palette="Blues", ax=ax)
+    sn.boxplot(data=df, x="Model", y=metric, hue="Model", palette="Blues", legend=False, ax=ax)
     sn.stripplot(data=df, x="Model", y=metric, color="black", alpha=0.3, ax=ax)
 
     # Statistical Annotations Title

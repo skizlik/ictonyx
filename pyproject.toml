@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "ictonyx"
-version = "0.3.1"
+version = "0.3.2"
 description = "Ictonyx: Iteration Comparison Testing Over N-runs: Yield eXamination"
 authors = ["Stephen Kizlik <stephen.kizlik@gmail.com>"]
 license = "MIT"

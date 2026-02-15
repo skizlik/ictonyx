@@ -8,10 +8,22 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import accuracy_score, confusion_matrix
 
 from .memory import get_memory_manager
 from .settings import logger
+
+# Optional sklearn metrics (fallback provided for accuracy_score)
+try:
+    from sklearn.metrics import accuracy_score
+
+    _HAS_SKLEARN_METRICS = True
+except ImportError:
+    _HAS_SKLEARN_METRICS = False
+
+    def accuracy_score(y_true, y_pred):
+        """Numpy fallback when sklearn is not installed."""
+        return float(np.mean(np.asarray(y_true) == np.asarray(y_pred)))
+
 
 # Optional TensorFlow imports
 try:

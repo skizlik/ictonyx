@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
 from .settings import logger
 
@@ -51,7 +50,7 @@ except ImportError:
     plt = None
     HAS_MATPLOTLIB = False
 
-# Optional sklearn (should always be available, but being defensive)
+# Optional sklearn for data splitting
 try:
     from sklearn.model_selection import train_test_split
 

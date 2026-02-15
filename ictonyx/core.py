@@ -771,7 +771,12 @@ if SKLEARN_AVAILABLE:
             X_test, y_test = data
             y_pred = self.model.predict(X_test)
 
-            metrics: Dict[str, Any] = {"accuracy": accuracy_score(y_test, y_pred)}
+            metrics: Dict[str, Any] = {}
+
+            # Classification metrics only apply to discrete targets
+            is_classifier = hasattr(self.model, "predict_proba") or hasattr(self.model, "classes_")
+            if is_classifier:
+                metrics["accuracy"] = accuracy_score(y_test, y_pred)
 
             try:
                 from sklearn.metrics import f1_score, precision_score, recall_score
@@ -788,7 +793,7 @@ if SKLEARN_AVAILABLE:
             try:
                 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-                if not hasattr(self.model, "predict_proba"):
+                if not is_classifier:
                     metrics["r2"] = r2_score(y_test, y_pred)
                     metrics["mse"] = mean_squared_error(y_test, y_pred)
                     metrics["mae"] = mean_absolute_error(y_test, y_pred)

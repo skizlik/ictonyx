@@ -544,3 +544,235 @@ class TestGetSummaryStatsExtended:
         assert "val_accuracy_max" in stats
         assert stats["val_accuracy_std"] >= 0
         assert stats["val_accuracy_min"] <= stats["val_accuracy_max"]
+
+
+# =============================================================================
+# ADD TO: tests/test_runners.py  (paste at the bottom)
+# =============================================================================
+# No new imports needed — existing file has MockModel, MockDataHandler,
+# ExperimentRunner, VariabilityStudyResults, ModelConfig, np, pd, pytest
+
+
+class MockDataHandlerWithTestData:
+    """Mock data handler that returns test_data too."""
+
+    @property
+    def data_type(self):
+        return "mock"
+
+    @property
+    def return_format(self):
+        return "split_arrays"
+
+    def load(self, **kwargs):
+        X_train = np.random.rand(60, 10)
+        y_train = np.random.randint(0, 2, 60)
+        X_val = np.random.rand(20, 10)
+        y_val = np.random.randint(0, 2, 20)
+        X_test = np.random.rand(20, 10)
+        y_test = np.random.randint(0, 2, 20)
+        return {
+            "train_data": (X_train, y_train),
+            "val_data": (X_val, y_val),
+            "test_data": (X_test, y_test),
+        }
+
+
+class TestRunnerWithTestData:
+    """Test that test_data evaluation path works."""
+
+    def test_study_with_test_data(self):
+        """Test that runner evaluates on test data when present."""
+
+        def model_builder(config):
+            return MockModel(config)
+
+        runner = ExperimentRunner(
+            model_builder=model_builder,
+            data_handler=MockDataHandlerWithTestData(),
+            model_config=ModelConfig({"epochs": 2}),
+            verbose=False,
+        )
+        results = runner.run_study(num_runs=3, epochs_per_run=2)
+
+        assert results.n_runs == 3
+        # Test metrics should be populated
+        assert len(results.final_test_metrics) == 3
+        for tm in results.final_test_metrics:
+            assert isinstance(tm, dict)
+            assert "accuracy" in tm
+
+    def test_test_metrics_in_to_dataframe(self):
+        """Test that test metrics appear in to_dataframe output."""
+
+        def model_builder(config):
+            return MockModel(config)
+
+        runner = ExperimentRunner(
+            model_builder=model_builder,
+            data_handler=MockDataHandlerWithTestData(),
+            model_config=ModelConfig({"epochs": 2}),
+            verbose=False,
+        )
+        results = runner.run_study(num_runs=2, epochs_per_run=2)
+        df = results.to_dataframe()
+
+        assert "test_accuracy" in df.columns
+        assert len(df) == 2
+
+
+class TestRunnerVerbose:
+    """Test verbose output paths."""
+
+    def test_verbose_study_runs(self, capsys):
+        """Test that verbose mode produces output without crashing."""
+
+        def model_builder(config):
+            return MockModel(config)
+
+        runner = ExperimentRunner(
+            model_builder=model_builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig({"epochs": 2}),
+            verbose=True,
+        )
+        results = runner.run_study(num_runs=2, epochs_per_run=2)
+        assert results.n_runs == 2
+
+
+class TestRunnerFailureRate:
+    """Test that high failure rate stops the study early."""
+
+    def test_stops_on_high_failure_rate(self):
+        """Runner should stop when failure rate exceeds threshold."""
+        call_count = 0
+
+        def always_failing_builder(config):
+            nonlocal call_count
+            call_count += 1
+            raise RuntimeError("Simulated failure")
+
+        runner = ExperimentRunner(
+            model_builder=always_failing_builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig(),
+            verbose=False,
+        )
+
+        results = runner.run_study(num_runs=10, stop_on_failure_rate=0.5)
+
+        # Should have stopped early, not attempted all 10
+        total = results.n_runs + len(runner.failed_runs)
+        assert total < 10
+        assert results.n_runs == 0  # all failed
+
+    def test_no_training_result_counts_as_failure(self):
+        """A model that trains but produces no training_result should count as failed."""
+
+        class NoResultModel(MockModel):
+            def fit(self, train_data, validation_data=None, **kwargs):
+                # Trains but doesn't set training_result
+                self.training_result = None
+
+        def builder(config):
+            return NoResultModel(config)
+
+        runner = ExperimentRunner(
+            model_builder=builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig({"epochs": 2}),
+            verbose=False,
+        )
+        # Use high stop threshold so all runs are attempted
+        results = runner.run_study(num_runs=3, stop_on_failure_rate=1.0)
+
+        assert results.n_runs == 0
+        assert len(runner.failed_runs) >= 1
+
+
+class TestRunnerDefaultEpochs:
+    """Test that epochs default to config value."""
+
+    def test_epochs_from_config(self):
+        """When epochs_per_run is None, should use config['epochs']."""
+
+        def model_builder(config):
+            return MockModel(config)
+
+        runner = ExperimentRunner(
+            model_builder=model_builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig({"epochs": 7}),
+            verbose=False,
+        )
+        results = runner.run_study(num_runs=1, epochs_per_run=None)
+
+        assert results.n_runs == 1
+        # Each run's DataFrame should have 7 epochs
+        df = results.all_runs_metrics[0]
+        assert len(df) == 7
+
+
+class TestVariabilityStudyResultsStatistical:
+    """Test compare_models_statistically method."""
+
+    def test_compare_models_statistically_basic(self):
+        """Test statistical comparison across runs."""
+        # Create results with enough variation
+        dfs = []
+        vals = []
+        for i in range(10):
+            acc = 0.8 + np.random.random() * 0.1
+            df = pd.DataFrame(
+                {
+                    "val_accuracy": np.linspace(0.5, acc, 5),
+                    "val_loss": np.linspace(0.5, 1 - acc, 5),
+                }
+            )
+            dfs.append(df)
+            vals.append(acc)
+
+        results = VariabilityStudyResults(
+            all_runs_metrics=dfs,
+            final_metrics={"val_accuracy": vals},
+            final_test_metrics=[],
+        )
+
+        comparison = results.compare_models_statistically(metric_name="val_accuracy")
+        assert isinstance(comparison, dict)
+
+    def test_compare_models_statistically_missing_metric(self):
+        """Test error when metric doesn't exist."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[pd.DataFrame({"val_accuracy": [0.8]})],
+            final_metrics={"val_accuracy": [0.8]},
+            final_test_metrics=[],
+        )
+
+        with pytest.raises(ValueError, match="not found"):
+            results.compare_models_statistically(metric_name="nonexistent_metric")
+
+    def test_compare_models_statistically_no_data(self):
+        """Test error with empty results."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={},
+            final_test_metrics=[],
+        )
+
+        with pytest.raises(ValueError, match="No run metrics"):
+            results.compare_models_statistically()
+
+
+class TestFinalValAccuraciesProperty:
+    """Test the final_val_accuracies backward-compat property if it exists."""
+
+    def test_final_metrics_access(self):
+        results = VariabilityStudyResults(
+            all_runs_metrics=[pd.DataFrame({"a": [1]})],
+            final_metrics={"val_accuracy": [0.8, 0.85, 0.82], "val_loss": [0.2, 0.15, 0.18]},
+            final_test_metrics=[],
+        )
+        # Access through dict
+        assert results.final_metrics["val_accuracy"] == [0.8, 0.85, 0.82]
+        assert len(results.final_metrics["val_loss"]) == 3

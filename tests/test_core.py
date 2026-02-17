@@ -444,3 +444,163 @@ class TestScikitLearnWrapperExtended:
         assert "precision" in result
         assert "recall" in result
         assert "f1" in result
+
+
+# =============================================================================
+# ADD TO: tests/test_core.py  (paste at the bottom)
+# =============================================================================
+# No new imports needed - existing file already has np, pytest, SKLEARN_AVAILABLE
+
+
+@pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not available")
+class TestScikitLearnWrapperCoverage:
+    """Target uncovered ScikitLearnModelWrapper lines."""
+
+    def test_cleanup_does_not_crash(self):
+        """Test that cleanup runs without error (line 614-617)."""
+        from sklearn.tree import DecisionTreeClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        X = np.random.rand(20, 3)
+        y = np.random.randint(0, 2, 20)
+        wrapper.fit((X, y))
+        wrapper.cleanup()  # should not raise
+
+    def test_fit_filters_keras_kwargs(self):
+        """Test that Keras-specific kwargs are silently ignored (lines 663-664)."""
+        from sklearn.tree import DecisionTreeClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        X = np.random.rand(20, 3)
+        y = np.random.randint(0, 2, 20)
+        # These kwargs should be silently dropped, not cause errors
+        wrapper.fit(
+            (X, y),
+            validation_data=None,
+            callbacks=[],
+            validation_split=0.2,
+            shuffle=True,
+        )
+        assert wrapper.training_result is not None
+
+    def test_fit_passes_sample_weight(self):
+        """Test that sample_weight is forwarded to sklearn fit."""
+        from sklearn.tree import DecisionTreeClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        X = np.random.rand(20, 3)
+        y = np.random.randint(0, 2, 20)
+        weights = np.ones(20)
+        # sample_weight is in the allowed list, should be passed through
+        wrapper.fit((X, y), sample_weight=weights)
+        assert wrapper.training_result is not None
+
+    def test_fit_regression_model_score(self):
+        """Test fit with a regressor — score() returns R², stored as val_accuracy."""
+        from sklearn.linear_model import LinearRegression
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        X = np.random.rand(50, 3)
+        y = X @ np.array([1.0, 2.0, 3.0]) + np.random.randn(50) * 0.1
+        X_val = np.random.rand(10, 3)
+        y_val = X_val @ np.array([1.0, 2.0, 3.0]) + np.random.randn(10) * 0.1
+
+        wrapper.fit((X, y), validation_data=(X_val, y_val))
+        h = wrapper.training_result.history
+        # For regressors, model.score() returns R², not accuracy
+        assert "val_accuracy" in h
+        assert h["val_accuracy"][0] > 0.5  # R² should be decent
+
+    def test_repr_before_and_after_training(self):
+        """Test that repr changes after training."""
+        from sklearn.tree import DecisionTreeClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier(), model_id="test_dt")
+        repr_before = repr(wrapper)
+        assert "is_trained=No" in repr_before
+        assert "test_dt" in repr_before
+
+        X = np.random.rand(20, 3)
+        y = np.random.randint(0, 2, 20)
+        wrapper.fit((X, y))
+        repr_after = repr(wrapper)
+        assert "is_trained=Yes" in repr_after
+
+    def test_get_memory_report(self):
+        """Test inherited get_memory_report returns a dict."""
+        from sklearn.tree import DecisionTreeClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        report = wrapper.get_memory_report()
+        assert isinstance(report, dict)
+
+    def test_evaluate_binary_vs_multiclass_metrics(self):
+        """Test that evaluate uses 'binary' avg for 2 classes, 'weighted' for 3+."""
+        from sklearn.tree import DecisionTreeClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        # Binary
+        wrapper_bin = ScikitLearnModelWrapper(DecisionTreeClassifier(random_state=0))
+        X = np.random.rand(40, 3)
+        y_bin = np.random.randint(0, 2, 40)
+        wrapper_bin.fit((X, y_bin))
+        result_bin = wrapper_bin.evaluate((X, y_bin))
+        assert "precision" in result_bin
+
+        # Multiclass
+        wrapper_multi = ScikitLearnModelWrapper(DecisionTreeClassifier(random_state=0))
+        y_multi = np.random.randint(0, 4, 40)
+        wrapper_multi.fit((X, y_multi))
+        result_multi = wrapper_multi.evaluate((X, y_multi))
+        assert "precision" in result_multi
+
+    def test_save_load_preserves_predictions(self):
+        """Test that a loaded model can predict identically."""
+        import os
+        import tempfile
+
+        from sklearn.ensemble import RandomForestClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(RandomForestClassifier(n_estimators=5, random_state=42))
+        X = np.random.rand(30, 4)
+        y = np.random.randint(0, 2, 30)
+        wrapper.fit((X, y))
+        preds_orig = wrapper.predict(X)
+
+        with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
+            path = f.name
+        try:
+            wrapper.save_model(path)
+            loaded = ScikitLearnModelWrapper.load_model(path)
+            preds_loaded = loaded.predict(X)
+            np.testing.assert_array_equal(preds_orig, preds_loaded)
+        finally:
+            os.unlink(path)
+
+
+class TestTrainingResult:
+    """Test TrainingResult dataclass."""
+
+    def test_creation(self):
+        result = TrainingResult(history={"loss": [0.5, 0.3], "accuracy": [0.7, 0.9]})
+        assert result.history["loss"] == [0.5, 0.3]
+        assert len(result.history["accuracy"]) == 2
+
+    def test_empty_history(self):
+        result = TrainingResult(history={})
+        assert result.history == {}

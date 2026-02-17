@@ -283,3 +283,186 @@ class TestAutoResolveHandlerPassthrough:
         """Test error for unsupported data type."""
         with pytest.raises(TypeError, match="Unsupported data type"):
             auto_resolve_handler(12345)
+
+
+# =============================================================================
+# ADD TO: tests/test_data.py  (paste at the bottom)
+# =============================================================================
+# No new imports needed — existing file has os, tempfile, np, pd, pytest,
+# ArraysDataHandler, TabularDataHandler, auto_resolve_handler, etc.
+
+
+class TestTabularDataHandlerCoverage:
+    """Target uncovered TabularDataHandler lines."""
+
+    def test_legacy_data_path_kwarg(self):
+        """Test backward-compat data_path keyword (line ~400)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            pd.DataFrame({"x": [1, 2, 3], "y": [0, 1, 0]}).to_csv(f.name, index=False)
+            path = f.name
+        try:
+            handler = TabularDataHandler(data_path=path, target_column="y")
+            splits = handler.load()
+            assert "train_data" in splits
+        finally:
+            os.unlink(path)
+
+    def test_no_data_raises(self):
+        """Test error when neither data nor data_path provided."""
+        with pytest.raises(ValueError, match="Must provide"):
+            TabularDataHandler(target_column="y")
+
+    def test_no_target_raises(self):
+        """Test error when target_column not provided."""
+        df = pd.DataFrame({"a": [1], "b": [2]})
+        with pytest.raises(ValueError, match="target_column"):
+            TabularDataHandler(data=df, target_column=None)
+
+    def test_invalid_data_type_raises(self):
+        """Test error when data is neither str nor DataFrame."""
+        with pytest.raises(TypeError, match="str path or DataFrame"):
+            TabularDataHandler(data=12345, target_column="y")
+
+    def test_features_parameter(self):
+        """Test that features param selects specific columns."""
+        df = pd.DataFrame(
+            {
+                "a": np.random.rand(50),
+                "b": np.random.rand(50),
+                "c": np.random.rand(50),
+                "target": np.random.randint(0, 2, 50),
+            }
+        )
+        handler = TabularDataHandler(data=df, target_column="target", features=["a", "b"])
+        splits = handler.load()
+        X_train, y_train = splits["train_data"]
+        # Should only have 2 feature columns (a, b), not 3
+        assert X_train.shape[1] == 2
+
+    def test_features_missing_column_raises(self):
+        """Test error when a requested feature doesn't exist."""
+        df = pd.DataFrame({"a": [1, 2], "target": [0, 1]})
+        handler = TabularDataHandler(data=df, target_column="target", features=["a", "nonexistent"])
+        with pytest.raises(ValueError, match="not found in data"):
+            handler.load()
+
+    def test_target_column_not_in_data(self):
+        """Test error when target column missing from DataFrame."""
+        df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+        handler = TabularDataHandler(data=df, target_column="nonexistent")
+        with pytest.raises(ValueError, match="not found"):
+            handler.load()
+
+    def test_empty_csv_raises(self):
+        """Test error when CSV file is empty."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            f.write("")  # empty file
+            path = f.name
+        try:
+            handler = TabularDataHandler(data=path, target_column="y")
+            with pytest.raises((ValueError, RuntimeError)):
+                handler.load()
+        finally:
+            os.unlink(path)
+
+    def test_csv_with_custom_sep(self):
+        """Test loading a TSV (tab-separated) file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            df = pd.DataFrame({"x1": range(20), "x2": range(20, 40), "target": [0, 1] * 10})
+            df.to_csv(f.name, sep="\t", index=False)
+            path = f.name
+        try:
+            handler = TabularDataHandler(data=path, target_column="target", sep="\t")
+            splits = handler.load()
+            X_train, y_train = splits["train_data"]
+            assert X_train.shape[1] == 2
+        finally:
+            os.unlink(path)
+
+    def test_load_no_val_split(self):
+        """Test with val_split=0."""
+        df = pd.DataFrame(
+            {
+                "a": np.random.rand(50),
+                "target": np.random.randint(0, 2, 50),
+            }
+        )
+        handler = TabularDataHandler(data=df, target_column="target")
+        splits = handler.load(test_split=0.2, val_split=0)
+        assert splits["val_data"] == (None, None) or splits["val_data"] is None
+
+    def test_load_no_test_split(self):
+        """Test with test_split=0."""
+        df = pd.DataFrame(
+            {
+                "a": np.random.rand(50),
+                "target": np.random.randint(0, 2, 50),
+            }
+        )
+        handler = TabularDataHandler(data=df, target_column="target")
+        splits = handler.load(test_split=0, val_split=0.2)
+        assert splits["test_data"] is None or splits["test_data"] == (None, None)
+
+    def test_load_splits_sum_too_large(self):
+        """Test error when splits sum >= 1.0."""
+        df = pd.DataFrame({"a": [1, 2, 3], "target": [0, 1, 0]})
+        handler = TabularDataHandler(data=df, target_column="target")
+        with pytest.raises(ValueError, match="< 1.0"):
+            handler.load(test_split=0.6, val_split=0.5)
+
+
+class TestDataHandlerGetInfo:
+    """Test get_data_info method."""
+
+    def test_arrays_handler_info(self):
+        handler = ArraysDataHandler(np.zeros((10, 3)), np.zeros(10))
+        info = handler.get_data_info()
+        assert info["data_type"] == "arrays"
+        assert info["return_format"] == "split_arrays"
+
+    def test_tabular_handler_info_from_df(self):
+        df = pd.DataFrame({"a": [1], "target": [0]})
+        handler = TabularDataHandler(data=df, target_column="target")
+        info = handler.get_data_info()
+        assert info["data_type"] == "tabular"
+
+
+class TestAutoResolveHandlerExtended:
+    """Additional auto_resolve_handler edge cases."""
+
+    def test_resolve_csv_with_text_column(self):
+        """Test that text_column kwarg routes to TextDataHandler (or ImportError)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            f.write("text,label\nhello,0\nworld,1\n")
+            path = f.name
+        try:
+            try:
+                handler = auto_resolve_handler(path, text_column="text", label_column="label")
+                assert isinstance(handler, TextDataHandler)
+            except ImportError:
+                # TF not available — that's fine, the routing was correct
+                pass
+        finally:
+            os.unlink(path)
+
+    def test_resolve_csv_with_value_column(self):
+        """Test that value_column kwarg routes to TimeSeriesDataHandler (or ImportError)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            f.write("date,value\n2024-01-01,100\n2024-01-02,101\n")
+            path = f.name
+        try:
+            try:
+                handler = auto_resolve_handler(path, value_column="value", sequence_length=5)
+                assert isinstance(handler, TimeSeriesDataHandler)
+            except ImportError:
+                # TF not available — routing was correct
+                pass
+        finally:
+            os.unlink(path)
+
+    def test_resolve_directory_without_image_size(self):
+        """Test error when directory given but image_size missing."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.makedirs(os.path.join(tmp_dir, "class_a"))
+            with pytest.raises(ValueError, match="image_size"):
+                auto_resolve_handler(tmp_dir)

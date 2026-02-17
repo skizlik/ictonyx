@@ -169,7 +169,20 @@ def _check_sklearn():
 def validate_sample_sizes(
     data: Union[pd.Series, List[pd.Series]], min_size: int, test_name: str
 ) -> Tuple[bool, List[str]]:
-    """Validate sample sizes are adequate for statistical testing."""
+    """Validate that sample sizes are adequate for a statistical test.
+
+    Checks each group against a minimum size threshold and generates
+    warnings for small samples.
+
+    Args:
+        data: A single ``pd.Series`` or list of ``pd.Series`` to check.
+        min_size: Minimum acceptable sample size per group.
+        test_name: Name of the test, used in warning messages.
+
+    Returns:
+        Tuple of ``(adequate, warnings)`` where ``adequate`` is ``True``
+        if all groups meet the minimum size.
+    """
     warnings_list = []
 
     if isinstance(data, pd.Series):
@@ -190,7 +203,20 @@ def validate_sample_sizes(
 
 
 def check_normality(data: pd.Series, alpha: float = 0.05) -> Tuple[bool, Dict[str, Any]]:
-    """Test for normality using multiple methods."""
+    """Test for normality using Shapiro-Wilk (and D'Agostino-Pearson if n >= 20).
+
+    Used internally by assumption-checking logic in statistical tests.
+
+    Args:
+        data: A ``pd.Series`` of metric values.
+        alpha: Significance level. Default 0.05.
+
+    Returns:
+        Tuple of ``(is_normal, details_dict)`` where ``is_normal`` is
+        ``True`` if the sample does not reject normality, and
+        ``details_dict`` contains test statistics and p-values.
+    """
+
     _check_scipy()
 
     results = {}
@@ -226,7 +252,22 @@ def check_normality(data: pd.Series, alpha: float = 0.05) -> Tuple[bool, Dict[st
 def check_equal_variances(
     data1: pd.Series, data2: pd.Series, alpha: float = 0.05
 ) -> Tuple[bool, Dict[str, Any]]:
-    """Test for equal variances using Levene's test."""
+    """Test for equal variances between two groups using Levene's test.
+
+    Used internally to choose between Student's t-test (equal variance)
+    and Welch's t-test (unequal variance).
+
+    Args:
+        data1: First group's metric values.
+        data2: Second group's metric values.
+        alpha: Significance level. Default 0.05.
+
+    Returns:
+        Tuple of ``(variances_equal, details_dict)`` where
+        ``variances_equal`` is ``True`` if Levene's test does not reject
+        the null hypothesis of equal variances.
+    """
+
     _check_scipy()
 
     try:
@@ -245,7 +286,22 @@ def check_equal_variances(
 def check_independence(
     data: pd.Series, max_lag: int = 5, alpha: float = 0.05
 ) -> Tuple[bool, Dict[str, Any]]:
-    """Check for autocorrelation that suggests non-independence."""
+    """Check for autocorrelation that would violate the independence assumption.
+
+    Computes autocorrelation at lags 1 through ``max_lag`` and flags the
+    data as non-independent if any lag exceeds the threshold.
+
+    Args:
+        data: A ``pd.Series`` of metric values ordered by run.
+        max_lag: Maximum lag to check. Default 5.
+        threshold: Autocorrelation magnitude above which dependence is
+            flagged. Default 0.3.
+
+    Returns:
+        Tuple of ``(is_independent, details_dict)`` where
+        ``is_independent`` is ``True`` if no significant autocorrelation
+        was detected.
+    """
 
     autocorr_results = {}
     significant_lags = []
@@ -278,7 +334,20 @@ def check_independence(
 
 
 def cohens_d(group1: pd.Series, group2: pd.Series, pooled: bool = True) -> Tuple[float, str]:
-    """Calculate Cohen's d effect size."""
+    """Calculate Cohen's d effect size between two groups.
+
+    Uses pooled standard deviation by default. Thresholds: small (0.2),
+    medium (0.5), large (0.8).
+
+    Args:
+        group1: First group's metric values.
+        group2: Second group's metric values.
+        pooled: If ``True`` (default), use pooled standard deviation.
+
+    Returns:
+        Tuple of ``(d_value, interpretation)`` where ``interpretation``
+        is one of ``'negligible'``, ``'small'``, ``'medium'``, ``'large'``.
+    """
 
     mean1, mean2 = group1.mean(), group2.mean()
 
@@ -311,7 +380,20 @@ def _interpret_cohens_d(abs_d: float) -> str:
 
 
 def rank_biserial_correlation(group1: pd.Series, group2: pd.Series) -> Tuple[float, str]:
-    """Calculate rank-biserial correlation (effect size for Mann-Whitney test)."""
+    """Calculate rank-biserial correlation as the effect size for the Mann-Whitney U test.
+
+    Ranges from -1 to 1, where 0 indicates no effect. Thresholds:
+    small (0.1), medium (0.3), large (0.5).
+
+    Args:
+        group1: First group's metric values.
+        group2: Second group's metric values.
+
+    Returns:
+        Tuple of ``(r_value, interpretation)`` where ``interpretation``
+        is ``'negligible'``, ``'small'``, ``'medium'``, or ``'large'``.
+    """
+
     _check_scipy()
 
     n1, n2 = len(group1), len(group2)
@@ -341,7 +423,19 @@ def _interpret_rank_biserial(abs_r: float) -> str:
 
 
 def eta_squared(groups: List[pd.Series]) -> Tuple[float, str]:
-    """Calculate eta-squared effect size for ANOVA from group data."""
+    """Calculate eta-squared effect size for ANOVA or Kruskal-Wallis.
+
+    Represents the proportion of variance in the dependent variable
+    explained by group membership. Thresholds: small (0.01),
+    medium (0.06), large (0.14).
+
+    Args:
+        groups: List of ``pd.Series``, one per group.
+
+    Returns:
+        Tuple of ``(eta_sq, interpretation)`` where ``interpretation``
+        is ``'negligible'``, ``'small'``, ``'medium'``, or ``'large'``.
+    """
 
     # Calculate sums of squares
     all_data = pd.concat(groups, ignore_index=True)
@@ -378,7 +472,21 @@ def _interpret_eta_squared(eta_sq: float) -> str:
 def apply_multiple_comparison_correction(
     p_values: List[float], method: str = "holm"
 ) -> Tuple[List[float], str]:
-    """Apply multiple comparison correction."""
+    """Apply multiple comparison correction to a list of p-values.
+
+    Adjusts p-values to control the family-wise error rate when
+    performing many pairwise comparisons.
+
+    Args:
+        p_values: List of raw p-values from pairwise tests.
+        method: Correction method — ``'bonferroni'``, ``'holm'``
+            (recommended), or ``'fdr_bh'`` (Benjamini-Hochberg).
+            Default ``'holm'``.
+        alpha: Significance level. Default 0.05.
+
+    Returns:
+        List of corrected p-values in the same order as the input.
+    """
 
     p_array = np.array(p_values)
     n = len(p_array)
@@ -432,7 +540,26 @@ def mann_whitney_test(
     alternative: str = "two-sided",
     alpha: float = 0.05,
 ) -> StatisticalTestResult:
-    """Mann-Whitney U test with comprehensive validation, effect sizes, and interpretation."""
+    """Mann-Whitney U test for comparing two independent groups.
+
+    A non-parametric test that does not assume normal distributions.
+    Includes sample-size validation, independence checks, rank-biserial
+    effect size, and auto-generated interpretation text.
+
+    Args:
+        model1_metrics: Metric values for the first model.
+        model2_metrics: Metric values for the second model.
+        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            Default ``'two-sided'``.
+        alpha: Significance level for assumption checks. Default 0.05.
+
+    Returns:
+        :class:`StatisticalTestResult` with test statistic, p-value,
+        rank-biserial correlation effect size, and interpretation.
+
+    Raises:
+        TypeError: If inputs are not ``pd.Series``.
+    """
     _check_scipy()
 
     result = StatisticalTestResult(
@@ -505,7 +632,23 @@ def wilcoxon_signed_rank_test(
     alternative: str = "two-sided",
     alpha: float = 0.05,
 ) -> StatisticalTestResult:
-    """Wilcoxon signed-rank test with comprehensive validation and effect sizes."""
+    """Wilcoxon signed-rank test for a single sample against a null value.
+
+    Tests whether the median of the sample differs from ``null_value``.
+    Useful for testing whether a model's accuracy is significantly
+    different from chance.
+
+    Args:
+        model_metrics: Metric values for the model.
+        null_value: Hypothesized median to test against. Default 0.5.
+        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            Default ``'two-sided'``.
+        alpha: Significance level. Default 0.05.
+
+    Returns:
+        :class:`StatisticalTestResult` with test statistic, p-value,
+        effect size (Wilcoxon r), and interpretation.
+    """
     _check_scipy()
 
     result = StatisticalTestResult(
@@ -575,7 +718,21 @@ def wilcoxon_signed_rank_test(
 
 
 def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> StatisticalTestResult:
-    """One-way ANOVA test with comprehensive validation, effect sizes, and interpretation."""
+    """One-way ANOVA for comparing three or more independent groups.
+
+    A parametric test that assumes normality and equal variances. If
+    assumptions are violated, consider :func:`kruskal_wallis_test` instead.
+    Includes eta-squared effect size.
+
+    Args:
+        model_metrics: Dict mapping model names to ``pd.Series`` of metric
+            values.
+        alpha: Significance level. Default 0.05.
+
+    Returns:
+        :class:`StatisticalTestResult` with F-statistic, p-value,
+        eta-squared effect size, and interpretation.
+    """
     _check_scipy()
 
     result = StatisticalTestResult(
@@ -662,22 +819,20 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
 def kruskal_wallis_test(
     model_metrics: Dict[str, pd.Series], alpha: float = 0.05
 ) -> StatisticalTestResult:
-    """
-    Kruskal-Wallis H-test with comprehensive validation and effect sizes.
+    """Kruskal-Wallis H-test for comparing three or more independent groups.
 
-    The Kruskal-Wallis test is a non-parametric alternative to one-way ANOVA.
-    It tests whether samples from different groups have different distributions.
+    A non-parametric alternative to ANOVA that does not assume normality
+    or equal variances. Recommended when sample sizes are small or
+    distributions are skewed.
 
     Args:
-        model_metrics: Dictionary mapping group names to pandas Series of values
-        alpha: Significance level for the test (default: 0.05)
+        model_metrics: Dict mapping model names to ``pd.Series`` of metric
+            values.
+        alpha: Significance level. Default 0.05.
 
     Returns:
-        StatisticalTestResult object with test statistics, p-value, effect size,
-        and interpretation
-
-    Raises:
-        ValueError: If fewer than 2 groups provided or insufficient data after cleaning
+        :class:`StatisticalTestResult` with H-statistic, p-value,
+        eta-squared effect size, and interpretation.
     """
     _check_scipy()
 
@@ -751,7 +906,21 @@ def kruskal_wallis_test(
 
 
 def shapiro_wilk_test(model_metrics: pd.Series, alpha: float = 0.05) -> StatisticalTestResult:
-    """Shapiro-Wilk test for normality with comprehensive validation."""
+    """Shapiro-Wilk test for normality.
+
+    Tests whether a sample comes from a normally distributed population.
+    Used internally by :func:`compare_two_models` to select between
+    parametric and non-parametric tests.
+
+    Args:
+        model_metrics: Metric values to test.
+        alpha: Significance level. Default 0.05. A significant result
+            (p < alpha) indicates the data is *not* normally distributed.
+
+    Returns:
+        :class:`StatisticalTestResult` with W-statistic, p-value, and
+        interpretation.
+    """
     _check_scipy()
 
     result = StatisticalTestResult(
@@ -1182,7 +1351,16 @@ def _interpret_wilcoxon_r(r: float) -> str:
 
 
 def calculate_autocorr(data: Union[pd.Series, List[float]], lag: int = 1) -> Optional[float]:
-    """Calculate autocorrelation of a time series at a specific lag. Enhanced with better error handling."""
+    """Calculate autocorrelation of a metric series at a given lag.
+
+    Args:
+        data: A ``pd.Series`` or list of metric values ordered by run.
+        lag: The lag at which to compute autocorrelation. Default 1.
+
+    Returns:
+        The autocorrelation coefficient as a float, or ``None`` if the
+        series is too short or the computation fails.
+    """
     if not isinstance(data, pd.Series):
         data = pd.Series(data)
 
@@ -1198,7 +1376,21 @@ def calculate_autocorr(data: Union[pd.Series, List[float]], lag: int = 1) -> Opt
 def calculate_averaged_autocorr(
     histories: List[pd.Series], max_lag: int = 20
 ) -> Tuple[List[float], List[float], List[float]]:
-    """Compute mean and standard deviation of autocorrelation functions across multiple histories. Enhanced with better validation."""
+    """Compute mean and std of autocorrelation across multiple run histories.
+
+    Args:
+        histories: List of ``pd.Series``, each representing a training
+            history (e.g. per-epoch loss values from one run).
+        max_lag: Maximum lag to compute. Default 20.
+
+    Returns:
+        Tuple of ``(lags, mean_autocorr, std_autocorr)`` — three lists
+        of equal length.
+
+    Raises:
+        ValueError: If ``histories`` is empty or none are long enough for
+            the requested ``max_lag``.
+    """
     if not histories:
         raise ValueError("The list of histories cannot be empty.")
 
@@ -1228,7 +1420,21 @@ def calculate_averaged_autocorr(
 def check_convergence(
     data: Union[pd.Series, List[float]], window_size: int = 5, autocorr_threshold: float = 0.1
 ) -> bool:
-    """Check for convergence using autocorrelation and variance criteria. Enhanced with multiple convergence indicators."""
+    """Check whether a metric series has converged.
+
+    Uses two criteria (either sufficient): low autocorrelation in a
+    recent window, or low recent variance relative to overall variance.
+
+    Args:
+        data: A ``pd.Series`` or list of metric values.
+        window_size: Number of recent values to examine. Default 5.
+        autocorr_threshold: Maximum acceptable autocorrelation at lag 1
+            for convergence. Default 0.1.
+
+    Returns:
+        ``True`` if either convergence criterion is met.
+    """
+
     if not isinstance(data, pd.Series):
         data = pd.Series(data)
 
@@ -1266,7 +1472,22 @@ def check_convergence(
 def get_confusion_matrix_df(
     predictions: np.ndarray, true_labels: np.ndarray, class_names: Dict[int, str]
 ) -> pd.DataFrame:
-    """Generate confusion matrix DataFrame from predictions and true labels."""
+    """Generate confusion matrix DataFrame from predictions and true labels.""" """Generate a confusion matrix as a labeled DataFrame.
+
+Args:
+    predictions: Array of predicted class indices.
+    true_labels: Array of true class indices.
+    class_names: Dict mapping class indices to human-readable names,
+        e.g. ``{0: 'cat', 1: 'dog'}``.
+
+Returns:
+    A square ``pd.DataFrame`` with class names as both row and column
+    labels, suitable for :func:`~ictonyx.plotting.plot_confusion_matrix`.
+
+Raises:
+    ValueError: If ``predictions`` and ``true_labels`` differ in length.
+"""
+
     _check_sklearn()
 
     if len(predictions) != len(true_labels):

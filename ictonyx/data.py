@@ -150,11 +150,24 @@ class DataHandler(ABC):
 
 
 class ImageDataHandler(DataHandler):
-    """
-    A concrete data handler for image datasets.
+    """Data handler for image classification datasets in directory format.
 
-    This class is specialized for datasets with a directory structure where
-    folder names are class labels.
+    Expects a directory structure where each subdirectory is a class
+    label containing image files. Images are loaded, resized, normalized
+    to [0, 1], and split into train/val/test sets.
+
+    Requires TensorFlow for image preprocessing. Install with
+    ``pip install tensorflow``.
+
+    Args:
+        data_path: Path to the root directory containing class subdirectories.
+        image_size: Target ``(height, width)`` for resizing, e.g. ``(64, 64)``.
+        color_mode: ``'rgb'`` (3 channels) or ``'grayscale'`` (1 channel).
+            Default ``'rgb'``.
+
+    Raises:
+        ValueError: If the path is not a directory, contains no class
+            subdirectories, or no valid image files are found.
     """
 
     @property
@@ -394,9 +407,23 @@ class ImageDataHandler(DataHandler):
 
 
 class TabularDataHandler(DataHandler):
-    """
-    A concrete data handler for structured, tabular data.
-    Accepts either a file path (CSV) or a pandas DataFrame.
+    """Data handler for structured tabular data from CSV files or DataFrames.
+
+    Loads data, validates columns, and splits into train/val/test sets.
+    Supports both file-path and in-memory DataFrame initialization.
+
+    Args:
+        data: Path to a CSV file, or a ``pd.DataFrame``.
+        target_column: Name of the column containing labels.
+        features: Optional list of feature column names. If ``None``,
+            all columns except ``target_column`` are used.
+        sep: CSV delimiter (only used for file paths). Default ``','``.
+        header: Header row number (only used for file paths). Default 0.
+
+    Raises:
+        ValueError: If ``data`` or ``target_column`` is missing, or if
+            the target column is not found in the data.
+        TypeError: If ``data`` is neither a string nor a DataFrame.
     """
 
     @property
@@ -567,8 +594,21 @@ class TabularDataHandler(DataHandler):
 
 
 class TextDataHandler(DataHandler):
-    """
-    A concrete data handler for text data.
+    """Data handler for text classification datasets from CSV files.
+
+    Loads text data from a CSV, tokenizes using a Keras ``Tokenizer``,
+    pads sequences to uniform length, and splits into train/val/test.
+
+    Requires TensorFlow for tokenization and padding. Install with
+    ``pip install tensorflow``.
+
+    Args:
+        data_path: Path to a CSV file containing text and label columns.
+        text_column: Name of the column containing raw text.
+        target_column: Name of the column containing labels.
+        max_features: Maximum vocabulary size. Default 10000.
+        max_length: Maximum sequence length (longer texts are truncated,
+            shorter texts are padded). Default 200.
     """
 
     @property
@@ -737,8 +777,17 @@ class TextDataHandler(DataHandler):
 
 
 class TimeSeriesDataHandler(DataHandler):
-    """
-    A concrete data handler for time series data.
+    """Data handler for time series data with sliding window extraction.
+
+    Converts a sequential dataset into supervised learning format by
+    creating input windows of length ``sequence_length`` and predicting
+    the next value. Supports both CSV files and DataFrames.
+
+    Args:
+        data_path: Path to a CSV file.
+        target_column: Name of the column to predict.
+        sequence_length: Number of time steps in each input window.
+        features: Optional list of feature column names.
     """
 
     @property
@@ -870,9 +919,18 @@ class TimeSeriesDataHandler(DataHandler):
 
 
 class ArraysDataHandler(DataHandler):
-    """
-    A concrete data handler for raw Numpy arrays or Lists.
-    Useful when data is already loaded into memory as (X, y) tuples.
+    """Data handler for pre-loaded in-memory arrays.
+
+    Use this when data is already available as numpy arrays or Python
+    lists, bypassing file I/O entirely. This is the handler used when
+    passing ``(X, y)`` tuples to :func:`~ictonyx.api.variability_study`.
+
+    Args:
+        X: Feature array or list. Converted to ``np.ndarray`` on init.
+        y: Label array or list. Must have the same length as ``X``.
+
+    Raises:
+        ValueError: If ``X`` and ``y`` have different lengths.
     """
 
     @property

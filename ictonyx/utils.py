@@ -14,14 +14,29 @@ logger = settings.logger
 
 
 def save_object(obj: Any, path: str):
-    """Saves a Python object to a file using pickle."""
+    """Serialize a Python object to disk using pickle.
+
+    Args:
+        obj: Any picklable Python object.
+        path: Destination file path (typically ``.pkl``).
+    """
     with open(path, "wb") as f:
         pickle.dump(obj, f)
     logger.info(f"Object saved to {path}")
 
 
 def load_object(path: str) -> Any:
-    """Loads a Python object from a file using pickle."""
+    """Deserialize a Python object from a pickle file.
+
+    Args:
+        path: Path to the pickle file.
+
+    Returns:
+        The deserialized object.
+
+    Raises:
+        FileNotFoundError: If ``path`` does not exist.
+    """
     with open(path, "rb") as f:
         obj = pickle.load(f)
     logger.info(f"Object loaded from {path}")
@@ -35,8 +50,21 @@ def train_val_test_split(
     val_size: float = 0.2,
     random_state: int = 42,
 ) -> Tuple:
-    """
-    Splits data into training, validation, and test sets.
+    """Split arrays into training, validation, and test sets.
+
+    Performs two sequential splits: first separating the test set, then
+    splitting the remainder into train and validation.
+
+    Args:
+        X: Feature array or DataFrame.
+        y: Label array or Series.
+        test_size: Fraction of data reserved for test. Default 0.2.
+        val_size: Fraction of the *training* remainder reserved for
+            validation. Default 0.2.
+        random_state: Seed for reproducibility. Default 42.
+
+    Returns:
+        Tuple of ``(X_train, X_val, X_test, y_train, y_val, y_test)``.
     """
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state

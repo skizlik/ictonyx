@@ -340,6 +340,18 @@ class BaseModelWrapper(ABC):
 if TENSORFLOW_AVAILABLE:
 
     class KerasModelWrapper(BaseModelWrapper):
+        """Wrapper for Keras / TensorFlow models.
+
+        Handles the three common Keras data formats (``tf.data.Dataset``,
+        ``tf.keras.utils.Sequence``, and ``(X, y)`` numpy tuples), stores
+        training history as a :class:`TrainingResult`, and performs
+        TensorFlow session cleanup on :meth:`cleanup`.
+
+        Args:
+            model: A compiled ``tf.keras.Model`` instance.
+            model_id: Optional string identifier for logging.
+        """
+
         def __init__(self, model: KerasModel, model_id: str = ""):
             super().__init__(model, model_id)
 

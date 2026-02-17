@@ -265,7 +265,23 @@ def plot_roc_curve(
     title: str = "",
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
-    """Plots the ROC curve for a multi-class model."""
+    """Plot per-class ROC curves with AUC values.
+
+    Binarizes labels using one-vs-rest and plots one ROC curve per class.
+    Requires the model wrapper to have a ``predict_proba`` method.
+
+    Args:
+        model_wrapper: A trained :class:`~ictonyx.core.BaseModelWrapper`
+            with ``predict_proba`` support.
+        X_test: Test feature array.
+        y_test: True class labels (integer-encoded).
+        title: Plot title. Default: ``'Receiver Operating Characteristic'``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if the model does
+        not support probability predictions.
+    """
     _check_plotting()
     _check_sklearn_metrics()
     _check_tensorflow_utils()
@@ -309,7 +325,23 @@ def plot_precision_recall_curve(
     title: str = "",
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
-    """Plots the Precision-Recall curve for a multi-class model."""
+    """Plot per-class precision-recall curves with AUC values.
+
+    Binarizes labels using one-vs-rest and plots one PR curve per class.
+    Requires the model wrapper to have a ``predict_proba`` method.
+
+    Args:
+        model_wrapper: A trained :class:`~ictonyx.core.BaseModelWrapper`
+            with ``predict_proba`` support.
+        X_test: Test feature array.
+        y_test: True class labels (integer-encoded).
+        title: Plot title. Default: ``'Precision-Recall Curve'``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if the model does
+        not support probability predictions.
+    """
     _check_plotting()
     _check_sklearn_metrics()
     _check_tensorflow_utils()
@@ -641,7 +673,27 @@ def plot_pairwise_comparison_matrix(
     annotate_significance: bool = True,
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
-    """Creates a matrix visualization of pairwise comparison results."""
+    """Heatmap matrix of pairwise p-values, significance, and effect sizes.
+
+    Creates 2–3 side-by-side heatmaps showing p-values, binary
+    significance indicators, and (optionally) effect sizes for every
+    pair of models.
+
+    Args:
+        comparison_results: Dict returned by
+            :func:`~ictonyx.api.compare_models`, containing a
+            ``'pairwise_comparisons'`` key.
+        figsize: Figure dimensions. Default ``(12, 10)``.
+        show_effect_sizes: If ``True``, include an effect-size heatmap.
+            Default ``True``.
+        annotate_significance: If ``True``, mark significant cells with
+            asterisks. Default ``True``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if no pairwise
+        comparisons are present.
+    """
     _check_plotting()
     _check_seaborn()
 
@@ -968,7 +1020,22 @@ def plot_pacf_vs_lag(
     alpha: float = 0.05,
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
-    """Plots PACF with confidence intervals."""
+    """Plot partial autocorrelation function (PACF) with confidence bands.
+
+    Requires ``statsmodels``. PACF isolates the direct correlation at
+    each lag, removing the influence of intermediate lags.
+
+    Args:
+        data: A ``pd.Series`` or list of metric values ordered by run.
+        max_lag: Maximum lag to compute. Default 20.
+        title: Plot title. Default ``'Partial Autocorrelation of Loss'``.
+        alpha: Confidence level for the bands. Default 0.05 (95% CI).
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if ``statsmodels``
+        is not installed or the series is too short.
+    """
     _check_matplotlib()
     try:
         from statsmodels.tsa.stattools import pacf
@@ -1005,7 +1072,21 @@ def plot_averaged_pacf(
     conf_level: float = 0.95,
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
-    """Plots mean PACF across multiple runs."""
+    """Plot averaged partial autocorrelation with error bands across runs.
+
+    Shows the mean PACF at each lag with ±1 standard deviation shaded.
+
+    Args:
+        lags: List of integer lag values.
+        mean_pacf: Mean PACF at each lag.
+        std_pacf: Standard deviation of PACF at each lag.
+        title: Plot title. Default ``'Averaged Partial Autocorrelation of Loss'``.
+        conf_level: Confidence level for reference lines. Default 0.95.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
+    """
     _check_matplotlib()
     fig = plt.figure(figsize=(10, 6))
     plt.plot(lags, mean_pacf, "b-", label="Mean PACF", linewidth=2)

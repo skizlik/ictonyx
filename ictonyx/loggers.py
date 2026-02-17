@@ -35,11 +35,26 @@ except ImportError:
 
 
 class BaseLogger:
-    """
-    A base class for logging experiment data.
+    """Base experiment logger with in-memory history tracking.
 
-    The logger stores all logged data in a history object and can optionally
-    print it to the console.
+    Stores parameters and per-step metrics in a history dict. All
+    ``log_*`` methods for artifacts, models, and figures are no-ops in
+    the base class — subclasses (e.g. :class:`MLflowLogger`) override
+    them to persist data to external systems.
+
+    This class is used as the default logger when no tracker is passed
+    to :class:`~ictonyx.runners.ExperimentRunner`.
+
+    Args:
+        verbose: If ``True``, print activity to stdout. Default ``True``.
+        print_params: If ``True`` and ``verbose``, print logged parameters.
+            Default ``False``.
+        print_metrics: If ``True`` and ``verbose``, print logged metrics.
+            Default ``False``.
+
+    Attributes:
+        history: Dict with keys ``'params'`` (Dict) and ``'metrics'``
+            (List of ``{'key', 'value', 'step'}`` dicts).
     """
 
     def __init__(
@@ -101,8 +116,24 @@ class BaseLogger:
 
 
 class MLflowLogger(BaseLogger):
-    """
-    An implementation of the BaseLogger for MLflow with comprehensive tracking capabilities.
+    """Experiment logger backed by MLflow.
+
+    Extends :class:`BaseLogger` to persist parameters, metrics, artifacts,
+    models, and figures to an MLflow tracking server. Creates a new MLflow
+    run on initialization and ends it on :meth:`end_run`.
+
+    Requires ``mlflow``. Install with ``pip install mlflow``.
+
+    Args:
+        run_name: Optional display name for this MLflow run.
+        experiment_name: MLflow experiment name. Created if it does not
+            exist. Default ``'ictonyx_experiment'``.
+        tracking_uri: MLflow tracking server URI. If ``None``, uses the
+            local ``mlruns/`` directory. Default ``None``.
+        verbose: Print logging activity to stdout. Default ``True``.
+
+    Raises:
+        ImportError: If ``mlflow`` is not installed.
     """
 
     def __init__(

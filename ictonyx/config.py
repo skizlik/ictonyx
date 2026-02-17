@@ -4,11 +4,29 @@ from typing import Any, Dict, ItemsView, KeysView, List, Optional, Union, Values
 
 
 class ModelConfig:
-    """
-    A class to manage and store all model training parameters and hyperparameters.
+    """Training configuration container with validation and factory methods.
 
-    Provides explicit parameter access methods and common parameter properties
-    for better IDE support and clearer error messages.
+    Stores hyperparameters as a flat dictionary with typed property
+    accessors for common parameters (epochs, batch_size, learning_rate).
+    Supports dictionary-style access, method chaining, deep copying, and
+    parameter validation.
+
+    Use the factory classmethods to create pre-configured defaults for
+    common model types.
+
+    Args:
+        params: Dictionary of hyperparameters. If ``None``, an empty
+            config is created.
+
+    Example::
+
+        config = ModelConfig({'epochs': 20, 'batch_size': 64})
+        config.learning_rate = 0.001
+        config.set('dropout', 0.3).set('optimizer', 'adam')
+
+    See Also:
+        :meth:`from_defaults`, :meth:`for_cnn`, :meth:`for_xgboost`,
+        :meth:`for_variability_study`
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
@@ -186,7 +204,14 @@ class ModelConfig:
 
     @classmethod
     def from_defaults(cls) -> "ModelConfig":
-        """Returns a config with general, reasonable defaults including memory management."""
+        """Create a config with sensible defaults for a generic training run.
+
+        Returns:
+            A :class:`ModelConfig` with ``epochs=10``, ``batch_size=32``,
+            ``learning_rate=0.001``, ``verbose=0``, and
+            ``cleanup_threshold=0.8``.
+        """
+
         return cls(
             {
                 "epochs": 10,
@@ -199,7 +224,18 @@ class ModelConfig:
 
     @classmethod
     def for_cnn(cls, input_shape: tuple = (128, 128, 3), num_classes: int = 10) -> "ModelConfig":
-        """Returns a config with defaults suitable for a CNN model."""
+        """Create a config with defaults suitable for a CNN model.
+
+        Extends :meth:`from_defaults` with CNN-specific parameters and a
+        more aggressive cleanup threshold (0.75) for memory-intensive models.
+
+        Args:
+            input_shape: Spatial dimensions and channels, e.g. ``(64, 64, 3)``.
+            num_classes: Number of output classes.
+
+        Returns:
+            A :class:`ModelConfig` with CNN-appropriate defaults.
+        """
         base_config = cls.from_defaults()
         base_config.update(
             {
@@ -214,7 +250,19 @@ class ModelConfig:
 
     @classmethod
     def for_xgboost(cls, num_classes: int = 10) -> "ModelConfig":
-        """Returns a config with defaults suitable for an XGBoost model."""
+        """Create a config with defaults suitable for an XGBoost model.
+
+        Extends :meth:`from_defaults` with ``n_estimators=180``,
+        ``max_depth=7``, and the appropriate objective function
+        (``binary:logistic`` for 2 classes, ``multi:softprob`` otherwise).
+
+        Args:
+            num_classes: Number of output classes.
+
+        Returns:
+            A :class:`ModelConfig` with XGBoost-appropriate defaults.
+        """
+
         base_config = cls.from_defaults()
         base_config.update(
             {
@@ -227,7 +275,18 @@ class ModelConfig:
 
     @classmethod
     def for_variability_study(cls, base_config: "ModelConfig", num_runs: int = 5) -> "ModelConfig":
-        """Create config specifically for variability studies."""
+        """Create a config for a variability study from an existing base config.
+
+        Copies the base config and adds study-specific parameters
+        (``num_runs``, ``epochs_per_run``).
+
+        Args:
+            base_config: An existing :class:`ModelConfig` to use as a template.
+            num_runs: Number of independent training runs. Default 10.
+
+        Returns:
+            A new :class:`ModelConfig` with study parameters added.
+        """
         study_config = base_config.copy()
         study_config.set("num_runs", num_runs)
         study_config.set("epochs_per_run", base_config.get("epochs", 10))

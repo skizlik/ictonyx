@@ -58,7 +58,8 @@ RUN pip --default-timeout=120 install \
     sphinx \
     sphinx-rtd-theme \
     numpydoc \
-    ipywidgets
+    ipywidgets \
+    tqdm
 
 # Set Environment
 ENV TF_CPP_MIN_LOG_LEVEL=2

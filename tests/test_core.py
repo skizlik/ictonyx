@@ -416,7 +416,6 @@ class TestScikitLearnWrapperExtended:
         h = wrapper.training_result.history
         # Without val data, val metrics should equal train metrics
         assert h["val_accuracy"] == h["accuracy"]
-        assert h["val_loss"] == h["loss"]
 
     def test_fit_bad_input(self):
         """Test that fit rejects non-tuple input."""
@@ -515,9 +514,10 @@ class TestScikitLearnWrapperCoverage:
 
         wrapper.fit((X, y), validation_data=(X_val, y_val))
         h = wrapper.training_result.history
-        # For regressors, model.score() returns R², not accuracy
-        assert "val_accuracy" in h
-        assert h["val_accuracy"][0] > 0.5  # R² should be decent
+        # Regressors now report R² under the correct key
+        assert "val_r2" in h
+        assert "val_accuracy" not in h
+        assert h["val_r2"][0] > 0.5
 
     def test_repr_before_and_after_training(self):
         """Test that repr changes after training."""

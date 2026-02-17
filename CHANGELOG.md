@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.3] - 2026-02-17
+
+### Fixed
+- `ScikitLearnModelWrapper.fit()` now reports `r2`/`val_r2` for regressors
+  instead of mislabeling R² as `accuracy`/`val_accuracy`. Classifier
+  history keys are unchanged.
+
+
 ## [0.3.2] - 2026-02-15
 
 ### Added

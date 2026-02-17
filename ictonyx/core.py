@@ -749,29 +749,38 @@ if SKLEARN_AVAILABLE:
                 # Fit the model (sklearn models ignore epochs/batch_size/verbose from signature)
                 self.model.fit(X_train, y_train, **sklearn_kwargs)
 
-                # Calculate training accuracy
-                train_accuracy = self.model.score(X_train, y_train)
+                # Detect classifier vs regressor
+                is_classifier = hasattr(self.model, "predict_proba") or hasattr(
+                    self.model, "classes_"
+                )
 
-                # Create mock history dictionary (sklearn trains in one "epoch")
-                history_dict = {
-                    "accuracy": [train_accuracy],  # Training accuracy
-                    "loss": [1.0 - train_accuracy],  # Mock loss as 1 - accuracy
-                }
+                # Calculate training score (accuracy for classifiers, R² for regressors)
+                train_score = self.model.score(X_train, y_train)
 
-                # Add validation metrics if validation data provided
+                # Calculate validation score
                 if (
                     validation_data is not None
                     and isinstance(validation_data, tuple)
                     and len(validation_data) == 2
                 ):
                     X_val, y_val = validation_data
-                    val_accuracy = self.model.score(X_val, y_val)
-                    history_dict["val_accuracy"] = [val_accuracy]
-                    history_dict["val_loss"] = [1.0 - val_accuracy]
+                    val_score = self.model.score(X_val, y_val)
                 else:
-                    # ExperimentRunner expects validation metrics - use training metrics as fallback
-                    history_dict["val_accuracy"] = [train_accuracy]
-                    history_dict["val_loss"] = [1.0 - train_accuracy]
+                    val_score = train_score
+
+                # Build history with task-appropriate metric names
+                if is_classifier:
+                    history_dict = {
+                        "accuracy": [train_score],
+                        "loss": [1.0 - train_score],
+                        "val_accuracy": [val_score],
+                        "val_loss": [1.0 - val_score],
+                    }
+                else:
+                    history_dict = {
+                        "r2": [train_score],
+                        "val_r2": [val_score],
+                    }
 
                 self.training_result = TrainingResult(history=history_dict)
 

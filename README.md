@@ -24,7 +24,7 @@ Ictonyx runs a model multiple times and provides complete distributions for mode
 pip install ictonyx
 ```
 
-Requires Python 3.10+. Current release: **0.3.2**
+Requires Python 3.10+. Current release: **0.3.3**
 ([changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/))
 
 ## Quick Start: sklearn

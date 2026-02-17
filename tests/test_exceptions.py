@@ -234,3 +234,42 @@ class TestIctonyxErrorExtended:
     def test_statistical_test_is_value_error(self):
         """Test that StatisticalTestError is also a ValueError."""
         assert issubclass(StatisticalTestError, ValueError)
+
+
+class TestConfigurationErrorInit:
+    """ConfigurationError __init__ with all kwargs and factory variants."""
+
+    def test_init_with_all_kwargs(self):
+        err = ConfigurationError(
+            "bad config",
+            config_info={"source": "file"},
+            invalid_params=["lr", "batch_size"],
+            valid_options={"lr": [0.001, 0.01]},
+        )
+        assert err.invalid_params == ["lr", "batch_size"]
+        assert err.valid_options == {"lr": [0.001, 0.01]}
+        assert err.config_info == {"source": "file"}
+
+    def test_init_defaults_to_empty(self):
+        err = ConfigurationError("something broke")
+        assert err.invalid_params == []
+        assert err.valid_options == {}
+        assert err.config_info == {}
+
+    def test_invalid_parameter_with_valid_options(self):
+        err = ConfigurationError.invalid_parameter(
+            "optimizer", "sgd_typo", valid_options=["adam", "sgd", "rmsprop"]
+        )
+        assert "Valid options" in str(err)
+
+    def test_invalid_parameter_with_both(self):
+        err = ConfigurationError.invalid_parameter(
+            "depth", -1, valid_options=[1, 2, 3], valid_range=(1, 100)
+        )
+        assert "Valid options" in str(err)
+        assert "Valid range" in str(err)
+
+    def test_invalid_parameter_no_suggestions(self):
+        err = ConfigurationError.invalid_parameter("foo", "bar")
+        assert "foo" in str(err)
+        assert "bar" in str(err)

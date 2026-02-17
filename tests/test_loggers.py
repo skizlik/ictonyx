@@ -107,3 +107,37 @@ class TestBaseLogger:
         logger.end_run()
         captured = capsys.readouterr()
         assert captured.out == ""
+
+
+class TestLoggerVerboseBranches:
+    """Verbose output for artifact, model, figure, tags, end_run."""
+
+    def test_verbose_artifact(self, capsys):
+        logger = BaseLogger(verbose=True)
+        logger.log_artifact("/some/artifact.csv")
+        captured = capsys.readouterr()
+        assert "artifact" in captured.out.lower()
+
+    def test_verbose_model(self, capsys):
+        logger = BaseLogger(verbose=True)
+        logger.log_model(None, "my_model")
+        captured = capsys.readouterr()
+        assert "my_model" in captured.out
+
+    def test_verbose_figure(self, capsys):
+        logger = BaseLogger(verbose=True)
+        logger.log_figure(None, "plot.png")
+        captured = capsys.readouterr()
+        assert "plot.png" in captured.out
+
+    def test_verbose_tags(self, capsys):
+        logger = BaseLogger(verbose=True)
+        logger.set_tags({"env": "prod"})
+        captured = capsys.readouterr()
+        assert "env" in captured.out
+
+    def test_verbose_end_run(self, capsys):
+        logger = BaseLogger(verbose=True)
+        logger.end_run()
+        captured = capsys.readouterr()
+        assert len(captured.out) > 0

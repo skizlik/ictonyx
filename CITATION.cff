@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Ictonyx: A Framework for Variability Analysis in Machine Learning Training"
+type: software
+version: 0.3.3
+date-released: "2026-02-17"
+license: MIT
+url: "https://github.com/skizlik/ictonyx"
+repository-code: "https://github.com/skizlik/ictonyx"
+abstract: >-
+  Ictonyx is a Python framework for assessing machine learning model
+  variability and performing rigorous statistical comparisons. It automates
+  the workflow of training a model multiple times with different random
+  seeds, collecting metric distributions, and applying non-parametric
+  statistical tests with effect sizes and bootstrap confidence intervals
+  to determine whether observed performance differences are statistically
+  meaningful.
+keywords:
+  - machine learning
+  - variability analysis
+  - reproducibility
+  - statistical testing
+  - model comparison
+  - training variance
+  - bootstrap confidence intervals
+  - effect size
+authors:
+  - family-names: Kizlik
+    given-names: Stephen
+    email: stephen.kizlik@gmail.com
+    # orcid: "https://orcid.org/0009-0009-2844-2760"  

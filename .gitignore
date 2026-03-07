@@ -94,3 +94,5 @@ coverage.xml
 .pytest_cache/
 *.pytest_cache
 test_output/
+frozen-requirements.txt
+images/var_plot_2.png

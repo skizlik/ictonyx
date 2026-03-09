@@ -389,30 +389,55 @@ def plot_variability_summary(
     metric: str = "accuracy",
     show_histogram: bool = True,
     show_boxplot: bool = False,
+    show_mean_lines: bool = True,
+    show_train: bool = True,
+    show_val: bool = True,
+    histogram_orientation: str = "vertical",
+    alpha: Optional[float] = None,
+    figsize: Optional[Tuple[float, float]] = None,
+    dpi: int = 300,
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
     """Plot a multi-panel variability summary for a completed study.
 
     Generates a figure with:
 
-    * **Overlaid training curves** — all runs plotted together with a
-      mean line, showing epoch-by-epoch convergence and spread.
-    * **Final metric distribution** — boxplot of final-epoch values,
-      showing the spread of outcomes across runs.
+    * **Overlaid training curves** — all runs plotted together,
+      showing epoch-by-epoch convergence and spread.
+    * **Final metric distribution** — histogram and/or boxplot of
+      final-epoch values, showing the spread of outcomes across runs.
 
     Args:
-        all_runs_metrics: List of per-run DataFrames (one per successful
-            run), as stored in
+        all_runs_metrics_list: List of per-run DataFrames (one per
+            successful run), as stored in
             :attr:`VariabilityStudyResults.all_runs_metrics`.
-        final_val_series: ``pd.Series`` of final-epoch validation metric
-            values across runs.
-        final_test_series: Optional ``pd.Series`` of test-set metric values.
-            If provided, a second boxplot is added.
+        final_metrics_series: ``pd.Series`` of final-epoch validation
+            metric values across runs.
+        final_test_series: Optional ``pd.Series`` of test-set metric
+            values. If provided, a second distribution is added.
         metric: Base metric name for labeling (default ``'accuracy'``).
+        show_histogram: Show histogram panel (default ``True``).
+        show_boxplot: Show boxplot panel (default ``False``).
+        show_mean_lines: Overlay mean training curves on the
+            trajectory panel (default ``True``). Set to ``False``
+            when runs diverge dramatically and the mean is
+            misleading.
+        show_train: Plot training metric curves (default ``True``).
+        show_val: Plot validation metric curves (default ``True``).
+        histogram_orientation: ``'vertical'`` (default) or
+            ``'horizontal'``. Horizontal orientation aligns the
+            distribution with the y-axis of the trajectory panel.
+        alpha: Opacity of individual run curves. ``None`` (default)
+            auto-calculates based on the number of runs.
+        figsize: Figure size as ``(width, height)`` in inches.
+            ``None`` (default) auto-calculates based on the number
+            of panels.
+        dpi: Figure resolution in dots per inch (default ``150``).
         show: Display behavior. See :func:`plot_confusion_matrix`.
 
     Returns:
-        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
+        The ``matplotlib.figure.Figure``, or ``None`` if display
+        is enabled.
     """
 
     _check_plotting()
@@ -421,7 +446,19 @@ def plot_variability_summary(
         settings.logger.warning("No run metrics provided to plot.")
         return None
 
-    # 1. Resolve Columns using smart detection
+    if histogram_orientation not in ("vertical", "horizontal"):
+        raise ValueError(
+            f"histogram_orientation must be 'vertical' or 'horizontal', "
+            f"got '{histogram_orientation}'"
+        )
+    if alpha is not None and not (0 < alpha <= 1):
+        raise ValueError(f"alpha must be between 0 and 1, got {alpha}")
+    if not show_train and not show_val:
+        settings.logger.warning(
+            "Both show_train and show_val are False. " "Training curves panel will be empty."
+        )
+
+    # Resolve Columns using smart detection
     sample_run = all_runs_metrics_list[0]
     train_col, val_col = _find_metric_columns(sample_run, metric)
 
@@ -433,7 +470,11 @@ def plot_variability_summary(
 
     # Setup layout
     num_plots = 1 + int(show_histogram) + int(show_boxplot)
-    fig, axes = plt.subplots(1, num_plots, figsize=(7 * num_plots, 6))
+
+    if figsize is None:
+        figsize = (7 * num_plots, 6)
+    fig, axes = plt.subplots(1, num_plots, figsize=figsize, dpi=dpi)
+
     if num_plots == 1:
         axes = [axes]
 
@@ -444,16 +485,28 @@ def plot_variability_summary(
     # Clean metric name for display
     metric_display = metric.replace("val_", "").replace("train_", "").replace("_", " ").title()
 
+    # Calculate alpha if not provided
+    if alpha is None:
+        n_runs = len(all_runs_metrics_list)
+        if n_runs <= 3:
+            alpha = 0.6
+        elif n_runs <= 10:
+            alpha = 0.4
+        elif n_runs <= 30:
+            alpha = 0.3
+        else:
+            alpha = max(0.1, 1.5 / n_runs)
+
     for df in all_runs_metrics_list:
         epochs = range(1, len(df) + 1)
-        if train_col and train_col in df.columns:
-            ax.plot(epochs, df[train_col], color=colors["train"], alpha=0.3)
-        if val_col and val_col in df.columns:
-            ax.plot(epochs, df[val_col], color=colors["val"], alpha=0.3)
+        if show_train and train_col and train_col in df.columns:
+            ax.plot(epochs, df[train_col], color=colors["train"], alpha=alpha)
+        if show_val and val_col and val_col in df.columns:
+            ax.plot(epochs, df[val_col], color=colors["val"], alpha=alpha)
 
     # Add Mean Lines
-    if len(all_runs_metrics_list) > 1:
-        if train_col:
+    if show_mean_lines and len(all_runs_metrics_list) > 1:
+        if show_train and train_col:
             try:
                 train_stack = np.array([run[train_col].values for run in all_runs_metrics_list])
                 ax.plot(
@@ -465,8 +518,7 @@ def plot_variability_summary(
                 )
             except ValueError:
                 pass
-
-        if val_col:
+        if show_val and val_col:
             try:
                 val_stack = np.array([run[val_col].values for run in all_runs_metrics_list])
                 ax.plot(
@@ -490,31 +542,51 @@ def plot_variability_summary(
     # PANEL 2: Histogram
     if show_histogram and len(final_metrics_series) > 0:
         ax = axes[plot_idx]
-        sn.histplot(final_metrics_series, kde=True, ax=ax, color=colors["val"], label="Validation")
-        if final_test_series is not None:
-            sn.histplot(final_test_series, kde=True, ax=ax, color=colors["test"], label="Test")
+        if histogram_orientation == "horizontal":
+            sn.histplot(
+                y=final_metrics_series, kde=True, ax=ax, color=colors["val"], label="Validation"
+            )
+            if final_test_series is not None:
+                sn.histplot(
+                    y=final_test_series, kde=True, ax=ax, color=colors["test"], label="Test"
+                )
+            ax.set_xlabel("Frequency")
+            ax.set_ylabel(f"Final {metric_display}")
+        else:
+            sn.histplot(
+                final_metrics_series, kde=True, ax=ax, color=colors["val"], label="Validation"
+            )
+            if final_test_series is not None:
+                sn.histplot(final_test_series, kde=True, ax=ax, color=colors["test"], label="Test")
+            ax.set_xlabel(f"Final {metric_display}")
+            ax.set_ylabel("Frequency")
         ax.set_title(f"Final {metric_display} Distribution")
         ax.legend()
         plot_idx += 1
 
-    # PANEL 3: Boxplot
-    if show_boxplot and len(final_metrics_series) > 0:
-        ax = axes[plot_idx]
-        data = [final_metrics_series]
-        labels = ["Val"]
-        palette = [colors["val"]]
-
-        if final_test_series is not None:
-            data.append(final_test_series)
-            labels.append("Test")
-            palette.append(colors["test"])
-
-        sn.boxplot(data=data, palette=palette, ax=ax)
-        ax.set_xticklabels(labels)
-        ax.set_title("Performance Spread")
-
-    plt.tight_layout()
-    return _finalize_plot(fig, show)
+        # PANEL 3: Boxplot
+        if show_boxplot and len(final_metrics_series) > 0:
+            ax = axes[plot_idx]
+            box_dict = {"Val": pd.Series(final_metrics_series)}
+            if final_test_series is not None:
+                box_dict["Test"] = pd.Series(final_test_series)
+            box_df = pd.DataFrame(box_dict).melt(var_name="Split", value_name=metric_display)
+            palette_map = {"Val": colors["val"]}
+            if final_test_series is not None:
+                palette_map["Test"] = colors["test"]
+            sn.boxplot(
+                data=box_df,
+                x="Split",
+                y=metric_display,
+                hue="Split",
+                palette=palette_map,
+                ax=ax,
+                legend=False,
+            )
+            ax.set_title("Performance Spread")
+            plot_idx += 1
+        plt.tight_layout()
+        return _finalize_plot(fig, show)
 
 
 def plot_comparison_boxplots(

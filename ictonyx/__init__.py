@@ -45,7 +45,13 @@ from .memory import (
 )
 
 # Experiment runners (always available)
-from .runners import ExperimentRunner, VariabilityStudyResults, run_variability_study
+from .runners import (
+    ExperimentRunner,
+    GridStudyResults,
+    VariabilityStudyResults,
+    run_grid_study,
+    run_variability_study,
+)
 
 # Global settings
 from .settings import logger, set_display_plots, set_verbose
@@ -67,6 +73,8 @@ __all__ = [
     "ExperimentRunner",
     "run_variability_study",
     "VariabilityStudyResults",
+    "run_grid_study",
+    "GridStudyResults",
     # Exception classes
     "IctonyxError",
     "DataValidationError",

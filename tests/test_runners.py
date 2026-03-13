@@ -1,6 +1,7 @@
 """Test experiment runners."""
 
-from unittest.mock import MagicMock, Mock
+import itertools
+from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
 import pandas as pd
@@ -8,7 +9,13 @@ import pytest
 
 from ictonyx.config import ModelConfig
 from ictonyx.core import BaseModelWrapper, TrainingResult
-from ictonyx.runners import ExperimentRunner, VariabilityStudyResults, run_variability_study
+from ictonyx.runners import (
+    ExperimentRunner,
+    GridStudyResults,
+    VariabilityStudyResults,
+    run_grid_study,
+    run_variability_study,
+)
 
 
 class MockModel(BaseModelWrapper):
@@ -776,3 +783,235 @@ class TestFinalValAccuraciesProperty:
         # Access through dict
         assert results.final_metrics["val_accuracy"] == [0.8, 0.85, 0.82]
         assert len(results.final_metrics["val_loss"]) == 3
+
+
+class TestGridStudyResults:
+    """Tests for GridStudyResults dataclass and methods."""
+
+    def _make_mock_variability_result(self, mean, sd, n=12):
+        """Helper: construct a minimal VariabilityStudyResults with controlled values."""
+        np.random.seed(42)
+        values = np.random.normal(mean, sd, n).tolist()
+        df = pd.DataFrame(
+            {
+                "train_accuracy": np.linspace(0.3, mean, 10),
+                "val_accuracy": np.linspace(0.2, mean, 10),
+                "train_loss": np.linspace(1.5, 0.5, 10),
+                "val_loss": np.linspace(1.6, 0.6, 10),
+            }
+        )
+        return VariabilityStudyResults(
+            all_runs_metrics=[df] * n,
+            final_metrics={"val_accuracy": values, "train_accuracy": values},
+            final_test_metrics=[{}] * n,
+            seed=42,
+        )
+
+    def _make_grid_results(self):
+        """Helper: construct a minimal GridStudyResults for testing."""
+        param_grid = {"learning_rate": [0.001, 0.0001, 0.00001]}
+        base_config = ModelConfig(
+            {
+                "input_shape": (131, 131, 1),
+                "num_classes": 9,
+                "epochs": 12,
+                "batch_size": 8,
+                "learning_rate": 0.001,
+                "verbose": 0,
+            }
+        )
+        results = {}
+        for lr in param_grid["learning_rate"]:
+            key = GridStudyResults._config_key({"learning_rate": lr})
+            results[key] = self._make_mock_variability_result(mean=0.3 + lr * 100, sd=0.02)
+        return GridStudyResults(
+            results=results, param_grid=param_grid, base_config=base_config, metric="val_accuracy"
+        )
+
+    def test_n_configurations(self):
+        gr = self._make_grid_results()
+        assert gr.n_configurations == 3
+
+    def test_n_runs_per_config(self):
+        gr = self._make_grid_results()
+        assert gr.n_runs_per_config == 12
+
+    def test_config_key_is_sorted(self):
+        key1 = GridStudyResults._config_key({"batch_size": 8, "learning_rate": 0.001})
+        key2 = GridStudyResults._config_key({"learning_rate": 0.001, "batch_size": 8})
+        assert key1 == key2
+
+    def test_get_results_for_config(self):
+        gr = self._make_grid_results()
+        result = gr.get_results_for_config({"learning_rate": 0.001})
+        assert isinstance(result, VariabilityStudyResults)
+        assert result.n_runs == 12
+
+    def test_get_results_for_config_missing_raises(self):
+        gr = self._make_grid_results()
+        with pytest.raises(KeyError):
+            gr.get_results_for_config({"learning_rate": 99.0})
+
+    def test_list_configurations(self):
+        gr = self._make_grid_results()
+        configs = gr.list_configurations()
+        assert len(configs) == 3
+        assert all("learning_rate" in c for c in configs)
+
+    def test_to_dataframe_shape(self):
+        gr = self._make_grid_results()
+        df = gr.to_dataframe()
+        assert len(df) == 3
+        assert "learning_rate" in df.columns
+        assert all(col in df.columns for col in ["mean", "sd", "se", "min", "max", "n"])
+
+    def test_to_dataframe_sorted(self):
+        gr = self._make_grid_results()
+        df = gr.to_dataframe()
+        assert df["learning_rate"].is_monotonic_increasing
+
+    def test_to_dataframe_sample_sd(self):
+        """Verify SD is sample SD (N-1), not population SD (N)."""
+        gr = self._make_grid_results()
+        df = gr.to_dataframe()
+        result = gr.get_results_for_config({"learning_rate": 0.001})
+        values = pd.Series(result.get_metric_values("val_accuracy"))
+        assert df.loc[df["learning_rate"] == 0.001, "sd"].iloc[0] == round(values.std(), 4)
+
+    def test_summarize_returns_string(self):
+        gr = self._make_grid_results()
+        s = gr.summarize()
+        assert isinstance(s, str)
+        assert "Grid Study Results" in s
+        assert "3" in s  # n_configurations
+
+
+class TestRunGridStudy:
+    """Tests for run_grid_study function."""
+
+    def _make_mock_builder(self):
+        """Model builder that returns a minimal mock model."""
+
+        def builder(config):
+            model = MagicMock()
+            model.fit.return_value = MagicMock(
+                history={
+                    "accuracy": [0.3, 0.4, 0.5],
+                    "val_accuracy": [0.25, 0.35, 0.45],
+                    "loss": [1.5, 1.2, 0.9],
+                    "val_loss": [1.6, 1.3, 1.0],
+                }
+            )
+            return model
+
+        return builder
+
+    def test_dry_run_returns_empty_results(self):
+        base_config = ModelConfig(
+            {
+                "input_shape": (10, 10, 1),
+                "num_classes": 2,
+                "epochs": 3,
+                "batch_size": 4,
+                "learning_rate": 0.001,
+                "verbose": 0,
+            }
+        )
+        result = run_grid_study(
+            model_builder=self._make_mock_builder(),
+            data_handler=MagicMock(),
+            base_config=base_config,
+            param_grid={"learning_rate": [0.001, 0.0001]},
+            num_runs=2,
+            dry_run=True,
+        )
+        assert isinstance(result, GridStudyResults)
+        assert result.n_configurations == 0
+
+    def test_empty_param_grid_raises(self):
+        with pytest.raises(ValueError, match="param_grid must contain"):
+            run_grid_study(
+                model_builder=MagicMock(),
+                data_handler=MagicMock(),
+                base_config=MagicMock(),
+                param_grid={},
+            )
+
+    def test_empty_param_values_raises(self):
+        with pytest.raises(ValueError, match="is empty"):
+            run_grid_study(
+                model_builder=MagicMock(),
+                data_handler=MagicMock(),
+                base_config=MagicMock(),
+                param_grid={"learning_rate": []},
+            )
+
+    def test_cartesian_product_count(self):
+        """Verify correct number of configurations from Cartesian product."""
+        param_grid = {"learning_rate": [0.001, 0.0001], "batch_size": [8, 16, 32]}
+        # 2 × 3 = 6 combinations
+        combos = [
+            dict(zip(param_grid.keys(), combo)) for combo in itertools.product(*param_grid.values())
+        ]
+        assert len(combos) == 6
+
+    @patch("ictonyx.runners.run_variability_study")
+    def test_run_grid_study_calls_variability_study_correct_times(self, mock_run):
+        mock_run.return_value = MagicMock(
+            spec=VariabilityStudyResults,
+            n_runs=2,
+            get_metric_values=MagicMock(return_value=[0.5, 0.6]),
+        )
+        base_config = ModelConfig(
+            {
+                "input_shape": (10, 10, 1),
+                "num_classes": 2,
+                "epochs": 3,
+                "batch_size": 4,
+                "learning_rate": 0.001,
+                "verbose": 0,
+            }
+        )
+        run_grid_study(
+            model_builder=MagicMock(),
+            data_handler=MagicMock(),
+            base_config=base_config,
+            param_grid={"learning_rate": [0.001, 0.0001, 0.00001]},
+            num_runs=2,
+            use_process_isolation=False,
+        )
+        assert mock_run.call_count == 3
+
+    @patch("ictonyx.runners.run_variability_study")
+    def test_config_override_correct(self, mock_run):
+        """Verify each config passed to run_variability_study has correct lr."""
+        called_lrs = []
+
+        def capture_config(*args, **kwargs):
+            called_lrs.append(kwargs["model_config"]["learning_rate"])
+            return MagicMock(
+                spec=VariabilityStudyResults,
+                n_runs=2,
+                get_metric_values=MagicMock(return_value=[0.5, 0.6]),
+            )
+
+        mock_run.side_effect = capture_config
+        base_config = ModelConfig(
+            {
+                "input_shape": (10, 10, 1),
+                "num_classes": 2,
+                "epochs": 3,
+                "batch_size": 4,
+                "learning_rate": 0.001,
+                "verbose": 0,
+            }
+        )
+        run_grid_study(
+            model_builder=MagicMock(),
+            data_handler=MagicMock(),
+            base_config=base_config,
+            param_grid={"learning_rate": [0.001, 0.0001]},
+            num_runs=2,
+            use_process_isolation=False,
+        )
+        assert set(called_lrs) == {0.001, 0.0001}

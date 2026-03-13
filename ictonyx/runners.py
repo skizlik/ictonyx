@@ -5,6 +5,7 @@ Supports both standard and process-isolated execution modes.
 """
 
 import gc
+import itertools
 import random
 import warnings
 from dataclasses import dataclass, field
@@ -814,6 +815,137 @@ class VariabilityStudyResults:
         )
 
 
+@dataclass
+class GridStudyResults:
+    """Container for grid study results across multiple parameter configurations.
+
+    Returned by :func:`~ictonyx.api.run_grid_study`. Holds one
+    :class:`VariabilityStudyResults` per parameter configuration, the
+    param grid that generated them, and the base config used as the
+    template for all runs.
+
+    Attributes:
+        results:     Dict mapping frozen parameter tuples to
+                     VariabilityStudyResults. Keys are sorted tuples of
+                     (param_name, value) pairs for hashability and
+                     deterministic ordering.
+        param_grid:  The original param_grid dict passed by the caller.
+        base_config: The ModelConfig used as the template for all runs.
+        metric:      The primary metric used for summary statistics.
+    """
+
+    results: Dict[Tuple, VariabilityStudyResults]
+    param_grid: Dict[str, List[Any]]
+    base_config: "ModelConfig"
+    metric: str = "val_accuracy"
+
+    @staticmethod
+    def _config_key(param_combo: Dict[str, Any]) -> Tuple:
+        """Convert a parameter combination dict to a hashable, sorted tuple key."""
+        return tuple(sorted(param_combo.items()))
+
+    @property
+    def n_configurations(self) -> int:
+        """Total number of parameter configurations run."""
+        return len(self.results)
+
+    @property
+    def n_runs_per_config(self) -> int:
+        """Number of runs per configuration (from first result)."""
+        if not self.results:
+            return 0
+        return next(iter(self.results.values())).n_runs
+
+    def get_results_for_config(self, param_combo: Dict[str, Any]) -> VariabilityStudyResults:
+        """Retrieve VariabilityStudyResults for a specific parameter combination.
+
+        Args:
+            param_combo: Dict of parameter names to values, e.g.
+                         {'learning_rate': 0.001, 'batch_size': 8}
+
+        Returns:
+            :class:`VariabilityStudyResults` for that configuration.
+
+        Raises:
+            KeyError: If the configuration was not found in results.
+        """
+        key = self._config_key(param_combo)
+        if key not in self.results:
+            raise KeyError(
+                f"Configuration {param_combo} not found in results. "
+                f"Available configurations: {self.list_configurations()}"
+            )
+        return self.results[key]
+
+    def list_configurations(self) -> List[Dict[str, Any]]:
+        """Return list of all parameter combinations as dicts."""
+        return [dict(key) for key in self.results.keys()]
+
+    def to_dataframe(self, metric: Optional[str] = None) -> pd.DataFrame:
+        """Summary DataFrame with one row per configuration.
+
+        Columns: all parameter names, mean, sd, se, min, max, n.
+
+        Args:
+            metric: Metric to summarize. Defaults to self.metric.
+
+        Returns:
+            DataFrame sorted by first parameter in param_grid.
+        """
+        metric = metric or self.metric
+        rows = []
+
+        for key, result in self.results.items():
+            param_combo = dict(key)
+            try:
+                values = pd.Series(result.get_metric_values(metric))
+                n = len(values)
+                row = {
+                    **param_combo,
+                    "mean": round(values.mean(), 4),
+                    "sd": round(values.std(), 4),
+                    "se": round(values.std() / np.sqrt(n), 4),
+                    "min": round(values.min(), 4),
+                    "max": round(values.max(), 4),
+                    "n": n,
+                }
+            except KeyError:
+                row = {
+                    **param_combo,
+                    "mean": np.nan,
+                    "sd": np.nan,
+                    "se": np.nan,
+                    "min": np.nan,
+                    "max": np.nan,
+                    "n": 0,
+                }
+            rows.append(row)
+
+        df = pd.DataFrame(rows)
+        sort_cols = list(self.param_grid.keys())
+        return df.sort_values(sort_cols).reset_index(drop=True)
+
+    def summarize(self, metric: Optional[str] = None) -> str:
+        """Generate text summary of grid study results.
+
+        Args:
+            metric: Metric to summarize. Defaults to self.metric.
+        """
+        metric = metric or self.metric
+        df = self.to_dataframe(metric)
+        lines = [
+            "Grid Study Results",
+            "=" * 40,
+            f"Configurations: {self.n_configurations}",
+            f"Runs per configuration: {self.n_runs_per_config}",
+            f"Total runs: {self.n_configurations * self.n_runs_per_config}",
+            f"Metric: {metric}",
+            "",
+            df.to_string(index=False),
+        ]
+        return "\n".join(lines)
+
+
 def run_variability_study(
     model_builder: Callable[[ModelConfig], BaseModelWrapper],
     data_handler: DataHandler,
@@ -860,3 +992,134 @@ def run_variability_study(
     )
 
     return runner.run_study(num_runs=num_runs, epochs_per_run=epochs_per_run)
+
+
+def run_grid_study(
+    model_builder: Callable,
+    data_handler: "DataHandler",
+    base_config: "ModelConfig",
+    param_grid: Dict[str, List[Any]],
+    num_runs: int = 10,
+    metric: str = "val_accuracy",
+    use_process_isolation: bool = True,
+    dry_run: bool = False,
+) -> GridStudyResults:
+    """Run a variability study across a grid of parameter configurations.
+
+    For each combination in the Cartesian product of ``param_grid``,
+    creates a modified copy of ``base_config``, runs a full variability
+    study, and collects results. All runs use process isolation by default
+    to prevent CUDA memory accumulation across configurations.
+
+    Args:
+        model_builder:         Callable accepting a ModelConfig, returning
+                               a compiled model.
+        data_handler:          DataHandler instance providing train/val data.
+        base_config:           ModelConfig used as template. Values are
+                               overridden per configuration.
+        param_grid:            Dict mapping parameter names to lists of
+                               values to sweep. Example::
+
+                                   {
+                                       'learning_rate': [0.001, 0.0001],
+                                       'batch_size':    [8, 16]
+                                   }
+
+                               Generates the full Cartesian product:
+                               4 configurations × num_runs each.
+        num_runs:              Number of training runs per configuration.
+        metric:                Primary metric for summary statistics.
+        use_process_isolation: If True, each run executes in a subprocess.
+                               Strongly recommended to prevent GPU memory
+                               accumulation across configurations.
+        dry_run:               If True, print execution plan and return
+                               without training. Use to verify configuration
+                               before committing to a long run.
+
+    Returns:
+        :class:`GridStudyResults`
+
+    Raises:
+        ValueError: If param_grid is empty or contains no values.
+
+    Example::
+
+        results = run_grid_study(
+            model_builder=build_cnn,
+            data_handler=data_handler,
+            base_config=config,
+            param_grid={'learning_rate': [0.001, 0.0001, 0.00001]},
+            num_runs=12,
+            use_process_isolation=True
+        )
+        print(results.summarize())
+        df = results.to_dataframe()
+    """
+    if not param_grid:
+        raise ValueError("param_grid must contain at least one parameter with values.")
+
+    for param_name, values in param_grid.items():
+        if not values:
+            raise ValueError(
+                f"param_grid['{param_name}'] is empty. "
+                f"Each parameter must have at least one value."
+            )
+
+    # Build Cartesian product of all parameter combinations
+    param_names = list(param_grid.keys())
+    param_values = list(param_grid.values())
+    combinations = [dict(zip(param_names, combo)) for combo in itertools.product(*param_values)]
+
+    n_configs = len(combinations)
+    total_runs = n_configs * num_runs
+
+    if dry_run:
+        print("Grid Study — Dry Run")
+        print("=" * 40)
+        print(f"Parameter grid:")
+        for name, values in param_grid.items():
+            print(f"  {name}: {values}")
+        print(f"\nConfigurations:         {n_configs}")
+        print(f"Runs per configuration: {num_runs}")
+        print(f"Total training runs:    {total_runs}")
+        print(f"Metric:                 {metric}")
+        print(f"Process isolation:      {use_process_isolation}")
+        print("\nConfigurations to run:")
+        for i, combo in enumerate(combinations, 1):
+            print(f"  {i:>3}. {combo}")
+        return GridStudyResults(
+            results={}, param_grid=param_grid, base_config=base_config, metric=metric
+        )
+
+    results_dict: Dict[Tuple, VariabilityStudyResults] = {}
+
+    for i, param_combo in enumerate(combinations, 1):
+        print(f"\n{'='*50}")
+        print(f"Configuration {i}/{n_configs}: {param_combo}")
+        print(f"{'='*50}")
+
+        config = base_config.copy().update(param_combo)
+
+        result = run_variability_study(
+            model_builder=model_builder,
+            data_handler=data_handler,
+            model_config=config,
+            num_runs=num_runs,
+            use_process_isolation=use_process_isolation,
+        )
+
+        key = GridStudyResults._config_key(param_combo)
+        results_dict[key] = result
+
+        try:
+            values = pd.Series(result.get_metric_values(metric))
+            print(
+                f"  Mean: {values.mean():.4f}  SD: {values.std():.4f}  "
+                f"SE: {values.std()/np.sqrt(len(values)):.4f}"
+            )
+        except KeyError:
+            print(f"  Warning: metric '{metric}' not found in results.")
+
+    return GridStudyResults(
+        results=results_dict, param_grid=param_grid, base_config=base_config, metric=metric
+    )

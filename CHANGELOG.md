@@ -17,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.4] - 2026-03-13
+
+### Added
+- `run_grid_study()` — runs a full variability study across a Cartesian
+  product of parameter configurations. Each configuration executes via
+  `run_variability_study()` with process isolation by default, preventing
+  CUDA memory accumulation across configurations. Supports `dry_run=True`
+  for execution planning before committing to long runs.
+- `GridStudyResults` dataclass — holds one `VariabilityStudyResults` per
+  configuration with summary methods: `to_dataframe()`, `summarize()`,
+  `get_results_for_config()`, `list_configurations()`.
+- Both names exported from `ictonyx` public API.
+- 16 new tests in `test_runners.py`. runners.py coverage 58% → 72%.
+
 ## [0.3.3] - 2026-02-17
 
 ### Fixed

@@ -375,16 +375,6 @@ if TENSORFLOW_AVAILABLE:
             # Basic garbage collection
             gc.collect()
 
-        def _cleanup_model_references(self):
-            """Clear model references."""
-            if hasattr(self, "model"):
-                del self.model
-
-        def _cleanup_tensorflow_session(self):
-            """Clear TensorFlow session and memory."""
-            tf.keras.backend.clear_session()
-            gc.collect()
-
         def fit(self, train_data: Any, validation_data: Optional[Any] = None, **kwargs):
             """
             Fits the encapsulated Keras model.

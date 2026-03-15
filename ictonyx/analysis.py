@@ -1121,6 +1121,65 @@ def compare_two_models(
     return result
 
 
+@dataclass
+class ModelComparisonResults:
+    """Results from a multi-model statistical comparison.
+
+    Returned by :func:`~ictonyx.api.compare_models`. Contains the omnibus
+    test result, pairwise comparisons, raw metric distributions, and
+    convenience methods for summarization.
+
+    Attributes:
+        overall_test: :class:`StatisticalTestResult` for the Kruskal-Wallis
+            omnibus test across all models.
+        raw_data: Dict mapping model names to ``pd.Series`` of final metric
+            values — one value per run. Use for custom analysis or plotting.
+        pairwise_comparisons: Dict mapping comparison names
+            (e.g. ``'ModelA_vs_ModelB'``) to :class:`StatisticalTestResult`.
+            Empty if the omnibus test was not significant.
+        significant_comparisons: List of pairwise comparison names that
+            survived multiple comparison correction.
+        correction_method: The multiple comparison correction applied
+            (``'holm'``, ``'bonferroni'``, or ``'fdr_bh'``).
+        n_models: Number of models compared.
+        metric: The metric that was compared.
+    """
+
+    overall_test: StatisticalTestResult
+    raw_data: Dict[str, pd.Series]
+    pairwise_comparisons: Dict[str, StatisticalTestResult] = field(default_factory=dict)
+    significant_comparisons: List[str] = field(default_factory=list)
+    correction_method: str = "holm"
+    n_models: int = 0
+    metric: str = "val_accuracy"
+
+    def is_significant(self, alpha: float = 0.05) -> bool:
+        """True if the omnibus test is significant at the given alpha."""
+        return self.overall_test.is_significant(alpha)
+
+    def get_summary(self) -> str:
+        """Concise text summary of the comparison results."""
+        lines = [
+            f"Model Comparison Results ({self.metric})",
+            "=" * 40,
+            f"Models compared: {self.n_models}",
+            f"Omnibus test: {self.overall_test.get_summary()}",
+        ]
+
+        if self.pairwise_comparisons:
+            lines.append(f"\nPairwise comparisons ({self.correction_method} correction):")
+            for name, result in self.pairwise_comparisons.items():
+                sig = " *" if result.is_significant() else ""
+                lines.append(f"  {name}: {result.get_summary()}{sig}")
+        else:
+            lines.append("\nNo pairwise comparisons performed (omnibus test not significant).")
+
+        if self.significant_comparisons:
+            lines.append(f"\nSignificant pairs: {', '.join(self.significant_comparisons)}")
+
+        return "\n".join(lines)
+
+
 def compare_multiple_models(
     model_results: Dict[str, pd.Series], alpha: float = 0.05, correction_method: str = "holm"
 ) -> Dict[str, Any]:

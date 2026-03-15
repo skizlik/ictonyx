@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from . import settings
+from .analysis import ModelComparisonResults
 from .analysis import compare_multiple_models as _stat_compare
 from .config import ModelConfig
 from .core import PYTORCH_AVAILABLE, SKLEARN_AVAILABLE, TENSORFLOW_AVAILABLE, BaseModelWrapper
@@ -141,8 +142,9 @@ def compare_models(
     runs: int = 5,
     epochs: int = 10,
     metric: str = "val_accuracy",
+    seed: Optional[int] = None,
     **kwargs,
-) -> Dict[str, Any]:
+) -> ModelComparisonResults:
     """Run variability studies on multiple models and compare them statistically.
 
     Each model is trained ``runs`` times on the same data, producing a
@@ -166,20 +168,15 @@ def compare_models(
         metric: Metric name to compare across models. Must be a key in
             the training history (e.g. ``'val_accuracy'``, ``'val_loss'``,
             ``'val_f1'``). Default ``'val_accuracy'``.
+        seed: Base random seed for reproducibility. All models use the same
+            seed so the comparison can be reproduced exactly. If ``None``,
+            a random seed is generated.
         **kwargs: Forwarded to each :func:`variability_study` call.
 
     Returns:
-        Dict containing:
-
-        * ``'overall_test'``: :class:`~ictonyx.analysis.StatisticalTestResult`
-          for the omnibus test.
-        * ``'pairwise_comparisons'``: Dict of pairwise
-          :class:`~ictonyx.analysis.StatisticalTestResult` objects (if 3+
-          models).
-        * ``'raw_data'``: Dict mapping model names to ``pd.Series`` of
-          metric values.
-        * ``'error'``: Present only if fewer than 2 models produced valid
-          results.
+        :class:`~ictonyx.analysis.ModelComparisonResults` containing the
+        omnibus test, pairwise comparisons, raw metric distributions, and
+        summary methods.
 
     Example::
 
@@ -189,31 +186,33 @@ def compare_models(
             target_column='target',
             runs=20,
             metric='val_accuracy',
+            seed=42,
         )
-        print(results['overall_test'].get_summary())
+        print(results.get_summary())
     """
+
+    # Resolve seed once — all models use the same base seed for reproducibility
+    if seed is None:
+        seed = int(np.random.default_rng().integers(0, 2**31))
 
     handler = auto_resolve_handler(data, target_column=target_column, **kwargs)
     results_store = {}
 
-    settings.logger.info(f"--- Starting Comparison of {len(models)} Models ---")
+    settings.logger.info(f"--- Starting Comparison of {len(models)} Models (seed={seed}) ---")
 
     for model_input in models:
         name = _get_model_name(model_input)
         settings.logger.info(f"Evaluating: {name}")
 
-        # Run study for this specific model
-        # We recurse into variability_study to avoid duplicating logic
-        # Pass the already-resolved handler so all models use identical data splits
         study_results = variability_study(
             model=model_input,
-            data=handler,  # Pass the already resolved handler
+            data=handler,
             runs=runs,
             epochs=epochs,
+            seed=seed,
             **kwargs,
         )
 
-        # Extract metric
         metrics = study_results.get_final_metrics(metric)
         if not metrics:
             settings.logger.warning(f"No '{metric}' data found for {name}")
@@ -221,11 +220,23 @@ def compare_models(
 
         results_store[name] = pd.Series(list(metrics.values()))
 
-    # Statistical Analysis
     if len(results_store) < 2:
-        return {"error": "Insufficient valid results for comparison"}
+        raise ValueError(
+            f"Insufficient valid results for comparison: only {len(results_store)} model(s) "
+            f"produced '{metric}' data. Check that your metric name is correct."
+        )
 
-    return _stat_compare(results_store)
+    stat_results = _stat_compare(results_store)
+
+    return ModelComparisonResults(
+        overall_test=stat_results["overall_test"],
+        raw_data=results_store,
+        pairwise_comparisons=stat_results.get("pairwise_comparisons", {}),
+        significant_comparisons=stat_results.get("significant_comparisons", []),
+        correction_method=stat_results.get("correction_method", "holm"),
+        n_models=len(results_store),
+        metric=metric,
+    )
 
 
 # --- Clean Helpers ---

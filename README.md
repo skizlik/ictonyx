@@ -24,7 +24,7 @@ Ictonyx runs a model multiple times and provides complete distributions for mode
 pip install ictonyx
 ```
 
-Requires Python 3.10+. Current release: **0.3.4**
+Requires Python 3.10+. Current release: **0.3.4f**
 ([changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/))
 
 ## Quick Start: sklearn
@@ -75,7 +75,7 @@ comparison = ix.compare_models(
     runs=20
 )
 
-print(comparison['overall_test'].get_summary())
+print(comparison.get_summary())
 ```
 
 Output:

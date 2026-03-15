@@ -162,6 +162,7 @@ except ImportError:
 # Statistical analysis functions
 try:
     from .analysis import (
+        ModelComparisonResults,
         StatisticalTestResult,
         anova_test,
         apply_multiple_comparison_correction,
@@ -189,6 +190,7 @@ try:
 
     __all__.extend(
         [
+            "ModelComparisonResults",
             "StatisticalTestResult",
             "mann_whitney_test",
             "wilcoxon_signed_rank_test",

@@ -35,7 +35,8 @@ scikit-learn = {version = "^1.3.0", optional = true}
 
 [tool.poetry.extras]
 sklearn = ["scikit-learn"]
-all = ["scikit-learn"]
+isolation = ["cloudpickle", "psutil"]
+all = ["scikit-learn", "cloudpickle", "psutil"]
 
 [tool.poetry.group.ml.dependencies]
 tensorflow = "^2.16.0"

@@ -50,19 +50,6 @@ def _check_plotting():
         )
 
 
-# FIX THIS: eliminate backward compatibility, prefer to update functions
-
-
-def _check_matplotlib():
-    """Alias for _check_plotting for backward compatibility."""
-    _check_plotting()
-
-
-def _check_seaborn():
-    """Alias for _check_plotting for backward compatibility."""
-    _check_plotting()
-
-
 def _check_sklearn_metrics():
     if not HAS_SKLEARN_METRICS:
         raise ImportError(
@@ -767,7 +754,6 @@ def plot_pairwise_comparison_matrix(
         comparisons are present.
     """
     _check_plotting()
-    _check_seaborn()
 
     if "pairwise_comparisons" not in comparison_results:
         settings.logger.warning("No pairwise comparisons to plot.")
@@ -915,7 +901,7 @@ def plot_training_stability(
     Returns:
         The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
     """
-    _check_matplotlib()
+    _check_plotting()
 
     if "error" in stability_results:
         settings.logger.error(f"Cannot plot training stability: {stability_results['error']}")
@@ -1023,7 +1009,7 @@ def plot_autocorr_vs_lag(
     Returns:
         The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
     """
-    _check_matplotlib()
+    _check_plotting()
     if not isinstance(data, pd.Series):
         data = pd.Series(data)
     if len(data) <= max_lag:
@@ -1064,7 +1050,7 @@ def plot_averaged_autocorr(
     Returns:
         The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
     """
-    _check_matplotlib()
+    _check_plotting()
     fig = plt.figure(figsize=(10, 6))
     plt.plot(lags, mean_autocorr, "b-", label="Mean Autocorrelation")
     plt.fill_between(
@@ -1108,7 +1094,7 @@ def plot_pacf_vs_lag(
         The ``matplotlib.figure.Figure``, or ``None`` if ``statsmodels``
         is not installed or the series is too short.
     """
-    _check_matplotlib()
+    _check_plotting()
     try:
         from statsmodels.tsa.stattools import pacf
     except ImportError:
@@ -1159,7 +1145,7 @@ def plot_averaged_pacf(
     Returns:
         The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
     """
-    _check_matplotlib()
+    _check_plotting()
     fig = plt.figure(figsize=(10, 6))
     plt.plot(lags, mean_pacf, "b-", label="Mean PACF", linewidth=2)
     plt.fill_between(

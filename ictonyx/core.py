@@ -373,8 +373,6 @@ if TENSORFLOW_AVAILABLE:
                 pass
 
             # Basic garbage collection
-            import gc
-
             gc.collect()
 
         def _cleanup_model_references(self):
@@ -691,7 +689,6 @@ if SKLEARN_AVAILABLE:
 
         def _cleanup_implementation(self):
             """Scikit-learn specific cleanup (minimal)."""
-            import gc
 
             gc.collect()
 

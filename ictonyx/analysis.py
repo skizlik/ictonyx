@@ -289,13 +289,15 @@ def check_independence(
     """Check for autocorrelation that would violate the independence assumption.
 
     Computes autocorrelation at lags 1 through ``max_lag`` and flags the
-    data as non-independent if any lag exceeds the threshold.
+    data as non-independent if any lag exceeds the significance threshold
+    derived from ``alpha`` using a standard normal approximation.
 
     Args:
         data: A ``pd.Series`` of metric values ordered by run.
         max_lag: Maximum lag to check. Default 5.
-        threshold: Autocorrelation magnitude above which dependence is
-            flagged. Default 0.3.
+        alpha: Significance level for autocorrelation detection. Default 0.05.
+            A lag is flagged as significant if its autocorrelation exceeds
+            ``norm.ppf(1 - alpha/2) / sqrt(n)``.
 
     Returns:
         Tuple of ``(is_independent, details_dict)`` where
@@ -306,15 +308,19 @@ def check_independence(
     autocorr_results = {}
     significant_lags = []
 
+    # Derive critical value from alpha
+    from scipy.stats import norm
+
+    critical_value = norm.ppf(1 - alpha / 2)
+
     for lag in range(1, min(max_lag + 1, len(data) // 4)):
         try:
             autocorr = data.autocorr(lag)
             if not np.isnan(autocorr):
                 autocorr_results[f"lag_{lag}"] = autocorr
 
-                # Rough significance test (assuming normal distribution)
                 se = 1.0 / np.sqrt(len(data))
-                if abs(autocorr) > 1.96 * se:  # 95% confidence
+                if abs(autocorr) > critical_value * se:
                     significant_lags.append(lag)
         except Exception:
             continue

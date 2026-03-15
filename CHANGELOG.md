@@ -17,6 +17,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.5] - 2026-03-15
+
+### Added
+- `ModelComparisonResults` dataclass in `analysis.py` — typed return object for
+  `compare_models()`, replacing the previous untyped `Dict[str, Any]`. Includes
+  `is_significant()` and `get_summary()` convenience methods.
+- `seed` parameter to `compare_models()` — all models in a comparison now use
+  the same base seed, making comparisons reproducible. If `None`, a seed is
+  generated and used consistently across all models.
+- `cloudpickle` and `psutil` declared as optional `[isolation]` extra in
+  `pyproject.toml`. Both were silently used in `memory.py` but undeclared,
+  causing degraded process isolation behavior on clean installs.
+- Python 3.13 classifier added to `pyproject.toml` (already tested in CI).
+
+### Fixed
+- `compare_models()` now raises `ValueError` (with a descriptive message) when
+  fewer than 2 models produce valid results, replacing a silent error-dict return.
+- `compare_models()` `raw_data` field was documented in the return dict but
+  silently absent; now populated correctly in `ModelComparisonResults`.
+- `stop_on_failure_rate` default in `ExperimentRunner.run_study()` corrected
+  from `0.5` to `0.8` to match the documented value in the class docstring.
+- `check_independence()` accepted an `alpha` parameter but ignored it, hardcoding
+  `1.96` as the critical value. Now correctly derives the critical value via
+  `norm.ppf(1 - alpha / 2)`.
+- `check_independence()` docstring listed a phantom `threshold` parameter that
+  did not exist in the function signature; removed.
+- `ScikitLearnModelWrapper.fit()` kwarg allowlist contained `X_idx_sorted` and
+  `check_input`, both removed from scikit-learn in v1.0 (2021). Only
+  `sample_weight` remains.
+- `utils.py` imported `sklearn.model_selection.train_test_split` at module level,
+  causing `import ictonyx` to fail on installs without scikit-learn despite
+  sklearn being optional. Import moved inside `train_val_test_split()`.
+- `test_compare_models_insufficient_data` updated to match new `ValueError`
+  behavior (previously asserted on a silent error-dict return).
+- Dead `gc` re-imports removed from `KerasModelWrapper` and
+  `PyTorchModelWrapper` cleanup methods (`gc` already imported at module level).
+- Dead `_cleanup_model_references()` and `_cleanup_tensorflow_session()` methods
+  removed from `KerasModelWrapper` (defined but never called; logic already
+  present in `_cleanup_implementation()`).
+- Dead `_check_matplotlib()` and `_check_seaborn()` alias functions removed from
+  `plotting.py`; all call sites now use `_check_plotting()` directly. Removed
+  associated `# FIX THIS` comment.
+- Unnecessary `f`-string prefix removed from logger calls with no interpolation
+  in `runners.py`, `explainers.py`, and `tuning.py`.
+
+### Changed
+- `requirements.txt` removed. It incorrectly listed all optional ML frameworks
+  (TensorFlow, PyTorch, MLflow, SHAP) as mandatory dependencies, causing 1.5–3GB
+  of unwanted installs for users who only need sklearn support. Dev environment
+  setup instructions moved to `CONTRIBUTING.md`.
+- `CONTRIBUTING.md` expanded with tiered dev setup: core-only install vs full
+  ML environment, with explicit install commands for each.
+- README corrected: version badge showed 0.3.3 (was 0.3.4).
+- README `compare_models()` example updated to use `results.get_summary()`
+  reflecting the new `ModelComparisonResults` return type.
+
 ## [0.3.4] - 2026-03-13
 
 ### Added

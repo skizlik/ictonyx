@@ -728,8 +728,9 @@ if SKLEARN_AVAILABLE:
                 # Filter out Keras-specific kwargs that sklearn doesn't understand
                 sklearn_kwargs = {}
                 for key, value in kwargs.items():
-                    # Only pass through parameters that sklearn models typically accept
-                    if key in ["sample_weight", "check_input", "X_idx_sorted"]:
+                    # Only pass through sample_weight; all other kwargs are silently ignored
+                    # (epochs, batch_size, verbose, etc. are Keras-specific and don't apply)
+                    if key in ["sample_weight"]:
                         sklearn_kwargs[key] = value
                     # Silently ignore other parameters (like validation_split, callbacks, etc.)
 

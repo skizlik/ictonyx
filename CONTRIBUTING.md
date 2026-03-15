@@ -8,13 +8,27 @@ Fork and clone the repo, then install in dev mode:
 
     git clone https://github.com/skizlik/ictonyx.git
     cd ictonyx
+
+Choose your install depth depending on what you're working on:
+
+**Core only** (statistics, analysis, sklearn — sufficient for most contributions):
+
     pip install -e ".[sklearn]"
     pip install pytest pytest-cov black isort flake8 pre-commit
+
+**Full ML environment** (required if working on Keras, PyTorch, MLflow, or SHAP):
+
+    pip install -e ".[sklearn]"
+    pip install tensorflow
+    pip install torch --index-url https://download.pytorch.org/whl/cpu
+    pip install mlflow shap hyperopt jupyterlab tqdm cloudpickle psutil
+
+Then set up pre-commit hooks:
+
     pre-commit install
     pytest tests/ -v
 
 The `pre-commit install` step sets up git hooks that run black and isort automatically on every commit.
-
 ## Running Tests
 
 Full suite:

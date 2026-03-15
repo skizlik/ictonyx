@@ -438,7 +438,7 @@ class ExperimentRunner:
         self,
         num_runs: int = 5,
         epochs_per_run: Optional[int] = None,
-        stop_on_failure_rate: float = 0.5,
+        stop_on_failure_rate: float = 0.8,
     ) -> "VariabilityStudyResults":
         """Execute the complete variability study.
 

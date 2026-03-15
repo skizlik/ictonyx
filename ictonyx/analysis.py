@@ -1472,21 +1472,21 @@ def check_convergence(
 def get_confusion_matrix_df(
     predictions: np.ndarray, true_labels: np.ndarray, class_names: Dict[int, str]
 ) -> pd.DataFrame:
-    """Generate confusion matrix DataFrame from predictions and true labels.""" """Generate a confusion matrix as a labeled DataFrame.
+    """Generate a confusion matrix as a labeled DataFrame.
 
-Args:
-    predictions: Array of predicted class indices.
-    true_labels: Array of true class indices.
-    class_names: Dict mapping class indices to human-readable names,
-        e.g. ``{0: 'cat', 1: 'dog'}``.
+    Args:
+        predictions: Array of predicted class indices.
+        true_labels: Array of true class indices.
+        class_names: Dict mapping class indices to human-readable names,
+            e.g. ``{0: 'cat', 1: 'dog'}``.
 
-Returns:
-    A square ``pd.DataFrame`` with class names as both row and column
-    labels, suitable for :func:`~ictonyx.plotting.plot_confusion_matrix`.
+    Returns:
+        A square ``pd.DataFrame`` with class names as both row and column
+        labels, suitable for :func:`~ictonyx.plotting.plot_confusion_matrix`.
 
-Raises:
-    ValueError: If ``predictions`` and ``true_labels`` differ in length.
-"""
+    Raises:
+        ValueError: If ``predictions`` and ``true_labels`` differ in length.
+    """
 
     _check_sklearn()
 

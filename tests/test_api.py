@@ -170,14 +170,11 @@ def test_compare_models_insufficient_data(mock_var_study, sample_df):
     empty_results.get_final_metrics.return_value = {}
     mock_var_study.return_value = empty_results
 
-    # Act
-    result = api.compare_models(
-        models=[lambda x: x, lambda x: x], data=sample_df, target_column="target"
-    )
-
-    # Assert
-    assert "error" in result
-    assert result["error"] == "Insufficient valid results for comparison"
+    # Act / Assert — compare_models now raises ValueError instead of returning error dict
+    with pytest.raises(ValueError, match="Insufficient valid results for comparison"):
+        api.compare_models(
+            models=[lambda x: x, lambda x: x], data=sample_df, target_column="target"
+        )
 
 
 # --- Tests for Model Wrapping Helpers ---

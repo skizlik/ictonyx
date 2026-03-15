@@ -6,7 +6,6 @@ from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
 from . import settings
 
@@ -66,6 +65,15 @@ def train_val_test_split(
     Returns:
         Tuple of ``(X_train, X_val, X_test, y_train, y_val, y_test)``.
     """
+
+    try:
+        from sklearn.model_selection import train_test_split
+    except ImportError:
+        raise ImportError(
+            "scikit-learn is required for train_val_test_split. "
+            "Install with: pip install ictonyx[sklearn]"
+        )
+
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state
     )

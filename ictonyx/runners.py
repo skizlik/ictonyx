@@ -128,7 +128,7 @@ class ExperimentRunner:
             self.test_data = data_dict.get("test_data")
 
             if verbose:
-                logger.info(f"Data loaded successfully")
+                logger.info("Data loaded successfully")
                 if self.val_data is None:
                     logger.warning("No validation data provided")
 
@@ -487,7 +487,7 @@ class ExperimentRunner:
         # Print study configuration (System Logger)
         if self.verbose:
             mode = "with process isolation" if self.use_process_isolation else "in standard mode"
-            logger.info(f"\nStarting Variability Study")
+            logger.info("\nStarting Variability Study")
             logger.info(f"  Runs: {num_runs}")
             logger.info(f"  Epochs per run: {epochs_per_run}")
             logger.info(f"  Execution mode: {mode}")
@@ -543,7 +543,7 @@ class ExperimentRunner:
         # Print summary
         if self.verbose:
             successful = len(self.all_runs_metrics)
-            logger.info(f"\nStudy Summary:")
+            logger.info("\nStudy Summary:")
             logger.info(f"  Successful runs: {successful}/{num_runs}")
             if self.failed_runs:
                 logger.warning(f"  Failed runs: {self.failed_runs}")

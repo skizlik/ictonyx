@@ -107,7 +107,7 @@ def plot_shap_summary(
         # Multi-class models return a list of arrays (one per class)
         # Plot the first class by default
         if len(shap_values) > 1:
-            logger.info(f"Multi-class model detected. Plotting SHAP values for class 0.")
+            logger.info("Multi-class model detected. Plotting SHAP values for class 0.")
             logger.info(
                 f"Model has {len(shap_values)} classes. You may want to plot other classes separately."
             )

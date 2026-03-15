@@ -220,7 +220,7 @@ class HyperparameterTuner:
             else:
                 best_metric_value = best_loss
 
-            logger.info(f"\nOptimization completed!")
+            logger.info("\nOptimization completed!")
             logger.info(f"Best {self.metric}: {best_metric_value:.4f}")
             logger.info(f"Best parameters: {best_params}")
 

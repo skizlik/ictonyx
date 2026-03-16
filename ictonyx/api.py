@@ -22,6 +22,13 @@ from .loggers import BaseLogger
 from .runners import VariabilityStudyResults
 from .runners import run_variability_study as _run_study
 
+# Resolve torch.nn once at import time so isinstance checks below are reliable
+# and don't require repeated try/except blocks throughout this module.
+if PYTORCH_AVAILABLE:
+    import torch.nn as _torch_nn
+else:
+    _torch_nn = None
+
 
 def variability_study(
     model: Any,
@@ -317,7 +324,7 @@ def _build_instance_cloner(model: Any) -> Callable:
         )
 
     # PyTorch modules: no clean clone path
-    if "torch" in str(type(model).__mro__):
+    if PYTORCH_AVAILABLE and isinstance(model, _torch_nn.Module):
         raise ValueError(
             "Passing a PyTorch model instance risks weight leakage between runs. "
             "Pass a builder function instead:\n"
@@ -382,13 +389,8 @@ def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
 
         return KerasModelWrapper(obj)
 
-    # PyTorch nn.Module detection
-    if "torch" in str(type(obj).__mro__):
-        if not PYTORCH_AVAILABLE:
-            raise ImportError(
-                "PyTorch is required to auto-wrap torch.nn.Module models. "
-                "Install with: pip install torch"
-            )
+    # PyTorch nn.Module detection via isinstance — reliable, no string heuristics.
+    if PYTORCH_AVAILABLE and isinstance(obj, _torch_nn.Module):
         from .core import PyTorchModelWrapper
 
         return PyTorchModelWrapper(obj)

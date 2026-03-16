@@ -1240,11 +1240,48 @@ if PYTORCH_AVAILABLE:
 
         @classmethod
         def load_model(
-            cls, path: str, model: "nn.Module", task: str = "classification"
+            cls,
+            path: str,
+            model: Optional["nn.Module"] = None,
+            task: str = "classification",
         ) -> "PyTorchModelWrapper":
+            """Load model weights from a state-dict checkpoint.
+
+            .. note::
+                PyTorch state dicts store **weights only**, not the model
+                architecture. The architecture must be supplied via ``model``
+                and must match the one used when :meth:`save_model` was called.
+
+            Args:
+                path: Path to the ``.pt`` checkpoint written by
+                    :meth:`save_model`.
+                model: A ``torch.nn.Module`` instance whose architecture
+                    matches the saved checkpoint. **Required** — raises
+                    ``ValueError`` if omitted.
+                task: ``'classification'`` or ``'regression'``. Overridden
+                    by the value stored in the checkpoint when present.
+
+            Returns:
+                :class:`PyTorchModelWrapper` with weights loaded from *path*.
+
+            Raises:
+                ValueError: If *model* is ``None``.
+
+            Example::
+
+                net = MyNet()   # same architecture used at training time
+                wrapper = PyTorchModelWrapper.load_model("run1.pt", model=net)
             """
-            Load model from a state dict checkpoint.  Return model wrapper.
-            """
+            if model is None:
+                raise ValueError(
+                    "PyTorchModelWrapper.load_model() requires the 'model' argument: "
+                    "a torch.nn.Module instance whose architecture matches the saved "
+                    "checkpoint. PyTorch state dicts contain weights only — the "
+                    "architecture cannot be inferred from the file.\n\n"
+                    "Example:\n"
+                    "    net = MyNetwork()  # same architecture used during training\n"
+                    "    wrapper = PyTorchModelWrapper.load_model('run1.pt', model=net)"
+                )
             checkpoint = torch.load(path, map_location="cpu", weights_only=False)
             model.load_state_dict(checkpoint["model_state_dict"])
             wrapper = cls(model, task=checkpoint.get("task", task))

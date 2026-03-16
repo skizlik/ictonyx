@@ -54,7 +54,7 @@ from .runners import (
 )
 
 # Global settings
-from .settings import logger, set_display_plots, set_verbose
+from .settings import logger, set_display_plots, set_theme, set_verbose
 from .utils import load_object, save_object, train_val_test_split
 
 # Build __all__ list with core functionality
@@ -67,6 +67,7 @@ __all__ = [
     # Settings
     "set_verbose",
     "set_display_plots",
+    "set_theme",
     # Data handling
     "DataHandler",
     # Experiment running

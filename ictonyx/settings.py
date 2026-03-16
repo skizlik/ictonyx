@@ -52,9 +52,31 @@ def set_display_plots(display: bool):
     _DISPLAY_PLOTS = display
 
 
+# Original colours kept here so "default" can restore them.
+_DEFAULT_THEME: Dict[str, str] = {
+    "train": "#1f77b4",
+    "val": "#ff7f0e",
+    "test": "#2ca02c",
+    "baseline": "gray",
+    "significant": "crimson",
+    "grid": "#e6e6e6",
+}
+
+_VALID_THEMES = ("default", "dark", "publication")
+
+
 def set_theme(theme_name: str):
-    """Quickly switch between color presets."""
-    if theme_name == "dark":
+    """Switch the global colour theme used by all plotting functions.
+
+    Args:
+        theme_name: One of ``'default'``, ``'dark'``, or ``'publication'``.
+
+    Raises:
+        ValueError: If *theme_name* is not one of the valid options.
+    """
+    if theme_name == "default":
+        THEME.update(_DEFAULT_THEME)
+    elif theme_name == "dark":
         THEME.update(
             {
                 "train": "#4db8ff",
@@ -66,7 +88,7 @@ def set_theme(theme_name: str):
             }
         )
     elif theme_name == "publication":
-        # Grayscale/High Contrast
+        # Greyscale / high-contrast for print
         THEME.update(
             {
                 "train": "black",
@@ -76,6 +98,11 @@ def set_theme(theme_name: str):
                 "significant": "black",
                 "grid": "#eeeeee",
             }
+        )
+    else:
+        raise ValueError(
+            f"Unknown theme '{theme_name}'. "
+            f"Valid options are: {', '.join(repr(t) for t in _VALID_THEMES)}"
         )
 
 

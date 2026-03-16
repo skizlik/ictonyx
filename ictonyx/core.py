@@ -350,10 +350,29 @@ if TENSORFLOW_AVAILABLE:
         Args:
             model: A compiled ``tf.keras.Model`` instance.
             model_id: Optional string identifier for logging.
+            task: ``'classification'``, ``'regression'``, or ``None``
+                (default). When ``None``, the task is inferred from the
+                compiled loss function. Set this explicitly whenever you
+                use a custom loss function, an uncompiled model, or a
+                loss name not in the built-in recognition list.
+
+        Raises:
+            ValueError: If *task* is not one of the three accepted values.
         """
 
-        def __init__(self, model: KerasModel, model_id: str = ""):
+        def __init__(
+            self,
+            model: KerasModel,
+            model_id: str = "",
+            task: Optional[str] = None,
+        ):
+            if task is not None and task not in ("classification", "regression"):
+                raise ValueError(
+                    f"task must be 'classification', 'regression', or None "
+                    f"(auto-detect from loss), got '{task}'."
+                )
             super().__init__(model, model_id)
+            self.task: Optional[str] = task  # None = auto-detect from loss
 
         def _cleanup_implementation(self):
             """TensorFlow/Keras specific cleanup."""
@@ -523,21 +542,39 @@ if TENSORFLOW_AVAILABLE:
                 return raw_predictions
 
         def _is_classification_model(self) -> bool:
-            """
-            Determine if this is a classification model by examining the loss function.
+            """Determine whether this is a classification or regression model.
+
+            If the wrapper was created with an explicit ``task`` argument,
+            that value is used directly and no inspection is performed.
+            Otherwise the method inspects the compiled loss function.
 
             Returns:
-                bool: True if classification, False if regression
+                ``True`` for classification, ``False`` for regression.
+
+            Raises:
+                ValueError: If the task cannot be determined — i.e. the
+                    model is uncompiled, uses a custom loss, or the loss
+                    name is not in the built-in recognition list — and no
+                    explicit ``task`` was provided at construction.
             """
+            # Honour an explicit task set at construction time.
+            if self.task is not None:
+                return self.task == "classification"
+
+            # --- Step 1: extract the loss name. ---
+            # This accesses model attributes and is the only step that can
+            # raise AttributeError or TypeError from unexpected model state.
             try:
-                # Try to get the loss function
                 if not hasattr(self.model, "loss") or self.model.loss is None:
-                    # Model not compiled, assume classification (most common in this library)
-                    return True
+                    raise ValueError(
+                        "Cannot determine task type: the Keras model has not been "
+                        "compiled (model.loss is None). Either compile the model "
+                        "before wrapping it, or pass task='classification' or "
+                        "task='regression' to KerasModelWrapper()."
+                    )
 
                 loss = self.model.loss
 
-                # Handle different loss function representations
                 if hasattr(loss, "__name__"):
                     loss_name = loss.__name__.lower()
                 elif hasattr(loss, "name"):
@@ -547,47 +584,53 @@ if TENSORFLOW_AVAILABLE:
                 else:
                     loss_name = str(loss).lower()
 
-                # Classification loss functions (comprehensive list)
-                classification_indicators = [
-                    "categorical_crossentropy",
-                    "sparse_categorical_crossentropy",
-                    "binary_crossentropy",
-                    "categorical_hinge",
-                    "sparse_categorical_hinge",
-                    "hinge",
-                    "squared_hinge",
-                    "focal_loss",
-                    "crossentropy",
-                ]
+            except (AttributeError, TypeError) as exc:
+                raise ValueError(
+                    "Cannot determine task type: failed to inspect model.loss "
+                    f"({exc}). Pass task='classification' or task='regression' "
+                    "to KerasModelWrapper()."
+                ) from exc
 
-                # Regression loss functions
-                regression_indicators = [
-                    "mean_squared_error",
-                    "mse",
-                    "mean_absolute_error",
-                    "mae",
-                    "mean_absolute_percentage_error",
-                    "mape",
-                    "huber_loss",
-                    "huber",
-                    "log_cosh",
-                    "logcosh",
-                ]
+            # --- Step 2: match the loss name against known indicators. ---
+            # Pure string logic; no exceptions expected from here on.
+            regression_indicators = [
+                "mean_squared_error",
+                "mse",
+                "mean_absolute_error",
+                "mae",
+                "mean_absolute_percentage_error",
+                "mape",
+                "huber_loss",
+                "huber",
+                "log_cosh",
+                "logcosh",
+            ]
 
-                # Check for regression first (more specific)
-                if any(reg_loss in loss_name for reg_loss in regression_indicators):
-                    return False
+            # Check regression first — names are more specific than classification ones.
+            if any(reg in loss_name for reg in regression_indicators):
+                return False
 
-                # Check for classification
-                if any(cls_loss in loss_name for cls_loss in classification_indicators):
-                    return True
+            classification_indicators = [
+                "categorical_crossentropy",
+                "sparse_categorical_crossentropy",
+                "binary_crossentropy",
+                "categorical_hinge",
+                "sparse_categorical_hinge",
+                "hinge",
+                "squared_hinge",
+                "focal_loss",
+                "crossentropy",
+            ]
 
-                # If we can't determine, assume classification (safer default for this library)
+            if any(cls in loss_name for cls in classification_indicators):
                 return True
 
-            except (AttributeError, TypeError):
-                # Fallback: assume classification
-                return True
+            # Unknown loss — refuse to guess silently.
+            raise ValueError(
+                f"Cannot determine task type from loss function '{loss_name}'. "
+                "Pass task='classification' or task='regression' to "
+                "KerasModelWrapper() to set the task type explicitly."
+            )
 
         def _get_num_classes(self) -> int:
             """
@@ -663,9 +706,21 @@ if TENSORFLOW_AVAILABLE:
             logger.info(f"Model saved to {path}")
 
         @classmethod
-        def load_model(cls, path: str) -> "KerasModelWrapper":
+        def load_model(cls, path: str, task: Optional[str] = None) -> "KerasModelWrapper":
+            """Load a saved Keras model and return a wrapped instance.
+
+            Args:
+                path: Path written by :meth:`save_model` (SavedModel
+                    directory, ``.keras``, or ``.h5`` file).
+                task: ``'classification'``, ``'regression'``, or ``None``
+                    (auto-detect from loss). Pass explicitly when using
+                    custom loss functions.
+
+            Returns:
+                :class:`KerasModelWrapper` wrapping the loaded model.
+            """
             loaded_model = tf.keras.models.load_model(path)
-            return cls(loaded_model)
+            return cls(loaded_model, task=task)
 
 else:
     KerasModelWrapper = None

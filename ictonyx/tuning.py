@@ -133,48 +133,53 @@ class HyperparameterTuner:
                     # Build a new model with the trial hyperparameters
                     wrapped_model = self.model_builder(trial_config)
 
-                    # Train the model
-                    history = wrapped_model.fit(
+                    # Train the model. fit() returns None for all wrappers;
+                    # results are stored on wrapped_model.training_result.
+                    wrapped_model.fit(
                         train_data=self.train_data,
                         validation_data=self.val_data,
-                        epochs=getattr(trial_config, "epochs", 10),
-                        verbose=0,  # Keep training quiet during tuning
+                        epochs=trial_config.get("epochs", 10),
+                        verbose=0,
                     )
 
-                    # Extract the target metric
-                    if not hasattr(history, "history") or not history.history:
-                        raise ValueError("Model training did not return a valid history object")
+                    # Read training result via the standard TrainingResult API.
+                    training_result = wrapped_model.training_result
+                    if training_result is None or not training_result.history:
+                        raise ValueError(
+                            "Model training did not produce a TrainingResult. "
+                            "Ensure the model wrapper sets self.training_result in fit()."
+                        )
 
-                    if self.metric not in history.history:
-                        available_metrics = list(history.history.keys())
+                    history_dict = training_result.history
+
+                    if self.metric not in history_dict:
+                        available_metrics = list(history_dict.keys())
                         raise ValueError(
                             f"Metric '{self.metric}' not found in training history. "
                             f"Available metrics: {available_metrics}"
                         )
 
-                    # Get the final value of the specified metric
-                    metric_values = history.history[self.metric]
+                    metric_values = history_dict[self.metric]
                     if not metric_values:
-                        raise ValueError(f"No values found for metric '{self.metric}'")
+                        raise ValueError(f"No values recorded for metric '{self.metric}'")
 
                     final_metric_value = metric_values[-1]
 
-                    # Validate the metric value
                     if not isinstance(final_metric_value, (int, float)) or np.isnan(
                         final_metric_value
                     ):
-                        raise ValueError(f"Invalid metric value: {final_metric_value}")
+                        raise ValueError(
+                            f"Invalid metric value for '{self.metric}': {final_metric_value}"
+                        )
 
-                    # Convert to loss (hyperopt minimizes)
+                    # Hyperopt minimises; negate metrics that should be maximised.
                     if (
                         "accuracy" in self.metric.lower()
                         or "precision" in self.metric.lower()
                         or "recall" in self.metric.lower()
                     ):
-                        # For metrics we want to maximize, return negative
                         loss = -float(final_metric_value)
                     else:
-                        # For metrics we want to minimize (loss, error)
                         loss = float(final_metric_value)
 
                     logger.info(f"  Result: {self.metric} = {final_metric_value:.4f}")
@@ -182,7 +187,7 @@ class HyperparameterTuner:
                     return {
                         "loss": loss,
                         "status": STATUS_OK,
-                        "eval_time": getattr(history, "params", {}).get("epochs", 0),
+                        "eval_time": training_result.params.get("epochs", 0),
                         "final_metric": final_metric_value,
                     }
 

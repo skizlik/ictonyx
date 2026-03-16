@@ -846,10 +846,46 @@ if SKLEARN_AVAILABLE:
             return metrics
 
         def assess(self, true_labels: np.ndarray) -> Dict[str, float]:
+            """Assess stored predictions against true labels.
+
+            For classifiers (models with ``predict_proba`` or ``classes_``):
+            returns ``{'accuracy': float}``.
+            For regressors: returns ``{'r2': float, 'mse': float, 'mae': float}``.
+
+            Uses the same classifier/regressor detection as :meth:`fit` and
+            :meth:`evaluate` (presence of ``predict_proba`` or ``classes_``).
+
+            Args:
+                true_labels: 1-D array of ground-truth labels or values,
+                    corresponding to the stored ``self.predictions``.
+
+            Returns:
+                Dict of metric name → float.
+
+            Raises:
+                ValueError: If :meth:`predict` has not been called yet.
+            """
             if self.predictions is None:
                 raise ValueError("Model has not generated predictions yet. Call predict() first.")
-            accuracy = accuracy_score(true_labels, self.predictions)
-            return {"accuracy": accuracy}
+
+            is_classifier = hasattr(self.model, "predict_proba") or hasattr(self.model, "classes_")
+
+            if is_classifier:
+                return {"accuracy": float(accuracy_score(true_labels, self.predictions))}
+
+            # Regressor: compute R², MSE, and MAE with pure NumPy so no
+            # additional import is needed inside this already-optional class.
+            preds = np.asarray(self.predictions, dtype=float)
+            labels = np.asarray(true_labels, dtype=float)
+
+            mse = float(np.mean((preds - labels) ** 2))
+            mae = float(np.mean(np.abs(preds - labels)))
+
+            ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
+            ss_res = float(np.sum((labels - preds) ** 2))
+            r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 0.0
+
+            return {"r2": r2, "mse": mse, "mae": mae}
 
         def save_model(self, path: str):
             with open(path, "wb") as f:

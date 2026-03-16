@@ -243,7 +243,10 @@ def check_normality(data: pd.Series, alpha: float = 0.05) -> Tuple[bool, Dict[st
     if not results:
         return False, {"error": "Could not perform normality tests"}
 
-    # Consider normal if any test fails to reject normality
+    # Conservative rule: declare normal only if ALL tests fail to reject H0.
+    # With both Shapiro-Wilk and D'Agostino-Pearson active, this means both
+    # must return p > alpha. This is intentionally strict for the small-sample
+    # ML regime (typically 5–30 runs) where false normality assumptions matter.
     is_normal = all(test["p_value"] > alpha for test in results.values())
 
     return is_normal, results

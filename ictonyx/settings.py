@@ -20,11 +20,13 @@ THEME: Dict[str, str] = {
 # Setup Library Logger
 logger = logging.getLogger("ictonyx")
 logger.setLevel(logging.INFO)
+logger.propagate = False  # Don't bubble up to root logger
 
-# Default handler (StreamHandler to stdout)
-_handler = logging.StreamHandler(sys.stdout)
-_handler.setFormatter(logging.Formatter("%(message)s"))  # Simple format like print()
-logger.addHandler(_handler)
+# Only attach handler if none exists — lets applications configure logging themselves.
+if not logger.handlers:
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(_handler)
 
 
 def set_verbose(verbose: bool):

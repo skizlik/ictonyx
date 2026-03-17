@@ -763,6 +763,49 @@ else:
 if SKLEARN_AVAILABLE:
 
     class ScikitLearnModelWrapper(BaseModelWrapper):
+        """Wrapper for scikit-learn estimators.
+
+        Provides a consistent ``fit`` / ``predict`` / ``evaluate`` / ``assess``
+        interface over any scikit-learn estimator, making it compatible with
+        :class:`~ictonyx.runners.ExperimentRunner` and the variability study
+        pipeline.
+
+        Task type (classification vs. regression) is inferred automatically after
+        ``fit()`` by inspecting the estimator for ``predict_proba`` or
+        ``classes_``. It can also be set explicitly via the ``task`` parameter
+        if auto-detection is unreliable for a custom estimator.
+
+        Because scikit-learn models train in a single call rather than
+        epoch-by-epoch, ``fit()`` produces a one-entry mock history
+        (``{'accuracy': [score], 'val_accuracy': [score]}`` for classifiers,
+        or ``{'r2': [score], 'val_r2': [score]}`` for regressors) so that
+        downstream metric-aggregation code operates uniformly across all
+        wrapper types.
+
+        Args:
+            model: A scikit-learn estimator instance (any object implementing
+                ``fit`` and ``predict``).
+            model_id: Optional string identifier for logging and display.
+            task: ``'classification'``, ``'regression'``, or ``None``
+                (default). When ``None``, the task is inferred after the
+                first ``fit()`` call. Set this explicitly for custom
+                estimators that do not expose ``predict_proba`` or
+                ``classes_``.
+
+        Example::
+
+            from sklearn.ensemble import RandomForestClassifier
+            import ictonyx as ix
+
+            wrapper = ix.ScikitLearnModelWrapper(
+                RandomForestClassifier(n_estimators=100),
+                model_id="rf_baseline",
+            )
+            wrapper.fit((X_train, y_train), validation_data=(X_val, y_val))
+            wrapper.predict(X_test)
+            print(wrapper.assess(y_test))
+        """
+
         def __init__(self, model: BaseEstimator, model_id: str = ""):
             super().__init__(model, model_id)
 

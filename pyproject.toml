@@ -38,6 +38,7 @@ tqdm = {version = "^4.64.0", optional = true}
 [tool.poetry.extras]
 sklearn = ["scikit-learn"]
 isolation = ["cloudpickle", "psutil"]
+progress = ["tqdm"]
 all = ["scikit-learn", "cloudpickle", "psutil", "tqdm"]
 
 [tool.poetry.group.ml.dependencies]

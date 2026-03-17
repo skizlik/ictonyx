@@ -806,8 +806,9 @@ if SKLEARN_AVAILABLE:
             print(wrapper.assess(y_test))
         """
 
-        def __init__(self, model: BaseEstimator, model_id: str = ""):
+        def __init__(self, model: BaseEstimator, model_id: str = "", task: Optional[str] = None):
             super().__init__(model, model_id)
+            self.task: Optional[str] = task
 
         def _cleanup_implementation(self):
             """Scikit-learn specific cleanup (minimal)."""
@@ -903,6 +904,7 @@ if SKLEARN_AVAILABLE:
                     }
 
                 self.training_result = TrainingResult(history=history_dict)
+                self.task = "classification" if is_classifier else "regression"
 
             else:
                 raise ValueError(

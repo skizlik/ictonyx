@@ -470,6 +470,36 @@ class TestScikitLearnWrapperExtended:
         assert "recall" in result
         assert "f1" in result
 
+    def test_sklearn_regressor_assess_no_attribute_error():
+        """Regression: predict then assess must not raise AttributeError."""
+        from sklearn.linear_model import LinearRegression
+
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        X = np.random.rand(50, 3)
+        y = np.random.rand(50)
+        wrapper.fit((X, y))
+        wrapper.predict(X)
+        result = wrapper.assess(y)
+        assert "r2" in result
+        assert "mse" in result
+        assert "mae" in result
+
+    def test_sklearn_task_set_after_fit():
+        """task attribute is correctly set after fit."""
+        from sklearn.ensemble import RandomForestClassifier
+
+        clf = ScikitLearnModelWrapper(RandomForestClassifier(n_estimators=5))
+        X = np.random.rand(40, 3)
+        y = np.random.randint(0, 2, 40)
+        clf.fit((X, y))
+        assert clf.task == "classification"
+
+        from sklearn.linear_model import LinearRegression
+
+        reg = ScikitLearnModelWrapper(LinearRegression())
+        reg.fit((X, y.astype(float)))
+        assert reg.task == "regression"
+
 
 @pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not available")
 class TestScikitLearnWrapperCoverage:

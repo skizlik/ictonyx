@@ -696,10 +696,44 @@ if TENSORFLOW_AVAILABLE:
             return dict(zip(metric_names, results))
 
         def assess(self, true_labels: np.ndarray) -> Dict[str, float]:
+            """Assess stored predictions against true labels.
+
+            For classification models: returns ``{'accuracy': float}``.
+            For regression models: returns ``{'r2': float, 'mse': float, 'mae': float}``.
+
+            Task type is determined via :meth:`_is_classification_model`, which
+            respects the explicit ``task`` parameter if set at construction.
+
+            Args:
+                true_labels: 1-D array of ground-truth labels or values,
+                    corresponding to the stored ``self.predictions``.
+
+            Returns:
+                Dict of metric name → float.
+
+            Raises:
+                ValueError: If :meth:`predict` has not been called yet.
+                ValueError: If task type cannot be determined (uncompiled model
+                    with no explicit ``task``).
+            """
             if self.predictions is None:
                 raise ValueError("Model has not generated predictions yet. Call predict() first.")
-            accuracy = accuracy_score(true_labels, self.predictions)
-            return {"accuracy": accuracy}
+
+            if self._is_classification_model():
+                return {"accuracy": float(accuracy_score(true_labels, self.predictions))}
+
+            # Regression: pure NumPy, no additional imports required.
+            preds = np.asarray(self.predictions, dtype=float)
+            labels = np.asarray(true_labels, dtype=float)
+
+            mse = float(np.mean((preds - labels) ** 2))
+            mae = float(np.mean(np.abs(preds - labels)))
+
+            ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
+            ss_res = float(np.sum((labels - preds) ** 2))
+            r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 0.0
+
+            return {"r2": r2, "mse": mse, "mae": mae}
 
         def save_model(self, path: str):
             self.model.save(path)

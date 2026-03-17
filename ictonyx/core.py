@@ -893,9 +893,7 @@ if SKLEARN_AVAILABLE:
                 if is_classifier:
                     history_dict = {
                         "accuracy": [train_score],
-                        "loss": [1.0 - train_score],
                         "val_accuracy": [val_score],
-                        "val_loss": [1.0 - val_score],
                     }
                 else:
                     history_dict = {

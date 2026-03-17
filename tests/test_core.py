@@ -642,6 +642,73 @@ class TestScikitLearnWrapperCoverage:
         finally:
             os.unlink(path)
 
+    def test_sklearn_classifier_fit_no_fabricated_loss(self):
+        """Classifier history must not contain the fake 1-accuracy loss proxy."""
+        from sklearn.linear_model import LogisticRegression
+
+        wrapper = ScikitLearnModelWrapper(LogisticRegression(max_iter=200))
+        X = np.random.rand(60, 4)
+        y = np.random.randint(0, 2, 60)
+        wrapper.fit((X, y))
+        history = wrapper.training_result.history
+        assert "loss" not in history
+        assert "val_loss" not in history
+        assert "accuracy" in history
+        assert 0.0 <= history["accuracy"][0] <= 1.0
+
+    def test_sklearn_regressor_fit_no_loss_column(self):
+        """Regressor history must never have a loss column."""
+        from sklearn.linear_model import Ridge
+
+        wrapper = ScikitLearnModelWrapper(Ridge())
+        X = np.random.rand(60, 4)
+        y = np.random.rand(60)
+        wrapper.fit((X, y))
+        history = wrapper.training_result.history
+        assert "loss" not in history
+        assert "r2" in history
+
+    def test_plot_training_history_no_loss_column(self):
+        """plot_training_history must not raise when no loss column is present."""
+        import matplotlib
+
+        matplotlib.use("Agg")
+        from ictonyx import plot_training_history
+
+        # Simulate sklearn classifier history — accuracy only, no loss
+        history_df = pd.DataFrame(
+            {
+                "train_accuracy": [0.7, 0.8, 0.85],
+                "val_accuracy": [0.65, 0.75, 0.80],
+            }
+        )
+        fig = plot_training_history(history_df, show=False)
+        assert fig is not None
+
+    def test_assess_stability_no_loss_column(self):
+        """assess_training_stability must not return converged=False for all runs
+        merely because there is no 'loss' column (sklearn post-fix behaviour)."""
+        from ictonyx import assess_training_stability
+
+        # Simulate sklearn classifier DataFrames — accuracy only, clearly converging
+        runs = [
+            pd.DataFrame(
+                {
+                    "train_accuracy": np.linspace(0.5, 0.9, 20),
+                    "val_accuracy": np.linspace(0.45, 0.85, 20),
+                    "run_num": [i + 1] * 20,
+                    "epoch": range(1, 21),
+                }
+            )
+            for i in range(5)
+        ]
+        result = assess_training_stability(runs, window_size=5)
+        assert "error" not in result
+        # With clearly converging curves, at least some runs should be flagged converged
+        assert (
+            result["converged_runs"] > 0
+        ), "All runs reported not-converged — loss column fallback is not working"
+
 
 class TestTrainingResult:
     """Test TrainingResult dataclass."""

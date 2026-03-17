@@ -1810,13 +1810,11 @@ def assess_training_stability(
     for i, history in enumerate(truncated_histories):
         # Handle both Series and DataFrame inputs
         if isinstance(history, pd.DataFrame):
-            # For DataFrames, use the loss column for convergence check
-            if "loss" in history.columns:
-                converged = check_convergence(history["loss"], window_size=window_size)
-            elif "val_loss" in history.columns:
-                converged = check_convergence(history["val_loss"], window_size=window_size)
+            loss_candidates = ["loss", "train_loss", "val_loss", "val_accuracy", "r2", "val_r2"]
+            loss_col = next((c for c in loss_candidates if c in history.columns), None)
+            if loss_col is not None:
+                converged = check_convergence(history[loss_col], window_size=window_size)
             else:
-                # No loss column found, can't check convergence
                 converged = False
         elif isinstance(history, pd.Series):
             # Already a Series, use directly

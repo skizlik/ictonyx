@@ -8,12 +8,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Regression task support (MSE, MAE, R² as first-class metrics)
 - Sphinx documentation hosted on ReadTheDocs
 - Parallel execution for non-GPU models via `joblib`
 - `VariabilityStudyResults.bootstrap_ci()` convenience method
 - `VariabilityStudyResults.report()` for self-contained summaries
 - Paired/blocked experimental designs for model comparison
+
+
+---
+
+## [0.3.6] - 2026-03-17
+
+### Added
+- `KerasModelWrapper` now accepts an explicit `task` parameter
+  (`'classification'`, `'regression'`, or `None`). When set, task detection
+  skips loss-function inspection entirely. Required for custom loss functions,
+  uncompiled models, and any loss name not in the built-in recognition list.
+  `load_model()` updated to accept and forward `task=` to the loaded wrapper.
+- `tqdm` declared as an optional dependency. `pip install ictonyx[progress]`
+  now installs it. Previously tqdm was used by `runners.py` for progress bars
+  but was undeclared, so `pip install ictonyx[all]` silently omitted it.
+  `[progress]` extra added; `tqdm` added to `[all]` extra.
+- `set_theme()` exported from the public API — `ictonyx.set_theme()` now works.
+  It was present in `settings.py` but missing from `__init__.py` imports and
+  `__all__`, causing `AttributeError` on any direct use.
+- `tests/conftest.py` — shared fixtures available to all test files without
+  explicit import: `small_classification_arrays`, `small_multiclass_arrays`,
+  `small_regression_arrays`, `minimal_config`, `tabular_classification_handler`,
+  `tabular_regression_handler`.
+- New regression tests for previously fixed bugs:
+  - `TestScikitLearnWrapperExtended::test_assess_regression` — verifies
+    `ScikitLearnModelWrapper.assess()` returns `{'r2','mse','mae'}` for
+    regressors and never returns `'accuracy'`.
+  - `TestPyTorchRegression::test_regression_assess_returns_full_metrics` —
+    same contract for `PyTorchModelWrapper`.
+  - `TestPyTorchUtilities::test_load_model_without_architecture_raises` —
+    verifies `PyTorchModelWrapper.load_model(path)` raises `ValueError` with
+    a descriptive message when `model=` is omitted.
+
+### Fixed
+- **`ScikitLearnModelWrapper.assess()` returned wrong metrics for regressors.**
+  Always called `accuracy_score()` regardless of task type, producing 0.0 for
+  regression models with no error or warning. Now uses the same
+  classifier/regressor heuristic as `fit()` and `evaluate()`: classifiers get
+  `{'accuracy'}`, regressors get `{'r2', 'mse', 'mae'}` via pure NumPy.
+- **`KerasModelWrapper.assess()` had the same regression bug.** Fixed with
+  identical approach, routing through `_is_classification_model()`.
+- **`PyTorchModelWrapper.assess()` returned only `{'mse'}` for regression.**
+  Inconsistent with `ScikitLearnModelWrapper` (which returns `{'r2','mse','mae'}`),
+  silently causing `KeyError` when callers read `result['r2']` or `result['mae']`
+  on a PyTorch regressor. Now returns `{'r2', 'mse', 'mae'}` using the same
+  pure-NumPy formula across all three wrappers.
+- **`KerasModelWrapper._is_classification_model()` silently returned `True` for
+  unknown losses.** Uncompiled models, custom loss functions, and inspection
+  exceptions all fell through to `return True`, treating regression models as
+  classifiers and producing wrong predictions and metrics with no indication of
+  the problem. Now raises `ValueError` with actionable guidance in all three
+  cases, directing the user to set `task=` explicitly.
+- **`PyTorchModelWrapper.load_model()` violated the Liskov Substitution
+  Principle.** The base class signature is `load_model(cls, path: str)`. The
+  PyTorch override required a non-defaulted `model: nn.Module` argument, making
+  it impossible to call through the base class interface. `model` is now
+  `Optional[nn.Module] = None`; passing `None` raises `ValueError` explaining
+  the PyTorch state-dict constraint with a usage example.
+- **`set_theme()` silently ignored unknown theme names.** A typo like
+  `set_theme("pubication")` was a no-op with no error or warning. Now raises
+  `ValueError` naming the invalid theme and listing all valid options
+  (`'default'`, `'dark'`, `'publication'`). A `'default'` branch added to
+  restore the original palette, backed by a `_DEFAULT_THEME` constant.
+- **`HyperparameterTuner.tune()` accessed raw Keras history API.** The
+  objective function assigned the return value of `wrapped_model.fit()` to
+  `history` and then read `history.history` — treating it as a Keras `History`
+  object. `fit()` returns `None` for all three wrapper types. The `hasattr`
+  guard caught this and raised a generic `ValueError` on every non-Keras trial,
+  making `HyperparameterTuner` effectively Keras-only. Now calls `fit()` for
+  its side effect, then reads `wrapped_model.training_result.history`, which
+  works for all wrappers.
+- **PyTorch model detection in `api.py` used a fragile string heuristic.**
+  Both `_build_instance_cloner()` and `_ensure_wrapper()` detected PyTorch
+  models with `"torch" in str(type(obj).__mro__)` — a substring match on a
+  stringified list of type objects. Could false-positive on any class whose
+  module path contains "torch". Replaced with
+  `PYTORCH_AVAILABLE and isinstance(obj, _torch_nn.Module)`, the same pattern
+  used for sklearn. `torch.nn` imported once at module level as `_torch_nn`.
+- **`test_unknown_theme_no_change` asserted old broken behavior and caused
+  five consecutive CI failures.** The test called `set_theme("nonexistent_theme")`
+  with no `pytest.raises` guard and asserted THEME was unchanged — correct for
+  the old silent no-op, wrong after the `ValueError` fix. Replaced with
+  `test_unknown_theme_raises_value_error`. Full `TestSetTheme` class rewritten:
+  `teardown_method` now calls `set_theme("default")` instead of hardcoding
+  palette values; three new tests added covering the `'default'` reset branch,
+  THEME immutability on error, and error message content.
+- **`check_normality()` had a misleading inline comment.** Comment read "Consider
+  normal if *any* test fails to reject normality" but the code used `all()`,
+  which requires *every* test to agree. The code is correct. Comment updated to
+  accurately describe the conservative `all()` semantics and explain why that
+  choice is appropriate for the small-sample ML regime.
+
+### Changed
+- `KerasModelWrapper._is_classification_model()` restructured for clarity. The
+  `try` block now covers only the attribute access steps that can raise
+  `AttributeError` or `TypeError`. Indicator list matching moved outside the
+  `try` block; the final `raise ValueError` for unknown losses is now plainly
+  outside any exception handler, making the control flow unambiguous.
+- `settings.py` gains two module-level constants: `_DEFAULT_THEME` (the
+  original colour palette, used by `set_theme('default')` to restore defaults)
+  and `_VALID_THEMES` (used in `ValueError` messages).
+
+### Removed
+- "Regression task support (MSE, MAE, R² as first-class metrics)" removed from
+  `[Unreleased]` planned list — fully delivered in this release across all three
+  wrappers (`assess()`) and in `ScikitLearnModelWrapper.evaluate()`.
 
 ---
 

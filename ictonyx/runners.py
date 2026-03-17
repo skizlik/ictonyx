@@ -279,7 +279,7 @@ class ExperimentRunner:
                 self.test_data,
                 epochs,
                 run_id,
-                self.seed + run_id,
+                self._child_seeds[run_id - 1],
             ),
         )
 
@@ -355,7 +355,7 @@ class ExperimentRunner:
         self._run_log(f" - Run {run_id}: Training...")
 
         # Set deterministic seeds for this run
-        self._set_seeds(self.seed + run_id)
+        self._set_seeds(self._child_seeds[run_id - 1])
 
         # Log run start (Metric Tracker)
         self.tracker.log_params({"run_id": run_id, "mode": "standard"})
@@ -468,6 +468,13 @@ class ExperimentRunner:
         self.final_metrics = {}
         self.final_test_metrics = []
         self.failed_runs = []
+
+        # Generate independent child seeds up front.
+        # SeedSequence guarantees uncorrelated children regardless of proximity.
+        _ss = np.random.SeedSequence(self.seed)
+        self._child_seeds: list[int] = [
+            int(child.generate_state(1)[0]) for child in _ss.spawn(num_runs)
+        ]
 
         if epochs_per_run is None:
             epochs_per_run = self.model_config.get("epochs", 10)

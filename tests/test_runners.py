@@ -660,6 +660,17 @@ class TestRunnerWithTestData:
         assert "test_accuracy" in df.columns
         assert len(df) == 2
 
+    def test_child_seeds_are_not_adjacent():
+        """Child seeds must not be consecutive integers."""
+        import numpy as np
+
+        ss = np.random.SeedSequence(42)
+        children = [int(c.generate_state(1)[0]) for c in ss.spawn(5)]
+        for i in range(len(children) - 1):
+            assert (
+                abs(children[i] - children[i + 1]) > 1000
+            ), "Adjacent child seeds indicate incorrect seed generation"
+
 
 class TestRunnerVerbose:
     """Test verbose output paths."""

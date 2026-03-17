@@ -937,12 +937,10 @@ if SKLEARN_AVAILABLE:
         def assess(self, true_labels: np.ndarray) -> Dict[str, float]:
             """Assess stored predictions against true labels.
 
-            For classifiers (models with ``predict_proba`` or ``classes_``):
-            returns ``{'accuracy': float}``.
-            For regressors: returns ``{'r2': float, 'mse': float, 'mae': float}``.
-
-            Uses the same classifier/regressor detection as :meth:`fit` and
-            :meth:`evaluate` (presence of ``predict_proba`` or ``classes_``).
+            For classification: returns ``{'accuracy': float}``.
+            For regression: returns ``{'r2': float, 'mse': float, 'mae': float}``,
+            consistent with :class:`ScikitLearnModelWrapper` and
+            :class:`KerasModelWrapper`.
 
             Args:
                 true_labels: 1-D array of ground-truth labels or values,
@@ -957,13 +955,10 @@ if SKLEARN_AVAILABLE:
             if self.predictions is None:
                 raise ValueError("Model has not generated predictions yet. Call predict() first.")
 
-            is_classifier = hasattr(self.model, "predict_proba") or hasattr(self.model, "classes_")
+            if self.task == "classification":
+                return {"accuracy": float(np.mean(self.predictions == true_labels))}
 
-            if is_classifier:
-                return {"accuracy": float(accuracy_score(true_labels, self.predictions))}
-
-            # Regressor: compute R², MSE, and MAE with pure NumPy so no
-            # additional import is needed inside this already-optional class.
+            # Regression: match ScikitLearnModelWrapper metric set exactly.
             preds = np.asarray(self.predictions, dtype=float)
             labels = np.asarray(true_labels, dtype=float)
 

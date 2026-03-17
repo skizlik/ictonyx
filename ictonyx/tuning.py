@@ -177,6 +177,9 @@ class HyperparameterTuner:
                         "accuracy" in self.metric.lower()
                         or "precision" in self.metric.lower()
                         or "recall" in self.metric.lower()
+                        or "r2" in self.metric.lower()
+                        or "f1" in self.metric.lower()
+                        or "auc" in self.metric.lower()
                     ):
                         loss = -float(final_metric_value)
                     else:
@@ -220,6 +223,9 @@ class HyperparameterTuner:
                 "accuracy" in self.metric.lower()
                 or "precision" in self.metric.lower()
                 or "recall" in self.metric.lower()
+                or "r2" in self.metric.lower()
+                or "f1" in self.metric.lower()
+                or "auc" in self.metric.lower()
             ):
                 best_metric_value = -best_loss
             else:
@@ -264,6 +270,9 @@ class HyperparameterTuner:
             "accuracy" in self.metric.lower()
             or "precision" in self.metric.lower()
             or "recall" in self.metric.lower()
+            or "r2" in self.metric.lower()
+            or "f1" in self.metric.lower()
+            or "auc" in self.metric.lower()
         ):
             best_metric_value = -best_loss
         else:

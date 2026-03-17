@@ -351,6 +351,39 @@ class TestVariabilityStudyResults:
         assert "val_accuracy:" in summary
         assert "Mean:" in summary
 
+    def test_compare_statistically_uses_scalar_per_run(self):
+        """Each run must contribute exactly one observation, not one per epoch."""
+
+        # 3 runs of 5 epochs — the bug would pass 15 observations instead of 3
+        runs = []
+        for i in range(3):
+            df = pd.DataFrame(
+                {
+                    "val_accuracy": [0.8 + i * 0.05 + e * 0.001 for e in range(5)],
+                    "run_num": [i + 1] * 5,
+                    "epoch": range(1, 6),
+                }
+            )
+            runs.append(df)
+
+        results = VariabilityStudyResults(
+            all_runs_metrics=runs,
+            final_metrics={"val_accuracy": [0.804, 0.854, 0.904]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        comparison = results.compare_models_statistically("val_accuracy")
+        assert comparison is not None
+
+    def test_compare_statistically_missing_metric_raises(self):
+        results = VariabilityStudyResults(
+            all_runs_metrics=[pd.DataFrame({"val_accuracy": [0.9], "run_num": [1], "epoch": [1]})],
+            final_metrics={"val_accuracy": [0.9]},
+            final_test_metrics=[],
+        )
+        with pytest.raises(ValueError, match="not found"):
+            results.compare_models_statistically("nonexistent_metric")
+
 
 class TestConvenienceFunction:
     """Test run_variability_study convenience function."""

@@ -784,34 +784,40 @@ class VariabilityStudyResults:
         alpha: float = 0.05,
         correction_method: str = "holm",
     ) -> Dict[str, Any]:
-        """Perform statistical comparison of runs for the specified metric."""
+        """Perform statistical comparison of runs for the specified metric.
+
+        Each run contributes exactly one observation (its final-epoch metric
+        value), satisfying the independence assumption required by Mann-Whitney U
+        and Kruskal-Wallis tests.
+        """
         from .analysis import compare_multiple_models
 
         if not self.all_runs_metrics:
             raise ValueError("No run metrics available for statistical comparison")
 
-        final_metrics = self.get_final_metrics(metric_name)
-
-        if not final_metrics:
+        if metric_name not in self.final_metrics:
             available = self.get_available_metrics()
             raise ValueError(
                 f"Metric '{metric_name}' not found in results. " f"Available metrics: {available}"
             )
 
-        metrics_dict = {}
-        for run_name, value in final_metrics.items():
-            run_idx = int(run_name.split("_")[-1]) - 1
-            if run_idx < len(self.all_runs_metrics):
-                df = self.all_runs_metrics[run_idx]
-                if metric_name in df.columns:
-                    metrics_dict[run_name] = df[metric_name]
-                else:
-                    metrics_dict[run_name] = pd.Series([value], name=run_name)
-            else:
-                metrics_dict[run_name] = pd.Series([value], name=run_name)
+        values = self.final_metrics[metric_name]
+        if len(values) < 2:
+            raise ValueError(
+                f"At least 2 runs are required for statistical comparison, "
+                f"got {len(values)} for metric '{metric_name}'."
+            )
+
+        # Each run IS one observation — a single-element Series.
+        # Using final_metrics directly guarantees scalars, not epoch series.
+        metrics_dict: Dict[str, pd.Series] = {
+            f"run_{i + 1}": pd.Series([v], name=f"run_{i + 1}") for i, v in enumerate(values)
+        }
 
         return compare_multiple_models(
-            model_results=metrics_dict, alpha=alpha, correction_method=correction_method
+            model_results=metrics_dict,
+            alpha=alpha,
+            correction_method=correction_method,
         )
 
 

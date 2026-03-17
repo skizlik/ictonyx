@@ -955,7 +955,9 @@ if SKLEARN_AVAILABLE:
             if self.predictions is None:
                 raise ValueError("Model has not generated predictions yet. Call predict() first.")
 
-            if self.task == "classification":
+            is_classifier = hasattr(self.model, "predict_proba") or hasattr(self.model, "classes_")
+
+            if is_classifier:
                 return {"accuracy": float(np.mean(self.predictions == true_labels))}
 
             # Regression: match ScikitLearnModelWrapper metric set exactly.
@@ -1306,9 +1308,19 @@ if PYTORCH_AVAILABLE:
             if self.task == "classification":
                 accuracy = float(np.mean(self.predictions == true_labels))
                 return {"accuracy": accuracy}
+
             else:
-                mse = float(np.mean((self.predictions - true_labels) ** 2))
-                return {"mse": mse}
+                preds = np.asarray(self.predictions, dtype=float)
+                labels = np.asarray(true_labels, dtype=float)
+
+                mse = float(np.mean((preds - labels) ** 2))
+                mae = float(np.mean(np.abs(preds - labels)))
+
+                ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
+                ss_res = float(np.sum((labels - preds) ** 2))
+                r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 0.0
+
+                return {"r2": r2, "mse": mse, "mae": mae}
 
         def save_model(self, path: str):
             """Save model state dict to disk."""

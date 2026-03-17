@@ -59,17 +59,8 @@ class TestSetTheme:
     """Test set_theme function."""
 
     def teardown_method(self):
-        """Reset to default theme."""
-        THEME.update(
-            {
-                "train": "#1f77b4",
-                "val": "#ff7f0e",
-                "test": "#2ca02c",
-                "baseline": "gray",
-                "significant": "crimson",
-                "grid": "#e6e6e6",
-            }
-        )
+        """Reset to default theme after each test using the canonical API."""
+        set_theme("default")
 
     def test_dark_theme(self):
         set_theme("dark")
@@ -83,13 +74,41 @@ class TestSetTheme:
         assert THEME["val"] == "gray"
         assert THEME["grid"] == "#eeeeee"
 
-    def test_unknown_theme_no_change(self):
-        """Unknown theme name should leave THEME unchanged."""
-        original_train = THEME["train"]
-        set_theme("nonexistent_theme")
-        assert THEME["train"] == original_train
+    def test_default_theme_resets_to_originals(self):
+        """set_theme('default') must restore the original palette exactly."""
+        set_theme("dark")  # mutate away from defaults
+        set_theme("default")
+        assert THEME["train"] == "#1f77b4"
+        assert THEME["val"] == "#ff7f0e"
+        assert THEME["test"] == "#2ca02c"
+        assert THEME["baseline"] == "gray"
+        assert THEME["significant"] == "crimson"
+        assert THEME["grid"] == "#e6e6e6"
+
+    def test_unknown_theme_raises_value_error(self):
+        """An unrecognised theme name must raise ValueError."""
+        with pytest.raises(ValueError, match="nonexistent_theme"):
+            set_theme("nonexistent_theme")
+
+    def test_unknown_theme_does_not_mutate_theme(self):
+        """THEME must be unchanged when ValueError is raised."""
+        original = dict(THEME)  # snapshot before
+        with pytest.raises(ValueError):
+            set_theme("nonexistent_theme")
+        assert THEME == original  # no side effects
+
+    def test_error_message_lists_valid_options(self):
+        """ValueError message must name all valid themes so users know what to pass."""
+        with pytest.raises(ValueError) as exc_info:
+            set_theme("typo")
+        msg = str(exc_info.value)
+        assert "default" in msg
+        assert "dark" in msg
+        assert "publication" in msg
 
     def test_theme_has_all_keys(self):
-        """Verify all expected keys exist."""
+        """All six expected colour keys must be present after every theme switch."""
         expected = {"train", "val", "test", "baseline", "significant", "grid"}
-        assert expected == set(THEME.keys())
+        for theme in ("default", "dark", "publication"):
+            set_theme(theme)
+            assert expected == set(THEME.keys()), f"Missing keys after set_theme('{theme}')"

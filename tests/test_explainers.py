@@ -15,6 +15,8 @@ try:
 except ImportError:
     HAS_SHAP = False
 
+
+pytest.importorskip("shap", reason="shap not installed")
 pytestmark = pytest.mark.skipif(not HAS_SHAP, reason="shap not installed")
 
 
@@ -50,7 +52,7 @@ def test_plot_shap_summary_returns_figure(trained_tree_model):
 
     matplotlib.use("Agg")
     wrapper, X, feature_names = trained_tree_model
-    fig = plot_shap_summary(wrapper.model, X, feature_names, show=False)
+    fig = plot_shap_summary(wrapper.model, X, feature_names)
     assert fig is not None
 
 
@@ -59,5 +61,5 @@ def test_plot_shap_waterfall_returns_figure(trained_tree_model):
 
     matplotlib.use("Agg")
     wrapper, X, feature_names = trained_tree_model
-    fig = plot_shap_waterfall(wrapper.model, X, feature_names, sample_idx=0, show=False)
+    fig = plot_shap_waterfall(wrapper.model, X, feature_names, sample_idx=0)
     assert fig is not None

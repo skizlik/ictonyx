@@ -13,6 +13,8 @@ try:
 except ImportError:
     HAS_HYPEROPT = False
 
+pytest.importorskip("shap", reason="shap not installed")
+
 pytestmark = pytest.mark.skipif(not HAS_HYPEROPT, reason="hyperopt not installed")
 
 

@@ -233,7 +233,7 @@ class TestSklearnPipeline:
             target_column="target",
             runs=10,
         )
-        assert hasattr(comparison, "p_value")
+        assert comparison.overall_test.is_significant()
         assert hasattr(comparison, "is_significant")
         assert len(comparison.get_summary()) > 0
 

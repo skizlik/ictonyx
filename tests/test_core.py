@@ -470,7 +470,7 @@ class TestScikitLearnWrapperExtended:
         assert "recall" in result
         assert "f1" in result
 
-    def test_sklearn_regressor_assess_no_attribute_error():
+    def test_sklearn_regressor_assess_no_attribute_error(self):
         """Regression: predict then assess must not raise AttributeError."""
         from sklearn.linear_model import LinearRegression
 
@@ -484,7 +484,7 @@ class TestScikitLearnWrapperExtended:
         assert "mse" in result
         assert "mae" in result
 
-    def test_sklearn_task_set_after_fit():
+    def test_sklearn_task_set_after_fit(self):
         """task attribute is correctly set after fit."""
         from sklearn.ensemble import RandomForestClassifier
 

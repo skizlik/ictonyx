@@ -58,13 +58,13 @@ class TestSetDisplayPlots:
 class TestHandlersAndLoggers:
     """Test handlers and logger functions."""
 
-    def test_no_duplicate_handlers():
+    def test_no_duplicate_handlers(self):
         """Library must not add a handler if one already exists."""
         import ictonyx.settings as s
 
         assert len(s.logger.handlers) <= 1
 
-    def test_propagate_false():
+    def test_propagate_false(self):
         """Logger should not propagate to root to avoid duplicate output."""
         import ictonyx.settings as s
 

@@ -1,17 +1,18 @@
 """Test PyTorch model wrapper functionality."""
-import pytest
+
 import numpy as np
 import pandas as pd
+import pytest
 
 # Skip entire module if PyTorch not installed
 torch = pytest.importorskip("torch")
 nn = torch.nn
 
-from ictonyx.core import PyTorchModelWrapper, TrainingResult, PYTORCH_AVAILABLE
 from ictonyx.config import ModelConfig
-
+from ictonyx.core import PYTORCH_AVAILABLE, PyTorchModelWrapper, TrainingResult
 
 # --- Test fixtures ---
+
 
 def make_classification_data(n_samples=200, n_features=10, n_classes=3):
     """Generate random classification data."""
@@ -27,30 +28,23 @@ def make_regression_data(n_samples=200, n_features=5):
     rng = np.random.RandomState(42)
     X = rng.randn(n_samples, n_features).astype(np.float32)
     w = rng.randn(n_features).astype(np.float32)
-    y = (X @ w + rng.randn(n_samples).astype(np.float32) * 0.1)
+    y = X @ w + rng.randn(n_samples).astype(np.float32) * 0.1
     split = int(n_samples * 0.8)
     return (X[:split], y[:split]), (X[split:], y[split:])
 
 
 def make_classifier(n_features=10, n_classes=3):
     """Create a simple classification network."""
-    return nn.Sequential(
-        nn.Linear(n_features, 32),
-        nn.ReLU(),
-        nn.Linear(32, n_classes)
-    )
+    return nn.Sequential(nn.Linear(n_features, 32), nn.ReLU(), nn.Linear(32, n_classes))
 
 
 def make_regressor(n_features=5):
     """Create a simple regression network."""
-    return nn.Sequential(
-        nn.Linear(n_features, 16),
-        nn.ReLU(),
-        nn.Linear(16, 1)
-    )
+    return nn.Sequential(nn.Linear(n_features, 16), nn.ReLU(), nn.Linear(16, 1))
 
 
 # --- Wrapper creation ---
+
 
 class TestPyTorchWrapperCreation:
     """Test PyTorchModelWrapper initialization."""
@@ -60,52 +54,46 @@ class TestPyTorchWrapperCreation:
         wrapper = PyTorchModelWrapper(model, model_id="test")
         assert wrapper.model is model
         assert wrapper.model_id == "test"
-        assert wrapper.task == 'classification'
+        assert wrapper.task == "classification"
         assert wrapper.training_result is None
 
     def test_default_optimizer(self):
         wrapper = PyTorchModelWrapper(make_classifier())
         assert wrapper.optimizer_class is torch.optim.Adam
-        assert wrapper.optimizer_params == {'lr': 0.001}
+        assert wrapper.optimizer_params == {"lr": 0.001}
 
     def test_custom_optimizer(self):
         wrapper = PyTorchModelWrapper(
             make_classifier(),
             optimizer_class=torch.optim.SGD,
-            optimizer_params={'lr': 0.01, 'momentum': 0.9}
+            optimizer_params={"lr": 0.01, "momentum": 0.9},
         )
         assert wrapper.optimizer_class is torch.optim.SGD
-        assert wrapper.optimizer_params['momentum'] == 0.9
+        assert wrapper.optimizer_params["momentum"] == 0.9
 
     def test_device_auto(self):
-        wrapper = PyTorchModelWrapper(make_classifier(), device='auto')
-        expected = 'cuda' if torch.cuda.is_available() else 'cpu'
+        wrapper = PyTorchModelWrapper(make_classifier(), device="auto")
+        expected = "cuda" if torch.cuda.is_available() else "cpu"
         assert str(wrapper.device) == expected
 
     def test_device_explicit_cpu(self):
-        wrapper = PyTorchModelWrapper(make_classifier(), device='cpu')
-        assert str(wrapper.device) == 'cpu'
+        wrapper = PyTorchModelWrapper(make_classifier(), device="cpu")
+        assert str(wrapper.device) == "cpu"
 
     def test_regression_task(self):
-        wrapper = PyTorchModelWrapper(
-            make_regressor(),
-            criterion=nn.MSELoss(),
-            task='regression'
-        )
-        assert wrapper.task == 'regression'
+        wrapper = PyTorchModelWrapper(make_regressor(), criterion=nn.MSELoss(), task="regression")
+        assert wrapper.task == "regression"
 
 
 # --- Training (classification) ---
+
 
 class TestPyTorchClassification:
     """Test classification training, prediction, and evaluation."""
 
     def test_fit_creates_training_result(self):
         train, val = make_classification_data()
-        wrapper = PyTorchModelWrapper(
-            make_classifier(),
-            criterion=nn.CrossEntropyLoss()
-        )
+        wrapper = PyTorchModelWrapper(make_classifier(), criterion=nn.CrossEntropyLoss())
         wrapper.fit(train, validation_data=val, epochs=3, batch_size=32)
 
         assert wrapper.training_result is not None
@@ -117,12 +105,12 @@ class TestPyTorchClassification:
         wrapper.fit(train, validation_data=val, epochs=5, batch_size=32)
 
         h = wrapper.training_result.history
-        assert 'loss' in h
-        assert 'accuracy' in h
-        assert 'val_loss' in h
-        assert 'val_accuracy' in h
-        assert len(h['loss']) == 5
-        assert len(h['val_accuracy']) == 5
+        assert "loss" in h
+        assert "accuracy" in h
+        assert "val_loss" in h
+        assert "val_accuracy" in h
+        assert len(h["loss"]) == 5
+        assert len(h["val_accuracy"]) == 5
 
     def test_history_without_validation(self):
         train, _ = make_classification_data()
@@ -130,17 +118,17 @@ class TestPyTorchClassification:
         wrapper.fit(train, epochs=3)
 
         h = wrapper.training_result.history
-        assert 'loss' in h
-        assert 'accuracy' in h
-        assert 'val_loss' not in h
-        assert 'val_accuracy' not in h
+        assert "loss" in h
+        assert "accuracy" in h
+        assert "val_loss" not in h
+        assert "val_accuracy" not in h
 
     def test_training_improves_loss(self):
         train, val = make_classification_data(n_samples=500)
         wrapper = PyTorchModelWrapper(make_classifier(), criterion=nn.CrossEntropyLoss())
         wrapper.fit(train, validation_data=val, epochs=20, batch_size=32)
 
-        losses = wrapper.training_result.history['loss']
+        losses = wrapper.training_result.history["loss"]
         # First epoch loss should be higher than last
         assert losses[0] > losses[-1]
 
@@ -180,9 +168,9 @@ class TestPyTorchClassification:
         wrapper.fit(train, epochs=3)
 
         metrics = wrapper.evaluate(val)
-        assert 'loss' in metrics
-        assert 'accuracy' in metrics
-        assert 0.0 <= metrics['accuracy'] <= 1.0
+        assert "loss" in metrics
+        assert "accuracy" in metrics
+        assert 0.0 <= metrics["accuracy"] <= 1.0
 
     def test_assess_classification(self):
         train, val = make_classification_data()
@@ -191,7 +179,7 @@ class TestPyTorchClassification:
 
         wrapper.predict(val[0])
         result = wrapper.assess(val[1])
-        assert 'accuracy' in result
+        assert "accuracy" in result
 
     def test_assess_requires_predict_first(self):
         wrapper = PyTorchModelWrapper(make_classifier(), criterion=nn.CrossEntropyLoss())
@@ -201,28 +189,23 @@ class TestPyTorchClassification:
 
 # --- Training (regression) ---
 
+
 class TestPyTorchRegression:
     """Test regression training, prediction, and evaluation."""
 
     def test_regression_training(self):
         train, val = make_regression_data()
-        wrapper = PyTorchModelWrapper(
-            make_regressor(),
-            criterion=nn.MSELoss(),
-            task='regression'
-        )
+        wrapper = PyTorchModelWrapper(make_regressor(), criterion=nn.MSELoss(), task="regression")
         wrapper.fit(train, validation_data=val, epochs=5, batch_size=32)
 
         h = wrapper.training_result.history
-        assert 'loss' in h
-        assert 'val_loss' in h
-        assert 'val_mse' in h
+        assert "loss" in h
+        assert "val_loss" in h
+        assert "val_mse" in h
 
     def test_regression_predict(self):
         train, val = make_regression_data()
-        wrapper = PyTorchModelWrapper(
-            make_regressor(), criterion=nn.MSELoss(), task='regression'
-        )
+        wrapper = PyTorchModelWrapper(make_regressor(), criterion=nn.MSELoss(), task="regression")
         wrapper.fit(train, epochs=5)
 
         preds = wrapper.predict(val[0])
@@ -231,35 +214,47 @@ class TestPyTorchRegression:
 
     def test_regression_evaluate(self):
         train, val = make_regression_data()
-        wrapper = PyTorchModelWrapper(
-            make_regressor(), criterion=nn.MSELoss(), task='regression'
-        )
+        wrapper = PyTorchModelWrapper(make_regressor(), criterion=nn.MSELoss(), task="regression")
         wrapper.fit(train, epochs=5)
 
         metrics = wrapper.evaluate(val)
-        assert 'loss' in metrics
-        assert 'mse' in metrics
+        assert "loss" in metrics
+        assert "mse" in metrics
 
     def test_regression_assess(self):
         train, val = make_regression_data()
-        wrapper = PyTorchModelWrapper(
-            make_regressor(), criterion=nn.MSELoss(), task='regression'
-        )
+        wrapper = PyTorchModelWrapper(make_regressor(), criterion=nn.MSELoss(), task="regression")
         wrapper.fit(train, epochs=5)
         wrapper.predict(val[0])
 
         result = wrapper.assess(val[1])
-        assert 'mse' in result
+        assert "mse" in result
+
+    def test_regression_assess_returns_full_metrics(self):
+        """assess() for regression must return r2, mse, mae — consistent with sklearn."""
+        train, val = make_regression_data()
+        wrapper = PyTorchModelWrapper(make_regressor(), criterion=nn.MSELoss(), task="regression")
+        wrapper.fit(train, epochs=10)
+        wrapper.predict(val[0])
+        result = wrapper.assess(val[1])
+
+        assert set(result.keys()) == {
+            "r2",
+            "mse",
+            "mae",
+        }, f"Expected {{'r2','mse','mae'}}, got {set(result.keys())}"
+        assert result["mse"] >= 0.0
+        assert result["mae"] >= 0.0
+        assert "accuracy" not in result
 
     def test_predict_proba_regression_raises(self):
-        wrapper = PyTorchModelWrapper(
-            make_regressor(), criterion=nn.MSELoss(), task='regression'
-        )
+        wrapper = PyTorchModelWrapper(make_regressor(), criterion=nn.MSELoss(), task="regression")
         with pytest.raises(ValueError, match="classification"):
             wrapper.predict_proba(np.random.rand(10, 5).astype(np.float32))
 
 
 # --- DataLoader input ---
+
 
 class TestPyTorchDataLoader:
     """Test that DataLoader inputs work directly."""
@@ -269,15 +264,14 @@ class TestPyTorchDataLoader:
         X_t = torch.tensor(train_data[0])
         y_t = torch.tensor(train_data[1])
         loader = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(X_t, y_t),
-            batch_size=32, shuffle=True
+            torch.utils.data.TensorDataset(X_t, y_t), batch_size=32, shuffle=True
         )
 
         wrapper = PyTorchModelWrapper(make_classifier(), criterion=nn.CrossEntropyLoss())
         wrapper.fit(loader, epochs=3)
 
         assert wrapper.training_result is not None
-        assert len(wrapper.training_result.history['loss']) == 3
+        assert len(wrapper.training_result.history["loss"]) == 3
 
     def test_invalid_train_data_raises(self):
         wrapper = PyTorchModelWrapper(make_classifier())
@@ -286,6 +280,7 @@ class TestPyTorchDataLoader:
 
 
 # --- Cleanup and save/load ---
+
 
 class TestPyTorchUtilities:
     """Test cleanup, save, load."""
@@ -305,13 +300,27 @@ class TestPyTorchUtilities:
 
         loaded = PyTorchModelWrapper.load_model(save_path, model=make_classifier())
         assert isinstance(loaded, PyTorchModelWrapper)
-        assert loaded.task == 'classification'
+        assert loaded.task == "classification"
 
         # Verify loaded model produces same predictions as original
         X_test = train[0]
         original_preds = wrapper.predict(X_test)
         loaded_preds = loaded.predict(X_test)
         assert np.array_equal(original_preds, loaded_preds)
+
+    def test_load_model_without_architecture_raises(self, tmp_path):
+        """load_model() with no model= argument must raise ValueError."""
+        wrapper = PyTorchModelWrapper(make_classifier(), criterion=nn.CrossEntropyLoss())
+        wrapper.fit(make_classification_data()[0], epochs=1)
+        path = str(tmp_path / "model.pt")
+        wrapper.save_model(path)
+
+        with pytest.raises(ValueError, match="architecture"):
+            PyTorchModelWrapper.load_model(path)
+        # Verify the error message names the file that was attempted
+        with pytest.raises(ValueError) as exc_info:
+            PyTorchModelWrapper.load_model(path)
+        assert "model" in str(exc_info.value).lower()
 
     def test_repr(self):
         wrapper = PyTorchModelWrapper(make_classifier(), model_id="my_net")
@@ -321,12 +330,13 @@ class TestPyTorchUtilities:
 
 # --- Integration with ExperimentRunner ---
 
+
 class TestPyTorchRunnerIntegration:
     """Test that PyTorchModelWrapper works with ExperimentRunner."""
 
     def test_full_variability_study(self):
-        from ictonyx.runners import ExperimentRunner, VariabilityStudyResults
         from ictonyx.config import ModelConfig
+        from ictonyx.runners import ExperimentRunner, VariabilityStudyResults
 
         train, val = make_classification_data(n_samples=200)
 
@@ -334,42 +344,40 @@ class TestPyTorchRunnerIntegration:
             @property
             def data_type(self):
                 return "arrays"
+
             @property
             def return_format(self):
                 return "split_arrays"
+
             def load(self, **kwargs):
-                return {
-                    'train_data': train,
-                    'val_data': val,
-                    'test_data': None
-                }
+                return {"train_data": train, "val_data": val, "test_data": None}
 
         def model_builder(config):
             return PyTorchModelWrapper(
                 make_classifier(),
                 criterion=nn.CrossEntropyLoss(),
                 optimizer_class=torch.optim.Adam,
-                optimizer_params={'lr': 0.01},
+                optimizer_params={"lr": 0.01},
             )
 
         runner = ExperimentRunner(
             model_builder=model_builder,
             data_handler=MockPyTorchDataHandler(),
-            model_config=ModelConfig({'epochs': 5, 'batch_size': 32}),
+            model_config=ModelConfig({"epochs": 5, "batch_size": 32}),
             seed=42,
-            verbose=False
+            verbose=False,
         )
 
         results = runner.run_study(num_runs=3, epochs_per_run=5)
 
         assert isinstance(results, VariabilityStudyResults)
         assert results.n_runs == 3
-        assert 'val_accuracy' in results.final_metrics
-        assert len(results.final_metrics['val_accuracy']) == 3
+        assert "val_accuracy" in results.final_metrics
+        assert len(results.final_metrics["val_accuracy"]) == 3
 
     def test_seed_reproducibility(self):
-        from ictonyx.runners import ExperimentRunner
         from ictonyx.config import ModelConfig
+        from ictonyx.runners import ExperimentRunner
 
         train, val = make_classification_data(n_samples=100)
 
@@ -377,27 +385,29 @@ class TestPyTorchRunnerIntegration:
             @property
             def data_type(self):
                 return "arrays"
+
             @property
             def return_format(self):
                 return "split_arrays"
+
             def load(self, **kwargs):
-                return {'train_data': train, 'val_data': val, 'test_data': None}
+                return {"train_data": train, "val_data": val, "test_data": None}
 
         def model_builder(config):
             return PyTorchModelWrapper(
                 make_classifier(),
                 criterion=nn.CrossEntropyLoss(),
                 optimizer_class=torch.optim.Adam,
-                optimizer_params={'lr': 0.01}
+                optimizer_params={"lr": 0.01},
             )
 
         def run_with_seed(seed):
             runner = ExperimentRunner(
                 model_builder=model_builder,
                 data_handler=DataHandler(),
-                model_config=ModelConfig({'epochs': 3, 'batch_size': 32}),
+                model_config=ModelConfig({"epochs": 3, "batch_size": 32}),
                 seed=seed,
-                verbose=False
+                verbose=False,
             )
             return runner.run_study(num_runs=2, epochs_per_run=3)
 
@@ -405,11 +415,11 @@ class TestPyTorchRunnerIntegration:
         r2 = run_with_seed(42)
 
         # Same seed → same val_accuracy values
-        assert r1.final_metrics['val_accuracy'] == r2.final_metrics['val_accuracy']
+        assert r1.final_metrics["val_accuracy"] == r2.final_metrics["val_accuracy"]
 
     def test_convenience_function(self):
-        from ictonyx.runners import run_variability_study, VariabilityStudyResults
         from ictonyx.config import ModelConfig
+        from ictonyx.runners import VariabilityStudyResults, run_variability_study
 
         train, val = make_classification_data(n_samples=100)
 
@@ -417,27 +427,29 @@ class TestPyTorchRunnerIntegration:
             @property
             def data_type(self):
                 return "arrays"
+
             @property
             def return_format(self):
                 return "split_arrays"
+
             def load(self, **kwargs):
-                return {'train_data': train, 'val_data': val, 'test_data': None}
+                return {"train_data": train, "val_data": val, "test_data": None}
 
         def model_builder(config):
             return PyTorchModelWrapper(
                 make_classifier(),
                 criterion=nn.CrossEntropyLoss(),
                 optimizer_class=torch.optim.Adam,
-                optimizer_params={'lr': 0.01}
+                optimizer_params={"lr": 0.01},
             )
 
         results = run_variability_study(
             model_builder=model_builder,
             data_handler=DataHandler(),
-            model_config=ModelConfig({'epochs': 3}),
+            model_config=ModelConfig({"epochs": 3}),
             num_runs=2,
             seed=99,
-            verbose=False
+            verbose=False,
         )
 
         assert isinstance(results, VariabilityStudyResults)

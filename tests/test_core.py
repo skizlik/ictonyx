@@ -341,6 +341,32 @@ class TestScikitLearnWrapperExtended:
         assert "accuracy" in result
         assert 0.0 <= result["accuracy"] <= 1.0
 
+    def test_assess_regression(self):
+        """assess() on a regressor must return r2, mse, mae — not accuracy."""
+        from sklearn.linear_model import LinearRegression
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        rng = np.random.default_rng(0)
+        X = rng.random((60, 3))
+        y = X @ np.array([1.5, -2.0, 0.5]) + rng.normal(0, 0.05, 60)
+
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        wrapper.fit((X, y))
+        wrapper.predict(X)
+        result = wrapper.assess(y)
+
+        assert set(result.keys()) == {
+            "r2",
+            "mse",
+            "mae",
+        }, f"Expected {{'r2','mse','mae'}}, got {set(result.keys())}"
+        assert result["r2"] > 0.99, "R² should be near 1.0 on training data"
+        assert result["mse"] >= 0.0
+        assert result["mae"] >= 0.0
+        # Verify accuracy_score is NOT being called (would return ~0.0)
+        assert "accuracy" not in result
+
     def test_assess_without_predict_raises(self):
         """Test that assess raises before predict is called."""
         from sklearn.tree import DecisionTreeClassifier
@@ -443,12 +469,6 @@ class TestScikitLearnWrapperExtended:
         assert "precision" in result
         assert "recall" in result
         assert "f1" in result
-
-
-# =============================================================================
-# ADD TO: tests/test_core.py  (paste at the bottom)
-# =============================================================================
-# No new imports needed - existing file already has np, pytest, SKLEARN_AVAILABLE
 
 
 @pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not available")

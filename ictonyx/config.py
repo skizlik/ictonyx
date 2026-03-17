@@ -274,7 +274,7 @@ class ModelConfig:
         return base_config
 
     @classmethod
-    def for_variability_study(cls, base_config: "ModelConfig", num_runs: int = 5) -> "ModelConfig":
+    def for_variability_study(cls, base_config: "ModelConfig", num_runs: int = 10) -> "ModelConfig":
         """Create a config for a variability study from an existing base config.
 
         Copies the base config and adds study-specific parameters

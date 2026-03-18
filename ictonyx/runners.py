@@ -800,6 +800,81 @@ class VariabilityStudyResults:
 
         return "\n".join(lines)
 
+    def get_epoch_statistics(
+        self,
+        metric: str,
+        confidence: float = 0.95,
+    ) -> pd.DataFrame:
+        """Compute per-epoch mean, SD, SE, and confidence band across all runs.
+
+        Aligns all runs at each epoch position. Runs with fewer epochs
+        than the maximum are excluded from epochs beyond their last.
+
+        Args:
+            metric: Column name in per-run DataFrames, e.g.
+                ``'val_accuracy'``, ``'train_loss'``.
+            confidence: Confidence level for the percentile CI band.
+                Default 0.95.
+
+        Returns:
+            DataFrame with columns: ``epoch``, ``mean``, ``sd``,
+            ``se``, ``ci_lower``, ``ci_upper``, ``n_runs``.
+
+        Raises:
+            ValueError: If no runs are available.
+            KeyError: If *metric* is not found in any run's DataFrame.
+
+        Example::
+
+            stats = results.get_epoch_statistics("val_accuracy")
+            import matplotlib.pyplot as plt
+            plt.fill_between(
+                stats["epoch"], stats["ci_lower"], stats["ci_upper"],
+                alpha=0.2, label="95% CI"
+            )
+            plt.plot(stats["epoch"], stats["mean"], label="Mean")
+            plt.legend()
+        """
+        if not self.all_runs_metrics:
+            raise ValueError("No runs available.")
+
+        available_runs = [df for df in self.all_runs_metrics if metric in df.columns]
+        if not available_runs:
+            all_cols = sorted({col for df in self.all_runs_metrics for col in df.columns})
+            raise KeyError(
+                f"Metric '{metric}' not found in any run. " f"Available metrics: {all_cols}"
+            )
+
+        max_epochs = max(len(df) for df in available_runs)
+        alpha = 1 - confidence
+        rows = []
+
+        for epoch_idx in range(max_epochs):
+            epoch_vals = [
+                float(df[metric].iloc[epoch_idx]) for df in available_runs if len(df) > epoch_idx
+            ]
+            if len(epoch_vals) < 2:
+                continue
+
+            arr = np.array(epoch_vals)
+            mean = float(np.mean(arr))
+            sd = float(np.std(arr, ddof=1))
+            se = sd / np.sqrt(len(arr))
+
+            rows.append(
+                {
+                    "epoch": epoch_idx + 1,
+                    "mean": mean,
+                    "sd": sd,
+                    "se": se,
+                    "ci_lower": float(np.percentile(arr, 100 * alpha / 2)),
+                    "ci_upper": float(np.percentile(arr, 100 * (1 - alpha / 2))),
+                    "n_runs": len(epoch_vals),
+                }
+            )
+
+        return pd.DataFrame(rows)
+
     def compare_models_statistically(
         self,
         metric_name: str = "val_accuracy",

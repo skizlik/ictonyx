@@ -327,7 +327,7 @@ class TestVariabilityStudyResults:
         results = VariabilityStudyResults(
             all_runs_metrics=[df1],
             final_metrics={"val_accuracy": [0.75]},
-            final_test_metrics=[{"test_acc": 0.72}],
+            final_test_metrics=[{"run_id": 1, "test_acc": 0.72}],
         )
 
         summary_df = results.to_dataframe()
@@ -499,8 +499,8 @@ class TestVariabilityStudyResultsExtended:
             all_runs_metrics=[df1, df2],
             final_metrics={"val_accuracy": [0.8, 0.85]},
             final_test_metrics=[
-                {"accuracy": 0.78, "f1": 0.75},
-                {"accuracy": 0.82, "f1": 0.80},
+                {"run_id": 1, "accuracy": 0.78, "f1": 0.75},
+                {"run_id": 2, "accuracy": 0.82, "f1": 0.80},
             ],
         )
         summary = results.to_dataframe()

@@ -76,4 +76,4 @@ line_length = 100
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
-addopts = "--cov=ictonyx --cov-report=html --cov-report=term"
+addopts = "--cov=ictonyx --cov-report=html --cov-report=term --cov-fail-under=60"

@@ -1386,6 +1386,7 @@ if PYTORCH_AVAILABLE:
             path: str,
             model: Optional["nn.Module"] = None,
             task: str = "classification",
+            weights_only: bool = True,
         ) -> "PyTorchModelWrapper":
             """Load model weights from a state-dict checkpoint.
 
@@ -1402,6 +1403,10 @@ if PYTORCH_AVAILABLE:
                     ``ValueError`` if omitted.
                 task: ``'classification'`` or ``'regression'``. Overridden
                     by the value stored in the checkpoint when present.
+                weights_only: If ``True`` (default), restricts deserialization
+                    to tensors and primitives — safe for all checkpoints written
+                    by :meth:`save_model`. Set to ``False`` only for legacy
+                    checkpoints from untrusted sources. Default ``True``.
 
             Returns:
                 :class:`PyTorchModelWrapper` with weights loaded from *path*.
@@ -1424,7 +1429,7 @@ if PYTORCH_AVAILABLE:
                     "    net = MyNetwork()  # same architecture used during training\n"
                     "    wrapper = PyTorchModelWrapper.load_model('run1.pt', model=net)"
                 )
-            checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+            checkpoint = torch.load(path, map_location="cpu", weights_only=True)
             model.load_state_dict(checkpoint["model_state_dict"])
             wrapper = cls(model, task=checkpoint.get("task", task))
             return wrapper

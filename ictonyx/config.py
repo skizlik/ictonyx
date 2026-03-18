@@ -53,6 +53,33 @@ class ModelConfig:
         """Support 'in' operator: `'epochs' in config`."""
         return key in self.params
 
+    def __iter__(self):
+        """Iterate over parameter keys.
+
+        Enables ``dict(config)`` and ``for key in config:``.
+        """
+        return iter(self.params)
+
+    def __len__(self) -> int:
+        """Return the number of parameters. Enables ``len(config)``."""
+        return len(self.params)
+
+    def __eq__(self, other: object) -> bool:
+        """Compare by parameter contents.
+
+        Equal to another ``ModelConfig`` or a plain ``dict`` if their
+        parameter dictionaries are identical.
+        """
+        if isinstance(other, ModelConfig):
+            return self.params == other.params
+        if isinstance(other, dict):
+            return self.params == other
+        return NotImplemented
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a shallow copy of the parameters dictionary."""
+        return dict(self.params)
+
     def get(self, key: str, default: Any = None) -> Any:
         """Get parameter with optional default value."""
         return self.params.get(key, default)
@@ -68,11 +95,37 @@ class ModelConfig:
         return self
 
     def merge(self, other_params: Dict[str, Any]) -> "ModelConfig":
-        """Alias for update() to maintain backward compatibility."""
+        """Alias for :meth:`update`.
+
+        .. deprecated:: 0.3.9
+            ``merge()`` is identical to ``update()`` and will be removed
+            in v0.5.0. Use ``update()`` instead.
+        """
+        import warnings
+
+        warnings.warn(
+            "ModelConfig.merge() is deprecated and will be removed in "
+            "v0.5.0. Use ModelConfig.update() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.update(other_params)
 
     def has(self, key: str) -> bool:
-        """Check if parameter exists."""
+        """Check if parameter exists.
+
+        .. deprecated:: 0.3.9
+            Use the ``in`` operator instead: ``'key' in config``.
+            Will be removed in v0.5.0.
+        """
+        import warnings
+
+        warnings.warn(
+            "ModelConfig.has() is deprecated and will be removed in "
+            "v0.5.0. Use the 'in' operator instead: 'key' in config.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return key in self.params
 
     def keys(self) -> KeysView[str]:

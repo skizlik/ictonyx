@@ -17,6 +17,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.7] - 2026-03-17
+
+### Fixed
+- `ScikitLearnModelWrapper.assess()` raised `AttributeError` on any
+  regression `predict → assess` call because `self.task` was never set
+  in `__init__`. Fixed by adding `task: Optional[str] = None` to the
+  constructor and assigning `self.task` at the end of `fit()` using the
+  `is_classifier` flag already computed there.
+- `HyperparameterTuner` silently returned the worst model when
+  optimising on `r2`, `f1`, or `auc` because those metrics were absent
+  from the negation condition (Hyperopt minimises). Fixed in all three
+  locations: the `objective` function, the best-loss conversion in
+  `tune()`, and `get_best_params()`.
+- `logger.addHandler()` was called unconditionally at import time in
+  `settings.py`, causing every ictonyx message to be emitted twice in
+  any environment with an already-configured root logger (Jupyter,
+  applications using `logging.basicConfig()`). Handler addition is now
+  guarded by `if not logger.handlers`; `logger.propagate` set to
+  `False`.
+- `VariabilityStudyResults.compare_models_statistically()` passed a
+  full per-epoch `pd.Series` as each observation to
+  `compare_multiple_models()`. With `n_epochs > 1`, statistical tests
+  received `n_runs × n_epochs` observations instead of `n_runs`,
+  inflating the effective sample size and producing incorrect p-values.
+  Fixed by reading directly from `self.final_metrics`, which stores
+  exactly one scalar per run.
+- `ExperimentRunner` seeded each run with `self.seed + run_id`,
+  producing consecutive integers (e.g. 42, 43, 44). Many RNG
+  implementations exhibit correlation between adjacent seeds,
+  introducing systematic bias across runs. Replaced with
+  `np.random.SeedSequence`, which uses a hash-based spawning algorithm
+  to produce independent, uncorrelated child states. Child seeds are
+  generated once at the start of `run_study()` and used in both the
+  standard and process-isolated execution paths.
+- `ScikitLearnModelWrapper.fit()` included fabricated `'loss'` and
+  `'val_loss'` keys (`1 - accuracy`) in classifier training history.
+  `1 - accuracy` is not a valid loss value, cannot be meaningfully
+  compared to Keras `val_loss`, and produces values outside `[0, 1]`
+  for regressors where `score()` returns R². Both keys removed.
+  Classifier history now contains only `accuracy` and `val_accuracy`;
+  regressor history unchanged (`r2`, `val_r2`).
+- `assess_training_stability()` silently reported `converged=False` for
+  every sklearn run after the loss key removal, because the convergence
+  check looked only for `'loss'` and `'val_loss'`. The fallback now
+  checks `'train_loss'`, `'val_loss'`, `'val_accuracy'`, and `'r2'` in
+  order before giving up.
+
+### Changed
+- `ModelConfig.for_variability_study()` default `num_runs` corrected
+  from `5` to `10` to match the documented behaviour. This is a
+  **behavioural change**: studies created with
+  `for_variability_study(base_config)` without an explicit `num_runs`
+  argument will now run 10 times instead of 5.
+
+### Added
+- `tests/test_tuning.py` — first direct test coverage for
+  `HyperparameterTuner`, including a regression test confirming `r2`
+  is negated correctly (bug fixed above). Skipped automatically when
+  `hyperopt` is not installed.
+- `tests/test_integration.py` expanded from 3 tests to cover the full
+  sklearn classifier and regressor pipelines end-to-end, two-model
+  comparison via `compare_models()`, `results.to_dataframe()`,
+  save/load roundtrip, and statistical stability analysis on real
+  runner output.
+
+---
+
 ## [0.3.6] - 2026-03-17
 
 ### Added

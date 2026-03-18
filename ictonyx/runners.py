@@ -603,81 +603,72 @@ class ExperimentRunner:
 def _isolated_training_function(
     model_builder, config, train_data, val_data, test_data, epochs, run_id, run_seed=None
 ):
-    """
-    Training function executed in isolated subprocess.
+    """Training function executed in isolated subprocess.
+
+    Exceptions are intentionally not caught here. They propagate to the
+    subprocess worker (_cloudpickle_subprocess_worker or
+    _standard_subprocess_worker), which puts {"success": False} on the
+    result queue. This ensures training failures surface as proper failed
+    runs rather than as empty history.
     """
     import gc
 
-    try:
-        # Set seeds in subprocess
-        if run_seed is not None:
-            import random
+    # Set seeds in subprocess
+    if run_seed is not None:
+        import random
 
-            random.seed(run_seed)
-            np.random.seed(run_seed)
-            try:
-                import tensorflow as tf
+        random.seed(run_seed)
+        np.random.seed(run_seed)
+        try:
+            import tensorflow as tf
 
-                tf.random.set_seed(run_seed)
-            except ImportError:
-                pass
-            try:
-                import torch
+            tf.random.set_seed(run_seed)
+        except ImportError:
+            pass
+        try:
+            import torch
 
-                torch.manual_seed(run_seed)
-            except ImportError:
-                pass
+            torch.manual_seed(run_seed)
+        except ImportError:
+            pass
 
-        # Build model in subprocess
-        model = model_builder(config)
+    # Build model in subprocess
+    model = model_builder(config)
 
-        # Train model
-        model.fit(
-            train_data=train_data,
-            validation_data=val_data,
-            epochs=epochs,
-            batch_size=config.get("batch_size", 32),
-            verbose=config.get("verbose", 0),
-        )
+    # Train model
+    model.fit(
+        train_data=train_data,
+        validation_data=val_data,
+        epochs=epochs,
+        batch_size=config.get("batch_size", 32),
+        verbose=config.get("verbose", 0),
+    )
 
-        # Extract history
-        history = {}
-        if model.training_result is not None:
-            history = dict(model.training_result.history)
+    # Extract history
+    history = {}
+    if model.training_result is not None:
+        history = dict(model.training_result.history)
 
-        # Evaluate on test data if available
-        test_metrics = {}
-        if test_data is not None:
-            try:
-                test_metrics = model.evaluate(data=test_data)
-                # Ensure all values are serializable
-                if isinstance(test_metrics, dict):
-                    test_metrics = {
-                        k: float(v) if isinstance(v, (np.floating, np.integer)) else v
-                        for k, v in test_metrics.items()
-                    }
-            except Exception as e:
-                test_metrics = {"error": str(e)}
+    # Evaluate on test data if available
+    test_metrics = {}
+    if test_data is not None:
+        try:
+            test_metrics = model.evaluate(data=test_data)
+            if isinstance(test_metrics, dict):
+                test_metrics = {
+                    k: float(v) if isinstance(v, (np.floating, np.integer)) else v
+                    for k, v in test_metrics.items()
+                }
+        except Exception as e:
+            test_metrics = {"error": str(e)}
 
-        # Cleanup before returning
-        if hasattr(model, "cleanup"):
-            model.cleanup()
-        del model
-        gc.collect()
+    # Cleanup before returning
+    if hasattr(model, "cleanup"):
+        model.cleanup()
+    del model
+    gc.collect()
 
-        return {"history": history, "test_metrics": test_metrics, "run_id": run_id}
-
-    except Exception as e:
-        # Return error information
-        import traceback
-
-        return {
-            "history": {},
-            "test_metrics": {},
-            "run_id": run_id,
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-        }
+    return {"history": history, "test_metrics": test_metrics, "run_id": run_id}
 
 
 @dataclass

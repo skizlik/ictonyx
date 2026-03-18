@@ -1025,6 +1025,18 @@ if SKLEARN_AVAILABLE:
 
         @classmethod
         def load_model(cls, path: str) -> "ScikitLearnModelWrapper":
+            """Load a pickled scikit-learn model.
+
+            Warning:
+                Uses ``pickle``. Only load files from **trusted sources**.
+                Pickle files from untrusted sources can execute arbitrary code.
+
+            Args:
+                path: Path written by :meth:`save_model`.
+
+            Returns:
+                ScikitLearnModelWrapper wrapping the loaded model.
+            """
             with open(path, "rb") as f:
                 loaded_model = pickle.load(f)
             return cls(loaded_model)

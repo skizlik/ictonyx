@@ -15,6 +15,11 @@ logger = settings.logger
 def save_object(obj: Any, path: str):
     """Serialize a Python object to disk using pickle.
 
+    Warning:
+        The resulting file is a pickle file. Pickle files can execute
+        arbitrary code when loaded. Only share with trusted recipients
+        and only load files from trusted sources.
+
     Args:
         obj: Any picklable Python object.
         path: Destination file path (typically ``.pkl``).
@@ -27,6 +32,11 @@ def save_object(obj: Any, path: str):
 def load_object(path: str) -> Any:
     """Deserialize a Python object from a pickle file.
 
+    Warning:
+        Pickle deserialization can execute arbitrary code. Only load
+        files created by :func:`save_object` or received from a fully
+        trusted source.
+
     Args:
         path: Path to the pickle file.
 
@@ -36,6 +46,8 @@ def load_object(path: str) -> Any:
     Raises:
         FileNotFoundError: If ``path`` does not exist.
     """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Object file not found: {path}")
     with open(path, "rb") as f:
         obj = pickle.load(f)
     logger.info(f"Object loaded from {path}")

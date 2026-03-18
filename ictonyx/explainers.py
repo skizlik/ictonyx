@@ -44,6 +44,54 @@ def _check_matplotlib():
         )
 
 
+# Tree model detection for SHAP explainer selection.
+# Imported lazily at module load so sklearn is not a hard dependency.
+try:
+    from sklearn.ensemble import (
+        AdaBoostClassifier,
+        ExtraTreesClassifier,
+        ExtraTreesRegressor,
+        GradientBoostingClassifier,
+        GradientBoostingRegressor,
+        HistGradientBoostingClassifier,
+        HistGradientBoostingRegressor,
+        RandomForestClassifier,
+        RandomForestRegressor,
+    )
+    from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+
+    _SKLEARN_TREE_TYPES = (
+        AdaBoostClassifier,
+        DecisionTreeClassifier,
+        DecisionTreeRegressor,
+        ExtraTreesClassifier,
+        ExtraTreesRegressor,
+        GradientBoostingClassifier,
+        GradientBoostingRegressor,
+        HistGradientBoostingClassifier,
+        HistGradientBoostingRegressor,
+        RandomForestClassifier,
+        RandomForestRegressor,
+    )
+    _HAS_SKLEARN_TREES = True
+except ImportError:
+    _SKLEARN_TREE_TYPES = ()
+    _HAS_SKLEARN_TREES = False
+
+
+def _is_tree_model(model: Any) -> bool:
+    """Return ``True`` if *model* should use ``shap.TreeExplainer``.
+
+    Uses ``isinstance()`` for known sklearn tree types. Falls back to
+    class-name fragment matching for XGBoost, LightGBM, and CatBoost,
+    which are not sklearn classes but are supported by TreeExplainer.
+    """
+    if _HAS_SKLEARN_TREES and isinstance(model, _SKLEARN_TREE_TYPES):
+        return True
+    model_type = type(model).__name__
+    return any(hint in model_type for hint in ("XGB", "LGBM", "LightGBM", "CatBoost", "Booster"))
+
+
 def plot_shap_summary(
     model_wrapper: "BaseModelWrapper",
     X_data: np.ndarray,
@@ -62,10 +110,7 @@ def plot_shap_summary(
     _check_shap()
     _check_matplotlib()
 
-    model_type = type(model_wrapper.model).__name__
-
-    if "Tree" in model_type:
-        # For tree-based models, use TreeExplainer
+    if _is_tree_model(model_wrapper.model):
         explainer = shap.TreeExplainer(model_wrapper.model)
         shap_values = explainer.shap_values(X_data)
 
@@ -143,10 +188,7 @@ def plot_shap_waterfall(
             f"sample_index {sample_index} is out of range for data with {len(X_data)} samples"
         )
 
-    model_type = type(model_wrapper.model).__name__
-
-    # Get explainer (same logic as summary plot)
-    if "Tree" in model_type:
+    if _is_tree_model(model_wrapper.model):
         explainer = shap.TreeExplainer(model_wrapper.model)
     elif hasattr(model_wrapper.model, "layers"):
         background_size = min(100, len(X_data))
@@ -239,16 +281,8 @@ def plot_shap_dependence(
                 f"Feature index {feature_index} is out of range for data with {X_data.shape[1]} features"
             )
 
-    model_type = type(model_wrapper.model).__name__
-
     try:
-        # Get explainer
-        if (
-            "Tree" in model_type
-            or "Forest" in model_type
-            or "XGB" in model_type
-            or "LGB" in model_type
-        ):
+        if _is_tree_model(model_wrapper.model):
             explainer = shap.TreeExplainer(model_wrapper.model)
         elif hasattr(model_wrapper.model, "layers"):
             try:
@@ -312,10 +346,7 @@ def get_shap_feature_importance(
     """
     _check_shap()
 
-    model_type = type(model_wrapper.model).__name__
-
-    # Get explainer
-    if "Tree" in model_type:
+    if _is_tree_model(model_wrapper.model):
         explainer = shap.TreeExplainer(model_wrapper.model)
     elif hasattr(model_wrapper.model, "layers"):
         background_size = min(100, len(X_data))

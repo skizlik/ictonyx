@@ -120,17 +120,25 @@ class MemoryManager:
                     "functions with process isolation: pip install cloudpickle"
                 )
 
-        # Setup multiprocessing context (spawn for clean isolation)
+        # Use get_context() rather than set_start_method() to avoid mutating
+        # global process state. set_start_method(force=True) would break any
+        # other code in this process that relies on the default start method
+        # (e.g. PyTorch DataLoader uses fork on Linux).
         try:
             current_method = mp.get_start_method(allow_none=True)
-            if current_method != "spawn":
-                mp.set_start_method("spawn", force=True)
-            self.ctx = mp.get_context("spawn")
-        except RuntimeError:
-            # Already set, just get context
+            if current_method is not None and current_method != "spawn":
+                warnings.warn(
+                    f"Process isolation works best with the 'spawn' start method, "
+                    f"but the process is already using '{current_method}'. "
+                    "GPU memory isolation may be incomplete. "
+                    "Call mp.set_start_method('spawn') before importing ictonyx "
+                    "to avoid this warning.",
+                    UserWarning,
+                    stacklevel=3,
+                )
             self.ctx = mp.get_context("spawn")
         except Exception as e:
-            warnings.warn(f"Could not setup spawn context: {e}")
+            warnings.warn(f"Could not obtain spawn context: {e}")
             self.ctx = mp.get_context()
 
     def setup(self) -> bool:

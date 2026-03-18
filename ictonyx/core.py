@@ -859,14 +859,36 @@ if SKLEARN_AVAILABLE:
             if isinstance(train_data, tuple) and len(train_data) == 2:
                 X_train, y_train = train_data
 
-                # Filter out Keras-specific kwargs that sklearn doesn't understand
+                # kwargs that sklearn's fit() legitimately accepts
+                _SKLEARN_FIT_KWARGS = {"sample_weight"}
+
+                # Runner-injected kwargs that are intentionally ignored for
+                # cross-framework compatibility
+                _KNOWN_IGNORED_KWARGS = {
+                    "epochs",
+                    "batch_size",
+                    "verbose",
+                    "validation_split",
+                    "callbacks",
+                    "shuffle",
+                    "steps_per_epoch",
+                }
+
                 sklearn_kwargs = {}
                 for key, value in kwargs.items():
-                    # Only pass through sample_weight; all other kwargs are silently ignored
-                    # (epochs, batch_size, verbose, etc. are Keras-specific and don't apply)
-                    if key in ["sample_weight"]:
+                    if key in _SKLEARN_FIT_KWARGS:
                         sklearn_kwargs[key] = value
-                    # Silently ignore other parameters (like validation_split, callbacks, etc.)
+                    elif key not in _KNOWN_IGNORED_KWARGS:
+                        import warnings as _warnings
+
+                        _warnings.warn(
+                            f"ScikitLearnModelWrapper.fit() received unrecognized "
+                            f"keyword argument '{key}={value!r}'. This argument has "
+                            f"been ignored. If it is a valid sklearn fit() parameter, "
+                            f"add it to _SKLEARN_FIT_KWARGS in core.py.",
+                            UserWarning,
+                            stacklevel=3,
+                        )
 
                 # Fit the model (sklearn models ignore epochs/batch_size/verbose from signature)
                 self.model.fit(X_train, y_train, **sklearn_kwargs)

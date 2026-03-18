@@ -330,7 +330,7 @@ class ExperimentRunner:
                 # Store test metrics
                 test_metrics = result["result"].get("test_metrics")
                 if test_metrics:
-                    self.final_test_metrics.append(test_metrics)
+                    self.final_test_metrics.append({"run_id": run_id, **test_metrics})
                     for key, value in test_metrics.items():
                         self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
 
@@ -418,7 +418,7 @@ class ExperimentRunner:
             if self.test_data is not None:
                 try:
                     test_metrics = wrapped_model.evaluate(data=self.test_data)
-                    self.final_test_metrics.append(test_metrics)
+                    self.final_test_metrics.append({"run_id": run_id, **test_metrics})
                     for key, value in test_metrics.items():
                         self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
                 except Exception as e:
@@ -745,21 +745,33 @@ class VariabilityStudyResults:
         return sorted(self.final_metrics.keys())
 
     def to_dataframe(self) -> pd.DataFrame:
-        """Convert results to a summary DataFrame with one row per run."""
+        """Convert results to a summary DataFrame with one row per run.
+
+        Test metrics are aligned by ``run_id``, not list position, so a
+        failed test evaluation for one run does not corrupt the alignment
+        of subsequent runs.
+        """
         if not self.all_runs_metrics:
             return pd.DataFrame()
 
+        # Index test metrics by run_id for reliable O(1) lookup.
+        test_by_run: Dict[int, Dict] = {
+            m["run_id"]: {k: v for k, v in m.items() if k != "run_id"}
+            for m in self.final_test_metrics
+            if "run_id" in m
+        }
+
         rows = []
         for i, df in enumerate(self.all_runs_metrics):
-            row: Dict[str, Any] = {"run_id": i + 1}
+            run_id = int(df["run_num"].iloc[0]) if "run_num" in df.columns else i + 1
+            row: Dict[str, Any] = {"run_id": run_id}
 
             for col in df.columns:
                 if col not in {"run_num", "epoch", "run_id"}:
                     row[f"final_{col}"] = float(df[col].iloc[-1])
 
-            if i < len(self.final_test_metrics):
-                for key, value in self.final_test_metrics[i].items():
-                    row[f"test_{key}"] = value
+            for key, value in test_by_run.get(run_id, {}).items():
+                row[f"test_{key}"] = value
 
             rows.append(row)
 
@@ -1020,6 +1032,7 @@ def run_grid_study(
     metric: str = "val_accuracy",
     use_process_isolation: bool = True,
     dry_run: bool = False,
+    verbose: bool = True,
 ) -> GridStudyResults:
     """Run a variability study across a grid of parameter configurations.
 
@@ -1052,6 +1065,8 @@ def run_grid_study(
         dry_run:               If True, print execution plan and return
                                without training. Use to verify configuration
                                before committing to a long run.
+        verbose:               If ``True``, log study progress.
+                               Default ``True``.
 
     Returns:
         :class:`GridStudyResults`
@@ -1091,19 +1106,20 @@ def run_grid_study(
     total_runs = n_configs * num_runs
 
     if dry_run:
-        print("Grid Study — Dry Run")
-        print("=" * 40)
-        print(f"Parameter grid:")
-        for name, param_values in param_grid.items():
-            print(f"  {name}: {param_values}")
-        print(f"\nConfigurations:         {n_configs}")
-        print(f"Runs per configuration: {num_runs}")
-        print(f"Total training runs:    {total_runs}")
-        print(f"Metric:                 {metric}")
-        print(f"Process isolation:      {use_process_isolation}")
-        print("\nConfigurations to run:")
-        for i, combo in enumerate(combinations, 1):
-            print(f"  {i:>3}. {combo}")
+        if verbose:
+            logger.info("Grid Study — Dry Run")
+            logger.info("=" * 40)
+            logger.info("Parameter grid:")
+            for name, param_values in param_grid.items():
+                logger.info(f"  {name}: {param_values}")
+            logger.info(f"\nConfigurations:         {n_configs}")
+            logger.info(f"Runs per configuration: {num_runs}")
+            logger.info(f"Total training runs:    {total_runs}")
+            logger.info(f"Metric:                 {metric}")
+            logger.info(f"Process isolation:      {use_process_isolation}")
+            logger.info("\nConfigurations to run:")
+            for i, combo in enumerate(combinations, 1):
+                logger.info(f"  {i:>3}. {combo}")
         return GridStudyResults(
             results={}, param_grid=param_grid, base_config=base_config, metric=metric
         )
@@ -1111,9 +1127,10 @@ def run_grid_study(
     results_dict: Dict[Tuple, VariabilityStudyResults] = {}
 
     for i, param_combo in enumerate(combinations, 1):
-        print(f"\n{'='*50}")
-        print(f"Configuration {i}/{n_configs}: {param_combo}")
-        print(f"{'='*50}")
+        if verbose:
+            logger.info(f"\n{'=' * 50}")
+            logger.info(f"Configuration {i}/{n_configs}: {param_combo}")
+            logger.info(f"{'=' * 50}")
 
         config = base_config.copy().update(param_combo)
 
@@ -1130,12 +1147,14 @@ def run_grid_study(
 
         try:
             values: pd.Series = pd.Series(result.get_metric_values(metric))
-            print(
-                f"  Mean: {values.mean():.4f}  SD: {values.std():.4f}  "
-                f"SE: {values.std()/np.sqrt(len(values)):.4f}"
-            )
+            if verbose:
+                logger.info(
+                    f"  Mean: {values.mean():.4f}  SD: {values.std():.4f}  "
+                    f"SE: {values.std() / np.sqrt(len(values)):.4f}"
+                )
         except KeyError:
-            print(f"  Warning: metric '{metric}' not found in results.")
+            if verbose:
+                logger.warning(f"  Warning: metric '{metric}' not found in results.")
 
     return GridStudyResults(
         results=results_dict, param_grid=param_grid, base_config=base_config, metric=metric

@@ -303,9 +303,24 @@ def check_independence(
             ``norm.ppf(1 - alpha/2) / sqrt(n)``.
 
     Returns:
-        Tuple of ``(is_independent, details_dict)`` where
-        ``is_independent`` is ``True`` if no significant autocorrelation
-        was detected.
+        Tuple of ``(is_independent, details_dict)`` where:
+
+        * ``is_independent`` is ``True`` if no lag's autocorrelation
+          exceeds the significance threshold.
+        * ``details_dict`` contains keys:
+
+          - ``'autocorrelations'``: dict mapping ``'lag_N'`` strings to
+            the autocorrelation coefficient at lag N.
+          - ``'significant_lags'``: list of lag integers exceeding the
+            threshold.
+          - ``'max_autocorr'``: the largest absolute autocorrelation
+            observed across all checked lags.
+          - ``'threshold'``: the significance threshold used, equal to
+            ``norm.ppf(1-alpha/2) / sqrt(n)``.
+          - ``'n'``: the number of valid (non-NaN) observations.
+
+        Returns ``(False, {'error': '...'})`` if the series has fewer
+        valid observations than ``max_lag + 2``.
     """
 
     autocorr_results = {}
@@ -328,10 +343,13 @@ def check_independence(
 
     is_independent = len(significant_lags) == 0
 
+    n = len(data.dropna())
     details = {
         "autocorrelations": autocorr_results,
         "significant_lags": significant_lags,
-        "max_autocorr": max(autocorr_results.values()) if autocorr_results else 0,
+        "max_autocorr": (max(abs(v) for v in autocorr_results.values()) if autocorr_results else 0),
+        "threshold": critical_value / np.sqrt(n) if n > 0 else None,
+        "n": n,
     }
 
     return is_independent, details
@@ -489,7 +507,6 @@ def apply_multiple_comparison_correction(
         method: Correction method — ``'bonferroni'``, ``'holm'``
             (recommended), or ``'fdr_bh'`` (Benjamini-Hochberg).
             Default ``'holm'``.
-        alpha: Significance level. Default 0.05.
 
     Returns:
         List of corrected p-values in the same order as the input.

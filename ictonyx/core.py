@@ -964,8 +964,8 @@ if SKLEARN_AVAILABLE:
                 )
                 metrics["recall"] = recall_score(y_test, y_pred, average=average, zero_division=0)
                 metrics["f1"] = f1_score(y_test, y_pred, average=average, zero_division=0)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"Could not compute precision/recall/f1: {exc}")
 
             try:
                 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -974,8 +974,8 @@ if SKLEARN_AVAILABLE:
                     metrics["r2"] = r2_score(y_test, y_pred)
                     metrics["mse"] = mean_squared_error(y_test, y_pred)
                     metrics["mae"] = mean_absolute_error(y_test, y_pred)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"Could not compute regression metrics: {exc}")
 
             return metrics
 

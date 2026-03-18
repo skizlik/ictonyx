@@ -61,25 +61,54 @@ except ImportError:
 
 
 class DataHandler(ABC):
-    """Abstract base class for loading and splitting datasets.
+    """Abstract base class for all data handlers.
 
-    Provides a consistent interface for all data formats. Concrete
-    subclasses handle specific formats:
+    Provides a consistent interface regardless of data source.
+    Handlers that load from the file system should inherit from
+    :class:`FileDataHandler` instead of this class directly.
 
-    * :class:`TabularDataHandler` — CSV files and DataFrames.
-    * :class:`ImageDataHandler` — Image directories with class subfolders.
-    * :class:`TextDataHandler` — Text datasets with a text column.
-    * :class:`TimeSeriesDataHandler` — Sequential data with windowing.
-    * :class:`ArraysDataHandler` — Pre-loaded ``(X, y)`` numpy arrays.
+    All subclasses must implement :meth:`load`, :attr:`data_type`,
+    and :attr:`return_format`. The returned dict from :meth:`load`
+    must have keys ``'train_data'``, ``'val_data'``, and
+    ``'test_data'``, each a ``(X, y)`` tuple or ``None``.
+    """
 
-    All subclasses return a dict from :meth:`load` with keys
-    ``'train_data'``, ``'val_data'``, and ``'test_data'``, each
-    containing a ``(X, y)`` tuple or ``None`` if that split was not
-    requested.
+    @abstractmethod
+    def load(self, **kwargs: Any) -> Dict[str, Any]:
+        """Load and split the dataset.
 
-    For automatic format detection, use
-    :func:`auto_resolve_handler` or pass data directly to
-    :func:`~ictonyx.api.variability_study`.
+        Returns:
+            Dict with keys ``'train_data'``, ``'val_data'``,
+            ``'test_data'``.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def data_type(self) -> str:
+        """String identifier for the data type this handler processes."""
+        pass
+
+    @property
+    @abstractmethod
+    def return_format(self) -> str:
+        """String describing the format returned by :meth:`load`."""
+        pass
+
+    def get_data_info(self) -> Dict[str, Any]:
+        """Get basic information about the dataset."""
+        return {
+            "data_type": self.data_type,
+            "return_format": self.return_format,
+        }
+
+
+class FileDataHandler(DataHandler, ABC):
+    """Abstract base for file-system-backed data handlers.
+
+    Owns path existence validation. ``ImageDataHandler``,
+    ``TabularDataHandler``, ``TextDataHandler``, and
+    ``TimeSeriesDataHandler`` inherit from this class.
 
     Args:
         data_path: Path to the data source (file or directory).
@@ -89,12 +118,6 @@ class DataHandler(ABC):
     """
 
     def __init__(self, data_path: str):
-        """
-        Initialize the data handler with a path to the data source.
-
-        Args:
-            data_path (str): Path to the data source (file or directory)
-        """
         self.data_path = data_path
         self._validate_data_path()
 
@@ -103,53 +126,14 @@ class DataHandler(ABC):
         if not os.path.exists(self.data_path):
             raise FileNotFoundError(f"Data path not found: {self.data_path}")
 
-    @abstractmethod
-    def load(self, **kwargs) -> Dict[str, Any]:
-        """
-        Loads and prepares the dataset, and splits it into training, validation,
-        and test sets.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing the data splits, with keys
-                            'train_data', 'val_data', and 'test_data'.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def data_type(self) -> str:
-        """Return a string identifier for the data type this handler processes."""
-        pass
-
-    @property
-    @abstractmethod
-    def return_format(self) -> str:
-        """
-        Return a string describing the format of data returned by load().
-
-        Possible values:
-        - "tf_datasets": Returns tf.data.Dataset objects
-        - "split_arrays": Returns (X, y) tuple arrays
-        - "generators": Returns generator objects
-        """
-        pass
-
     def get_data_info(self) -> Dict[str, Any]:
-        """
-        Get basic information about the dataset.
-
-        Returns:
-            Dict with dataset statistics and properties
-        """
-        return {
-            "data_path": self.data_path,
-            "data_type": self.data_type,
-            "return_format": self.return_format,
-            "path_exists": os.path.exists(self.data_path),
-        }
+        info = super().get_data_info()
+        info["data_path"] = self.data_path
+        info["path_exists"] = os.path.exists(self.data_path)
+        return info
 
 
-class ImageDataHandler(DataHandler):
+class ImageDataHandler(FileDataHandler):
     """Data handler for image classification datasets in directory format.
 
     Expects a directory structure where each subdirectory is a class
@@ -408,7 +392,7 @@ class ImageDataHandler(DataHandler):
         return info
 
 
-class TabularDataHandler(DataHandler):
+class TabularDataHandler(FileDataHandler):
     """Data handler for structured tabular data from CSV files or DataFrames.
 
     Loads data, validates columns, and splits into train/val/test sets.
@@ -597,7 +581,7 @@ class TabularDataHandler(DataHandler):
         return info
 
 
-class TextDataHandler(DataHandler):
+class TextDataHandler(FileDataHandler):
     """Data handler for text classification datasets from CSV files.
 
     Loads text data from a CSV, tokenizes using a Keras ``Tokenizer``,
@@ -784,7 +768,7 @@ class TextDataHandler(DataHandler):
         return info
 
 
-class TimeSeriesDataHandler(DataHandler):
+class TimeSeriesDataHandler(FileDataHandler):
     """Data handler for time series data with sliding window extraction.
 
     Converts a sequential dataset into supervised learning format by
@@ -953,25 +937,21 @@ class ArraysDataHandler(DataHandler):
         return "split_arrays"
 
     def __init__(self, X: Union[np.ndarray, List, Any], y: Union[np.ndarray, List, Any]):
-        """
-        Initialize with existing arrays.
+        """Initialize with pre-loaded arrays.
 
         Args:
-            X: Feature array/list (n_samples, n_features)
-            y: Label array/list (n_samples,)
-        """
-        # Dummy path since data is in memory
-        super().__init__("in_memory_arrays")
+            X: Feature array/list ``(n_samples, n_features)``.
+            y: Label array/list ``(n_samples,)``.
 
+        Raises:
+            ValueError: If ``X`` and ``y`` have different lengths.
+        """
+        # DataHandler has no __init__ to call — no path, no validation.
         self.X = np.array(X)
         self.y = np.array(y)
 
         if len(self.X) != len(self.y):
             raise ValueError(f"Length mismatch: X has {len(self.X)}, y has {len(self.y)}")
-
-    def _validate_data_path(self):
-        """Skip path validation for in-memory arrays."""
-        pass
 
     def load(
         self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42, **kwargs: Any

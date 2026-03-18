@@ -123,7 +123,7 @@ def variability_study(
         {
             "epochs": epochs,
             "batch_size": batch_size,
-            "verbose": 1 if settings._VERBOSE else 0,
+            "verbose": 1 if settings.should_verbose() else 0,
             **kwargs,
         }
     )

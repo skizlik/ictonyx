@@ -111,3 +111,11 @@ def set_theme(theme_name: str):
 def should_display() -> bool:
     """Internal check for plotting functions."""
     return _DISPLAY_PLOTS
+
+
+def should_verbose() -> bool:
+    """Return the current global verbosity setting.
+
+    Use this instead of accessing ``_VERBOSE`` directly.
+    """
+    return _VERBOSE

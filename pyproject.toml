@@ -50,7 +50,6 @@ torch = "^2.0.0"
 mlflow = "^2.0.0"
 shap = "^0.43.0"
 hyperopt = "^0.2.7"
-protobuf = "<4.0.0"
 
 [tool.poetry.group.dev.dependencies]
 jupyterlab = "^4.0.0"

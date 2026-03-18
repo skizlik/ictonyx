@@ -199,6 +199,20 @@ class ExperimentRunner:
         except ImportError:
             pass
 
+    @staticmethod
+    def _standardize_history_df(df: pd.DataFrame) -> pd.DataFrame:
+        """Rename raw framework history columns to ictonyx standard names.
+
+        Only renames columns that are present; absent columns are silently
+        skipped. Returns a new DataFrame; does not modify in place.
+        """
+        rename_map = {
+            "accuracy": "train_accuracy",
+            "loss": "train_loss",
+        }
+        existing = {k: v for k, v in rename_map.items() if k in df.columns}
+        return df.rename(columns=existing, inplace=False)
+
     def _run_log(self, msg: str, level: str = "info"):
         """Log a per-run message, respecting tqdm when active.
 
@@ -302,9 +316,7 @@ class ExperimentRunner:
                 history_df["epoch"] = range(1, len(history_df) + 1)
 
                 # Standardize column names
-                history_df.rename(
-                    columns={"accuracy": "train_accuracy", "loss": "train_loss"}, inplace=True
-                )
+                history_df = self._standardize_history_df(history_df)
 
                 # Store final values for ALL tracked metrics
                 for col in history_df.columns:
@@ -391,9 +403,7 @@ class ExperimentRunner:
             history_df["epoch"] = range(1, len(history_df) + 1)
 
             # Standardize column names
-            history_df.rename(
-                columns={"accuracy": "train_accuracy", "loss": "train_loss"}, inplace=True
-            )
+            history_df = self._standardize_history_df(history_df)
 
             # Store final values for ALL tracked metrics
             for col in history_df.columns:

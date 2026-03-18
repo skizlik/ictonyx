@@ -1,5 +1,5 @@
 # ictonyx/__init__.py
-# v.0.3.7
+# v.0.3.8
 
 """
 Ictonyx: A Machine Learning Framework for Variability and Reproducibility Analysis
@@ -7,6 +7,9 @@ Ictonyx: A Machine Learning Framework for Variability and Reproducibility Analys
 Ictonyx provides tools for conducting systematic variability studies, statistical analysis
 of model performance, experiment tracking, and comprehensive ML workflow management.
 """
+
+__version__ = "0.3.8"
+
 import os
 
 # Core imports (always available)
@@ -332,9 +335,6 @@ try:
     __all__.extend(["variability_study", "compare_models"])
 except ImportError:
     pass
-
-# Library version
-__version__ = "0.3.7"
 
 
 # Feature availability summary

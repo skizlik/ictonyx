@@ -17,6 +17,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.8] - 2026-03-18
+
+### Fixed
+- `_isolated_training_function()` no longer catches all exceptions
+  internally. Exceptions now propagate to the subprocess worker, which
+  returns `{"success": False}`. Training crashes inside subprocesses
+  were previously silently treated as empty history with no error
+  message surfaced to the caller.
+- `cloudpickle` and `psutil` declared as `optional = true` in
+  `[tool.poetry.dependencies]`. `pip install ictonyx[isolation]` now
+  actually installs these packages.
+- `check_independence()`: removed `from scipy.stats import norm` inside
+  the function body; replaced with `stats.norm` from the module-level
+  import. The naked import re-executed on every call.
+- `apply_multiple_comparison_correction()`: removed phantom `alpha`
+  parameter from docstring (the parameter does not exist in the
+  signature).
+- `settings.should_verbose()` added as a public accessor for `_VERBOSE`;
+  `api.py` no longer accesses the private attribute directly.
+- `ScikitLearnModelWrapper.evaluate()`: replaced two bare
+  `except Exception: pass` blocks with `logger.warning()` calls.
+  Failures computing precision/recall/f1 or R²/MSE/MAE were previously
+  silent.
+- `check_independence()` returned dict now includes `threshold` and `n`
+  keys. `max_autocorr` now uses `abs()` so large negative
+  autocorrelations are correctly captured. `Returns:` docstring
+  completed with full key inventory.
+- `protobuf = "<4.0.0"` constraint removed from ml dependency group;
+  conflicted with TensorFlow 2.16+ and MLflow 2.x.
+- `_standardize_history_df()` extracted as a shared static method on
+  `ExperimentRunner`; removes duplicated column rename logic from both
+  `_run_single_fit_isolated()` and `_run_single_fit_standard()`.
+- `__version__` moved to the top of `__init__.py`, before imports.
+- `PyTorchModelWrapper.load_model()` now defaults to
+  `weights_only=True`, preventing arbitrary code execution when loading
+  checkpoints from untrusted sources. A `weights_only` parameter is
+  exposed for callers who need to load legacy checkpoints.
+- Security warnings added to `save_object()`, `load_object()`, and
+  `ScikitLearnModelWrapper.load_model()` docstrings. `load_object()`
+  now raises `FileNotFoundError` with a clean message before attempting
+  to open the file, matching what the docstring already promised.
+- `MemoryManager` no longer calls `mp.set_start_method("spawn",
+  force=True)`, which permanently mutated global process state and
+  could break PyTorch `DataLoader` on Linux. Now uses
+  `mp.get_context("spawn")` throughout.
+
+### Added
+- `SECURITY.md` documenting pickle risks, the `weights_only` default
+  for PyTorch checkpoints, and a vulnerability reporting path.
+- `mypy` added to CI lint job and to dev dependencies. All 74 type
+  errors resolved; `py.typed` marker is now backed by actual type
+  checking.
+
+---
+
+
 ## [0.3.7] - 2026-03-17
 
 ### Fixed

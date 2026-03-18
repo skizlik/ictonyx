@@ -312,9 +312,7 @@ def check_independence(
     significant_lags = []
 
     # Derive critical value from alpha
-    from scipy.stats import norm
-
-    critical_value = norm.ppf(1 - alpha / 2)
+    critical_value = stats.norm.ppf(1 - alpha / 2)
 
     for lag in range(1, min(max_lag + 1, len(data) // 4)):
         try:

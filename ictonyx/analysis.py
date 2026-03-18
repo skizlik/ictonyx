@@ -491,6 +491,28 @@ def _interpret_eta_squared(eta_sq: float) -> str:
         return "large"
 
 
+def _interpret_epsilon_squared(eps_sq: float) -> str:
+    """Interpret epsilon-squared effect size magnitude (Kruskal-Wallis).
+
+    Epsilon-squared is the recommended effect size for the Kruskal-Wallis
+    H-test. Uses the same conventional thresholds as eta-squared.
+
+    Args:
+        eps_sq: Epsilon-squared value in range [0, 1].
+
+    Returns:
+        One of ``'negligible'``, ``'small'``, ``'medium'``, ``'large'``.
+    """
+    if eps_sq < 0.01:
+        return "negligible"
+    elif eps_sq < 0.06:
+        return "small"
+    elif eps_sq < 0.14:
+        return "medium"
+    else:
+        return "large"
+
+
 # MULTIPLE COMPARISON CORRECTIONS
 
 
@@ -714,16 +736,18 @@ def wilcoxon_signed_rank_test(
             if len(non_zero_data) < 6:
                 raise ValueError("Insufficient non-zero differences for Wilcoxon test")
 
-            statistic, p_value = wilcoxon(non_zero_data, alternative=alternative)
-            result.statistic = float(statistic)
-            result.p_value = float(p_value)
+            wilcoxon_result = wilcoxon(non_zero_data, alternative=alternative, method="approx")
+            result.statistic = float(wilcoxon_result.statistic)
+            result.p_value = float(wilcoxon_result.pvalue)
 
-            # Effect size (r = Z / sqrt(N))
+            # Effect size r = |Z| / sqrt(N) using scipy's tie-corrected Z.
+            # method='approx' populates WilcoxonResult.zstatistic, which
+            # applies the tie-corrected variance denominator internally.
+            # The hasattr guard protects against future scipy API changes.
             n = len(non_zero_data)
-            if n > 0:
-                z_score = (statistic - n * (n + 1) / 4) / np.sqrt(n * (n + 1) * (2 * n + 1) / 24)
+            if n > 0 and hasattr(wilcoxon_result, "zstatistic"):
+                z_score = float(wilcoxon_result.zstatistic)
                 r = abs(z_score) / np.sqrt(n)
-
                 result.effect_size = r
                 result.effect_size_name = "r (effect size)"
                 result.effect_size_interpretation = _interpret_wilcoxon_r(r)
@@ -856,7 +880,7 @@ def kruskal_wallis_test(
 
     Returns:
         :class:`StatisticalTestResult` with H-statistic, p-value,
-        eta-squared effect size, and interpretation.
+        epsilon-squared effect size, and interpretation.
     """
     _check_scipy()
 
@@ -911,7 +935,7 @@ def kruskal_wallis_test(
 
         result.effect_size = epsilon_sq
         result.effect_size_name = "epsilon-squared"
-        result.effect_size_interpretation = _interpret_eta_squared(epsilon_sq)
+        result.effect_size_interpretation = _interpret_epsilon_squared(epsilon_sq)
 
     except Exception as e:
         # Create a failure result object for consistent return type

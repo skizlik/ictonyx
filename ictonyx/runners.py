@@ -812,10 +812,11 @@ class VariabilityStudyResults:
             )
 
         values = self.final_metrics[metric_name]
-        if len(values) < 2:
+        if len(values) < 3:
             raise ValueError(
-                f"At least 2 runs are required for statistical comparison, "
-                f"got {len(values)} for metric '{metric_name}'."
+                f"At least 3 runs are required for Kruskal-Wallis comparison "
+                f"(got {len(values)} for metric '{metric_name}'). "
+                f"Run the study with num_runs >= 3."
             )
 
         # Each run IS one observation — a single-element Series.

@@ -18,7 +18,7 @@ try:
 
     HAS_MLFLOW = True
 except ImportError:
-    mlflow = None
+    mlflow = None  # type: ignore[assignment]
     HAS_MLFLOW = False
 
 # Optional system info dependencies
@@ -29,8 +29,8 @@ try:
 
     HAS_SYSTEM_INFO = True
 except ImportError:
-    platform = None
-    psutil = None
+    platform = None  # type: ignore[assignment]
+    psutil = None  # type: ignore[assignment]
     HAS_SYSTEM_INFO = False
 
 
@@ -169,7 +169,12 @@ class MLflowLogger(BaseLogger):
             experiment_id = mlflow.create_experiment(experiment_name)
         except mlflow.exceptions.MlflowException:
             # Experiment already exists
-            experiment_id = mlflow.get_experiment_by_name(experiment_name).experiment_id
+            _exp = mlflow.get_experiment_by_name(experiment_name)
+            if _exp is None:
+                raise RuntimeError(
+                    f"MLflow experiment '{experiment_name}' not found after creation attempt."
+                )
+            experiment_id = _exp.experiment_id
 
         mlflow.set_experiment(experiment_name)
 

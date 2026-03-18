@@ -47,7 +47,7 @@ try:
 
     HAS_MATPLOTLIB = True
 except ImportError:
-    plt = None
+    plt = None  # type: ignore[assignment]
     HAS_MATPLOTLIB = False
 
 # Optional sklearn for data splitting
@@ -287,7 +287,9 @@ class ImageDataHandler(DataHandler):
             placeholder = tf.zeros((*self.image_size, 3), dtype=tf.float32)
             return placeholder, label
 
-    def load(self, validation_split: float = 0.2, test_split: float = 0.1) -> Dict[str, Any]:
+    def load(
+        self, validation_split: float = 0.2, test_split: float = 0.1, **kwargs: Any
+    ) -> Dict[str, Any]:
         """
         Loads and splits the dataset into training, validation, and test sets,
         ensuring stratified sampling.
@@ -437,7 +439,7 @@ class TabularDataHandler(DataHandler):
     def __init__(
         self,
         data: Union[str, pd.DataFrame] = None,
-        target_column: str = None,
+        target_column: Optional[str] = None,
         features: Optional[List[str]] = None,
         sep: str = ",",
         header: int = 0,
@@ -526,7 +528,7 @@ class TabularDataHandler(DataHandler):
 
     # ... (Keep existing load() and get_data_info() methods identical to previous version) ...
     def load(
-        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42
+        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42, **kwargs: Any
     ) -> Dict[str, Any]:
         if not HAS_SKLEARN:
             raise ImportError("scikit-learn is required for data splitting.")
@@ -535,6 +537,7 @@ class TabularDataHandler(DataHandler):
             raise ValueError("Sum of test_split and val_split must be < 1.0")
 
         self._load_and_validate_data()
+        assert self.data is not None
 
         # Prepare features and target
         if self.features:
@@ -580,6 +583,7 @@ class TabularDataHandler(DataHandler):
         try:
             if self.data is None:
                 self._load_and_validate_data()
+            assert self.data is not None
 
             info.update(
                 {
@@ -688,7 +692,7 @@ class TextDataHandler(DataHandler):
         logger.info(f"Loaded text data: {len(self.data)} samples")
 
     def load(
-        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42
+        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42, **kwargs: Any
     ) -> Dict[str, Any]:
         """
         Load and split the text data.
@@ -709,6 +713,9 @@ class TextDataHandler(DataHandler):
         self._load_and_validate_data()
 
         # Initialize and fit tokenizer
+        assert Tokenizer is not None, "TensorFlow preprocessing not available"
+        assert pad_sequences is not None
+        assert self.data is not None
         self.tokenizer = Tokenizer(num_words=self.max_words, oov_token="<OOV>")
 
         try:
@@ -754,6 +761,7 @@ class TextDataHandler(DataHandler):
         try:
             if self.data is None:
                 self._load_and_validate_data()
+            assert self.data is not None
 
             info.update(
                 {
@@ -863,7 +871,7 @@ class TimeSeriesDataHandler(DataHandler):
         logger.info(f"Loaded time series: {len(self.data)} time points")
 
     def load(
-        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42
+        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42, **kwargs: Any
     ) -> Dict[str, Any]:
         """
         Load and split the time series data.
@@ -875,6 +883,8 @@ class TimeSeriesDataHandler(DataHandler):
             raise ValueError("Sum of test_split and val_split must be < 1.0")
 
         self._load_and_validate_data()
+        assert TimeseriesGenerator is not None
+        assert self.data is not None
 
         # Convert to numpy array
         data = self.data[self.value_column].values.reshape(-1, 1)
@@ -899,6 +909,7 @@ class TimeSeriesDataHandler(DataHandler):
 
         # Create generators
         def create_generator(data_array):
+            assert TimeseriesGenerator is not None, "TensorFlow preprocessing not available"
             if data_array is None or len(data_array) < self.sequence_length + 1:
                 return None
             return TimeseriesGenerator(
@@ -963,7 +974,7 @@ class ArraysDataHandler(DataHandler):
         pass
 
     def load(
-        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42
+        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42, **kwargs: Any
     ) -> Dict[str, Any]:
         """Split the pre-loaded arrays."""
         if not HAS_SKLEARN:

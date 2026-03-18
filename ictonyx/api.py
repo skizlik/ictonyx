@@ -27,7 +27,7 @@ from .runners import run_variability_study as _run_study
 if PYTORCH_AVAILABLE:
     import torch.nn as _torch_nn
 else:
-    _torch_nn = None
+    _torch_nn = None  # type: ignore[assignment]
 
 
 def variability_study(

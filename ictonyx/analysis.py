@@ -141,7 +141,7 @@ class StatisticalTestResult:
 
         if self.confidence_interval is not None:
             lo, hi = self.confidence_interval
-            summary += f", {self.ci_confidence_level*100:.0f}% CI [{lo:.4f}, {hi:.4f}]"
+            summary += f", {(self.ci_confidence_level or 0.95)*100:.0f}% CI [{lo:.4f}, {hi:.4f}]"
 
         if self.warnings:
             summary += f" (⚠ {len(self.warnings)} warnings)"
@@ -1241,7 +1241,7 @@ def compare_multiple_models(
     # Overall test first (Kruskal-Wallis - more robust than ANOVA)
     overall_result = kruskal_wallis_test(model_results, alpha=alpha)
 
-    results = {
+    results: Dict[str, Any] = {
         "overall_test": overall_result,
         "pairwise_comparisons": {},
         "correction_method": correction_method,
@@ -1443,7 +1443,7 @@ def calculate_autocorr(data: Union[pd.Series, List[float]], lag: int = 1) -> Opt
 
 def calculate_averaged_autocorr(
     histories: List[pd.Series], max_lag: int = 20
-) -> Tuple[List[float], List[float], List[float]]:
+) -> Tuple[List[int], List[float], List[float]]:
     """Compute mean and std of autocorrelation across multiple run histories.
 
     Args:
@@ -1620,12 +1620,12 @@ def generate_statistical_summary(results: List[StatisticalTestResult]) -> str:
         # Add confidence interval
         if result.confidence_interval is not None:
             lo, hi = result.confidence_interval
-            ci_line = f"  {result.ci_confidence_level*100:.0f}% CI for difference: [{lo:.4f}, {hi:.4f}] ({result.ci_method})"
+            ci_line = f"  {(result.ci_confidence_level or 0.95)*100:.0f}% CI for difference: [{lo:.4f}, {hi:.4f}] ({result.ci_method})"
             summary_lines.append(ci_line)
             if result.ci_effect_size is not None:
                 es_lo, es_hi = result.ci_effect_size
                 summary_lines.append(
-                    f"  {result.ci_confidence_level*100:.0f}% CI for effect size: [{es_lo:.4f}, {es_hi:.4f}]"
+                    f"  {(result.ci_confidence_level or 0.95)*100:.0f}% CI for effect size: [{es_lo:.4f}, {es_hi:.4f}]"
                 )
 
         # Add major warnings
@@ -1785,7 +1785,7 @@ def assess_training_stability(
     final_losses = loss_array[:, -1]
     final_window_losses = loss_array[:, -window_size:]
 
-    results = {
+    results: Dict[str, Any] = {
         "n_runs": len(loss_histories),
         "common_length": min_length,
         "final_loss_mean": np.mean(final_losses),

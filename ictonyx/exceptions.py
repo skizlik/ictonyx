@@ -94,7 +94,7 @@ class DataValidationError(IctonyxError, ValueError):
         cls, dataset_name: str, expected_size: Optional[int] = None
     ) -> "DataValidationError":
         """Factory method for empty dataset errors."""
-        context = {"dataset_name": dataset_name}
+        context: Dict[str, Any] = {"dataset_name": dataset_name}
         if expected_size:
             context["expected_min_size"] = expected_size
 
@@ -137,7 +137,7 @@ class ModelError(IctonyxError):
         cls, model_type: str, epoch: Optional[int] = None, error_details: Optional[str] = None
     ) -> "ModelError":
         """Factory method for training failures."""
-        context = {"model_type": model_type}
+        context: Dict[str, Any] = {"model_type": model_type}
         if epoch is not None:
             context["failed_at_epoch"] = epoch
         if error_details:
@@ -157,7 +157,7 @@ class ModelError(IctonyxError):
         error_details: Optional[str] = None,
     ) -> "ModelError":
         """Factory method for prediction failures."""
-        context = {"model_type": model_type}
+        context: Dict[str, Any] = {"model_type": model_type}
         if input_shape:
             context["input_shape"] = input_shape
         if error_details:

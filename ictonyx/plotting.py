@@ -15,8 +15,8 @@ try:
 
     HAS_PLOTTING = True
 except ImportError:
-    plt = None
-    Figure = None
+    plt = None  # type: ignore[assignment]
+    Figure = None  # type: ignore[assignment,misc]
     sn = None
     HAS_PLOTTING = False
 
@@ -130,7 +130,10 @@ def plot_confusion_matrix(
 
 
 def plot_training_history(
-    history: Any, title: str = None, metrics: List[str] = None, show: Optional[bool] = None
+    history: Any,
+    title: Optional[str] = None,
+    metrics: Optional[List[str]] = None,
+    show: Optional[bool] = None,
 ) -> Optional["Figure"]:
     """Plot training and validation metrics over epochs.
 
@@ -240,7 +243,7 @@ def plot_training_history(
         ax.grid(True, alpha=0.3, color=colors.get("grid", "#e6e6e6"))
 
     fig.suptitle(title, fontsize=14, fontweight="bold")
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.tight_layout(rect=(0, 0, 1, 0.96))
 
     return _finalize_plot(fig, show)
 
@@ -572,8 +575,8 @@ def plot_variability_summary(
             )
             ax.set_title("Performance Spread")
             plot_idx += 1
-        plt.tight_layout()
-        return _finalize_plot(fig, show)
+    plt.tight_layout()
+    return _finalize_plot(fig, show)
 
 
 def plot_comparison_boxplots(
@@ -760,11 +763,11 @@ def plot_pairwise_comparison_matrix(
         return None
 
     pairwise = comparison_results["pairwise_comparisons"]
-    model_names = set()
+    _name_set: set = set()
     for comp_name in pairwise.keys():
         names = comp_name.split("_vs_")
-        model_names.update(names)
-    model_names = sorted(list(model_names))
+        _name_set.update(names)
+    model_names = sorted(list(_name_set))
     n_models = len(model_names)
 
     p_value_matrix = np.ones((n_models, n_models))
@@ -874,7 +877,7 @@ def plot_pairwise_comparison_matrix(
         axes[2].set_title("Effect Sizes", fontsize=12, fontweight="bold")
 
     plt.suptitle(f"Pairwise Comparison Matrix ({n_models} models)", fontsize=14, fontweight="bold")
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.tight_layout(rect=(0, 0, 1, 0.96))
 
     return _finalize_plot(fig, show)
 
@@ -1112,7 +1115,7 @@ def plot_pacf_vs_lag(
     lags = range(1, max_lag + 1)
 
     fig = plt.figure(figsize=(10, 6))
-    plt.stem(lags, pacf_values, use_line_collection=True, label="PACF")
+    plt.stem(lags, pacf_values, label="PACF")
     plt.fill_between(
         lags, conf_int[:, 0] - pacf_values, conf_int[:, 1] - pacf_values, alpha=0.2, color="gray"
     )

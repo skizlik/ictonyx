@@ -93,7 +93,9 @@ class ExperimentRunner:
         self.model_builder = model_builder
         self.data_handler = data_handler
         self.model_config = model_config
-        self.seed = seed if seed is not None else int(np.random.default_rng().integers(0, 2**31))
+        self.seed: int = (
+            seed if seed is not None else int(np.random.default_rng().integers(0, 2**31))
+        )
         self._child_seeds: List[int] = []
 
         # The Experiment Tracker (Records results/metrics)
@@ -466,17 +468,15 @@ class ExperimentRunner:
         """
 
         # Reset state from any previous run
-        self.all_runs_metrics = []
-        self.final_metrics = {}
-        self.final_test_metrics = []
-        self.failed_runs = []
+        self.all_runs_metrics.clear()
+        self.final_metrics.clear()
+        self.final_test_metrics.clear()
+        self.failed_runs.clear()
 
         # Generate independent child seeds up front.
         # SeedSequence guarantees uncorrelated children regardless of proximity.
         _ss = np.random.SeedSequence(self.seed)
-        self._child_seeds: list[int] = [
-            int(child.generate_state(1)[0]) for child in _ss.spawn(num_runs)
-        ]
+        self._child_seeds = [int(child.generate_state(1)[0]) for child in _ss.spawn(num_runs)]
 
         if epochs_per_run is None:
             epochs_per_run = self.model_config.get("epochs", 10)
@@ -591,10 +591,10 @@ class ExperimentRunner:
 
         for metric_name, values in self.final_metrics.items():
             if values:
-                stats[f"{metric_name}_mean"] = np.mean(values)
-                stats[f"{metric_name}_std"] = np.std(values)
-                stats[f"{metric_name}_min"] = np.min(values)
-                stats[f"{metric_name}_max"] = np.max(values)
+                stats[f"{metric_name}_mean"] = float(np.mean(values))
+                stats[f"{metric_name}_std"] = float(np.std(values))
+                stats[f"{metric_name}_min"] = float(np.min(values))
+                stats[f"{metric_name}_max"] = float(np.max(values))
 
         return stats
 
@@ -750,7 +750,7 @@ class VariabilityStudyResults:
 
         rows = []
         for i, df in enumerate(self.all_runs_metrics):
-            row = {"run_id": i + 1}
+            row: Dict[str, Any] = {"run_id": i + 1}
 
             for col in df.columns:
                 if col not in {"run_num", "epoch", "run_id"}:
@@ -1073,8 +1073,8 @@ def run_grid_study(
     if not param_grid:
         raise ValueError("param_grid must contain at least one parameter with values.")
 
-    for param_name, values in param_grid.items():
-        if not values:
+    for param_name, param_vals in param_grid.items():
+        if not param_vals:
             raise ValueError(
                 f"param_grid['{param_name}'] is empty. "
                 f"Each parameter must have at least one value."
@@ -1092,8 +1092,8 @@ def run_grid_study(
         print("Grid Study — Dry Run")
         print("=" * 40)
         print(f"Parameter grid:")
-        for name, values in param_grid.items():
-            print(f"  {name}: {values}")
+        for name, param_values in param_grid.items():
+            print(f"  {name}: {param_values}")
         print(f"\nConfigurations:         {n_configs}")
         print(f"Runs per configuration: {num_runs}")
         print(f"Total training runs:    {total_runs}")
@@ -1127,7 +1127,7 @@ def run_grid_study(
         results_dict[key] = result
 
         try:
-            values = pd.Series(result.get_metric_values(metric))
+            values: pd.Series = pd.Series(result.get_metric_values(metric))
             print(
                 f"  Mean: {values.mean():.4f}  SD: {values.std():.4f}  "
                 f"SE: {values.std()/np.sqrt(len(values)):.4f}"

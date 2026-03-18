@@ -10,7 +10,7 @@ try:
 
     HAS_SHAP = True
 except ImportError:
-    shap = None
+    shap = None  # type: ignore[assignment]
     HAS_SHAP = False
 
 # Optional matplotlib dependency
@@ -19,7 +19,8 @@ try:
 
     HAS_MATPLOTLIB = True
 except ImportError:
-    plt = None
+    plt = None  # type: ignore[assignment]
+    Figure = None  # type: ignore[assignment]
     HAS_MATPLOTLIB = False
 
 # Import BaseModelWrapper with TYPE_CHECKING to avoid circular imports

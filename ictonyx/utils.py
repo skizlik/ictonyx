@@ -108,7 +108,12 @@ def setup_mlflow(
         experiment_id = mlflow.create_experiment(experiment_name)
         logger.info(f"Created new MLflow experiment: {experiment_name}")
     except mlflow.exceptions.MlflowException:
-        experiment_id = mlflow.get_experiment_by_name(experiment_name).experiment_id
+        _exp = mlflow.get_experiment_by_name(experiment_name)
+        if _exp is None:
+            raise RuntimeError(
+                f"MLflow experiment '{experiment_name}' not found after creation attempt."
+            )
+        experiment_id = _exp.experiment_id
         logger.info(f"Using existing MLflow experiment: {experiment_name}")
 
     return experiment_id

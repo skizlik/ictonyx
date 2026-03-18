@@ -39,7 +39,7 @@ try:
 
     HAS_TORCH = True
 except ImportError:
-    torch = None
+    torch = None  # type: ignore[assignment]
     HAS_TORCH = False
 
 try:
@@ -281,7 +281,7 @@ class MemoryManager:
             try:
                 process = psutil.Process()
                 result.memory_after_mb = process.memory_info().rss / (1024**2)
-                if result.memory_before_mb:
+                if result.memory_before_mb is not None and result.memory_after_mb is not None:
                     result.memory_freed_mb = result.memory_before_mb - result.memory_after_mb
             except Exception:
                 pass

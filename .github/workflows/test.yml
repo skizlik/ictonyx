@@ -101,3 +101,6 @@ jobs:
 
     - name: Check import sorting
       run: isort --check-only ictonyx/
+
+    - name: Run mypy type checking
+      run: mypy ictonyx/ --ignore-missing-imports --no-error-summary

@@ -33,9 +33,9 @@ try:
 
     TENSORFLOW_AVAILABLE = True
 except ImportError:
-    tf = None
-    KerasModel = None
-    Sequence = None
+    tf = None  # type: ignore[assignment]
+    KerasModel = None  # type: ignore[assignment]
+    Sequence = None  # type: ignore[assignment]
     TENSORFLOW_AVAILABLE = False
 
 # Optional scikit-learn imports
@@ -44,7 +44,7 @@ try:
 
     SKLEARN_AVAILABLE = True
 except ImportError:
-    BaseEstimator = None
+    BaseEstimator = None  # type: ignore[assignment]
     SKLEARN_AVAILABLE = False
 
 # Optional PyTorch imports
@@ -55,10 +55,10 @@ try:
 
     PYTORCH_AVAILABLE = True
 except ImportError:
-    torch = None
-    nn = None
-    DataLoader = None
-    TensorDataset = None
+    torch = None  # type: ignore[assignment]
+    nn = None  # type: ignore[assignment]
+    DataLoader = None  # type: ignore[assignment,misc]
+    TensorDataset = None  # type: ignore[assignment,misc]
     PYTORCH_AVAILABLE = False
 
 
@@ -482,6 +482,7 @@ if TENSORFLOW_AVAILABLE:
                     # Multi-class classification (softmax)
                     self.predictions = np.argmax(raw_predictions, axis=1).astype(int)
 
+            assert self.predictions is not None
             return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
@@ -757,7 +758,7 @@ if TENSORFLOW_AVAILABLE:
             return cls(loaded_model, task=task)
 
 else:
-    KerasModelWrapper = None
+    KerasModelWrapper = None  # type: ignore[assignment,misc]
 
 # Concrete class for Scikit-learn models
 if SKLEARN_AVAILABLE:
@@ -911,6 +912,7 @@ if SKLEARN_AVAILABLE:
 
         def predict(self, data: np.ndarray, **kwargs) -> np.ndarray:
             self.predictions = self.model.predict(data, **kwargs)
+            assert self.predictions is not None
             return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
@@ -1028,7 +1030,7 @@ if SKLEARN_AVAILABLE:
             return cls(loaded_model)
 
 else:
-    ScikitLearnModelWrapper = None
+    ScikitLearnModelWrapper = None  # type: ignore[assignment,misc]
 
 # Concrete class for PyTorch models
 if PYTORCH_AVAILABLE:
@@ -1162,7 +1164,7 @@ if PYTORCH_AVAILABLE:
             optimizer = self.optimizer_class(self.model.parameters(), **self.optimizer_params)
 
             # History tracking
-            history = {
+            history: Dict[str, list] = {
                 "loss": [],
             }
             if self.task == "classification":
@@ -1283,6 +1285,7 @@ if PYTORCH_AVAILABLE:
                     outputs = outputs.squeeze(-1)
                 self.predictions = outputs.cpu().numpy()
 
+            assert self.predictions is not None
             return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
@@ -1427,4 +1430,4 @@ if PYTORCH_AVAILABLE:
             return wrapper
 
 else:
-    PyTorchModelWrapper = None
+    PyTorchModelWrapper = None  # type: ignore[assignment,misc]

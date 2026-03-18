@@ -5,7 +5,13 @@ import pandas as pd
 import pytest
 
 from ictonyx.config import ModelConfig
-from ictonyx.core import SKLEARN_AVAILABLE, TENSORFLOW_AVAILABLE, BaseModelWrapper, TrainingResult
+from ictonyx.core import (
+    SKLEARN_AVAILABLE,
+    TENSORFLOW_AVAILABLE,
+    BaseModelWrapper,
+    ScikitLearnModelWrapper,
+    TrainingResult,
+)
 
 
 class DummyModel:

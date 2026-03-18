@@ -660,7 +660,7 @@ class TestRunnerWithTestData:
         assert "test_accuracy" in df.columns
         assert len(df) == 2
 
-    def test_child_seeds_are_not_adjacent():
+    def test_child_seeds_are_not_adjacent(self):
         """Child seeds must not be consecutive integers."""
         import numpy as np
 

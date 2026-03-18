@@ -94,6 +94,7 @@ class ExperimentRunner:
         self.data_handler = data_handler
         self.model_config = model_config
         self.seed = seed if seed is not None else int(np.random.default_rng().integers(0, 2**31))
+        self._child_seeds: List[int] = []
 
         # The Experiment Tracker (Records results/metrics)
         self.tracker = tracker or BaseLogger()  # <--- RENAMED ATTR
@@ -355,7 +356,8 @@ class ExperimentRunner:
         self._run_log(f" - Run {run_id}: Training...")
 
         # Set deterministic seeds for this run
-        self._set_seeds(self._child_seeds[run_id - 1])
+        if self._child_seeds:
+            self._set_seeds(self._child_seeds[run_id - 1])
 
         # Log run start (Metric Tracker)
         self.tracker.log_params({"run_id": run_id, "mode": "standard"})

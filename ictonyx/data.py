@@ -936,34 +936,85 @@ class ArraysDataHandler(DataHandler):
     def return_format(self) -> str:
         return "split_arrays"
 
-    def __init__(self, X: Union[np.ndarray, List, Any], y: Union[np.ndarray, List, Any]):
-        """Initialize with pre-loaded arrays.
+    def __init__(
+        self,
+        X: Union[np.ndarray, List, Any],
+        y: Union[np.ndarray, List, Any],
+        X_test: Optional[Union[np.ndarray, List, Any]] = None,
+        y_test: Optional[Union[np.ndarray, List, Any]] = None,
+    ):
+        """Data handler for pre-loaded in-memory arrays.
+
+        Use this when data is already available as numpy arrays or Python
+        lists, bypassing file I/O entirely. Optionally accepts a pre-held-out
+        test set; if provided, it is passed through unchanged and only a
+        train/val split is performed on the training arrays.
 
         Args:
-            X: Feature array/list ``(n_samples, n_features)``.
-            y: Label array/list ``(n_samples,)``.
+            X: Feature array or list. Converted to ``np.ndarray`` on init.
+            y: Label array or list. Must have the same length as ``X``.
+            X_test: Optional pre-held-out test features. If provided,
+                ``load()`` will not carve a test set from ``X``/``y``.
+            y_test: Optional pre-held-out test labels. Required if
+                ``X_test`` is provided.
 
         Raises:
-            ValueError: If ``X`` and ``y`` have different lengths.
+            ValueError: If ``X`` and ``y`` have different lengths, or if
+                ``X_test`` and ``y_test`` have different lengths.
         """
-        # DataHandler has no __init__ to call — no path, no validation.
+
         self.X = np.array(X)
         self.y = np.array(y)
+        self.X_test_provided = np.array(X_test) if X_test is not None else None
+        self.y_test_provided = np.array(y_test) if y_test is not None else None
 
         if len(self.X) != len(self.y):
             raise ValueError(f"Length mismatch: X has {len(self.X)}, y has {len(self.y)}")
 
+        if self.X_test_provided is not None and self.y_test_provided is not None:
+            if len(self.X_test_provided) != len(self.y_test_provided):
+                raise ValueError(
+                    f"Test set length mismatch: X_test has {len(self.X_test_provided)}, "
+                    f"y_test has {len(self.y_test_provided)}"
+                )
+
     def load(
         self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42, **kwargs: Any
     ) -> Dict[str, Any]:
-        """Split the pre-loaded arrays."""
+        """Split the pre-loaded arrays.
+
+        If X_test and y_test were provided at construction, they are used
+        as the test set directly and only a train/val split is performed.
+        Otherwise, test_split is carved out of the provided arrays first.
+        """
         if not HAS_SKLEARN:
             raise ImportError("scikit-learn required for splitting.")
 
         if test_split + val_split >= 1.0:
             raise ValueError("Sum of splits must be < 1.0")
 
-        # Split 1: Separate Test
+        # --- Path 1: Pre-held-out test set provided ---
+        if self.X_test_provided is not None:
+            if val_split > 0 and len(self.X) > 1:
+                X_train, X_val, y_train, y_val = train_test_split(
+                    self.X, self.y, test_size=val_split, random_state=random_state
+                )
+            else:
+                X_train, y_train = self.X, self.y
+                X_val, y_val = None, None
+
+            logger.info(
+                f"Array splits - Train: {len(X_train)}, "
+                f"Val: {len(X_val) if X_val is not None else 0}, "
+                f"Test: {len(self.X_test_provided)} (pre-provided)"
+            )
+            return {
+                "train_data": (X_train, y_train),
+                "val_data": (X_val, y_val) if X_val is not None else None,
+                "test_data": (self.X_test_provided, self.y_test_provided),
+            }
+
+        # --- Path 2: Internal split ---
         if test_split > 0:
             X_train, X_test, y_train, y_test = train_test_split(
                 self.X, self.y, test_size=test_split, random_state=random_state
@@ -971,20 +1022,19 @@ class ArraysDataHandler(DataHandler):
         else:
             X_train, X_test, y_train, y_test = self.X, None, self.y, None
 
-        # Split 2: Separate Val from Train
         X_val, y_val = None, None
         if val_split > 0 and len(X_train) > 1:
             adj_val_split = val_split / (1 - test_split) if test_split > 0 else val_split
-
             if adj_val_split < 1.0:
                 X_train, X_val, y_train, y_val = train_test_split(
                     X_train, y_train, test_size=adj_val_split, random_state=random_state
                 )
 
         logger.info(
-            f"Array splits - Train: {len(X_train)}, Val: {len(X_val) if X_val is not None else 0}, Test: {len(X_test) if X_test is not None else 0}"
+            f"Array splits - Train: {len(X_train)}, "
+            f"Val: {len(X_val) if X_val is not None else 0}, "
+            f"Test: {len(X_test) if X_test is not None else 0}"
         )
-
         return {
             "train_data": (X_train, y_train),
             "val_data": (X_val, y_val) if X_val is not None else None,

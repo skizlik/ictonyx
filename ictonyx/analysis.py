@@ -548,7 +548,7 @@ def apply_multiple_comparison_correction(
         sorted_p = p_array[sorted_indices]
 
         # Apply Holm correction
-        corrected_sorted = np.minimum.accumulate(sorted_p * (n - np.arange(n)))
+        corrected_sorted = np.maximum.accumulate(sorted_p * (n - np.arange(n)))
         corrected_sorted = np.minimum(corrected_sorted, 1.0)
 
         # Restore original order

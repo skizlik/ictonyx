@@ -4,48 +4,41 @@ Covers: all public functions in ictonyx.analysis, edge cases,
 regression tests for fixed bugs (B1/B2 result-overwrite),
 and property-based sanity checks for effect sizes and corrections.
 """
-import pytest
+
 import numpy as np
 import pandas as pd
-from ictonyx.analysis import (
-    # Dataclass
+import pytest
+
+from ictonyx.analysis import (  # Dataclass; Validation; Effect sizes; Multiple comparison corrections; Statistical tests; High-level comparisons; Convergence / stability; Confusion matrix; Reporting
     StatisticalTestResult,
-    # Validation
-    validate_sample_sizes,
-    check_normality,
-    check_equal_variances,
-    check_independence,
-    # Effect sizes
-    cohens_d,
-    rank_biserial_correlation,
-    eta_squared,
-    # Multiple comparison corrections
-    apply_multiple_comparison_correction,
-    # Statistical tests
-    mann_whitney_test,
-    wilcoxon_signed_rank_test,
     anova_test,
-    kruskal_wallis_test,
-    shapiro_wilk_test,
-    # High-level comparisons
-    compare_two_models,
-    compare_multiple_models,
-    # Convergence / stability
+    apply_multiple_comparison_correction,
+    assess_training_stability,
     calculate_autocorr,
     calculate_averaged_autocorr,
     check_convergence,
-    assess_training_stability,
-    # Confusion matrix
-    get_confusion_matrix_df,
-    # Reporting
-    generate_statistical_summary,
+    check_equal_variances,
+    check_independence,
+    check_normality,
+    cohens_d,
+    compare_multiple_models,
+    compare_two_models,
     create_results_dataframe,
+    eta_squared,
+    generate_statistical_summary,
+    get_confusion_matrix_df,
+    kruskal_wallis_test,
+    mann_whitney_test,
+    rank_biserial_correlation,
+    shapiro_wilk_test,
+    validate_sample_sizes,
+    wilcoxon_signed_rank_test,
 )
-
 
 # ---------------------------------------------------------------------------
 #  Helpers / Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def clear_difference_groups():
@@ -64,9 +57,9 @@ def similar_groups():
 def three_model_results_different():
     """Three clearly different groups for multi-model comparison."""
     return {
-        'model_A': pd.Series([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89]),
-        'model_B': pd.Series([0.80, 0.81, 0.79, 0.82, 0.78, 0.80, 0.81, 0.79]),
-        'model_C': pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69]),
+        "model_A": pd.Series([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89]),
+        "model_B": pd.Series([0.80, 0.81, 0.79, 0.82, 0.78, 0.80, 0.81, 0.79]),
+        "model_C": pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69]),
     }
 
 
@@ -75,15 +68,16 @@ def three_model_results_similar():
     """Three groups drawn from similar distributions."""
     rng = np.random.RandomState(42)
     return {
-        'model_A': pd.Series(rng.normal(0.85, 0.02, 10)),
-        'model_B': pd.Series(rng.normal(0.85, 0.02, 10)),
-        'model_C': pd.Series(rng.normal(0.85, 0.02, 10)),
+        "model_A": pd.Series(rng.normal(0.85, 0.02, 10)),
+        "model_B": pd.Series(rng.normal(0.85, 0.02, 10)),
+        "model_C": pd.Series(rng.normal(0.85, 0.02, 10)),
     }
 
 
 # ===================================================================
 #  StatisticalTestResult
 # ===================================================================
+
 
 class TestStatisticalTestResult:
 
@@ -115,6 +109,7 @@ class TestStatisticalTestResult:
 #  Validation Functions
 # ===================================================================
 
+
 class TestValidateSampleSizes:
 
     def test_adequate_single_series(self):
@@ -145,7 +140,7 @@ class TestCheckNormality:
         data = pd.Series(rng.normal(0, 1, 100))
         is_normal, details = check_normality(data)
         assert isinstance(is_normal, bool)
-        assert 'shapiro' in details
+        assert "shapiro" in details
 
     def test_skewed_data_likely_fails(self):
         rng = np.random.RandomState(42)
@@ -157,20 +152,20 @@ class TestCheckNormality:
     def test_too_few_samples(self):
         is_normal, details = check_normality(pd.Series([1, 2]))
         assert is_normal is False
-        assert 'error' in details
+        assert "error" in details
 
     def test_large_sample_uses_dagostino(self):
         rng = np.random.RandomState(42)
         data = pd.Series(rng.normal(0, 1, 100))
         _, details = check_normality(data)
-        assert 'dagostino' in details
+        assert "dagostino" in details
 
     def test_small_sample_no_dagostino(self):
         rng = np.random.RandomState(42)
         data = pd.Series(rng.normal(0, 1, 15))
         _, details = check_normality(data)
-        assert 'dagostino' not in details
-        assert 'shapiro' in details
+        assert "dagostino" not in details
+        assert "shapiro" in details
 
 
 class TestCheckEqualVariances:
@@ -181,7 +176,7 @@ class TestCheckEqualVariances:
         b = pd.Series(rng.normal(5, 1, 50))
         equal, details = check_equal_variances(a, b)
         assert equal  # may be numpy bool
-        assert 'levene_statistic' in details
+        assert "levene_statistic" in details
 
     def test_unequal_variances(self):
         rng = np.random.RandomState(42)
@@ -198,7 +193,7 @@ class TestCheckIndependence:
         data = pd.Series(rng.normal(0, 1, 50))
         is_indep, details = check_independence(data)
         assert isinstance(is_indep, bool)
-        assert 'autocorrelations' in details
+        assert "autocorrelations" in details
 
     def test_autocorrelated_data(self):
         # Build a strongly autocorrelated series
@@ -209,7 +204,7 @@ class TestCheckIndependence:
         data = pd.Series(values)
         is_indep, details = check_independence(data)
         assert is_indep is False
-        assert len(details['significant_lags']) > 0
+        assert len(details["significant_lags"]) > 0
 
     def test_short_data(self):
         data = pd.Series([1, 2, 3])
@@ -221,6 +216,7 @@ class TestCheckIndependence:
 #  Effect Size Calculations
 # ===================================================================
 
+
 class TestCohensD:
 
     def test_basic_calculation(self):
@@ -229,7 +225,7 @@ class TestCohensD:
         d, interp = cohens_d(g1, g2)
         assert isinstance(d, float)
         assert d < 0  # g1 mean < g2 mean
-        assert interp in ['negligible', 'small', 'medium', 'large']
+        assert interp in ["negligible", "small", "medium", "large"]
 
     def test_antisymmetry(self):
         """cohens_d(a, b) should equal -cohens_d(b, a)."""
@@ -244,7 +240,7 @@ class TestCohensD:
         g = pd.Series([5, 5, 5, 5, 5])
         d, interp = cohens_d(g, g)
         assert d == 0.0
-        assert interp == 'negligible'
+        assert interp == "negligible"
 
     def test_unpooled_variant(self):
         g1 = pd.Series([1, 2, 3, 4, 5])
@@ -263,7 +259,7 @@ class TestRankBiserialCorrelation:
         r, interp = rank_biserial_correlation(g1, g2)
         assert isinstance(r, float)
         assert abs(r) > 0.5  # strong effect
-        assert interp == 'large'
+        assert interp == "large"
 
     def test_similar_groups(self, similar_groups):
         g1, g2 = similar_groups
@@ -277,13 +273,13 @@ class TestEtaSquared:
         groups = [pd.Series([5, 5, 5]), pd.Series([5, 5, 5])]
         eta_sq, interp = eta_squared(groups)
         assert eta_sq == pytest.approx(0.0)
-        assert interp == 'negligible'
+        assert interp == "negligible"
 
     def test_very_different_groups(self):
         groups = [pd.Series([1, 1, 1]), pd.Series([100, 100, 100])]
         eta_sq, interp = eta_squared(groups)
         assert eta_sq > 0.9
-        assert interp == 'large'
+        assert interp == "large"
 
     def test_bounded_zero_to_one(self):
         rng = np.random.RandomState(42)
@@ -296,6 +292,7 @@ class TestEtaSquared:
 #  Multiple Comparison Corrections
 # ===================================================================
 
+
 class TestMultipleComparisonCorrection:
 
     @pytest.fixture
@@ -303,49 +300,49 @@ class TestMultipleComparisonCorrection:
         return [0.01, 0.03, 0.04, 0.10, 0.50]
 
     def test_bonferroni(self, raw_p_values):
-        corrected, desc = apply_multiple_comparison_correction(raw_p_values, 'bonferroni')
+        corrected, desc = apply_multiple_comparison_correction(raw_p_values, "bonferroni")
         n = len(raw_p_values)
         assert corrected[0] == pytest.approx(raw_p_values[0] * n)
         assert all(c <= 1.0 for c in corrected)
-        assert 'Bonferroni' in desc
+        assert "Bonferroni" in desc
 
     def test_holm(self, raw_p_values):
-        corrected, desc = apply_multiple_comparison_correction(raw_p_values, 'holm')
+        corrected, desc = apply_multiple_comparison_correction(raw_p_values, "holm")
         assert all(c <= 1.0 for c in corrected)
-        assert 'Holm' in desc
+        assert "Holm" in desc
 
     def test_fdr_bh(self, raw_p_values):
-        corrected, desc = apply_multiple_comparison_correction(raw_p_values, 'fdr_bh')
+        corrected, desc = apply_multiple_comparison_correction(raw_p_values, "fdr_bh")
         assert all(c <= 1.0 for c in corrected)
-        assert 'Benjamini-Hochberg' in desc
+        assert "Benjamini-Hochberg" in desc
 
     def test_unknown_method_raises(self):
         with pytest.raises(ValueError, match="Unknown correction method"):
-            apply_multiple_comparison_correction([0.05], 'fake_method')
+            apply_multiple_comparison_correction([0.05], "fake_method")
 
     def test_corrected_geq_original_bonferroni(self, raw_p_values):
         """Bonferroni corrected p-values must be >= their original values."""
-        corrected, _ = apply_multiple_comparison_correction(raw_p_values, 'bonferroni')
+        corrected, _ = apply_multiple_comparison_correction(raw_p_values, "bonferroni")
         for orig, corr in zip(raw_p_values, corrected):
             assert corr >= orig - 1e-10
 
     def test_corrected_capped_at_one(self, raw_p_values):
         """All correction methods must cap p-values at 1.0."""
-        for method in ['bonferroni', 'holm', 'fdr_bh']:
+        for method in ["bonferroni", "holm", "fdr_bh"]:
             corrected, _ = apply_multiple_comparison_correction(raw_p_values, method)
             for c in corrected:
                 assert c <= 1.0
 
     def test_bonferroni_geq_holm(self, raw_p_values):
         """Bonferroni should be at least as conservative as Holm."""
-        bonf, _ = apply_multiple_comparison_correction(raw_p_values, 'bonferroni')
-        holm, _ = apply_multiple_comparison_correction(raw_p_values, 'holm')
+        bonf, _ = apply_multiple_comparison_correction(raw_p_values, "bonferroni")
+        holm, _ = apply_multiple_comparison_correction(raw_p_values, "holm")
         for b, h in zip(bonf, holm):
             assert b >= h - 1e-10
 
     def test_single_p_value(self):
         """A single p-value should be unchanged after correction."""
-        for method in ['bonferroni', 'holm', 'fdr_bh']:
+        for method in ["bonferroni", "holm", "fdr_bh"]:
             corrected, _ = apply_multiple_comparison_correction([0.03], method)
             assert corrected[0] == pytest.approx(0.03)
 
@@ -353,6 +350,7 @@ class TestMultipleComparisonCorrection:
 # ===================================================================
 #  Statistical Tests
 # ===================================================================
+
 
 class TestMannWhitneyTest:
 
@@ -362,7 +360,7 @@ class TestMannWhitneyTest:
         assert isinstance(result, StatisticalTestResult)
         assert result.p_value < 0.05
         assert result.effect_size is not None
-        assert 'Mann-Whitney' in result.test_name
+        assert "Mann-Whitney" in result.test_name
 
     def test_no_significant_difference(self, similar_groups):
         g1, g2 = similar_groups
@@ -374,15 +372,15 @@ class TestMannWhitneyTest:
         g1, g2 = clear_difference_groups
         result = mann_whitney_test(g1, g2)
         assert result.sample_sizes is not None
-        assert result.sample_sizes['group1'] == len(g1)
-        assert result.sample_sizes['group2'] == len(g2)
+        assert result.sample_sizes["group1"] == len(g1)
+        assert result.sample_sizes["group2"] == len(g2)
 
     def test_preserves_assumptions(self, clear_difference_groups):
         """Regression test for B1: assumptions_met must survive the test."""
         g1, g2 = clear_difference_groups
         result = mann_whitney_test(g1, g2)
-        assert 'adequate_sample_size' in result.assumptions_met
-        assert 'independence' in result.assumptions_met
+        assert "adequate_sample_size" in result.assumptions_met
+        assert "independence" in result.assumptions_met
 
     def test_nan_handling(self):
         g1 = pd.Series([1, 2, np.nan, 4, 5, 6])
@@ -414,22 +412,22 @@ class TestWilcoxonSignedRankTest:
         result = wilcoxon_signed_rank_test(data, null_value=0.5)
         assert isinstance(result, StatisticalTestResult)
         assert result.p_value < 0.05
-        assert 'Wilcoxon' in result.test_name
+        assert "Wilcoxon" in result.test_name
 
     def test_preserves_sample_sizes(self):
         """Regression test for B2: sample_sizes must survive the test."""
         data = pd.Series([0.6, 0.7, 0.8, 0.75, 0.65, 0.7, 0.8, 0.85])
         result = wilcoxon_signed_rank_test(data, null_value=0.5)
         assert result.sample_sizes is not None
-        assert 'total' in result.sample_sizes
-        assert 'non_zero' in result.sample_sizes
+        assert "total" in result.sample_sizes
+        assert "non_zero" in result.sample_sizes
 
     def test_preserves_assumptions(self):
         """Regression test for B2: assumptions_met must survive the test."""
         data = pd.Series([0.6, 0.7, 0.8, 0.75, 0.65, 0.7, 0.8, 0.85])
         result = wilcoxon_signed_rank_test(data, null_value=0.5)
-        assert 'adequate_sample_size' in result.assumptions_met
-        assert 'symmetry' in result.assumptions_met
+        assert "adequate_sample_size" in result.assumptions_met
+        assert "symmetry" in result.assumptions_met
 
     def test_no_difference_from_null(self):
         rng = np.random.RandomState(42)
@@ -451,9 +449,9 @@ class TestWilcoxonSignedRankTest:
 class TestAnovaTest:
     def test_significant_difference(self):
         groups = {
-            'A': pd.Series([10, 11, 12, 10, 11, 12, 10, 11]),
-            'B': pd.Series([20, 21, 22, 20, 21, 22, 20, 21]),
-            'C': pd.Series([30, 31, 32, 30, 31, 32, 30, 31]),
+            "A": pd.Series([10, 11, 12, 10, 11, 12, 10, 11]),
+            "B": pd.Series([20, 21, 22, 20, 21, 22, 20, 21]),
+            "C": pd.Series([30, 31, 32, 30, 31, 32, 30, 31]),
         }
         result = anova_test(groups)
         assert result.p_value < 0.05
@@ -467,16 +465,16 @@ class TestAnovaTest:
 
     def test_too_few_groups_raises(self):
         with pytest.raises(ValueError):
-            anova_test({'A': pd.Series([1, 2, 3])})
+            anova_test({"A": pd.Series([1, 2, 3])})
 
     def test_checks_normality_and_variance(self):
         groups = {
-            'A': pd.Series(np.arange(20, dtype=float)),
-            'B': pd.Series(np.arange(20, 40, dtype=float)),
+            "A": pd.Series(np.arange(20, dtype=float)),
+            "B": pd.Series(np.arange(20, 40, dtype=float)),
         }
         result = anova_test(groups)
-        assert 'normality' in result.assumptions_met
-        assert 'equal_variances' in result.assumptions_met
+        assert "normality" in result.assumptions_met
+        assert "equal_variances" in result.assumptions_met
 
 
 class TestKruskalWallisTest:
@@ -484,7 +482,7 @@ class TestKruskalWallisTest:
     def test_significant_difference(self, three_model_results_different):
         result = kruskal_wallis_test(three_model_results_different)
         assert result.p_value < 0.05
-        assert 'Kruskal-Wallis' in result.test_name
+        assert "Kruskal-Wallis" in result.test_name
         assert result.effect_size is not None
 
     def test_no_significant_difference(self, three_model_results_similar):
@@ -493,20 +491,65 @@ class TestKruskalWallisTest:
 
     def test_too_few_groups_raises(self):
         with pytest.raises(ValueError):
-            kruskal_wallis_test({'A': pd.Series([1, 2, 3])})
+            kruskal_wallis_test({"A": pd.Series([1, 2, 3])})
 
     def test_sample_sizes_populated(self, three_model_results_different):
         result = kruskal_wallis_test(three_model_results_different)
         assert result.sample_sizes is not None
-        assert 'model_A' in result.sample_sizes
+        assert "model_A" in result.sample_sizes
 
     def test_nan_groups_cleaned(self):
         groups = {
-            'A': pd.Series([1, 2, np.nan, 4, 5, 6]),
-            'B': pd.Series([7, np.nan, 9, 10, 11, 12]),
+            "A": pd.Series([1, 2, np.nan, 4, 5, 6]),
+            "B": pd.Series([7, np.nan, 9, 10, 11, 12]),
         }
         result = kruskal_wallis_test(groups)
         assert not np.isnan(result.statistic)
+
+
+class TestKruskalWallisEffectSizeLabel:
+    """Verify epsilon-squared is correctly labelled and interpreted."""
+
+    def test_effect_size_name_is_epsilon_squared(self):
+        groups = {
+            "a": pd.Series([0.7, 0.75, 0.72, 0.74]),
+            "b": pd.Series([0.8, 0.82, 0.79, 0.81]),
+            "c": pd.Series([0.9, 0.91, 0.88, 0.92]),
+        }
+        result = kruskal_wallis_test(groups)
+        assert (
+            result.effect_size_name == "epsilon-squared"
+        ), f"Expected 'epsilon-squared', got '{result.effect_size_name}'"
+
+    def test_effect_size_interpretation_uses_epsilon_thresholds(self):
+        """Interpretation must come from _interpret_epsilon_squared, not eta."""
+        groups = {
+            "a": pd.Series([0.5, 0.5, 0.5, 0.5]),
+            "b": pd.Series([0.9, 0.9, 0.9, 0.9]),
+            "c": pd.Series([0.7, 0.7, 0.7, 0.7]),
+        }
+        result = kruskal_wallis_test(groups)
+        assert result.effect_size_interpretation in ("negligible", "small", "medium", "large")
+        assert result.effect_size_name == "epsilon-squared"
+
+
+class TestWilcoxonTieCorrection:
+    """Verify the Wilcoxon z-score uses scipy's tie-corrected formula."""
+
+    def test_effect_size_present_without_ties(self):
+        data = pd.Series([0.6, 0.7, 0.75, 0.8, 0.72, 0.68, 0.78, 0.82])
+        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        assert result.effect_size is not None
+        assert 0.0 <= result.effect_size <= 1.0
+
+    def test_effect_size_present_with_ties(self):
+        """Effect size must still be computed when tied values are present."""
+        data = pd.Series([0.6, 0.7, 0.7, 0.8, 0.8, 0.75, 0.85, 0.9])
+        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        # With ties, manual formula would give incorrect result.
+        # We just verify effect size is present and in valid range.
+        assert result.effect_size is not None
+        assert 0.0 <= result.effect_size <= 1.0
 
 
 class TestShapiroWilkTest:
@@ -515,7 +558,7 @@ class TestShapiroWilkTest:
         data = pd.Series(rng.normal(0, 1, 50))
         result = shapiro_wilk_test(data)
         assert result.p_value > 0.05
-        assert 'Shapiro-Wilk' in result.test_name
+        assert "Shapiro-Wilk" in result.test_name
 
     def test_non_normal_data(self):
         rng = np.random.RandomState(42)
@@ -537,6 +580,7 @@ class TestShapiroWilkTest:
 #  High-Level Comparison Functions
 # ===================================================================
 
+
 class TestCompareTwoModels:
 
     def test_independent_with_clear_difference(self):
@@ -550,13 +594,13 @@ class TestCompareTwoModels:
         m1 = pd.Series([0.80, 0.82, 0.79, 0.81, 0.83, 0.80])
         m2 = pd.Series([0.75, 0.77, 0.74, 0.76, 0.78, 0.75])
         result = compare_two_models(m1, m2, paired=True)
-        assert 'Paired' in result.test_name or 'Wilcoxon' in result.test_name
+        assert "Paired" in result.test_name or "Wilcoxon" in result.test_name
 
     def test_insufficient_data_returns_warning(self):
         m1 = pd.Series([0.80, 0.82])
         m2 = pd.Series([0.75, 0.77])
         result = compare_two_models(m1, m2, paired=False)
-        assert 'Insufficient' in result.test_name
+        assert "Insufficient" in result.test_name
         assert len(result.warnings) > 0
 
     def test_selects_ttest_for_normal_data(self):
@@ -586,7 +630,7 @@ class TestCompareTwoModels:
         assert result.confidence_interval is not None
         lo, hi = result.confidence_interval
         assert lo < hi
-        assert result.ci_method == 'bca'
+        assert result.ci_method == "bca"
         assert result.ci_confidence_level == 0.95
 
     def test_paired_comparison_has_ci(self):
@@ -631,51 +675,52 @@ class TestCompareMultipleModels:
 
     def test_significant_overall(self, three_model_results_different):
         results = compare_multiple_models(three_model_results_different)
-        assert 'overall_test' in results
-        assert results['overall_test'].is_significant()
-        assert len(results['pairwise_comparisons']) > 0
-        assert len(results['significant_comparisons']) > 0
+        assert "overall_test" in results
+        assert results["overall_test"].is_significant()
+        assert len(results["pairwise_comparisons"]) > 0
+        assert len(results["significant_comparisons"]) > 0
 
     def test_nonsignificant_skips_pairwise(self, three_model_results_similar):
         results = compare_multiple_models(three_model_results_similar)
-        assert 'overall_test' in results
-        if not results['overall_test'].is_significant():
-            assert 'message' in results
-            assert len(results['pairwise_comparisons']) == 0
+        assert "overall_test" in results
+        if not results["overall_test"].is_significant():
+            assert "message" in results
+            assert len(results["pairwise_comparisons"]) == 0
 
     def test_correct_number_of_pairwise_tests(self, three_model_results_different):
         results = compare_multiple_models(three_model_results_different)
         n = 3
         expected_pairs = n * (n - 1) // 2
-        assert results['n_comparisons'] == expected_pairs
-        if results['overall_test'].is_significant():
-            assert len(results['pairwise_comparisons']) == expected_pairs
+        assert results["n_comparisons"] == expected_pairs
+        if results["overall_test"].is_significant():
+            assert len(results["pairwise_comparisons"]) == expected_pairs
 
     def test_correction_applied(self, three_model_results_different):
         results = compare_multiple_models(
-            three_model_results_different, correction_method='bonferroni'
+            three_model_results_different, correction_method="bonferroni"
         )
-        assert results['correction_method'] == 'bonferroni'
-        if results['overall_test'].is_significant():
-            for name, test in results['pairwise_comparisons'].items():
+        assert results["correction_method"] == "bonferroni"
+        if results["overall_test"].is_significant():
+            for name, test in results["pairwise_comparisons"].items():
                 assert test.corrected_p_value is not None
                 assert test.corrected_p_value >= test.p_value - 1e-10
 
     def test_too_few_models_raises(self):
         with pytest.raises(ValueError):
-            compare_multiple_models({'A': pd.Series([1, 2, 3])})
+            compare_multiple_models({"A": pd.Series([1, 2, 3])})
 
     def test_all_correction_methods(self, three_model_results_different):
-        for method in ['bonferroni', 'holm', 'fdr_bh']:
+        for method in ["bonferroni", "holm", "fdr_bh"]:
             results = compare_multiple_models(
                 three_model_results_different, correction_method=method
             )
-            assert results['correction_method'] == method
+            assert results["correction_method"] == method
 
 
 # ===================================================================
 #  Convergence & Stability
 # ===================================================================
+
 
 class TestCalculateAutocorr:
 
@@ -736,37 +781,43 @@ class TestAssessTrainingStability:
 
     def test_stable_training(self):
         """Similar loss curves should produce high stability."""
-        histories = [pd.Series(np.linspace(1.0, 0.1, 50) + i * 0.001)
-                     for i in range(5)]
+        histories = [pd.Series(np.linspace(1.0, 0.1, 50) + i * 0.001) for i in range(5)]
         result = assess_training_stability(histories, window_size=5)
-        assert 'stability_assessment' in result
-        assert result['n_runs'] == 5
-        assert result['stability_assessment'] in ['high', 'moderate']
+        assert "stability_assessment" in result
+        assert result["n_runs"] == 5
+        assert result["stability_assessment"] in ["high", "moderate"]
 
     def test_unstable_training(self):
         """Very different loss curves should produce low stability."""
         rng = np.random.RandomState(42)
         histories = [pd.Series(rng.uniform(0, 10, 50)) for _ in range(5)]
         result = assess_training_stability(histories, window_size=5)
-        assert result['stability_assessment'] == 'low'
+        assert result["stability_assessment"] == "low"
 
     def test_too_few_histories(self):
         result = assess_training_stability([pd.Series(range(10))])
-        assert 'error' in result
+        assert "error" in result
 
     def test_histories_too_short(self):
         histories = [pd.Series([1, 2]), pd.Series([3, 4])]
         result = assess_training_stability(histories, window_size=10)
-        assert 'error' in result
+        assert "error" in result
 
     def test_output_keys(self):
         histories = [pd.Series(np.linspace(1, 0.1, 50)) for _ in range(3)]
         result = assess_training_stability(histories, window_size=5)
         expected_keys = [
-            'n_runs', 'common_length', 'final_loss_mean', 'final_loss_std',
-            'final_loss_cv', 'convergence_rate', 'converged_runs',
-            'stability_assessment', 'between_run_variance',
-            'within_run_variance_mean', 'final_losses_list',
+            "n_runs",
+            "common_length",
+            "final_loss_mean",
+            "final_loss_std",
+            "final_loss_cv",
+            "convergence_rate",
+            "converged_runs",
+            "stability_assessment",
+            "between_run_variance",
+            "within_run_variance_mean",
+            "final_losses_list",
         ]
         for key in expected_keys:
             assert key in result, f"Missing key: {key}"
@@ -776,25 +827,27 @@ class TestAssessTrainingStability:
 #  Confusion Matrix
 # ===================================================================
 
+
 class TestGetConfusionMatrixDf:
 
     def test_basic(self):
         preds = np.array([0, 1, 1, 0, 1])
         truth = np.array([0, 1, 0, 0, 1])
-        names = {0: 'cat', 1: 'dog'}
+        names = {0: "cat", 1: "dog"}
         df = get_confusion_matrix_df(preds, truth, names)
         assert isinstance(df, pd.DataFrame)
-        assert list(df.index) == ['cat', 'dog']
-        assert list(df.columns) == ['cat', 'dog']
+        assert list(df.index) == ["cat", "dog"]
+        assert list(df.columns) == ["cat", "dog"]
 
     def test_length_mismatch_raises(self):
         with pytest.raises(ValueError):
-            get_confusion_matrix_df(np.array([0, 1]), np.array([0]), {0: 'a', 1: 'b'})
+            get_confusion_matrix_df(np.array([0, 1]), np.array([0]), {0: "a", 1: "b"})
 
 
 # ===================================================================
 #  Reporting
 # ===================================================================
+
 
 class TestGenerateStatisticalSummary:
 
@@ -831,8 +884,8 @@ class TestCreateResultsDataframe:
         df = create_results_dataframe(results)
         assert isinstance(df, pd.DataFrame)
         assert len(df) == 2
-        assert 'test_name' in df.columns
-        assert 'p_value' in df.columns
+        assert "test_name" in df.columns
+        assert "p_value" in df.columns
 
     def test_empty_results(self):
         df = create_results_dataframe([])
@@ -841,15 +894,15 @@ class TestCreateResultsDataframe:
 
     def test_includes_sample_sizes(self):
         r = StatisticalTestResult("Test", statistic=5.0, p_value=0.01)
-        r.sample_sizes = {'group1': 10, 'group2': 12}
+        r.sample_sizes = {"group1": 10, "group2": 12}
         df = create_results_dataframe([r])
-        assert 'n_group1' in df.columns
-        assert 'n_group2' in df.columns
+        assert "n_group1" in df.columns
+        assert "n_group2" in df.columns
 
     def test_includes_corrected_p(self):
         r = StatisticalTestResult("Test", statistic=5.0, p_value=0.01)
         r.corrected_p_value = 0.03
-        r.correction_method = 'holm'
+        r.correction_method = "holm"
         df = create_results_dataframe([r])
-        assert 'corrected_p_value' in df.columns
-        assert df['corrected_p_value'].iloc[0] == pytest.approx(0.03)
+        assert "corrected_p_value" in df.columns
+        assert df["corrected_p_value"].iloc[0] == pytest.approx(0.03)

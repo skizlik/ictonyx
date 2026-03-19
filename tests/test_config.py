@@ -190,6 +190,70 @@ class TestModelConfigExtended:
         assert "learning_rate" in config
 
 
+class TestModelConfigDunderMethods:
+    """Tests for __iter__, __len__, __eq__, to_dict()."""
+
+    def test_dict_conversion(self):
+        cfg = ModelConfig({"epochs": 10, "batch_size": 32})
+        d = dict(cfg)
+        assert d == {"epochs": 10, "batch_size": 32}
+
+    def test_len(self):
+        cfg = ModelConfig({"a": 1, "b": 2, "c": 3})
+        assert len(cfg) == 3
+
+    def test_len_empty(self):
+        cfg = ModelConfig({})
+        assert len(cfg) == 0
+
+    def test_iter_yields_keys(self):
+        cfg = ModelConfig({"x": 1, "y": 2})
+        assert set(cfg) == {"x", "y"}
+
+    def test_equality_with_model_config(self):
+        assert ModelConfig({"a": 1}) == ModelConfig({"a": 1})
+        assert ModelConfig({"a": 1}) != ModelConfig({"a": 2})
+
+    def test_equality_with_dict(self):
+        cfg = ModelConfig({"a": 1, "b": 2})
+        assert cfg == {"a": 1, "b": 2}
+        assert cfg != {"a": 1}
+
+    def test_to_dict_returns_copy(self):
+        cfg = ModelConfig({"a": 1})
+        d = cfg.to_dict()
+        d["b"] = 99
+        assert "b" not in cfg
+
+    def test_to_dict_contents(self):
+        cfg = ModelConfig({"epochs": 5, "lr": 0.01})
+        assert cfg.to_dict() == {"epochs": 5, "lr": 0.01}
+
+
+class TestModelConfigDeprecations:
+    """Verify DeprecationWarning fires for merge() and has()."""
+
+    def test_merge_emits_deprecation_warning(self):
+        import warnings
+
+        cfg = ModelConfig({"a": 1})
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = cfg.merge({"b": 2})
+        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert result["b"] == 2  # still works
+
+    def test_has_emits_deprecation_warning(self):
+        import warnings
+
+        cfg = ModelConfig({"a": 1})
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = cfg.has("a")
+        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert result is True  # still works
+
+
 class TestConfigSettersUncovered:
     """Verbose, num_runs, epochs_per_run, cleanup_threshold setter validation."""
 

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -46,6 +46,7 @@ def _check_matplotlib():
 
 # Tree model detection for SHAP explainer selection.
 # Imported lazily at module load so sklearn is not a hard dependency.
+
 try:
     from sklearn.ensemble import (
         AdaBoostClassifier,
@@ -60,6 +61,7 @@ try:
     )
     from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
+    _SKLEARN_TREE_TYPES: Tuple = ()
     _SKLEARN_TREE_TYPES = (
         AdaBoostClassifier,
         DecisionTreeClassifier,

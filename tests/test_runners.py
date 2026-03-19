@@ -815,6 +815,146 @@ class TestVariabilityStudyResultsStatistical:
             results.compare_models_statistically()
 
 
+class TestGetEpochStatistics:
+    """Tests for VariabilityStudyResults.get_epoch_statistics()."""
+
+    def _make_results(self, n_runs=5, n_epochs=10):
+        dfs = []
+        vals = []
+        for i in range(n_runs):
+            acc = 0.7 + i * 0.02
+            df = pd.DataFrame(
+                {
+                    "val_accuracy": np.linspace(0.5, acc, n_epochs),
+                    "run_num": [i + 1] * n_epochs,
+                    "epoch": range(1, n_epochs + 1),
+                }
+            )
+            dfs.append(df)
+            vals.append(acc)
+        return VariabilityStudyResults(
+            all_runs_metrics=dfs,
+            final_metrics={"val_accuracy": vals},
+            final_test_metrics=[],
+        )
+
+    def test_returns_dataframe_with_correct_shape(self):
+        results = self._make_results(n_runs=5, n_epochs=10)
+        stats = results.get_epoch_statistics("val_accuracy")
+        assert isinstance(stats, pd.DataFrame)
+        assert len(stats) == 10
+        assert set(stats.columns) == {"epoch", "mean", "sd", "se", "ci_lower", "ci_upper", "n_runs"}
+
+    def test_epoch_column_is_one_indexed(self):
+        results = self._make_results(n_runs=3, n_epochs=5)
+        stats = results.get_epoch_statistics("val_accuracy")
+        assert stats["epoch"].tolist() == [1, 2, 3, 4, 5]
+
+    def test_n_runs_column_correct(self):
+        results = self._make_results(n_runs=4, n_epochs=3)
+        stats = results.get_epoch_statistics("val_accuracy")
+        assert all(stats["n_runs"] == 4)
+
+    def test_ci_bounds_bracket_mean(self):
+        results = self._make_results(n_runs=5, n_epochs=8)
+        stats = results.get_epoch_statistics("val_accuracy")
+        assert all(stats["ci_lower"] <= stats["mean"])
+        assert all(stats["mean"] <= stats["ci_upper"])
+
+    def test_sd_is_nonnegative(self):
+        results = self._make_results(n_runs=5, n_epochs=5)
+        stats = results.get_epoch_statistics("val_accuracy")
+        assert all(stats["sd"] >= 0)
+
+    def test_missing_metric_raises_key_error(self):
+        results = self._make_results()
+        with pytest.raises(KeyError, match="not found"):
+            results.get_epoch_statistics("nonexistent_metric")
+
+    def test_empty_results_raises_value_error(self):
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={},
+            final_test_metrics=[],
+        )
+        with pytest.raises(ValueError, match="No runs available"):
+            results.get_epoch_statistics("val_accuracy")
+
+    def test_confidence_parameter_affects_ci_width(self):
+        """Higher confidence should produce wider CI bands."""
+        results = self._make_results(n_runs=10, n_epochs=5)
+        stats_95 = results.get_epoch_statistics("val_accuracy", confidence=0.95)
+        stats_50 = results.get_epoch_statistics("val_accuracy", confidence=0.50)
+        ci_width_95 = (stats_95["ci_upper"] - stats_95["ci_lower"]).mean()
+        ci_width_50 = (stats_50["ci_upper"] - stats_50["ci_lower"]).mean()
+        assert ci_width_95 > ci_width_50
+
+
+class TestCompareModelsStatisticallyMinRun:
+    """Verify the minimum run guard on compare_models_statistically."""
+
+    def test_two_runs_raises(self):
+        """Guard raised from 2 to 3 in 0.3.9 — 2 runs must raise."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[
+                pd.DataFrame({"val_accuracy": [0.8], "run_num": [1], "epoch": [1]}),
+                pd.DataFrame({"val_accuracy": [0.9], "run_num": [2], "epoch": [1]}),
+            ],
+            final_metrics={"val_accuracy": [0.8, 0.9]},
+            final_test_metrics=[],
+        )
+        with pytest.raises(ValueError, match="3 runs"):
+            results.compare_models_statistically("val_accuracy")
+
+    def test_three_runs_does_not_raise(self):
+        """Exactly 3 runs should not raise the guard."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[
+                pd.DataFrame({"val_accuracy": [0.7 + i * 0.05], "run_num": [i + 1], "epoch": [1]})
+                for i in range(3)
+            ],
+            final_metrics={"val_accuracy": [0.7, 0.75, 0.80]},
+            final_test_metrics=[],
+        )
+        # Should not raise — just verify it runs
+        result = results.compare_models_statistically("val_accuracy")
+        assert result is not None
+
+
+class TestToDataframeRunIdAlignment:
+    """Verify to_dataframe() aligns test metrics by run_id not position."""
+
+    def test_missing_run_does_not_misalign(self):
+        """If run 1 has no test metrics, run 2's must not appear in run 1's row."""
+        df1 = pd.DataFrame({"val_accuracy": [0.80], "run_num": [1], "epoch": [1]})
+        df2 = pd.DataFrame({"val_accuracy": [0.90], "run_num": [2], "epoch": [1]})
+        results = VariabilityStudyResults(
+            all_runs_metrics=[df1, df2],
+            final_metrics={"val_accuracy": [0.80, 0.90]},
+            final_test_metrics=[{"run_id": 2, "accuracy": 0.88}],
+        )
+        summary = results.to_dataframe()
+        run1 = summary[summary["run_id"] == 1].iloc[0]
+        run2 = summary[summary["run_id"] == 2].iloc[0]
+        assert run2["test_accuracy"] == 0.88
+        assert "test_accuracy" not in run1.index or pd.isna(run1.get("test_accuracy"))
+
+    def test_both_runs_have_test_metrics(self):
+        df1 = pd.DataFrame({"val_accuracy": [0.80], "run_num": [1], "epoch": [1]})
+        df2 = pd.DataFrame({"val_accuracy": [0.90], "run_num": [2], "epoch": [1]})
+        results = VariabilityStudyResults(
+            all_runs_metrics=[df1, df2],
+            final_metrics={"val_accuracy": [0.80, 0.90]},
+            final_test_metrics=[
+                {"run_id": 1, "accuracy": 0.78},
+                {"run_id": 2, "accuracy": 0.88},
+            ],
+        )
+        summary = results.to_dataframe()
+        assert summary[summary["run_id"] == 1].iloc[0]["test_accuracy"] == 0.78
+        assert summary[summary["run_id"] == 2].iloc[0]["test_accuracy"] == 0.88
+
+
 class TestFinalValAccuraciesProperty:
     """Test the final_val_accuracies backward-compat property if it exists."""
 

@@ -466,3 +466,49 @@ class TestAutoResolveHandlerExtended:
             os.makedirs(os.path.join(tmp_dir, "class_a"))
             with pytest.raises(ValueError, match="image_size"):
                 auto_resolve_handler(tmp_dir)
+
+
+class TestDataHandlerHierarchy:
+    """Verify the DataHandler / FileDataHandler / ArraysDataHandler hierarchy."""
+
+    def test_arrays_handler_has_no_data_path(self):
+        """ArraysDataHandler must not carry a dummy file path attribute."""
+        X = np.random.rand(30, 4)
+        y = np.random.randint(0, 2, 30)
+        handler = ArraysDataHandler(X, y)
+        assert not hasattr(
+            handler, "data_path"
+        ), "ArraysDataHandler should not have a data_path attribute"
+
+    def test_arrays_handler_is_data_handler(self):
+        """ArraysDataHandler must still satisfy the DataHandler contract."""
+        from ictonyx.data import DataHandler
+
+        X = np.random.rand(30, 4)
+        y = np.random.randint(0, 2, 30)
+        assert isinstance(ArraysDataHandler(X, y), DataHandler)
+
+    def test_tabular_handler_is_data_handler(self, tmp_path):
+        """TabularDataHandler must satisfy the DataHandler contract."""
+        from ictonyx.data import DataHandler
+
+        csv = tmp_path / "data.csv"
+        csv.write_text("a,b,target\n1,2,0\n3,4,1\n")
+        assert isinstance(TabularDataHandler(str(csv), target_column="target"), DataHandler)
+
+    def test_file_handler_raises_on_missing_path(self):
+        """TabularDataHandler must raise FileNotFoundError for non-existent paths."""
+        with pytest.raises(FileNotFoundError):
+            TabularDataHandler("/does/not/exist.csv", target_column="y")
+
+    def test_arrays_handler_load_still_works(self):
+        """Removing the dummy path must not break the load() method."""
+        X = np.random.rand(50, 4)
+        y = np.random.randint(0, 2, 50)
+        handler = ArraysDataHandler(X, y)
+        result = handler.load(test_split=0.2, val_split=0.1)
+        assert "train_data" in result
+        assert "val_data" in result
+        assert "test_data" in result
+        X_train, y_train = result["train_data"]
+        assert len(X_train) > 0

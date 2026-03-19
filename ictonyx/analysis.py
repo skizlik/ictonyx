@@ -426,7 +426,7 @@ def rank_biserial_correlation(group1: pd.Series, group2: pd.Series) -> Tuple[flo
     try:
         U, _ = mannwhitneyu(group1, group2, alternative="two-sided")
         # Convert to rank-biserial correlation
-        r = 1 - (2 * U) / (n1 * n2)
+        r = (2 * U) / (n1 * n2) - 1
     except Exception:
         r = 0.0
 

@@ -17,6 +17,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.9] - 2026-03-18
+
+### Fixed
+- `apply_multiple_comparison_correction()`: Holm step-down algorithm
+  used `np.minimum.accumulate` instead of `np.maximum.accumulate` to
+  enforce monotonicity. This collapsed all corrected p-values down to
+  the smallest scaled value, making the correction more permissive than
+  intended. With input `[0.001, 0.01, 0.03]` the old code produced
+  `[0.003, 0.003, 0.003]`; the correct output is `[0.003, 0.02, 0.03]`.
+- `kruskal_wallis_test()`: effect size interpretation now calls
+  `_interpret_epsilon_squared()` rather than `_interpret_eta_squared()`.
+  Docstring Returns section corrected to say "epsilon-squared".
+- `wilcoxon_signed_rank_test()`: Z-score for effect size now uses
+  `scipy.stats.wilcoxon(method='approx').zstatistic`, which applies
+  scipy's internal tie-corrected variance. The previous manual formula
+  ignored ties and could produce an incorrect effect size `r`.
+- `VariabilityStudyResults.compare_models_statistically()`: minimum run
+  guard raised from 2 to 3, matching the actual requirement of
+  `kruskal_wallis_test()`.
+- `VariabilityStudyResults.to_dataframe()`: test metrics now stored
+  with `run_id` and joined by identity rather than list position.
+  Previously, a failed test evaluation for one run silently assigned
+  wrong metrics to all subsequent runs.
+- SHAP tree detection replaced string-based class name matching with
+  `isinstance()` checks against all sklearn tree types, plus
+  name-fragment fallback for XGBoost, LightGBM, and CatBoost. Fixes
+  silent fallback to `KernelExplainer` for `GradientBoostingClassifier`,
+  `HistGradientBoostingClassifier`, `ExtraTreesClassifier`,
+  `AdaBoostClassifier`, and others.
+- `DataHandler` refactored: path validation moved to new
+  `FileDataHandler` intermediate class. `ArraysDataHandler` no longer
+  carries a dummy `"in_memory_arrays"` path or a no-op
+  `_validate_data_path()` override.
+  **Minor breaking change:** `ArraysDataHandler.data_path` no longer
+  exists.
+- `run_grid_study()`: replaced `print()` calls with
+  `logger.info/warning`. Added `verbose` parameter (default `True`).
+  `set_verbose(False)` now correctly suppresses grid study output.
+- `ScikitLearnModelWrapper.fit()`: unrecognized keyword arguments now
+  produce a `UserWarning` instead of being silently discarded.
+
+### Deprecated
+- `ModelConfig.merge()`: use `update()` instead. Removal in v0.5.0.
+- `ModelConfig.has()`: use `'key' in config` instead. Removal in
+  v0.5.0.
+
+### Added
+- `VariabilityStudyResults.get_epoch_statistics()`: computes per-epoch
+  mean, SD, SE, and percentile confidence band across all runs. Returns
+  a DataFrame suitable for use with `plt.fill_between()`.
+- `ModelConfig.__iter__()`, `__len__()`, `__eq__()`, `to_dict()`:
+  `dict(config)`, `len(config)`, and equality comparison now work as
+  expected.
+- Coverage floor set at 60% via `--cov-fail-under` in pytest config.
+  Total coverage: 65%.
+
+---
+
 ## [0.3.8] - 2026-03-18
 
 ### Fixed

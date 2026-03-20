@@ -250,7 +250,7 @@ class TestScikitLearnWrapper:
         assert wrapper.training_result is not None
         assert isinstance(wrapper.training_result, TrainingResult)
         assert "accuracy" in wrapper.training_result.history
-        assert "val_accuracy" in wrapper.training_result.history
+        assert "val_accuracy" not in wrapper.training_result.history
 
     def test_sklearn_evaluate_full_metrics(self):
         """Test sklearn evaluate returns multiple metrics."""
@@ -433,8 +433,13 @@ class TestScikitLearnWrapperExtended:
         assert len(h["val_accuracy"]) == 1
         assert 0.0 <= h["val_accuracy"][0] <= 1.0
 
-    def test_fit_without_validation_data(self):
-        """Test that fit uses training accuracy as val fallback."""
+    def test_fit_without_validation_data_omits_val_keys(self):
+        """When no validation data is provided, val_* keys must be absent from history.
+
+        Previously val_accuracy was fabricated as a copy of train_accuracy.
+        After the fix, no val_* key appears — absence is the correct signal
+        that no validation was performed.
+        """
         from sklearn.linear_model import LogisticRegression
 
         from ictonyx.core import ScikitLearnModelWrapper
@@ -446,8 +451,66 @@ class TestScikitLearnWrapperExtended:
         wrapper.fit((X, y), validation_data=None)
 
         h = wrapper.training_result.history
-        # Without val data, val metrics should equal train metrics
-        assert h["val_accuracy"] == h["accuracy"]
+        assert "accuracy" in h, "Train accuracy must be present"
+        assert "val_accuracy" not in h, (
+            "val_accuracy must NOT appear when no validation data was provided. "
+            "Its presence means a fabricated value equal to train_accuracy "
+            "is being treated as a generalisation metric."
+        )
+
+    def test_fit_with_validation_data_includes_val_accuracy(self):
+        """When real validation data is provided, val_accuracy must appear in history."""
+        from sklearn.linear_model import LogisticRegression
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(LogisticRegression())
+        X_train = np.random.rand(40, 3)
+        y_train = np.random.randint(0, 2, 40)
+        X_val = np.random.rand(10, 3)
+        y_val = np.random.randint(0, 2, 10)
+
+        wrapper.fit((X_train, y_train), validation_data=(X_val, y_val))
+
+        h = wrapper.training_result.history
+        assert "val_accuracy" in h
+        assert len(h["val_accuracy"]) == 1
+        assert 0.0 <= h["val_accuracy"][0] <= 1.0
+
+    def test_fit_regression_without_validation_omits_val_r2(self):
+        """Regression wrapper: val_r2 must be absent when validation_data is None."""
+        from sklearn.linear_model import LinearRegression
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        X = np.random.rand(40, 3)
+        y = X @ np.array([1.0, -0.5, 0.25]) + np.random.randn(40) * 0.05
+
+        wrapper.fit((X, y), validation_data=None)
+
+        h = wrapper.training_result.history
+        assert "r2" in h
+        assert "val_r2" not in h, "val_r2 must not appear when no validation data was provided."
+
+    def test_fit_regression_with_validation_includes_val_r2(self):
+        """Regression wrapper: val_r2 must appear when validation data is provided."""
+        from sklearn.linear_model import LinearRegression
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        X_train = np.random.rand(40, 3)
+        y_train = X_train @ np.array([1.0, -0.5, 0.25])
+        X_val = np.random.rand(10, 3)
+        y_val = X_val @ np.array([1.0, -0.5, 0.25])
+
+        wrapper.fit((X_train, y_train), validation_data=(X_val, y_val))
+
+        h = wrapper.training_result.history
+        assert "val_r2" in h
+        assert len(h["val_r2"]) == 1
+        assert -1.0 <= h["val_r2"][0] <= 1.0
 
     def test_fit_bad_input(self):
         """Test that fit rejects non-tuple input."""

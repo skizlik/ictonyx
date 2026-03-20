@@ -901,28 +901,30 @@ if SKLEARN_AVAILABLE:
                 # Calculate training score (accuracy for classifiers, R² for regressors)
                 train_score = self.model.score(X_train, y_train)
 
-                # Calculate validation score
-                if (
+                # Calculate validation score only when real validation data was provided.
+                # Do NOT fabricate val_score = train_score when validation_data is None.
+                # A fabricated val_accuracy is indistinguishable from a real one downstream
+                # and silently corrupts any comparison or summary that reads val_accuracy.
+                has_val_data = (
                     validation_data is not None
                     and isinstance(validation_data, tuple)
                     and len(validation_data) == 2
-                ):
+                )
+
+                if has_val_data:
                     X_val, y_val = validation_data
                     val_score = self.model.score(X_val, y_val)
-                else:
-                    val_score = train_score
 
-                # Build history with task-appropriate metric names
+                # Build history with task-appropriate metric names.
+                # val_* keys are only included when actual validation data was used.
                 if is_classifier:
-                    history_dict = {
-                        "accuracy": [train_score],
-                        "val_accuracy": [val_score],
-                    }
+                    history_dict: Dict[str, list] = {"accuracy": [train_score]}
+                    if has_val_data:
+                        history_dict["val_accuracy"] = [val_score]
                 else:
-                    history_dict = {
-                        "r2": [train_score],
-                        "val_r2": [val_score],
-                    }
+                    history_dict = {"r2": [train_score]}
+                    if has_val_data:
+                        history_dict["val_r2"] = [val_score]
 
                 self.training_result = TrainingResult(history=history_dict)
                 self.task = "classification" if is_classifier else "regression"

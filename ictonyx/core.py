@@ -336,8 +336,10 @@ class BaseModelWrapper(ABC):
         return get_memory_info()
 
     def check_memory_and_cleanup_if_needed(self) -> Optional[Dict[str, Any]]:
-        """Check memory usage and cleanup if thresholds exceeded."""
-        # This method doesn't exist in new manager, just do cleanup
+        """Run cleanup and report if significant memory was freed.
+
+        Returns a summary dict if more than 50 MB was freed, otherwise ``None``.
+        """
         cleanup_result = self._resource_manager.cleanup()
         if cleanup_result.memory_freed_mb and cleanup_result.memory_freed_mb > 50:
             return {"cleaned": True, "freed_mb": cleanup_result.memory_freed_mb}

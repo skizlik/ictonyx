@@ -407,13 +407,6 @@ class TestAutoResolveHandlerPassthrough:
             auto_resolve_handler(12345)
 
 
-# =============================================================================
-# ADD TO: tests/test_data.py  (paste at the bottom)
-# =============================================================================
-# No new imports needed — existing file has os, tempfile, np, pd, pytest,
-# ArraysDataHandler, TabularDataHandler, auto_resolve_handler, etc.
-
-
 class TestTabularDataHandlerCoverage:
     """Target uncovered TabularDataHandler lines."""
 
@@ -531,6 +524,62 @@ class TestTabularDataHandlerCoverage:
         handler = TabularDataHandler(data=df, target_column="target")
         with pytest.raises(ValueError, match="< 1.0"):
             handler.load(test_split=0.6, val_split=0.5)
+
+    def test_nan_features_emit_warning(self):
+        """NaN values in feature columns must trigger logger.warning, not pass silently."""
+        import unittest.mock as mock
+
+        df = pd.DataFrame(
+            {
+                "a": [1.0, np.nan, 3.0, 4.0, 5.0],
+                "b": [10.0, 20.0, np.nan, 40.0, 50.0],
+                "target": [0, 1, 0, 1, 0],
+            }
+        )
+        handler = TabularDataHandler(data=df, target_column="target")
+
+        with mock.patch("ictonyx.data.logger") as mock_logger:
+            handler.load(test_split=0.0, val_split=0.0)
+            assert mock_logger.warning.called
+            call_args = mock_logger.warning.call_args[0][0]
+            assert "missing" in call_args.lower() or "nan" in call_args.lower()
+
+    def test_nan_features_warning_names_the_column(self):
+        """The NaN warning message must identify which column(s) are affected."""
+        df = pd.DataFrame(
+            {
+                "feature_alpha": [1.0, np.nan, 3.0, 4.0, 5.0],
+                "feature_beta": [10.0, 20.0, 30.0, 40.0, 50.0],
+                "target": [0, 1, 0, 1, 0],
+            }
+        )
+        handler = TabularDataHandler(data=df, target_column="target")
+
+        import unittest.mock as mock
+
+        with mock.patch("ictonyx.data.logger") as mock_logger:
+            handler.load(test_split=0.0, val_split=0.0)
+            call_args = mock_logger.warning.call_args[0][0]
+            assert "feature_alpha" in call_args
+
+    def test_clean_features_no_warning(self):
+        """No warning when features have no NaN values."""
+        df = pd.DataFrame(
+            {
+                "a": [1.0, 2.0, 3.0, 4.0, 5.0],
+                "target": [0, 1, 0, 1, 0],
+            }
+        )
+        handler = TabularDataHandler(data=df, target_column="target")
+
+        import unittest.mock as mock
+
+        with mock.patch("ictonyx.data.logger") as mock_logger:
+            handler.load(test_split=0.0, val_split=0.0)
+            # warning should not have been called for features
+            # (it may be called for other reasons, but not for NaN in X)
+            for call in mock_logger.warning.call_args_list:
+                assert "missing" not in str(call).lower() or "target" in str(call).lower()
 
 
 class TestDataHandlerGetInfo:

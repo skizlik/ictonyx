@@ -565,11 +565,17 @@ class TabularDataHandler(FileDataHandler):
 
         y = self.data[self.target_column]
 
-        # Check for missing values
+        # Check for missing values in features
         if X.isnull().any().any():
-            null_counts = X.isnull().sum()
-            # Only print warning, don't crash
-            # print(f"Warning: Missing values in features")
+            null_cols = X.isnull().sum()
+            null_cols = null_cols[null_cols > 0]
+            total_missing = int(X.isnull().sum().sum())
+            logger.warning(
+                f"Features contain {total_missing} missing value(s) across "
+                f"{len(null_cols)} column(s): {null_cols.to_dict()}. "
+                f"Consider imputing before training — many models will error "
+                f"or produce incorrect results on NaN inputs."
+            )
 
         if y.isnull().any():
             logger.warning(f"{y.isnull().sum()} missing values in target column")

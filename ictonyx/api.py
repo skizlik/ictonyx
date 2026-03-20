@@ -349,9 +349,9 @@ def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
     returned unchanged. Otherwise, the function inspects the object to
     determine the correct wrapper:
 
-    * Objects with ``fit``/``predict`` → :class:`ScikitLearnModelWrapper`
-    * Keras models → :class:`KerasModelWrapper`
+    * Keras / TensorFlow models → :class:`KerasModelWrapper`
     * PyTorch ``nn.Module`` → :class:`PyTorchModelWrapper`
+    * Objects with ``fit``/``predict`` → :class:`ScikitLearnModelWrapper`
 
     Args:
         obj: A model object to wrap.
@@ -367,19 +367,12 @@ def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
     if isinstance(obj, BaseModelWrapper):
         return obj
 
-    # Duck typing checks are Pythonic and readable
-    if hasattr(obj, "fit") and hasattr(obj, "predict"):
-        if not SKLEARN_AVAILABLE:
-            raise ImportError(
-                "scikit-learn is required to auto-wrap models with fit/predict. "
-                "Install with: pip install scikit-learn"
-            )
-        from .core import ScikitLearnModelWrapper
+        # Framework-specific checks MUST come before the generic duck-typing check.
+        # Keras models expose .fit() and .predict(), so they would be mis-wrapped as
+        # ScikitLearnModelWrapper if the duck-typing branch ran first.
 
-        return ScikitLearnModelWrapper(obj)
-
-    # String check avoids hard import of TensorFlow
-    if "keras" in str(type(obj)) or "tensorflow" in str(type(obj)):
+        # Keras / TensorFlow detection via string inspection — avoids a hard TF import.
+    if "keras" in str(type(obj)).lower() or "tensorflow" in str(type(obj)).lower():
         if not TENSORFLOW_AVAILABLE:
             raise ImportError(
                 "TensorFlow is required to auto-wrap Keras models. "
@@ -389,11 +382,22 @@ def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
 
         return KerasModelWrapper(obj)
 
-    # PyTorch nn.Module detection via isinstance — reliable, no string heuristics.
+        # PyTorch nn.Module detection via isinstance — reliable, no string heuristics.
     if PYTORCH_AVAILABLE and isinstance(obj, _torch_nn.Module):
         from .core import PyTorchModelWrapper
 
         return PyTorchModelWrapper(obj)
+
+        # Generic duck-typing — only reached if the object is not Keras or PyTorch.
+    if hasattr(obj, "fit") and hasattr(obj, "predict"):
+        if not SKLEARN_AVAILABLE:
+            raise ImportError(
+                "scikit-learn is required to auto-wrap models with fit/predict. "
+                "Install with: pip install scikit-learn"
+            )
+        from .core import ScikitLearnModelWrapper
+
+        return ScikitLearnModelWrapper(obj)
 
     raise TypeError(f"Cannot wrap model of type: {type(obj)}")
 

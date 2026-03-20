@@ -7,7 +7,7 @@ import pytest
 
 from ictonyx import ModelConfig, api
 from ictonyx.api import _ensure_wrapper, _get_model_name
-from ictonyx.core import BaseModelWrapper
+from ictonyx.core import TENSORFLOW_AVAILABLE, BaseModelWrapper
 
 # --- Fixtures (Reusable Data) ---
 
@@ -266,6 +266,34 @@ class TestEnsureWrapper:
     def test_rejects_int(self):
         with pytest.raises(TypeError, match="Cannot wrap"):
             _ensure_wrapper(42)
+
+    @pytest.mark.skipif(not TENSORFLOW_AVAILABLE, reason="TensorFlow not available")
+    def test_keras_model_not_wrapped_as_sklearn(self):
+        """A Keras model must be wrapped as KerasModelWrapper, not ScikitLearnModelWrapper.
+
+        This test catches the ordering bug where the duck-typing check
+        (hasattr fit/predict) fires before the Keras string check, causing
+        Keras models to be silently mis-wrapped.
+        """
+        import tensorflow as tf
+
+        from ictonyx.core import KerasModelWrapper, ScikitLearnModelWrapper
+
+        model = tf.keras.Sequential(
+            [
+                tf.keras.layers.Dense(4, input_shape=(4,), activation="relu"),
+                tf.keras.layers.Dense(1, activation="sigmoid"),
+            ]
+        )
+        model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+
+        result = _ensure_wrapper(model)
+
+        assert isinstance(result, KerasModelWrapper), (
+            f"Expected KerasModelWrapper but got {type(result).__name__}. "
+            "The duck-typing check is firing before the Keras check."
+        )
+        assert not isinstance(result, ScikitLearnModelWrapper)
 
 
 class TestGetModelName:

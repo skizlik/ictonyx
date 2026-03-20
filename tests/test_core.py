@@ -128,6 +128,8 @@ class TestBaseModelWrapper:
         assert wrapper.predictions is not None
         assert np.array_equal(preds, wrapper.predictions)
         assert wrapper.model.predict_count == 1
+        # The assert in predict() was replaced with ModelError to survive python -O.
+        # Normal operation never triggers it; this test confirms the happy path works.
 
     def test_predict_proba(self):
         """Test probability prediction."""

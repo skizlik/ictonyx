@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
+from .exceptions import ModelError
 from .memory import get_memory_manager
 from .settings import logger
 
@@ -482,7 +483,12 @@ if TENSORFLOW_AVAILABLE:
                     # Multi-class classification (softmax)
                     self.predictions = np.argmax(raw_predictions, axis=1).astype(int)
 
-            assert self.predictions is not None
+            if self.predictions is None:  # pragma: no branch
+                raise ModelError(
+                    "KerasModelWrapper.predict() completed but self.predictions is None. "
+                    "This is an internal bug in the wrapper.",
+                    operation="predict",
+                )
             return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
@@ -936,7 +942,12 @@ if SKLEARN_AVAILABLE:
 
         def predict(self, data: np.ndarray, **kwargs) -> np.ndarray:
             self.predictions = self.model.predict(data, **kwargs)
-            assert self.predictions is not None
+            if self.predictions is None:  # pragma: no branch
+                raise ModelError(
+                    "ScikitLearnModelWrapper.predict() completed but self.predictions is None. "
+                    "This is an internal bug in the wrapper.",
+                    operation="predict",
+                )
             return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
@@ -1321,7 +1332,12 @@ if PYTORCH_AVAILABLE:
                     outputs = outputs.squeeze(-1)
                 self.predictions = outputs.cpu().numpy()
 
-            assert self.predictions is not None
+            if self.predictions is None:  # pragma: no branch
+                raise ModelError(
+                    "PyTorchModelWrapper.predict() completed but self.predictions is None. "
+                    "This is an internal bug in the wrapper.",
+                    operation="predict",
+                )
             return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:

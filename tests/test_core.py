@@ -688,6 +688,61 @@ class TestScikitLearnWrapperCoverage:
         result_multi = wrapper_multi.evaluate((X, y_multi))
         assert "precision" in result_multi
 
+    def test_n_classes_stored_at_fit_time(self):
+        """_n_classes attribute is set on the wrapper after fit()."""
+        from sklearn.linear_model import LogisticRegression
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        wrapper = ScikitLearnModelWrapper(LogisticRegression())
+        X = np.random.rand(30, 3)
+
+        # Binary
+        y_binary = np.random.randint(0, 2, 30)
+        wrapper.fit((X, y_binary))
+        assert wrapper._n_classes == 2
+
+        # Re-fit as 4-class
+        y_multi = np.random.randint(0, 4, 30)
+        wrapper.fit((X, y_multi))
+        assert wrapper._n_classes == 4
+
+    def test_evaluate_averaging_uses_training_class_count(self):
+        """evaluate() must use _n_classes from training, not from the test batch.
+
+        A 3-class training set but a test batch containing only 2 classes must
+        still use 'weighted' averaging (multiclass), not 'binary'.
+        """
+        from sklearn.tree import DecisionTreeClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        rng = np.random.default_rng(0)
+
+        # Train on 3 classes
+        X_train = rng.standard_normal((90, 4))
+        y_train = np.array([0, 1, 2] * 30)
+
+        # Test set contains only classes 0 and 1 — class 2 is absent
+        X_test = rng.standard_normal((20, 4))
+        y_test = np.array([0, 1] * 10)
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier(random_state=0))
+        wrapper.fit((X_train, y_train))
+
+        assert (
+            wrapper._n_classes == 3
+        ), "_n_classes should be 3 after fitting on 3-class training data"
+
+        # evaluate() should not raise and should return meaningful metrics
+        result = wrapper.evaluate((X_test, y_test))
+        assert "precision" in result
+        assert "recall" in result
+        assert "f1" in result
+        # All values should be in a valid range
+        for key in ("precision", "recall", "f1"):
+            assert 0.0 <= result[key] <= 1.0, f"{key} = {result[key]} is out of [0, 1] range"
+
     def test_save_load_preserves_predictions(self):
         """Test that a loaded model can predict identically."""
         import os

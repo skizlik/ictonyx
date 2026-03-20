@@ -898,6 +898,7 @@ if SKLEARN_AVAILABLE:
 
                 # Fit the model (sklearn models ignore epochs/batch_size/verbose from signature)
                 self.model.fit(X_train, y_train, **sklearn_kwargs)
+                self._n_classes = int(len(np.unique(y_train)))
 
                 # Detect classifier vs regressor
                 is_classifier = hasattr(self.model, "predict_proba") or hasattr(
@@ -993,7 +994,14 @@ if SKLEARN_AVAILABLE:
             try:
                 from sklearn.metrics import f1_score, precision_score, recall_score
 
-                average = "binary" if len(np.unique(y_test)) == 2 else "weighted"
+                # Use the class count from training, not from the test batch.
+                # A small or imbalanced test batch may be missing some classes,
+                # causing np.unique(y_test) to return fewer classes than the model
+                # actually knows about and selecting the wrong averaging strategy.
+                # getattr fallback: if evaluate() is called before fit() (e.g. on a
+                # freshly loaded model), fall back to the test-set count.
+                n_classes = getattr(self, "_n_classes", len(np.unique(y_test)))
+                average = "binary" if n_classes == 2 else "weighted"
                 metrics["precision"] = precision_score(
                     y_test, y_pred, average=average, zero_division=0
                 )

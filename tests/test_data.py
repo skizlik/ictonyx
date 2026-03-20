@@ -237,6 +237,45 @@ class TestArraysDataHandlerEdgeCases:
         splits = handler.load(test_split=0.5, val_split=0)
         assert splits["train_data"] is not None
 
+    def test_xtest_without_ytest_raises(self):
+        """Providing X_test without y_test must raise ValueError at construction."""
+        X = np.zeros((50, 3))
+        y = np.zeros(50)
+        X_test = np.zeros((10, 3))
+
+        with pytest.raises(ValueError, match="both X_test and y_test"):
+            ArraysDataHandler(X, y, X_test=X_test)  # no y_test
+
+    def test_ytest_without_xtest_raises(self):
+        """Providing y_test without X_test must raise ValueError at construction."""
+        X = np.zeros((50, 3))
+        y = np.zeros(50)
+        y_test = np.zeros(10)
+
+        with pytest.raises(ValueError, match="both X_test and y_test"):
+            ArraysDataHandler(X, y, y_test=y_test)  # no X_test
+
+    def test_both_provided_does_not_raise(self):
+        """Providing both X_test and y_test is valid."""
+        X = np.zeros((50, 3))
+        y = np.zeros(50)
+        X_test = np.zeros((10, 3))
+        y_test = np.zeros(10)
+
+        handler = ArraysDataHandler(X, y, X_test=X_test, y_test=y_test)
+        result = handler.load()
+        X_test_out, y_test_out = result["test_data"]
+        assert X_test_out.shape == (10, 3)
+        assert y_test_out.shape == (10,)
+
+    def test_neither_provided_does_not_raise(self):
+        """Providing neither X_test nor y_test uses internal splitting."""
+        handler = ArraysDataHandler(np.zeros((50, 3)), np.zeros(50))
+        result = handler.load(test_split=0.2)
+        assert result["test_data"] is not None
+        X_test_out, _ = result["test_data"]
+        assert len(X_test_out) > 0
+
 
 class TestTabularDataHandlerFromDataFrame:
     """Test TabularDataHandler initialized with a DataFrame."""

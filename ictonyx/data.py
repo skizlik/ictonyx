@@ -965,8 +965,9 @@ class ArraysDataHandler(DataHandler):
             when not overridden there. Default ``0.2``.
 
         Raises:
-            ValueError: If ``X`` and ``y`` have different lengths, or if
-                ``X_test`` and ``y_test`` have different lengths.
+            ValueError: If ``X`` and ``y`` have different lengths.
+            ValueError: If exactly one of ``X_test`` / ``y_test`` is provided.
+            ValueError: If ``X_test`` and ``y_test`` have different lengths.
         """
 
         self.X = np.array(X)
@@ -978,6 +979,15 @@ class ArraysDataHandler(DataHandler):
 
         if len(self.X) != len(self.y):
             raise ValueError(f"Length mismatch: X has {len(self.X)}, y has {len(self.y)}")
+
+        # Validate test set symmetry: both or neither must be provided.
+        if (X_test is None) != (y_test is None):
+            provided = "X_test" if X_test is not None else "y_test"
+            missing = "y_test" if X_test is not None else "X_test"
+            raise ValueError(
+                f"ArraysDataHandler requires both X_test and y_test, or neither. "
+                f"Got {provided} but not {missing}."
+            )
 
         if self.X_test_provided is not None and self.y_test_provided is not None:
             if len(self.X_test_provided) != len(self.y_test_provided):

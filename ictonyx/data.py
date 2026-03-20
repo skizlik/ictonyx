@@ -35,7 +35,7 @@ try:
     from tensorflow.keras.preprocessing.text import Tokenizer
 
     HAS_TF_PREPROCESSING = True
-except ImportError:
+except (ImportError, AttributeError):
     TimeseriesGenerator = None
     Tokenizer = None
     pad_sequences = None

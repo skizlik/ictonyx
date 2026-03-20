@@ -480,7 +480,7 @@ if TENSORFLOW_AVAILABLE:
 
             if not is_classification:
                 # Regression: return raw predictions, maintain original shape
-                self.predictions = raw_predictions.flatten() if n_outputs == 1 else raw_predictions
+                self.predictions = (raw_predictions.flatten() >= 0.5).astype(int)
             else:
                 # Classification: return class predictions as integers
                 if n_outputs == 1:
@@ -1501,7 +1501,7 @@ if PYTORCH_AVAILABLE:
                     "    net = MyNetwork()  # same architecture used during training\n"
                     "    wrapper = PyTorchModelWrapper.load_model('run1.pt', model=net)"
                 )
-            checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+            checkpoint = torch.load(path, map_location="cpu", weights_only=weights_only)
             model.load_state_dict(checkpoint["model_state_dict"])
             wrapper = cls(model, task=checkpoint.get("task", task))
             return wrapper

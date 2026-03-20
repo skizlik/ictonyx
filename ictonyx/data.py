@@ -603,7 +603,26 @@ class TabularDataHandler(FileDataHandler):
         }
 
     def get_data_info(self) -> Dict[str, Any]:
-        info = super().get_data_info()
+        """Return metadata about the tabular dataset.
+
+        When operating from an in-memory DataFrame, returns a ``source`` key
+        with ``'dataframe'`` instead of a ``data_path`` / ``path_exists`` pair,
+        which would otherwise show a nonsensical dummy path.
+        """
+        # Build base info without the FileDataHandler dummy-path fields.
+        if self.input_df is not None:
+            # In-memory DataFrame mode — FileDataHandler.get_data_info() would
+            # return data_path="in_memory_dataframe", path_exists=False, which
+            # is confusing. Build our own base dict instead.
+            info: Dict[str, Any] = {
+                "data_type": self.data_type,
+                "return_format": self.return_format,
+                "source": "dataframe",
+            }
+        else:
+            # File-backed mode — use FileDataHandler's info normally.
+            info = super().get_data_info()
+
         try:
             if self.data is None:
                 self._load_and_validate_data()
@@ -614,10 +633,12 @@ class TabularDataHandler(FileDataHandler):
                     "num_rows": len(self.data),
                     "num_columns": len(self.data.columns),
                     "target_column": self.target_column,
+                    "columns": list(self.data.columns),
                 }
             )
         except Exception as e:
             info["error"] = str(e)
+
         return info
 
 

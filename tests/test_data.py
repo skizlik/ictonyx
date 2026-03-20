@@ -332,6 +332,53 @@ class TestTabularDataHandlerFromDataFrame:
         with pytest.raises((KeyError, ValueError)):
             handler.load()
 
+    def test_get_data_info_dataframe_mode_no_dummy_path(self):
+        """get_data_info() for DataFrame-backed handler must not contain dummy path."""
+        df = pd.DataFrame({"a": range(10), "b": range(10), "target": [0, 1] * 5})
+        handler = TabularDataHandler(data=df, target_column="target")
+
+        info = handler.get_data_info()
+
+        # Must NOT contain the dummy path
+        assert (
+            info.get("data_path") != "in_memory_dataframe"
+        ), "get_data_info() should not expose the internal dummy path string"
+        # Must NOT say path_exists=False (which implies a broken handler)
+        assert (
+            info.get("path_exists") is not False
+        ), "get_data_info() should not report path_exists=False for in-memory data"
+        # Should identify the source clearly
+        assert info.get("source") == "dataframe"
+        # Should still contain useful metadata
+        assert info["data_type"] == "tabular"
+
+    def test_get_data_info_dataframe_includes_shape(self):
+        """get_data_info() for DataFrame mode includes row/column counts."""
+        df = pd.DataFrame(
+            {
+                "x1": np.random.rand(30),
+                "x2": np.random.rand(30),
+                "y": np.random.randint(0, 2, 30),
+            }
+        )
+        handler = TabularDataHandler(data=df, target_column="y")
+        # load() must be called first to populate self.data
+        handler.load(test_split=0.0, val_split=0.0)
+
+        info = handler.get_data_info()
+        assert info["num_rows"] == 30
+        assert info["num_columns"] == 3
+        assert info["target_column"] == "y"
+
+    def test_get_data_info_file_mode_has_path(self, tmp_path):
+        """get_data_info() for file-backed handler still returns the real path."""
+        csv = tmp_path / "data.csv"
+        csv.write_text("a,b,target\n1,2,0\n3,4,1\n5,6,0\n")
+        handler = TabularDataHandler(data=str(csv), target_column="target")
+        info = handler.get_data_info()
+        assert info["data_path"] == str(csv)
+        assert info["path_exists"] is True
+
 
 class TestImageDataHandlerValidation:
     """Tests for ImageDataHandler._validate_image_files."""

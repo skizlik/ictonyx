@@ -942,6 +942,8 @@ class ArraysDataHandler(DataHandler):
         y: Union[np.ndarray, List, Any],
         X_test: Optional[Union[np.ndarray, List, Any]] = None,
         y_test: Optional[Union[np.ndarray, List, Any]] = None,
+        val_split: float = 0.1,
+        test_split: float = 0.2,
     ):
         """Data handler for pre-loaded in-memory arrays.
 
@@ -957,6 +959,10 @@ class ArraysDataHandler(DataHandler):
                 ``load()`` will not carve a test set from ``X``/``y``.
             y_test: Optional pre-held-out test labels. Required if
                 ``X_test`` is provided.
+            val_split: Default validation fraction passed to ``load()``
+            when not overridden there. Default ``0.1``.
+            test_split: Default test fraction passed to ``load()``
+            when not overridden there. Default ``0.2``.
 
         Raises:
             ValueError: If ``X`` and ``y`` have different lengths, or if
@@ -967,6 +973,8 @@ class ArraysDataHandler(DataHandler):
         self.y = np.array(y)
         self.X_test_provided = np.array(X_test) if X_test is not None else None
         self.y_test_provided = np.array(y_test) if y_test is not None else None
+        self._default_val_split = val_split
+        self._default_test_split = test_split
 
         if len(self.X) != len(self.y):
             raise ValueError(f"Length mismatch: X has {len(self.X)}, y has {len(self.y)}")
@@ -979,25 +987,42 @@ class ArraysDataHandler(DataHandler):
                 )
 
     def load(
-        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42, **kwargs: Any
+        self,
+        test_split: Optional[float] = None,
+        val_split: Optional[float] = None,
+        random_state: int = 42,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Split the pre-loaded arrays.
 
         If X_test and y_test were provided at construction, they are used
         as the test set directly and only a train/val split is performed.
         Otherwise, test_split is carved out of the provided arrays first.
+
+        Args:
+            test_split: Fraction to reserve for test. Defaults to the
+                value passed to ``__init__`` (default ``0.2``). Pass
+                ``0`` to skip the test split.
+            val_split: Fraction to reserve for validation. Defaults to
+                the value passed to ``__init__`` (default ``0.1``).
+            random_state: Seed for reproducibility. Default ``42``.
         """
+
+        # Resolve defaults: explicit argument wins over stored default.
+        _test_split = self._default_test_split if test_split is None else test_split
+        _val_split = self._default_val_split if val_split is None else val_split
+
         if not HAS_SKLEARN:
             raise ImportError("scikit-learn required for splitting.")
 
-        if test_split + val_split >= 1.0:
+        if _test_split + _val_split >= 1.0:
             raise ValueError("Sum of splits must be < 1.0")
 
-        # --- Path 1: Pre-held-out test set provided ---
+            # --- Path 1: Pre-held-out test set provided ---
         if self.X_test_provided is not None:
-            if val_split > 0 and len(self.X) > 1:
+            if _val_split > 0 and len(self.X) > 1:
                 X_train, X_val, y_train, y_val = train_test_split(
-                    self.X, self.y, test_size=val_split, random_state=random_state
+                    self.X, self.y, test_size=_val_split, random_state=random_state
                 )
             else:
                 X_train, y_train = self.X, self.y
@@ -1014,17 +1039,17 @@ class ArraysDataHandler(DataHandler):
                 "test_data": (self.X_test_provided, self.y_test_provided),
             }
 
-        # --- Path 2: Internal split ---
-        if test_split > 0:
+            # --- Path 2: Internal split ---
+        if _test_split > 0:
             X_train, X_test, y_train, y_test = train_test_split(
-                self.X, self.y, test_size=test_split, random_state=random_state
+                self.X, self.y, test_size=_test_split, random_state=random_state
             )
         else:
             X_train, X_test, y_train, y_test = self.X, None, self.y, None
 
         X_val, y_val = None, None
-        if val_split > 0 and len(X_train) > 1:
-            adj_val_split = val_split / (1 - test_split) if test_split > 0 else val_split
+        if _val_split > 0 and len(X_train) > 1:
+            adj_val_split = _val_split / (1 - _test_split) if _test_split > 0 else _val_split
             if adj_val_split < 1.0:
                 X_train, X_val, y_train, y_val = train_test_split(
                     X_train, y_train, test_size=adj_val_split, random_state=random_state

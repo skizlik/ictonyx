@@ -512,3 +512,80 @@ class TestDataHandlerHierarchy:
         assert "test_data" in result
         X_train, y_train = result["train_data"]
         assert len(X_train) > 0
+
+
+class TestArraysDataHandlerSplitDefaults:
+    """Verify that val_split/test_split can be set at construction time (A1 fix)."""
+
+    def test_split_defaults_stored_on_init(self):
+        """Constructor stores val_split and test_split as instance attributes."""
+        handler = ArraysDataHandler(
+            np.zeros((100, 3)), np.zeros(100), val_split=0.15, test_split=0.25
+        )
+        assert handler._default_val_split == 0.15
+        assert handler._default_test_split == 0.25
+
+    def test_load_uses_init_defaults_when_not_overridden(self):
+        """load() with no arguments uses the splits configured at init."""
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((200, 4))
+        y = rng.integers(0, 2, 200)
+
+        handler = ArraysDataHandler(X, y, val_split=0.2, test_split=0.1)
+        splits = handler.load()  # no explicit splits
+
+        X_train, _ = splits["train_data"]
+        X_val, _ = splits["val_data"]
+        X_test, _ = splits["test_data"]
+
+        assert len(X_test) == pytest.approx(20, abs=3)  # ~10% of 200
+        # val is carved from the 180-sample remainder: 0.2 / 0.9 ≈ 22.2%
+        assert len(X_val) == pytest.approx(40, abs=5)  # ~20% of 200
+
+    def test_explicit_load_args_override_init_defaults(self):
+        """Explicit arguments to load() take precedence over init defaults."""
+        handler = ArraysDataHandler(
+            np.zeros((100, 2)), np.zeros(100), val_split=0.3, test_split=0.3
+        )
+        splits = handler.load(test_split=0.1, val_split=0.1)
+
+        X_test, _ = splits["test_data"]
+        assert len(X_test) == pytest.approx(10, abs=2)  # 10%, not 30%
+
+    def test_conftest_classification_fixture_works(self, tabular_classification_handler):
+        """The tabular_classification_handler fixture must not raise TypeError."""
+        # If we reach this line, the fixture constructed successfully.
+        result = tabular_classification_handler.load()
+        assert "train_data" in result
+        assert "val_data" in result
+        assert "test_data" in result
+        X_train, y_train = result["train_data"]
+        assert len(X_train) > 0
+
+    def test_conftest_regression_fixture_works(self, tabular_regression_handler):
+        """The tabular_regression_handler fixture must not raise TypeError."""
+        result = tabular_regression_handler.load()
+        assert "train_data" in result
+        X_train, y_train = result["train_data"]
+        assert len(X_train) > 0
+
+    def test_default_splits_unchanged_from_original_load_defaults(self):
+        """Default val_split=0.1 and test_split=0.2 match load()'s original defaults."""
+        handler = ArraysDataHandler(np.zeros((100, 2)), np.zeros(100))
+        # No splits specified at init — should behave exactly like the old load() defaults
+        splits_new = handler.load()
+
+        # Compare against explicitly passing the old defaults
+        handler2 = ArraysDataHandler(np.zeros((100, 2)), np.zeros(100))
+        splits_old = handler2.load(test_split=0.2, val_split=0.1)
+
+        X_train_new, _ = splits_new["train_data"]
+        X_train_old, _ = splits_old["train_data"]
+        assert len(X_train_new) == len(X_train_old)
+
+    def test_backward_compatibility_explicit_load_args_still_work(self):
+        """Existing code that calls load(test_split=..., val_split=...) is unaffected."""
+        handler = ArraysDataHandler(np.zeros((100, 2)), np.zeros(100))
+        splits = handler.load(test_split=0.3, val_split=0.2)
+        X_test, _ = splits["test_data"]
+        assert len(X_test) == pytest.approx(30, abs=3)

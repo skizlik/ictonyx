@@ -119,7 +119,17 @@ class BaseModelWrapper(ABC):
         return f"Ictonyx BaseModelWrapper(id='{self.model_id}', type='{model_type}', is_trained={is_trained})"
 
     def __del__(self):
-        """Automatic cleanup when object is destroyed."""
+        """Automatic cleanup when object is destroyed.
+
+        Skips cleanup during interpreter shutdown. At shutdown time, modules
+        such as ``tensorflow`` and ``torch`` may be partially unloaded.
+        Calling framework teardown (e.g. ``tf.keras.backend.clear_session()``)
+        in that state can trigger out-of-order shutdown sequences.
+        """
+        import sys
+
+        if sys.is_finalizing():
+            return
         try:
             self.cleanup()
         except Exception:

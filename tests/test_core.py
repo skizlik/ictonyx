@@ -178,6 +178,10 @@ class TestBaseModelWrapper:
         wrapper.cleanup()
         assert wrapper.cleaned == 2
 
+        # Note: __del__ is not tested directly. Interpreter-shutdown behaviour
+        # (sys.is_finalizing() == True) is not reproducible in pytest. The guard
+        # exists to prevent TF/PyTorch teardown from running during shutdown.
+
     def test_memory_report(self):
         """Test memory reporting."""
         wrapper = TestableWrapper(DummyModel())

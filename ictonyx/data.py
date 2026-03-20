@@ -239,37 +239,70 @@ class ImageDataHandler(FileDataHandler):
 
         return all_image_paths, all_labels
 
-    def _preprocess_image(self, file_path, label):
-        """Helper to load and preprocess a single image from its path."""
+    def _validate_image_files(self, file_paths: List[str]) -> None:
+        """Scan all image paths before building the dataset.
+
+        Checks that every file can be opened with PIL. Raises
+        ``DataValidationError`` listing all unreadable files if any are found.
+        This prevents corrupt images from being silently replaced with
+        zero-filled tensors during training.
+
+        Requires ``Pillow`` (``pip install Pillow``). If Pillow is not
+        installed, skips validation with a warning.
+
+        Args:
+            file_paths: List of absolute paths to image files.
+
+        Raises:
+            DataValidationError: If any file cannot be opened as an image.
+        """
         try:
-            # Load the raw data from the file as a string
-            img = tf.io.read_file(file_path)
+            from PIL import Image as _PILImage
+        except ImportError:
+            logger.warning(
+                "Pillow not installed — skipping image file validation. "
+                "Install with: pip install Pillow"
+            )
+            return
 
-            # Try to decode as different formats
+        failed = []
+        for path in file_paths:
             try:
-                img = tf.image.decode_jpeg(img, channels=3)
-            except tf.errors.InvalidArgumentError:
-                try:
-                    img = tf.image.decode_png(img, channels=3)
-                except tf.errors.InvalidArgumentError:
-                    # If both fail, try generic decode_image
-                    img = tf.image.decode_image(img, channels=3)
-                    img.set_shape([None, None, 3])  # Set shape for decode_image
+                with _PILImage.open(path) as im:
+                    im.verify()
+            except Exception:
+                failed.append(path)
 
-            # Convert to float and resize
-            img = tf.cast(img, tf.float32)
-            img = tf.image.resize(img, self.image_size)
+        if failed:
+            from .exceptions import DataValidationError
 
-            # Normalize the pixel values to [0, 1]
-            img = img / 255.0
+            sample = failed[:5]
+            tail = f" ... and {len(failed) - 5} more" if len(failed) > 5 else ""
+            raise DataValidationError(
+                f"{len(failed)} image file(s) could not be opened:{tail}\n"
+                + "\n".join(f"  {p}" for p in sample)
+                + "\nFix or remove these files before training."
+            )
 
-            return img, label
+    def _preprocess_image(self, file_path, label):
+        """Load, decode, resize, and normalise a single image.
 
-        except Exception as e:
-            # Create a placeholder image if loading fails
-            logger.warning(f"Failed to load image {file_path}: {e}")
-            placeholder = tf.zeros((*self.image_size, 3), dtype=tf.float32)
-            return placeholder, label
+        Uses ``tf.image.decode_image`` which handles JPEG, PNG, BMP, and GIF
+        automatically. This is the only pattern that works correctly inside
+        ``tf.data.Dataset.map()`` — Python try/except blocks cannot intercept
+        TF op errors in graph execution mode.
+        """
+        img = tf.io.read_file(file_path)
+        # decode_image handles JPEG, PNG, BMP, GIF.
+        # expand_animations=False collapses GIF frames to the first frame only.
+        img = tf.image.decode_image(img, channels=3, expand_animations=False)
+        # decode_image does not set static shape; set it explicitly so
+        # downstream ops (resize) know the rank.
+        img.set_shape([None, None, 3])
+        img = tf.cast(img, tf.float32)
+        img = tf.image.resize(img, self.image_size)
+        img = img / 255.0
+        return img, label
 
     def load(
         self, validation_split: float = 0.2, test_split: float = 0.1, **kwargs: Any
@@ -298,6 +331,7 @@ class ImageDataHandler(FileDataHandler):
             raise ValueError("Split values must be non-negative")
 
         all_image_paths, all_labels = self._get_image_paths_and_labels()
+        self._validate_image_files(all_image_paths)
         total_files = len(all_image_paths)
 
         logger.info(f"Total images found: {total_files}")

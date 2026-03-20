@@ -304,6 +304,89 @@ class TestTabularDataHandlerFromDataFrame:
             handler.load()
 
 
+class TestImageDataHandlerValidation:
+    """Tests for ImageDataHandler._validate_image_files."""
+
+    def test_validate_raises_on_corrupt_file(self, tmp_path):
+        """_validate_image_files raises DataValidationError for non-image files."""
+        pytest.importorskip("PIL", reason="Pillow not installed")
+
+        from ictonyx.exceptions import DataValidationError
+
+        # Create a fake "image" that is actually plain text
+        corrupt = tmp_path / "bad.jpg"
+        corrupt.write_bytes(b"this is not an image")
+
+        # We need a minimal ImageDataHandler to call the private method.
+        # Use a real (but minimal) directory structure so __init__ doesn't raise.
+        img_dir = tmp_path / "dataset"
+        class_dir = img_dir / "cat"
+        class_dir.mkdir(parents=True)
+        # Put a valid tiny PNG in the class directory so ImageDataHandler init passes
+        try:
+            from PIL import Image
+
+            img = Image.new("RGB", (8, 8), color=(255, 0, 0))
+            img.save(str(class_dir / "valid.png"))
+        except ImportError:
+            pytest.skip("Pillow not available")
+
+        if not TENSORFLOW_AVAILABLE:
+            pytest.skip("TensorFlow not available")
+
+        from ictonyx.data import ImageDataHandler
+
+        handler = ImageDataHandler(str(img_dir), image_size=(8, 8))
+
+        with pytest.raises(DataValidationError, match="could not be opened"):
+            handler._validate_image_files([str(corrupt)])
+
+    def test_validate_passes_for_valid_files(self, tmp_path):
+        """_validate_image_files does not raise for well-formed image files."""
+        pytest.importorskip("PIL", reason="Pillow not installed")
+
+        from PIL import Image
+
+        # Write a valid PNG
+        valid = tmp_path / "good.png"
+        img = Image.new("RGB", (16, 16), color=(0, 128, 255))
+        img.save(str(valid))
+
+        img_dir = tmp_path / "dataset"
+        class_dir = img_dir / "cat"
+        class_dir.mkdir(parents=True)
+        img.save(str(class_dir / "valid.png"))
+
+        if not TENSORFLOW_AVAILABLE:
+            pytest.skip("TensorFlow not available")
+
+        from ictonyx.data import ImageDataHandler
+
+        handler = ImageDataHandler(str(img_dir), image_size=(16, 16))
+        # Should not raise
+        handler._validate_image_files([str(valid)])
+
+    def test_validate_empty_list_does_not_raise(self, tmp_path):
+        """_validate_image_files with an empty list is a no-op."""
+        pytest.importorskip("PIL", reason="Pillow not installed")
+
+        img_dir = tmp_path / "dataset"
+        (img_dir / "cat").mkdir(parents=True)
+
+        if not TENSORFLOW_AVAILABLE:
+            pytest.skip("TensorFlow not available")
+
+        from PIL import Image
+
+        from ictonyx.data import ImageDataHandler
+
+        img = Image.new("RGB", (8, 8))
+        img.save(str(img_dir / "cat" / "x.png"))
+
+        handler = ImageDataHandler(str(img_dir), image_size=(8, 8))
+        handler._validate_image_files([])  # should be a no-op
+
+
 class TestAutoResolveHandlerPassthrough:
     """Test that passing an existing DataHandler returns it unchanged."""
 

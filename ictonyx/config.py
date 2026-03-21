@@ -2,6 +2,8 @@
 
 from typing import Any, Dict, ItemsView, KeysView, List, Optional, Union, ValuesView
 
+import numpy as np
+
 
 class ModelConfig:
     """Training configuration container with validation and factory methods.
@@ -188,7 +190,7 @@ class ModelConfig:
     @epochs.setter
     def epochs(self, value: int):
         """Set epochs parameter with validation."""
-        if not isinstance(value, int) or value <= 0:
+        if not isinstance(value, (int, np.integer)) or value <= 0:
             raise ValueError(f"epochs must be a positive integer, got {value}")
         self.params["epochs"] = value
 
@@ -200,7 +202,7 @@ class ModelConfig:
     @batch_size.setter
     def batch_size(self, value: int):
         """Set batch_size parameter with validation."""
-        if not isinstance(value, int) or value <= 0:
+        if not isinstance(value, (int, np.integer)) or value <= 0:
             raise ValueError(f"batch_size must be a positive integer, got {value}")
         self.params["batch_size"] = value
 
@@ -212,7 +214,7 @@ class ModelConfig:
     @learning_rate.setter
     def learning_rate(self, value: Union[float, int]):
         """Set learning_rate parameter with validation."""
-        if not isinstance(value, (float, int)) or value <= 0:
+        if not isinstance(value, (float, int, np.integer)) or value <= 0:
             raise ValueError(f"learning_rate must be a positive number, got {value}")
         self.params["learning_rate"] = float(value)
 
@@ -224,7 +226,7 @@ class ModelConfig:
     @verbose.setter
     def verbose(self, value: int):
         """Set verbose parameter with validation."""
-        if not isinstance(value, int) or value < 0:
+        if not isinstance(value, (int, np.integer)) or value < 0:
             raise ValueError(f"verbose must be a non-negative integer, got {value}")
         self.params["verbose"] = value
 
@@ -237,7 +239,7 @@ class ModelConfig:
     @num_runs.setter
     def num_runs(self, value: int):
         """Set num_runs parameter with validation."""
-        if not isinstance(value, int) or value <= 0:
+        if not isinstance(value, (int, np.integer)) or value <= 0:
             raise ValueError(f"num_runs must be a positive integer, got {value}")
         self.params["num_runs"] = value
 
@@ -249,7 +251,7 @@ class ModelConfig:
     @epochs_per_run.setter
     def epochs_per_run(self, value: int):
         """Set epochs_per_run parameter with validation."""
-        if not isinstance(value, int) or value <= 0:
+        if not isinstance(value, (int, np.integer)) or value <= 0:
             raise ValueError(f"epochs_per_run must be a positive integer, got {value}")
         self.params["epochs_per_run"] = value
 
@@ -353,6 +355,6 @@ class ModelConfig:
     @cleanup_threshold.setter
     def cleanup_threshold(self, value: float):
         """Set cleanup threshold with validation."""
-        if not isinstance(value, (float, int)) or not 0.1 <= value <= 1.0:
+        if not isinstance(value, (float, int, np.integer)) or not 0.1 <= value <= 1.0:
             raise ValueError("cleanup_threshold must be between 0.1 and 1.0")
         self.params["cleanup_threshold"] = float(value)

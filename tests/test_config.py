@@ -313,3 +313,38 @@ class TestConfigSettersUncovered:
         assert config.cleanup_threshold == 0.1
         config.cleanup_threshold = 1.0
         assert config.cleanup_threshold == 1.0
+
+
+class TestModelConfigNumpyInteger:
+    """ModelConfig property setters must accept numpy.integer values."""
+
+    def test_epochs_accepts_numpy_int64(self):
+        import numpy as np
+
+        config = ModelConfig()
+        config.epochs = np.int64(20)  # must not raise
+        assert config.epochs == 20
+
+    def test_batch_size_accepts_numpy_int32(self):
+        import numpy as np
+
+        config = ModelConfig()
+        config.batch_size = np.int32(64)
+        assert config.batch_size == 64
+
+    def test_num_runs_accepts_numpy_intp(self):
+        import numpy as np
+
+        config = ModelConfig()
+        config.num_runs = np.intp(10)
+        assert config.num_runs == 10
+
+    def test_grid_search_pattern(self):
+        """Iterating over a numpy array of ints must work without ValueError."""
+        import numpy as np
+
+        epoch_values = np.array([10, 20, 50])
+        for epochs in epoch_values:
+            config = ModelConfig()
+            config.epochs = epochs  # this was raising ValueError before the fix
+            assert config.epochs == int(epochs)

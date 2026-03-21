@@ -875,48 +875,29 @@ class VariabilityStudyResults:
 
         return pd.DataFrame(rows)
 
-    def compare_models_statistically(
-        self,
-        metric_name: str = "val_accuracy",
-        alpha: float = 0.05,
-        correction_method: str = "holm",
-    ) -> Dict[str, Any]:
-        """Perform statistical comparison of runs for the specified metric.
 
-        Each run contributes exactly one observation (its final-epoch metric
-        value), satisfying the independence assumption required by Mann-Whitney U
-        and Kruskal-Wallis tests.
-        """
-        from .analysis import compare_multiple_models
+def compare_models_statistically(self, *args, **kwargs):
+    """Removed in v0.3.10.
 
-        if not self.all_runs_metrics:
-            raise ValueError("No run metrics available for statistical comparison")
+    This method applied Kruskal-Wallis to groups of one observation each
+    (one per run), which is statistically incoherent — within-group variance
+    is undefined with a single observation.
 
-        if metric_name not in self.final_metrics:
-            available = self.get_available_metrics()
-            raise ValueError(
-                f"Metric '{metric_name}' not found in results. " f"Available metrics: {available}"
-            )
+    To compare a single model's run distribution against a null value, use::
 
-        values = self.final_metrics[metric_name]
-        if len(values) < 3:
-            raise ValueError(
-                f"At least 3 runs are required for Kruskal-Wallis comparison "
-                f"(got {len(values)} for metric '{metric_name}'). "
-                f"Run the study with num_runs >= 3."
-            )
+        results.test_against_null(null_value=0.5, metric="val_accuracy")
 
-        # Each run IS one observation — a single-element Series.
-        # Using final_metrics directly guarantees scalars, not epoch series.
-        metrics_dict: Dict[str, pd.Series] = {
-            f"run_{i + 1}": pd.Series([v], name=f"run_{i + 1}") for i, v in enumerate(values)
-        }
+    To compare multiple distinct models against each other, use::
 
-        return compare_multiple_models(
-            model_results=metrics_dict,
-            alpha=alpha,
-            correction_method=correction_method,
-        )
+        ix.compare_models(models=[model_a, model_b], data=..., runs=20)
+    """
+    raise AttributeError(
+        "compare_models_statistically() was removed in v0.3.10. "
+        "It applied Kruskal-Wallis to single-observation groups (one per run), "
+        "producing statistically incoherent results.\n\n"
+        "For single-model null testing: results.test_against_null(null_value=0.5)\n"
+        "For cross-model comparison:    ix.compare_models([model_a, model_b], data=...)"
+    )
 
 
 @dataclass

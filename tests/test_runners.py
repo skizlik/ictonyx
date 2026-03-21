@@ -764,55 +764,32 @@ class TestRunnerDefaultEpochs:
         assert len(df) == 7
 
 
-class TestVariabilityStudyResultsStatistical:
-    """Test compare_models_statistically method."""
+class TestCompareModelsStatisticallyRemoved:
+    """compare_models_statistically() was removed in v0.3.10."""
 
-    def test_compare_models_statistically_basic(self):
-        """Test statistical comparison across runs."""
-        # Create results with enough variation
-        dfs = []
-        vals = []
-        for i in range(10):
-            acc = 0.8 + np.random.random() * 0.1
-            df = pd.DataFrame(
-                {
-                    "val_accuracy": np.linspace(0.5, acc, 5),
-                    "val_loss": np.linspace(0.5, 1 - acc, 5),
-                }
-            )
-            dfs.append(df)
-            vals.append(acc)
-
-        results = VariabilityStudyResults(
-            all_runs_metrics=dfs,
-            final_metrics={"val_accuracy": vals},
-            final_test_metrics=[],
-        )
-
-        comparison = results.compare_models_statistically(metric_name="val_accuracy")
-        assert isinstance(comparison, dict)
-
-    def test_compare_models_statistically_missing_metric(self):
-        """Test error when metric doesn't exist."""
-        results = VariabilityStudyResults(
-            all_runs_metrics=[pd.DataFrame({"val_accuracy": [0.8]})],
-            final_metrics={"val_accuracy": [0.8]},
-            final_test_metrics=[],
-        )
-
-        with pytest.raises(ValueError, match="not found"):
-            results.compare_models_statistically(metric_name="nonexistent_metric")
-
-    def test_compare_models_statistically_no_data(self):
-        """Test error with empty results."""
+    def test_raises_attribute_error(self):
+        """The removed method must raise AttributeError with a helpful message."""
         results = VariabilityStudyResults(
             all_runs_metrics=[],
-            final_metrics={},
+            final_metrics={"val_accuracy": [0.8, 0.85, 0.82]},
             final_test_metrics=[],
+            seed=42,
         )
+        with pytest.raises(AttributeError, match="removed in v0.3.10"):
+            results.compare_models_statistically("val_accuracy")
 
-        with pytest.raises(ValueError, match="No run metrics"):
+    def test_message_mentions_replacement(self):
+        """The error message must name the replacement methods."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": [0.8, 0.85]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        with pytest.raises(AttributeError) as exc_info:
             results.compare_models_statistically()
+        msg = str(exc_info.value)
+        assert "test_against_null" in msg or "compare_models" in msg
 
 
 class TestGetEpochStatistics:
@@ -888,37 +865,6 @@ class TestGetEpochStatistics:
         ci_width_95 = (stats_95["ci_upper"] - stats_95["ci_lower"]).mean()
         ci_width_50 = (stats_50["ci_upper"] - stats_50["ci_lower"]).mean()
         assert ci_width_95 > ci_width_50
-
-
-class TestCompareModelsStatisticallyMinRun:
-    """Verify the minimum run guard on compare_models_statistically."""
-
-    def test_two_runs_raises(self):
-        """Guard raised from 2 to 3 in 0.3.9 — 2 runs must raise."""
-        results = VariabilityStudyResults(
-            all_runs_metrics=[
-                pd.DataFrame({"val_accuracy": [0.8], "run_num": [1], "epoch": [1]}),
-                pd.DataFrame({"val_accuracy": [0.9], "run_num": [2], "epoch": [1]}),
-            ],
-            final_metrics={"val_accuracy": [0.8, 0.9]},
-            final_test_metrics=[],
-        )
-        with pytest.raises(ValueError, match="3 runs"):
-            results.compare_models_statistically("val_accuracy")
-
-    def test_three_runs_does_not_raise(self):
-        """Exactly 3 runs should not raise the guard."""
-        results = VariabilityStudyResults(
-            all_runs_metrics=[
-                pd.DataFrame({"val_accuracy": [0.7 + i * 0.05], "run_num": [i + 1], "epoch": [1]})
-                for i in range(3)
-            ],
-            final_metrics={"val_accuracy": [0.7, 0.75, 0.80]},
-            final_test_metrics=[],
-        )
-        # Should not raise — just verify it runs
-        result = results.compare_models_statistically("val_accuracy")
-        assert result is not None
 
 
 class TestToDataframeRunIdAlignment:

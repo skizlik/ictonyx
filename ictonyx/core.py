@@ -930,19 +930,19 @@ if SKLEARN_AVAILABLE:
                     and len(validation_data) == 2
                 )
 
-                if has_val_data:
-                    X_val, y_val = validation_data
-                    val_score = self.model.score(X_val, y_val)
-
-                # Build history with task-appropriate metric names.
-                # val_* keys are only included when actual validation data was used.
                 if is_classifier:
                     history_dict: Dict[str, list] = {"accuracy": [train_score]}
                     if has_val_data:
+                        assert validation_data is not None
+                        X_val, y_val = validation_data
+                        val_score = self.model.score(X_val, y_val)
                         history_dict["val_accuracy"] = [val_score]
                 else:
                     history_dict = {"r2": [train_score]}
                     if has_val_data:
+                        assert validation_data is not None
+                        X_val, y_val = validation_data
+                        val_score = self.model.score(X_val, y_val)
                         history_dict["val_r2"] = [val_score]
 
                 self.training_result = TrainingResult(history=history_dict)

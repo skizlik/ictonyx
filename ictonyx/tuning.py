@@ -8,7 +8,7 @@ from .settings import logger
 
 # Optional hyperopt dependency
 try:
-    from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
+    from hyperopt import STATUS_OK, Trials, fmin, hp, space_eval, tpe
     from hyperopt.pyll.base import scope
 
     HAS_HYPEROPT = True
@@ -235,7 +235,7 @@ class HyperparameterTuner:
             logger.info(f"Best {self.metric}: {best_metric_value:.4f}")
             logger.info(f"Best parameters: {best_params}")
 
-            return best_params
+            return space_eval(param_space, best_params)
 
         except KeyboardInterrupt:
             logger.warning("\nOptimization interrupted by user.")
@@ -245,7 +245,7 @@ class HyperparameterTuner:
                 logger.info(
                     f"Returning best parameters found in {len(self.trials.trials)} trials: {best_params}"
                 )
-                return best_params
+                return space_eval(param_space, best_params)
             else:
                 raise RuntimeError("No trials completed before interruption")
 

@@ -202,7 +202,11 @@ def validate_sample_sizes(
     return True, warnings_list
 
 
-def check_normality(data: pd.Series, alpha: float = 0.05) -> Tuple[bool, Dict[str, Any]]:
+def check_normality(
+    data: pd.Series,
+    alpha: float = 0.05,
+    require_all_tests: bool = False,
+) -> Tuple[bool, Dict[str, Any]]:
     """Test for normality using Shapiro-Wilk (and D'Agostino-Pearson if n >= 20).
 
     Used internally by assumption-checking logic in statistical tests.
@@ -222,7 +226,11 @@ def check_normality(data: pd.Series, alpha: float = 0.05) -> Tuple[bool, Dict[st
     results = {}
 
     if len(data) < 3:
-        return False, {"error": "Insufficient data for normality testing"}
+        return False, {
+            "error": "Insufficient data for normality testing (n < 3)",
+            "shapiro": None,
+            "dagostino": None,
+        }
 
     # Shapiro-Wilk test (best for small samples)
     if len(data) <= 5000:  # Shapiro-Wilk has sample size limits
@@ -243,11 +251,11 @@ def check_normality(data: pd.Series, alpha: float = 0.05) -> Tuple[bool, Dict[st
     if not results:
         return False, {"error": "Could not perform normality tests"}
 
-    # Conservative rule: declare normal only if ALL tests fail to reject H0.
-    # With both Shapiro-Wilk and D'Agostino-Pearson active, this means both
-    # must return p > alpha. This is intentionally strict for the small-sample
-    # ML regime (typically 5–30 runs) where false normality assumptions matter.
-    is_normal = all(test["p_value"] > alpha for test in results.values())
+        # For n < 20, D'Agostino-Pearson does not run — only Shapiro-Wilk is
+        # evaluated. In that regime the "ALL tests" rule reduces to a single test.
+        # Set require_all_tests=True to enforce the strict conjunction regardless.
+        passing = [t["p_value"] > alpha for t in results.values() if t is not None]
+        is_normal = all(passing) if require_all_tests else any(passing)
 
     return is_normal, results
 
@@ -1063,6 +1071,70 @@ def shapiro_wilk_test(model_metrics: pd.Series, alpha: float = 0.05) -> Statisti
 # HIGH-LEVEL COMPARISON FUNCTIONS
 
 
+def paired_wilcoxon_test(
+    series_a: pd.Series,
+    series_b: pd.Series,
+    alpha: float = 0.05,
+) -> StatisticalTestResult:
+    """Paired Wilcoxon signed-rank test for two matched samples.
+
+    Tests whether the median difference between ``series_a`` and
+    ``series_b`` differs from zero. Appropriate when both models are
+    evaluated on the same random seeds.
+
+    Args:
+        series_a: Per-run metric values for model A.
+        series_b: Per-run metric values for model B.
+        alpha: Significance threshold. Default 0.05.
+
+    Returns:
+        StatisticalTestResult with paired-comparison conclusion text.
+    """
+    from scipy.stats import wilcoxon
+
+    aligned = pd.DataFrame({"a": series_a, "b": series_b}).dropna()
+    n = len(aligned)
+    differences = aligned["a"] - aligned["b"]
+    nonzero = differences[differences != 0]
+
+    result = StatisticalTestResult(
+        test_name="Paired Wilcoxon Signed-Rank Test",
+        statistic=float("nan"),
+        p_value=float("nan"),
+    )
+    result.sample_sizes = {"n_pairs": n, "non_zero_differences": len(nonzero)}
+
+    if len(nonzero) < 1:
+        result.warnings.append("All paired differences are zero; test undefined.")
+        return result
+
+    if len(nonzero) < 6:
+        result.warnings.append(
+            f"Only {len(nonzero)} non-zero differences; Wilcoxon test results "
+            "may be unreliable. Use num_runs >= 10 for reliable inference."
+        )
+
+    try:
+        stat, p = wilcoxon(nonzero)
+        result.statistic = float(stat)
+        result.p_value = float(p)
+        direction = "A" if float(differences.median()) > 0 else "B"
+        if p < alpha:
+            result.conclusion = (
+                f"Model {direction} outperforms the other in paired comparison "
+                f"(W={stat:.3f}, p={p:.4f}, n={n} pairs)."
+            )
+        else:
+            result.conclusion = (
+                f"No significant difference between paired models "
+                f"(W={stat:.3f}, p={p:.4f}, n={n} pairs)."
+            )
+    except Exception as e:
+        result.warnings.append(f"Test failed: {e}")
+
+    return result
+
+
 def compare_two_models(
     model1_results: pd.Series, model2_results: pd.Series, paired: bool = False, alpha: float = 0.05
 ) -> StatisticalTestResult:
@@ -1117,10 +1189,7 @@ def compare_two_models(
         return result
 
     if paired:
-        # For paired comparisons, test the differences
-        differences = clean1 - clean2
-        result = wilcoxon_signed_rank_test(differences, null_value=0, alpha=alpha)
-        result.test_name = "Paired Comparison (Wilcoxon Signed-Rank)"
+        result = paired_wilcoxon_test(clean1, clean2, alpha=alpha)
     else:
         # For independent comparisons, use intelligent test selection
 
@@ -1185,7 +1254,7 @@ def compare_two_models(
             result.ci_method = ci_result.method
 
             # Also compute CI for the effect size (Cohen's d)
-            if result.effect_size is not None:
+            if result.effect_size is not None and "Mann-Whitney" not in result.test_name:
                 es_ci = bootstrap_effect_size_ci(
                     clean1,
                     clean2,

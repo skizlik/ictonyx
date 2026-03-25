@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+from scipy import stats as _scipy_stats
 
 from . import settings
 
@@ -288,7 +289,10 @@ def plot_roc_curve(
         y_score = np.vstack([1 - y_score, y_score]).T
 
     num_classes = y_score.shape[1]
-    y_test_binarized = to_categorical(y_test, num_classes=num_classes)
+    if HAS_TENSORFLOW_UTILS:
+        y_test_binarized = to_categorical(y_test, num_classes=num_classes)
+    else:
+        y_test_binarized = np.eye(num_classes)[y_test.astype(int)]
 
     fig = plt.figure(figsize=(10, 8))
 
@@ -348,7 +352,10 @@ def plot_precision_recall_curve(
         y_score = np.vstack([1 - y_score, y_score]).T
 
     num_classes = y_score.shape[1]
-    y_test_binarized = to_categorical(y_test, num_classes=num_classes)
+    if HAS_TENSORFLOW_UTILS:
+        y_test_binarized = to_categorical(y_test, num_classes=num_classes)
+    else:
+        y_test_binarized = np.eye(num_classes)[y_test.astype(int)]
 
     fig = plt.figure(figsize=(10, 8))
 
@@ -698,7 +705,9 @@ def plot_comparison_forest(
             np.var(scores, ddof=1) / len(scores)
             + np.var(baseline_scores, ddof=1) / len(baseline_scores)
         )
-        ci = 1.96 * se_diff
+        df_welch = len(scores) + len(baseline_scores) - 2
+        t_crit = _scipy_stats.t.ppf(0.975, df=df_welch)
+        ci = t_crit * se_diff
 
         models.append(name)
         diff_means.append(diff)

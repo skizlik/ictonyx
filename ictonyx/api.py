@@ -40,6 +40,7 @@ def variability_study(
     tracker: Optional[BaseLogger] = None,
     use_process_isolation: bool = False,
     seed: Optional[int] = None,
+    verbose: bool = True,
     **kwargs,
 ) -> VariabilityStudyResults:
     """Run a variability study: train a model N times and collect distributions.
@@ -86,6 +87,7 @@ def variability_study(
         seed: Base random seed. Run *i* uses ``seed + i``, so every run is
             different but the full study is reproducible. If ``None``, a
             random seed is generated and stored in the results.
+        verbose: If ``False``, suppress all training output. Default ``True``.
         **kwargs: Additional arguments forwarded to both the
             :class:`~ictonyx.config.ModelConfig` and the data handler
             (e.g. ``image_size``, ``test_split``, ``val_split``).
@@ -109,8 +111,19 @@ def variability_study(
         print(results.summarize())
     """
 
+    # Separate infrastructure kwargs from model kwargs
+    _INFRA_KWARGS = {
+        "image_size",
+        "test_split",
+        "val_split",
+        "gpu_memory_limit",
+        "color_mode",
+    }
+    model_kwargs = {k: v for k, v in kwargs.items() if k not in _INFRA_KWARGS}
+    infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
+
     # 1. Prepare Data
-    handler = auto_resolve_handler(data, target_column=target_column, **kwargs)
+    handler = auto_resolve_handler(data, target_column=target_column, **infra_kwargs)
 
     # 2. Prepare Model Builder
     # If the user passes a class (e.g. RandomForestClassifier), we instantiate it per run.
@@ -123,8 +136,8 @@ def variability_study(
         {
             "epochs": epochs,
             "batch_size": batch_size,
-            "verbose": 1 if settings.should_verbose() else 0,
-            **kwargs,
+            "verbose": 1 if verbose else 0,
+            **model_kwargs,
         }
     )
 
@@ -150,6 +163,8 @@ def compare_models(
     epochs: int = 10,
     metric: str = "val_accuracy",
     seed: Optional[int] = None,
+    verbose: bool = True,
+    paired: bool = False,
     **kwargs,
 ) -> ModelComparisonResults:
     """Run variability studies on multiple models and compare them statistically.
@@ -178,6 +193,10 @@ def compare_models(
         seed: Base random seed for reproducibility. All models use the same
             seed so the comparison can be reproduced exactly. If ``None``,
             a random seed is generated.
+        verbose: If ``False``, suppress all output. Default ``True``.
+        paired: If ``True``, use Wilcoxon signed-rank for two-model
+            comparison. Correct when both models share the same seeds.
+            Default ``False``.
         **kwargs: Forwarded to each :func:`variability_study` call.
 
     Returns:
@@ -208,7 +227,12 @@ def compare_models(
     settings.logger.info(f"--- Starting Comparison of {len(models)} Models (seed={seed}) ---")
 
     for model_input in models:
-        name = _get_model_name(model_input)
+        base_name = _get_model_name(model_input)
+        name = base_name
+        counter = 1
+        while name in results_store:
+            name = f"{base_name}_{counter}"
+            counter += 1
         settings.logger.info(f"Evaluating: {name}")
 
         study_results = variability_study(
@@ -217,20 +241,49 @@ def compare_models(
             runs=runs,
             epochs=epochs,
             seed=seed,
+            verbose=verbose,
             **kwargs,
         )
 
-        metrics = study_results.get_final_metrics(metric)
-        if not metrics:
+        metric_values = study_results.get_metric_values(metric)
+        if not metric_values:
             settings.logger.warning(f"No '{metric}' data found for {name}")
             continue
-
-        results_store[name] = pd.Series(list(metrics.values()))
+        results_store[name] = pd.Series(metric_values)
 
     if len(results_store) < 2:
         raise ValueError(
             f"Insufficient valid results for comparison: only {len(results_store)} model(s) "
             f"produced '{metric}' data. Check that your metric name is correct."
+        )
+
+    if paired and len(results_store) == 2:
+        from .analysis import paired_wilcoxon_test
+
+        names = list(results_store.keys())
+        series_a = results_store[names[0]]
+        series_b = results_store[names[1]]
+        if len(series_a) != len(series_b):
+            import warnings
+
+            warnings.warn(
+                f"compare_models(paired=True): '{names[0]}' has {len(series_a)} runs "
+                f"but '{names[1]}' has {len(series_b)} runs. "
+                "Paired comparison requires equal run counts.",
+                UserWarning,
+                stacklevel=2,
+            )
+        paired_result = paired_wilcoxon_test(series_a, series_b)
+        return ModelComparisonResults(
+            overall_test=paired_result,
+            raw_data=results_store,
+            pairwise_comparisons={f"{names[0]}_vs_{names[1]}": paired_result},
+            significant_comparisons=(
+                [f"{names[0]}_vs_{names[1]}"] if paired_result.is_significant() else []
+            ),
+            correction_method="none",
+            n_models=2,
+            metric=metric,
         )
 
     stat_results = _stat_compare(results_store)

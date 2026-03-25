@@ -168,6 +168,7 @@ def test_compare_models_insufficient_data(mock_var_study, sample_df):
     # Arrange: Study returns empty metrics
     empty_results = MagicMock()
     empty_results.get_final_metrics.return_value = {}
+    empty_results.get_metric_values.return_value = []
     mock_var_study.return_value = empty_results
 
     # Act / Assert — compare_models now raises ValueError instead of returning error dict

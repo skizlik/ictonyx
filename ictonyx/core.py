@@ -1049,10 +1049,17 @@ if SKLEARN_AVAILABLE:
             if self.predictions is None:
                 raise ValueError("Model has not generated predictions yet. Call predict() first.")
 
-            is_classifier = hasattr(self.model, "predict_proba") or hasattr(self.model, "classes_")
+            if self.task is not None:
+                is_classifier = self.task == "classification"
+            else:
+                is_classifier = hasattr(self.model, "predict_proba") or hasattr(
+                    self.model, "classes_"
+                )
 
             if is_classifier:
-                return {"accuracy": float(np.mean(self.predictions == true_labels))}
+                from sklearn.metrics import accuracy_score
+
+                return {"accuracy": float(accuracy_score(true_labels, self.predictions))}
 
             # Regression: match ScikitLearnModelWrapper metric set exactly.
             preds = np.asarray(self.predictions, dtype=float)

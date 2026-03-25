@@ -758,6 +758,14 @@ def plot_pairwise_comparison_matrix(
     """
     _check_plotting()
 
+    if not comparison_results:
+        warnings.warn(
+            "plot_pairwise_comparison_matrix: pairwise_comparisons is empty.",
+            UserWarning,
+            stacklevel=2,
+        )
+        return None
+
     if "pairwise_comparisons" not in comparison_results:
         settings.logger.warning("No pairwise comparisons to plot.")
         return None
@@ -765,7 +773,7 @@ def plot_pairwise_comparison_matrix(
     pairwise = comparison_results["pairwise_comparisons"]
     _name_set: set = set()
     for comp_name in pairwise.keys():
-        names = comp_name.split("_vs_")
+        names = comp_name.split("_vs_", maxsplit=1)
         _name_set.update(names)
     model_names = sorted(list(_name_set))
     n_models = len(model_names)
@@ -775,7 +783,10 @@ def plot_pairwise_comparison_matrix(
     effect_size_matrix = np.zeros((n_models, n_models))
 
     for comp_name, result in pairwise.items():
-        name1, name2 = comp_name.split("_vs_")
+        parts = comp_name.split("_vs_", maxsplit=1)
+        if len(parts) != 2:
+            continue
+        name1, name2 = parts
         i, j = model_names.index(name1), model_names.index(name2)
         p_val = result.corrected_p_value if result.corrected_p_value is not None else result.p_value
         p_value_matrix[i, j] = p_val

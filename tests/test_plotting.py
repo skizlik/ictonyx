@@ -17,6 +17,7 @@ from ictonyx.plotting import (
     plot_comparison_boxplots,
     plot_comparison_forest,
     plot_confusion_matrix,
+    plot_pairwise_comparison_matrix,
     plot_training_history,
     plot_training_stability,
     plot_variability_summary,
@@ -386,3 +387,27 @@ class TestPlotVariabilitySummaryOptions:
         )
         assert fig is not None
         plt.close(fig)
+
+
+class TestPairwiseMatrixFixes:
+    def test_empty_dict_returns_none_with_warning(self):
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = plot_pairwise_comparison_matrix({})
+        assert result is None
+        assert any("empty" in str(warning.message).lower() for warning in w)
+
+    def test_underscore_model_names_do_not_crash(self):
+        data = {
+            "model_with_underscore_vs_another_model": MagicMock(
+                p_value=0.01,
+                is_significant=MagicMock(return_value=True),
+            )
+        }
+        # Should not raise — may return None or a figure
+        try:
+            plot_pairwise_comparison_matrix(data)
+        except Exception as e:
+            pytest.fail(f"Raised unexpected exception: {e}")

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 import numpy as np
 import pandas as pd
+from scipy import stats as _scipy_stats
 
 from .config import ModelConfig
 from .core import BaseModelWrapper
@@ -480,6 +481,9 @@ class ExperimentRunner:
             metric distributions, and optional test-set metrics.
         """
 
+        if num_runs < 1:
+            raise ValueError(f"num_runs must be at least 1, got {num_runs}.")
+
         # Reset state from any previous run
         self.all_runs_metrics.clear()
         self.final_metrics.clear()
@@ -574,7 +578,7 @@ class ExperimentRunner:
             for metric_name, values in self.final_metrics.items():
                 if values:
                     mean_val = np.mean(values)
-                    std_val = np.std(values)
+                    std_val = np.std(values, ddof=1)
                     logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {std_val:.4f})")
 
         return VariabilityStudyResults(
@@ -607,7 +611,7 @@ class ExperimentRunner:
         for metric_name, values in self.final_metrics.items():
             if values:
                 stats[f"{metric_name}_mean"] = float(np.mean(values))
-                stats[f"{metric_name}_std"] = float(np.std(values))
+                stats[f"{metric_name}_std"] = float(np.std(values, ddof=1))
                 stats[f"{metric_name}_min"] = float(np.min(values))
                 stats[f"{metric_name}_max"] = float(np.max(values))
 
@@ -797,7 +801,7 @@ class VariabilityStudyResults:
                     [
                         f"{metric_name}:",
                         f"  Mean: {np.mean(values):.4f}",
-                        f"  Std:  {np.std(values):.4f}",
+                        f"  Std:  {np.std(values, ddof=1):.4f}",
                         f"  Min:  {np.min(values):.4f}",
                         f"  Max:  {np.max(values):.4f}",
                     ]
@@ -840,8 +844,14 @@ class VariabilityStudyResults:
             plt.plot(stats["epoch"], stats["mean"], label="Mean")
             plt.legend()
         """
+
         if not self.all_runs_metrics:
             raise ValueError("No runs available.")
+
+        if not (0 < confidence < 1):
+            raise ValueError(
+                f"confidence must be in (0, 1), got {confidence!r}. " "Use 0.95 for 95%, not 95."
+            )
 
         available_runs = [df for df in self.all_runs_metrics if metric in df.columns]
         if not available_runs:
@@ -866,14 +876,23 @@ class VariabilityStudyResults:
             sd = float(np.std(arr, ddof=1))
             se = sd / np.sqrt(len(arr))
 
+            if len(arr) > 1:
+                t_crit = _scipy_stats.t.ppf(1 - alpha / 2, df=len(arr) - 1)
+                ci_half = t_crit * se
+                ci_lower = float(mean - ci_half)
+                ci_upper = float(mean + ci_half)
+            else:
+                ci_lower = float("nan")
+                ci_upper = float("nan")
+
             rows.append(
                 {
                     "epoch": epoch_idx + 1,
                     "mean": mean,
                     "sd": sd,
                     "se": se,
-                    "ci_lower": float(np.percentile(arr, 100 * alpha / 2)),
-                    "ci_upper": float(np.percentile(arr, 100 * (1 - alpha / 2))),
+                    "ci_lower": ci_lower,
+                    "ci_upper": ci_upper,
                     "n_runs": len(epoch_vals),
                 }
             )
@@ -1128,6 +1147,7 @@ def run_grid_study(
     use_process_isolation: bool = True,
     dry_run: bool = False,
     verbose: bool = True,
+    seed: Optional[int] = None,
 ) -> GridStudyResults:
     """Run a variability study across a grid of parameter configurations.
 
@@ -1162,6 +1182,9 @@ def run_grid_study(
                                before committing to a long run.
         verbose:               If ``True``, log study progress.
                                Default ``True``.
+        seed:                  Base random seed for reproducibility. Configuration
+                               i uses seed + i. If ``None``, each configuration
+                               uses a random seed.
 
     Returns:
         :class:`GridStudyResults`
@@ -1235,6 +1258,7 @@ def run_grid_study(
             model_config=config,
             num_runs=num_runs,
             use_process_isolation=use_process_isolation,
+            seed=(seed + i) if seed is not None else None,
         )
 
         key = GridStudyResults._config_key(param_combo)

@@ -87,18 +87,15 @@ class BaseLogger:
 
     def log_artifact(self, artifact_path: str, artifact_name: Optional[str] = None):
         """Logs an artifact (file) - base implementation does nothing."""
-        if self.verbose:
-            print(f"Would log artifact: {artifact_path}")
+        logger.debug(f"Would log artifact: {artifact_path}")
 
     def log_model(self, model, artifact_path: str = "model"):
         """Logs a model - base implementation does nothing."""
-        if self.verbose:
-            print(f"Would log model to: {artifact_path}")
+        logger.debug(f"Would log model to: {artifact_path}")
 
     def log_figure(self, figure, artifact_name: str):
         """Logs a matplotlib figure - base implementation does nothing."""
-        if self.verbose:
-            print(f"Would log figure: {artifact_name}")
+        logger.debug(f"Would log figure: {artifact_name}")
 
     def set_tags(self, tags: Dict[str, str]):
         """Sets tags for the run - base implementation does nothing."""

@@ -383,14 +383,13 @@ class TestTestAgainstNull:
         """Values clearly above 0.5 should produce a significant result."""
         results = self._make_results([0.90, 0.91, 0.89, 0.92, 0.88, 0.93, 0.90, 0.91, 0.89, 0.92])
         result = results.test_against_null(null_value=0.5)
-        assert result.is_significant
         assert result.p_value < 0.05
 
     def test_null_result_near_null_value(self):
         """Values near the null should not be significant."""
         results = self._make_results([0.50, 0.51, 0.49, 0.52, 0.48, 0.50, 0.51, 0.49, 0.50, 0.51])
         result = results.test_against_null(null_value=0.5)
-        assert not result.is_significant
+        assert result.p_value > 0.05
 
     def test_invalid_metric_raises_value_error(self):
         results = self._make_results([0.8, 0.85, 0.82], metric="val_accuracy")
@@ -1167,3 +1166,99 @@ class TestRunGridStudy:
             use_process_isolation=False,
         )
         assert set(called_lrs) == {0.001, 0.0001}
+
+
+class TestDdof1:
+    def test_summarize_uses_sample_std(self):
+        values = [0.80, 0.85, 0.82, 0.79, 0.88, 0.83, 0.81, 0.86, 0.84, 0.87]
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": values},
+            final_test_metrics=[],
+            seed=42,
+        )
+        expected_std = float(np.std(values, ddof=1))
+        summary = results.summarize()
+        for line in summary.split("\n"):
+            if "Std:" in line:
+                reported = float(line.split(":")[-1].strip())
+                np.testing.assert_allclose(reported, round(expected_std, 4), atol=0.00005)
+                return
+        pytest.fail("No Std line found in summarize() output")
+
+
+class TestInputValidation:
+    def test_num_runs_zero_raises(self):
+        with pytest.raises(ValueError, match="num_runs"):
+            run_variability_study(
+                model_builder=lambda c: None,
+                data_handler=MagicMock(),
+                model_config=ModelConfig({"epochs": 1}),
+                num_runs=0,
+            )
+
+    def test_num_runs_negative_raises(self):
+        with pytest.raises(ValueError, match="num_runs"):
+            run_variability_study(
+                model_builder=lambda c: None,
+                data_handler=MagicMock(),
+                model_config=ModelConfig({"epochs": 1}),
+                num_runs=-1,
+            )
+
+    def test_confidence_95_raises(self):
+        results = VariabilityStudyResults(
+            all_runs_metrics=[pd.DataFrame({"val_accuracy": [0.8, 0.85]})],
+            final_metrics={"val_accuracy": [0.8, 0.85]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        with pytest.raises(ValueError, match="confidence"):
+            results.get_epoch_statistics(metric="val_accuracy", confidence=95)
+
+    def test_confidence_valid_accepted(self):
+        results = VariabilityStudyResults(
+            all_runs_metrics=[
+                pd.DataFrame({"val_accuracy": [0.8, 0.85, 0.82]}),
+                pd.DataFrame({"val_accuracy": [0.81, 0.84, 0.83]}),
+            ],
+            final_metrics={"val_accuracy": [0.82, 0.83]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        df = results.get_epoch_statistics(metric="val_accuracy", confidence=0.95)
+        assert df is not None
+        assert "ci_lower" in df.columns
+        assert "ci_upper" in df.columns
+
+
+class TestGetEpochStatisticsCI:
+    def test_ci_columns_are_not_percentiles(self):
+        """ci_lower/ci_upper must be t-interval, not empirical percentiles."""
+        epoch_values = [0.80, 0.85, 0.79, 0.83, 0.81]
+        n = len(epoch_values)
+        mean = np.mean(epoch_values)
+        sd = np.std(epoch_values, ddof=1)
+        se = sd / np.sqrt(n)
+        from scipy import stats
+
+        t_crit = stats.t.ppf(0.975, df=n - 1)
+        expected_lower = mean - t_crit * se
+        expected_upper = mean + t_crit * se
+        # Percentile equivalents for comparison
+        percentile_lower = np.percentile(epoch_values, 2.5)
+        percentile_upper = np.percentile(epoch_values, 97.5)
+        # They must differ — if they're equal the test data is wrong
+        assert not np.isclose(
+            expected_lower, percentile_lower
+        ), "Test data too symmetric — can't distinguish t-interval from percentile"
+        results = VariabilityStudyResults(
+            all_runs_metrics=[pd.DataFrame({"val_accuracy": [v]}) for v in epoch_values],
+            final_metrics={"val_accuracy": epoch_values},
+            final_test_metrics=[],
+            seed=42,
+        )
+        df = results.get_epoch_statistics(metric="val_accuracy", confidence=0.95)
+        row = df.iloc[0]
+        np.testing.assert_allclose(row["ci_lower"], expected_lower, rtol=1e-3)
+        np.testing.assert_allclose(row["ci_upper"], expected_upper, rtol=1e-3)

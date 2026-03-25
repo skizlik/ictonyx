@@ -779,7 +779,6 @@ def wilcoxon_signed_rank_test(
             wilcoxon_result = wilcoxon(non_zero_data, alternative=alternative, method="approx")
             result.statistic = float(wilcoxon_result.statistic)
             result.p_value = float(wilcoxon_result.pvalue)
-            result.is_significant = result.p_value < alpha
 
             # Effect size r = |Z| / sqrt(N) using scipy's tie-corrected Z.
             # method='approx' populates WilcoxonResult.zstatistic, which
@@ -1317,17 +1316,6 @@ def compare_multiple_models(
 
     if n_models < 2:
         raise ValueError("Need at least 2 models to compare")
-
-    warned = False
-    for name, series in model_results.items():
-        if isinstance(series, pd.Series) and len(series) > 1 and not warned:
-            warnings.warn(
-                f"compare_multiple_models: '{name}' has {len(series)} values. "
-                "Ensure each Series contains one value per run, not per epoch.",
-                UserWarning,
-                stacklevel=2,
-            )
-            warned = True
 
     # Overall test first (Kruskal-Wallis - more robust than ANOVA)
     overall_result = kruskal_wallis_test(model_results, alpha=alpha)
@@ -1887,18 +1875,18 @@ def assess_training_stability(
         "n_runs": len(loss_histories),
         "common_length": min_length,
         "final_loss_mean": np.mean(final_losses),
-        "final_loss_std": np.std(final_losses),
+        "final_loss_std": np.std(final_losses, ddof=1),
         "final_loss_cv": (
-            np.std(final_losses) / np.mean(final_losses)
+            np.std(final_losses, ddof=1) / np.mean(final_losses)
             if np.mean(final_losses) > 0
             else float("inf")
         ),
         "final_window_std_mean": np.mean(
-            [np.std(run_window) for run_window in final_window_losses]
+            [np.std(run_window, ddof=1) for run_window in final_window_losses]
         ),
-        "between_run_variance": np.var(np.mean(final_window_losses, axis=1)),
+        "between_run_variance": np.var(np.mean(final_window_losses, axis=1), ddof=1),
         "within_run_variance_mean": np.mean(
-            [np.var(run_window) for run_window in final_window_losses]
+            [np.var(run_window, ddof=1) for run_window in final_window_losses]
         ),
         "final_losses_list": final_losses.tolist(),
     }

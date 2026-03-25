@@ -16,6 +16,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.11] — 2026-03-25
+
+### Added
+- `VariabilityStudyResults.test_against_null(null_value, metric, alpha)`:
+  one-sample Wilcoxon signed-rank test against a user-specified null value.
+  The v0.3.10 removal stub for `compare_models_statistically()` directed
+  users to this method; it did not exist. Requires `num_runs >= 6` for
+  reliable results.
+- `variability_study()` and `compare_models()`: `verbose` parameter
+  (default `True`).
+- `compare_models()`: `paired` parameter (default `False`). When `True`,
+  uses Wilcoxon signed-rank — correct when models share the same seeds.
+  Warns when series have unequal run counts.
+- `run_grid_study()`: `seed` parameter; each configuration receives
+  `seed + i` for reproducible grid studies.
+
+### Fixed — critical
+- `KerasModelWrapper.predict()`: regression branch now returns raw float
+  values. Previously applied `>= 0.5` threshold and cast to integer,
+  silently corrupting every Keras regression prediction.
+- `KerasModelWrapper.predict()`: binary classification threshold corrected
+  from `> 0.5` to `>= 0.5`. A sigmoid output of exactly 0.5 was assigned
+  to class 0; correct behaviour is class 1, consistent with sklearn
+  convention. The v0.3.10 CHANGELOG claimed this fix was shipped — it was not.
+
+### Fixed — statistical correctness
+- `summarize()`, `get_summary_stats()`, and `assess_training_stability()`:
+  standard deviation now uses `ddof=1` (sample std). Reported std was
+  systematically too small — approximately 5% at n=10, 11% at n=5.
+- `get_epoch_statistics()`: `ci_lower`/`ci_upper` now contain a
+  t-distribution CI on the epoch mean. Previously empirical percentiles,
+  which at n=5 are essentially min and max.
+- `get_epoch_statistics()`: raises `ValueError` if `confidence` is not
+  in (0, 1). Passing `confidence=95` previously produced garbage silently.
+- `plot_comparison_forest()`: CI now uses Welch t-multiplier per
+  comparison instead of hardcoded z=1.96. CIs at small n were too narrow.
+- `compare_two_models()`: paired path refactored to dedicated
+  `paired_wilcoxon_test()` with natural conclusion text. Previously passed
+  pre-computed differences to a single-sample test, producing misleading
+  metadata.
+- `compare_two_models()`: effect size CI no longer computed for the
+  Mann-Whitney path, where Cohen's d CI is the wrong pairing.
+- `check_convergence()`: secondary criterion now requires both criteria
+  to agree. Previously fired on any decreasing curve. Falls back to
+  variance criterion alone when autocorrelation cannot be computed.
+- `check_independence()`: false-positive "independent" on short series
+  corrected — returns early when `n < max_lag + 2`. Loop bound corrected
+  from `n // 4` to `min(max_lag, n - 2)`; SE uses post-dropna count.
+- `check_normality()`: `require_all_tests` parameter added (default
+  `False`); n<3 return structure standardized; n<20 comment corrected.
+- `cohens_d()`: returns `NaN` with `RuntimeWarning` when pooled std is
+  undefined. Previously silently returned 0.0.
+- `assess_training_stability()`: correct results for DataFrame histories;
+  all std/variance computations now use `ddof=1`.
+- `compare_multiple_models()`: warns when multi-value Series are passed,
+  indicating accidental per-epoch data rather than per-run data.
+- `ModelConfig.for_variability_study()`: `epochs_per_run` key now read
+  by `run_study()` before falling back to `epochs`.
+- R² returns `NaN` instead of `0.0` when `ss_tot == 0` in all three
+  model wrappers.
+
+### Fixed — API and runners
+- `compare_models()`: two instances of the same class with different
+  parameters no longer silently overwrite each other in results.
+- `compare_models()`: uses `get_metric_values()` instead of deprecated
+  `get_final_metrics()`.
+- `variability_study()`: model kwargs no longer bleed into `ModelConfig`
+  and experiment logs.
+- `ScikitLearnModelWrapper.assess()`: reads `self.task` set during
+  `fit()`; uses `accuracy_score` for consistency with other wrappers.
+- `run_study()`: raises `ValueError` for `num_runs < 1`.
+- `plot_pairwise_comparison_matrix()`: no longer crashes on model names
+  containing underscores; returns `None` with a warning on empty input.
+- `plot_roc_curve()` / `plot_pr_curve()`: TensorFlow dependency removed
+  from label binarization; falls back to `np.eye()` when TF is absent.
+- `BaseLogger`: debug-only messages removed from stdout.
+
+===
+
 ## [0.3.10] — 2026-03-24
 
 ### Removed

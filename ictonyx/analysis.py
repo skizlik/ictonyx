@@ -254,8 +254,8 @@ def check_normality(
         # For n < 20, D'Agostino-Pearson does not run — only Shapiro-Wilk is
         # evaluated. In that regime the "ALL tests" rule reduces to a single test.
         # Set require_all_tests=True to enforce the strict conjunction regardless.
-        passing = [t["p_value"] > alpha for t in results.values() if t is not None]
-        is_normal = all(passing) if require_all_tests else any(passing)
+    passing = [t["p_value"] > alpha for t in results.values() if t is not None]
+    is_normal = all(passing) if require_all_tests else any(passing)
 
     return is_normal, results
 

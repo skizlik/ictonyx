@@ -28,7 +28,7 @@ Ictonyx trains a model N times under independent random seeds, collects the full
 pip install ictonyx tensorflow
 ```
 
-Requires Python 3.10+. Current release: **0.3.10** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
+Requires Python 3.10+. Current release: **0.3.11** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
 
 scikit-learn and PyTorch are also supported. See the [examples](examples/) directory.
 
@@ -336,7 +336,7 @@ on the GitHub repository page.
 @software{kizlik_ictonyx,
   author  = {Kizlik, Stephen},
   title   = {Ictonyx: A Framework for Variability Analysis in Machine Learning Training},
-  version = {0.3.10},
+  version = {0.3.11},
   url     = {https://github.com/skizlik/ictonyx},
   license = {MIT},
 }

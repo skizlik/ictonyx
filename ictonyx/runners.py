@@ -875,29 +875,28 @@ class VariabilityStudyResults:
 
         return pd.DataFrame(rows)
 
+    def compare_models_statistically(self, *args, **kwargs):
+        """Removed in v0.3.10.
 
-def compare_models_statistically(self, *args, **kwargs):
-    """Removed in v0.3.10.
+        This method applied Kruskal-Wallis to groups of one observation each
+        (one per run), which is statistically incoherent — within-group variance
+        is undefined with a single observation.
 
-    This method applied Kruskal-Wallis to groups of one observation each
-    (one per run), which is statistically incoherent — within-group variance
-    is undefined with a single observation.
+        To compare a single model's run distribution against a null value, use::
 
-    To compare a single model's run distribution against a null value, use::
+            results.test_against_null(null_value=0.5, metric="val_accuracy")
 
-        results.test_against_null(null_value=0.5, metric="val_accuracy")
+        To compare multiple distinct models against each other, use::
 
-    To compare multiple distinct models against each other, use::
-
-        ix.compare_models(models=[model_a, model_b], data=..., runs=20)
-    """
-    raise AttributeError(
-        "compare_models_statistically() was removed in v0.3.10. "
-        "It applied Kruskal-Wallis to single-observation groups (one per run), "
-        "producing statistically incoherent results.\n\n"
-        "For single-model null testing: results.test_against_null(null_value=0.5)\n"
-        "For cross-model comparison:    ix.compare_models([model_a, model_b], data=...)"
-    )
+            ix.compare_models(models=[model_a, model_b], data=..., runs=20)
+        """
+        raise AttributeError(
+            "compare_models_statistically() was removed in v0.3.10. "
+            "It applied Kruskal-Wallis to single-observation groups (one per run), "
+            "producing statistically incoherent results.\n\n"
+            "For single-model null testing: results.test_against_null(null_value=0.5)\n"
+            "For cross-model comparison:    ix.compare_models([model_a, model_b], data=...)"
+        )
 
 
 @dataclass

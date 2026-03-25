@@ -602,9 +602,9 @@ def plot_comparison_boxplots(
     """
     _check_plotting()
 
-    if "raw_data" in comparison_results:
-        data_dict = comparison_results["raw_data"]
-    elif all(isinstance(v, (list, pd.Series, np.ndarray)) for v in comparison_results.values()):
+    if hasattr(comparison_results, "raw_data"):
+        data_dict = comparison_results.raw_data
+    elif isinstance(comparison_results, dict):
         data_dict = comparison_results
     else:
         settings.logger.error("Could not find raw data for boxplots.")
@@ -624,8 +624,8 @@ def plot_comparison_boxplots(
     sn.stripplot(data=df, x="Model", y=metric, color="black", alpha=0.3, ax=ax)
 
     # Statistical Annotations Title
-    if "pairwise_comparisons" in comparison_results:
-        pairs = comparison_results["pairwise_comparisons"]
+    if hasattr(comparison_results, "pairwise_comparisons"):
+        pairs = comparison_results.pairwise_comparisons
         sig_pairs = [k for k, v in pairs.items() if v.is_significant()]
         if sig_pairs:
             subtitle = "Significant differences: " + ", ".join(sig_pairs)
@@ -666,10 +666,10 @@ def plot_comparison_forest(
     """
     _check_plotting()
 
-    if "raw_data" in comparison_results:
-        data_dict = comparison_results["raw_data"]
-    elif all(isinstance(v, (list, pd.Series, np.ndarray)) for v in comparison_results.values()):
-        data_dict = comparison_results
+    if hasattr(comparison_results, "raw_data"):
+        data_dict = comparison_results.raw_data
+    elif isinstance(comparison_results, dict):
+        data_dict = comparison_results.get("raw_data", comparison_results)
     else:
         settings.logger.error("Could not find raw data.")
         return None

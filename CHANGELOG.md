@@ -14,6 +14,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VariabilityStudyResults.report()` for self-contained summaries
 - Paired/blocked experimental designs for model comparison
 
+---
+
+## [0.3.10] — 2026-03-24
+
+### Removed
+
+- `VariabilityStudyResults.compare_models_statistically()` removed. The method applied
+  Kruskal-Wallis to groups of one observation each (one per run), producing statistically
+  incoherent results. A stub raises `AttributeError` with migration guidance. Use
+  `ix.compare_models()` for cross-model comparison.
+
+### Added
+
+- `ArraysDataHandler` now accepts optional `X_test` and `y_test` parameters. When
+  provided, `load()` bypasses internal test splitting and returns the supplied arrays as
+  `test_data` directly, performing only a train/val split on the training arrays. Ensures
+  deterministic, consistent test evaluation across variability study runs for users with
+  existing held-out test sets. Fully backward compatible.
+
+- `ArraysDataHandler.__init__()` now accepts `val_split` and `test_split` as constructor
+  parameters, storing them as defaults for `load()`. Explicit arguments to `load()` still
+  take precedence; existing call sites are unaffected.
+
+### Fixed — data integrity (re-run may be required)
+
+- `ScikitLearnModelWrapper.fit()`: `val_accuracy` and `val_r2` are no longer written to
+  the training history when no validation data is provided. Previously `val_score` was
+  silently set equal to `train_score`, fabricating a generalisation metric that propagated
+  into `final_metrics` and any downstream comparison or summary. **Users who ran sklearn
+  variability studies without an explicit validation split should re-run their experiments.**
+
+### Fixed — statistical correctness
+
+- `analysis.py` — `rank_biserial_correlation()` returned the wrong sign on every call.
+  The formula `1 - 2U/(n₁n₂)` has been corrected to `2U/(n₁n₂) - 1`, consistent with
+  the Kerby (2014) definition and scipy's convention. Previously, a result where model A
+  outperformed model B would report a negative rank-biserial correlation. Effect size
+  magnitude and all p-values were unaffected.
+
+- `ScikitLearnModelWrapper.evaluate()`: precision, recall, and F1 averaging strategy
+  (`'binary'` vs `'weighted'`) is now determined from the training label count rather
+  than `np.unique(y_test)`. A test batch missing any class would silently apply the
+  wrong averaging.
+
+- `HyperparameterTuner.tune()`: now applies `space_eval()` before returning, decoding
+  hyperopt-encoded indices back to actual hyperparameter values. Previously a search over
+  `hp.choice("batch_size", [16, 32, 64])` could return `{"batch_size": 2}` (the index)
+  instead of `{"batch_size": 64}` (the value).
+
+- `KerasModelWrapper.predict()`: binary classification threshold corrected from `> 0.5`
+  to `>= 0.5`. A sigmoid output of exactly 0.5 was previously assigned to class 0 instead
+  of class 1, inconsistent with sklearn convention and `predict_proba`.
+
+### Fixed — crashes and silent failures
+
+- `_ensure_wrapper()`: Keras models are now correctly wrapped as `KerasModelWrapper`.
+  Previously the duck-typing check (`hasattr(obj, "fit") and hasattr(obj, "predict")`)
+  fired before the Keras check, silently mis-wrapping any Keras model as
+  `ScikitLearnModelWrapper`.
+
+- `ArraysDataHandler.__init__()`: now raises `ValueError` if exactly one of `X_test` /
+  `y_test` is provided. Previously the asymmetric pair was silently accepted; `load()`
+  then returned `test_data=(array, None)`, causing a confusing crash inside `evaluate()`.
+
+- `ImageDataHandler._preprocess_image()`: replaced dead nested `try/except` blocks with
+  a direct call to `tf.image.decode_image()`. Python exception handlers cannot intercept
+  TF op errors inside `tf.data.Dataset.map()` in graph execution mode — the JPEG→PNG
+  fallback chain was never triggered.
+
+- `ImageDataHandler.load()`: added `_validate_image_files()` pre-flight scan using Pillow
+  before the dataset is built. Previously, any unreadable image silently injected an
+  all-zero tensor with its original class label into training data. Now raises
+  `DataValidationError` listing the offending files. Requires `Pillow`; skips validation
+  with a warning if not installed.
+
+- `TabularDataHandler.load()`: NaN values in feature columns now emit a `logger.warning`
+  identifying the affected columns and counts. Previously the check computed `null_counts`
+  and discarded it — a commented-out `print` was the only remnant. Target-column NaN
+  already warned; feature columns now do too.
+
+- `predict()` in all three wrappers: `assert self.predictions is not None` replaced with
+  an explicit `ModelError`. Python strips `assert` statements when running with `-O`,
+  silently turning the invariant check into dead code.
+
+- `PyTorchModelWrapper.load_model()`: `weights_only` parameter is now passed through to
+  `torch.load()`. Previously hardcoded as `True`, silently overriding the caller's value
+  and causing `UnpicklingError` for any legacy checkpoint loaded with `weights_only=False`.
+
+- `BaseModelWrapper.__del__()`: cleanup is now skipped during interpreter shutdown.
+  Previously, calling `tf.keras.backend.clear_session()` during teardown could trigger
+  TF's shutdown sequence out of order, causing `AttributeError` or segfaults in some
+  TF versions.
+
+- `ModelConfig` property setters (`epochs`, `batch_size`, `num_runs`, `epochs_per_run`,
+  `learning_rate`, `cleanup_threshold`): now accept `numpy.integer` values. Previously
+  `isinstance(value, int)` rejected `np.int64` and similar types with a `ValueError`,
+  silently breaking any grid search that iterated over a numpy parameter array.
+
+### Fixed — data layer
+
+- `data.py`: TF preprocessing import guard now catches `AttributeError` in addition to
+  `ImportError`. In TF 2.16+ / Keras 3, `tensorflow.keras.preprocessing` exists as a
+  module stub but its sub-attributes have moved, raising `AttributeError` instead of
+  `ImportError`. Without this fix, importing `ArraysDataHandler` or `TabularDataHandler`
+  would fail in any Keras 3 environment.
+
+- `TabularDataHandler.get_data_info()`: no longer returns `data_path: "in_memory_dataframe"`
+  and `path_exists: False` when the handler was initialised from a DataFrame. Now returns
+  `source: "dataframe"` alongside the actual shape and column metadata.
+
+### Internal
+
+- Stale comment removed from `BaseModelWrapper.check_memory_and_cleanup_if_needed()`.
+- `conftest.py` fixture `TypeError` resolved; shared test fixtures now work as intended.
+
 
 ---
 

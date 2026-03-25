@@ -744,7 +744,7 @@ if TENSORFLOW_AVAILABLE:
 
             ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
             ss_res = float(np.sum((labels - preds) ** 2))
-            r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 0.0
+            r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else float("nan")
 
             return {"r2": r2, "mse": mse, "mae": mae}
 
@@ -1063,7 +1063,7 @@ if SKLEARN_AVAILABLE:
 
             ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
             ss_res = float(np.sum((labels - preds) ** 2))
-            r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 0.0
+            r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else float("nan")
 
             return {"r2": r2, "mse": mse, "mae": mae}
 
@@ -1236,7 +1236,7 @@ if PYTORCH_AVAILABLE:
                 if self.task == "classification":
                     history["val_accuracy"] = []
                 else:
-                    history["val_mse"] = []
+                    history["val_loss"] = []
 
             # Training loop
             for epoch in range(epochs):
@@ -1279,7 +1279,7 @@ if PYTORCH_AVAILABLE:
                     if self.task == "classification":
                         history["val_accuracy"].append(val_metric)
                     else:
-                        history["val_mse"].append(val_metric)
+                        history["val_loss"].append(val_metric)
 
             self.training_result = TrainingResult(
                 history=history,
@@ -1430,7 +1430,7 @@ if PYTORCH_AVAILABLE:
 
                 ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
                 ss_res = float(np.sum((labels - preds) ** 2))
-                r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 0.0
+                r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else float("nan")
 
                 return {"r2": r2, "mse": mse, "mae": mae}
 

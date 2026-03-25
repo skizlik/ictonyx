@@ -869,8 +869,10 @@ class TestScikitLearnWrapperCoverage:
         runs = [
             pd.DataFrame(
                 {
-                    "train_accuracy": np.linspace(0.5, 0.9, 20),
-                    "val_accuracy": np.linspace(0.45, 0.85, 20),
+                    "train_accuracy": np.concatenate(
+                        [np.linspace(0.5, 0.88, 15), np.full(5, 0.89)]
+                    ),
+                    "val_accuracy": np.concatenate([np.linspace(0.45, 0.84, 15), np.full(5, 0.85)]),
                     "run_num": [i + 1] * 20,
                     "epoch": range(1, 21),
                 }

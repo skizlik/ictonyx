@@ -489,7 +489,9 @@ class ExperimentRunner:
         self._child_seeds = [int(child.generate_state(1)[0]) for child in _ss.spawn(num_runs)]
 
         if epochs_per_run is None:
-            epochs_per_run = self.model_config.get("epochs", 10)
+            epochs_per_run = self.model_config.get("epochs_per_run") or self.model_config.get(
+                "epochs", 10
+            )
 
         # Log study parameters (Metric Tracker)
         self.tracker.log_params(

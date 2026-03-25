@@ -291,13 +291,19 @@ def check_independence(
 ) -> Tuple[bool, Dict[str, Any]]:
     """Check for autocorrelation that would violate the independence assumption.
 
-    Computes autocorrelation at lags 1 through ``max_lag`` and flags the
-    data as non-independent if any lag exceeds the significance threshold
+    Computes autocorrelation at lags 1 through ``effective_max_lag`` and flags
+    the data as non-independent if any lag exceeds the significance threshold
     derived from ``alpha`` using a standard normal approximation.
+
+    The effective maximum lag is ``min(max_lag, n - 2)`` where ``n`` is the
+    number of valid observations, ensuring the loop is meaningful for small
+    samples. For a typical variability study with ``n=10`` runs and
+    ``max_lag=5``, lags 1 through 5 are all checked.
 
     Args:
         data: A ``pd.Series`` of metric values ordered by run.
-        max_lag: Maximum lag to check. Default 5.
+        max_lag: Maximum lag to check. Default 5. The actual number of lags
+            checked may be fewer if ``n - 2 < max_lag``.
         alpha: Significance level for autocorrelation detection. Default 0.05.
             A lag is flagged as significant if its autocorrelation exceeds
             ``norm.ppf(1 - alpha/2) / sqrt(n)``.
@@ -314,13 +320,14 @@ def check_independence(
           - ``'significant_lags'``: list of lag integers exceeding the
             threshold.
           - ``'max_autocorr'``: the largest absolute autocorrelation
-            observed across all checked lags.
+            observed across all checked lags. ``0`` if no lags were checked.
           - ``'threshold'``: the significance threshold used, equal to
-            ``norm.ppf(1-alpha/2) / sqrt(n)``.
+            ``norm.ppf(1 - alpha/2) / sqrt(n)``.
           - ``'n'``: the number of valid (non-NaN) observations.
 
-        Returns ``(False, {'error': '...'})`` if the series has fewer
-        valid observations than ``max_lag + 2``.
+        Returns ``(False, {'error': '...'})`` immediately if the number of
+        valid observations is less than ``max_lag + 2``, without performing
+        any autocorrelation checks.
     """
 
     autocorr_results = {}
@@ -329,13 +336,23 @@ def check_independence(
     # Derive critical value from alpha
     critical_value = stats.norm.ppf(1 - alpha / 2)
 
-    for lag in range(1, min(max_lag + 1, len(data) // 4)):
+    n = len(data.dropna())
+    if n < max_lag + 2:
+        return False, {
+            "error": (
+                f"Series too short: {n} observations for max_lag={max_lag}. "
+                f"Need at least {max_lag + 2} observations."
+            )
+        }
+
+    effective_max_lag = min(max_lag, max(1, n - 2))
+    for lag in range(1, effective_max_lag + 1):
         try:
             autocorr = data.autocorr(lag)
             if not np.isnan(autocorr):
                 autocorr_results[f"lag_{lag}"] = autocorr
 
-                se = 1.0 / np.sqrt(len(data))
+                se = 1.0 / np.sqrt(n)
                 if abs(autocorr) > critical_value * se:
                     significant_lags.append(lag)
         except Exception:
@@ -1301,6 +1318,17 @@ def compare_multiple_models(
     if n_models < 2:
         raise ValueError("Need at least 2 models to compare")
 
+    warned = False
+    for name, series in model_results.items():
+        if isinstance(series, pd.Series) and len(series) > 1 and not warned:
+            warnings.warn(
+                f"compare_multiple_models: '{name}' has {len(series)} values. "
+                "Ensure each Series contains one value per run, not per epoch.",
+                UserWarning,
+                stacklevel=2,
+            )
+            warned = True
+
     # Overall test first (Kruskal-Wallis - more robust than ANOVA)
     overall_result = kruskal_wallis_test(model_results, alpha=alpha)
 
@@ -1575,26 +1603,26 @@ def check_convergence(
     # Get recent window
     recent_data = data.iloc[-window_size:]
 
-    # Primary criterion: low autocorrelation
+    # Primary criterion: low autocorrelation in recent window
     autocorr = calculate_autocorr(recent_data, lag=1)
-    if autocorr is None:
-        return False
 
-    low_autocorr = abs(autocorr) < autocorr_threshold
-
-    # Secondary criterion: low variance in recent window relative to overall
+    # Secondary criterion: low recent variance relative to overall
     if len(data) > window_size:
         recent_variance = recent_data.var()
         overall_variance = data.var()
-
-        if overall_variance > 0:
-            low_recent_variance = recent_variance < 0.1 * overall_variance
-        else:
-            low_recent_variance = True
+        low_recent_variance = (
+            recent_variance < 0.1 * overall_variance if overall_variance > 0 else True
+        )
     else:
         low_recent_variance = False
 
-    return low_autocorr or low_recent_variance
+    # If autocorrelation cannot be computed (e.g. constant series),
+    # fall back to variance criterion alone
+    if autocorr is None or np.isnan(autocorr):
+        return low_recent_variance
+
+    low_autocorr = abs(autocorr) < autocorr_threshold
+    return low_autocorr and low_recent_variance
 
 
 # CONFUSION MATRIX FUNCTION (enhanced)
@@ -1842,7 +1870,14 @@ def assess_training_stability(
     truncated_histories = [history.iloc[:min_length] for history in loss_histories]
 
     # Convert to array for easier computation
-    loss_array = np.array([history.values for history in truncated_histories])
+    def _to_values(h):
+        if isinstance(h, pd.DataFrame):
+            candidates = ["loss", "train_loss", "val_loss", "val_accuracy", "r2", "val_r2"]
+            col = next((c for c in candidates if c in h.columns), None)
+            return h[col].values if col is not None else h.iloc[:, 0].values
+        return h.values
+
+    loss_array = np.array([_to_values(h) for h in truncated_histories])
 
     # Compute stability metrics
     final_losses = loss_array[:, -1]

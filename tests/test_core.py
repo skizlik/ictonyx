@@ -1,5 +1,7 @@
 """Test core model wrapper functionality."""
 
+from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -226,7 +228,50 @@ class TestKerasWrapper:
 
         wrapper = KerasModelWrapper(model, model_id="keras_test")
         wrapper.cleanup()
-        # Should not crash
+
+
+@pytest.mark.skipif(not TENSORFLOW_AVAILABLE, reason="TensorFlow not available")
+class TestKerasModelWrapperPredict:
+
+    def _make_regression_wrapper(self):
+        # Adjust to match how your existing tests construct a KerasModelWrapper
+        # Look at the existing test_core.py fixtures for the right pattern
+        wrapper = KerasModelWrapper.__new__(KerasModelWrapper)
+        wrapper.model = MagicMock()
+        wrapper.task = "regression"
+        wrapper.predictions = None
+        return wrapper
+
+    def _make_classification_wrapper(self):
+        wrapper = KerasModelWrapper.__new__(KerasModelWrapper)
+        wrapper.model = MagicMock()
+        wrapper.task = "classification"
+        wrapper.predictions = None
+        return wrapper
+
+    def test_regression_predict_returns_floats(self):
+        wrapper = self._make_regression_wrapper()
+        raw = np.array([[2.7], [0.03], [1.5], [-0.4]])
+        wrapper.model.predict = MagicMock(return_value=raw)
+        wrapper.predict(MagicMock())
+        assert wrapper.predictions.dtype in (np.float32, np.float64)
+        assert not set(wrapper.predictions.tolist()).issubset({0, 1})
+
+    def test_regression_predict_preserves_values(self):
+        wrapper = self._make_regression_wrapper()
+        raw = np.array([[2.7], [0.03], [1.5]])
+        wrapper.model.predict = MagicMock(return_value=raw)
+        wrapper.predict(MagicMock())
+        np.testing.assert_allclose(wrapper.predictions, [2.7, 0.03, 1.5])
+
+    def test_binary_classification_threshold_at_0_5(self):
+        wrapper = self._make_classification_wrapper()
+        raw = np.array([[0.5], [0.4999], [0.5001]])
+        wrapper.model.predict = MagicMock(return_value=raw)
+        wrapper.predict(MagicMock())
+        assert wrapper.predictions[0] == 1
+        assert wrapper.predictions[1] == 0
+        assert wrapper.predictions[2] == 1
 
 
 @pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not available")

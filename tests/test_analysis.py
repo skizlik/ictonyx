@@ -239,8 +239,8 @@ class TestCohensD:
     def test_identical_groups_gives_zero(self):
         g = pd.Series([5, 5, 5, 5, 5])
         d, interp = cohens_d(g, g)
-        assert d == 0.0
-        assert interp == "negligible"
+        assert np.isnan(d)
+        assert interp == "undefined"
 
     def test_unpooled_variant(self):
         g1 = pd.Series([1, 2, 3, 4, 5])
@@ -574,6 +574,29 @@ class TestShapiroWilkTest:
     def test_invalid_input_type(self):
         with pytest.raises(TypeError):
             shapiro_wilk_test([1, 2, 3])
+
+
+class TestCohensDEdgeCases:
+    def test_cohens_d_returns_nan_for_n1_eq_1_n2_eq_1(self):
+        """cohens_d with n=1 per group has undefined pooled_std — must return NaN."""
+        import warnings
+
+        a = pd.Series([0.85])
+        b = pd.Series([0.75])
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result, interp = cohens_d(a, b)
+        assert np.isnan(result), "Expected NaN for degenerate single-observation groups"
+        assert interp == "undefined"
+        assert any(issubclass(warning.category, RuntimeWarning) for warning in w)
+
+    def test_cohens_d_normal_case_unchanged(self):
+        """Normal inputs must still produce a numeric result."""
+        a = pd.Series([0.85, 0.86, 0.84, 0.87, 0.85])
+        b = pd.Series([0.75, 0.74, 0.76, 0.75, 0.77])
+        result, interp = cohens_d(a, b)
+        assert not np.isnan(result)
+        assert result > 0
 
 
 # ===================================================================

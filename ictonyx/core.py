@@ -479,20 +479,14 @@ if TENSORFLOW_AVAILABLE:
             is_classification = self._is_classification_model()
 
             if not is_classification:
-                # Regression: return raw predictions, maintain original shape
-                self.predictions = (raw_predictions.flatten() >= 0.5).astype(int)
+                # Regression: return raw predicted values as floats.
+                self.predictions = raw_predictions.flatten().astype(float)
             else:
-                # Classification: return class predictions as integers
                 if n_outputs == 1:
-                    # Binary classification with single output (sigmoid)
-                    if not np.all((raw_predictions >= 0) & (raw_predictions <= 1)):
-                        raise ValueError(
-                            "Binary classification model output not in [0,1] range. "
-                            "Ensure final layer uses sigmoid activation."
-                        )
-                    self.predictions = (raw_predictions.flatten() > 0.5).astype(int)
+                    # >= 0.5: a sigmoid output of exactly 0.5 (maximum uncertainty)
+                    # is assigned to class 1, consistent with sklearn convention.
+                    self.predictions = (raw_predictions.flatten() >= 0.5).astype(int)
                 else:
-                    # Multi-class classification (softmax)
                     self.predictions = np.argmax(raw_predictions, axis=1).astype(int)
 
             if self.predictions is None:  # pragma: no branch

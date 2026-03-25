@@ -377,15 +377,38 @@ def cohens_d(group1: pd.Series, group2: pd.Series, pooled: bool = True) -> Tuple
     mean1, mean2 = group1.mean(), group2.mean()
 
     if pooled:
-        # Pooled standard deviation
         n1, n2 = len(group1), len(group2)
         var1, var2 = group1.var(), group2.var()
-        pooled_std = np.sqrt(((n1 - 1) * var1 + (n2 - 1) * var2) / (n1 + n2 - 2))
-        d = (mean1 - mean2) / pooled_std if pooled_std > 0 else 0
+        denom = n1 + n2 - 2
+        if denom <= 0:
+            warnings.warn(
+                f"cohens_d: denominator is zero (n1={n1}, n2={n2}). "
+                "Cohen's d is undefined; returning NaN.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return float("nan"), "undefined"
+        pooled_std = np.sqrt(((n1 - 1) * var1 + (n2 - 1) * var2) / denom)
+        if np.isnan(pooled_std) or pooled_std == 0.0:
+            warnings.warn(
+                f"cohens_d: pooled_std is {'NaN' if np.isnan(pooled_std) else 'zero'} "
+                f"(n1={n1}, n2={n2}). Cohen's d is undefined; returning NaN.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return float("nan"), "undefined"
+        d = (mean1 - mean2) / pooled_std
     else:
-        # Control group standard deviation
         std2 = group2.std()
-        d = (mean1 - mean2) / std2 if std2 > 0 else 0
+        if np.isnan(std2) or std2 == 0.0:
+            warnings.warn(
+                f"cohens_d: control group std is {'NaN' if np.isnan(std2) else 'zero'} "
+                f"(n2={len(group2)}). Cohen's d is undefined; returning NaN.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return float("nan"), "undefined"
+        d = (mean1 - mean2) / std2
 
     interpretation = _interpret_cohens_d(abs(d))
 

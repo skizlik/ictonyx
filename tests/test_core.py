@@ -234,8 +234,10 @@ class TestKerasWrapper:
 class TestKerasModelWrapperPredict:
 
     def _make_regression_wrapper(self):
-        # Adjust to match how your existing tests construct a KerasModelWrapper
-        # Look at the existing test_core.py fixtures for the right pattern
+        import tensorflow as tf
+
+        from ictonyx.core import KerasModelWrapper
+
         wrapper = KerasModelWrapper.__new__(KerasModelWrapper)
         wrapper.model = MagicMock()
         wrapper.task = "regression"
@@ -243,6 +245,10 @@ class TestKerasModelWrapperPredict:
         return wrapper
 
     def _make_classification_wrapper(self):
+        import tensorflow as tf
+
+        from ictonyx.core import KerasModelWrapper
+
         wrapper = KerasModelWrapper.__new__(KerasModelWrapper)
         wrapper.model = MagicMock()
         wrapper.task = "classification"

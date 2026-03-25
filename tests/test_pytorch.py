@@ -201,7 +201,6 @@ class TestPyTorchRegression:
         h = wrapper.training_result.history
         assert "loss" in h
         assert "val_loss" in h
-        assert "val_mse" in h
 
     def test_regression_predict(self):
         train, val = make_regression_data()

@@ -9,7 +9,10 @@ import itertools
 import random
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+
+if TYPE_CHECKING:
+    from .analysis import StatisticalTestResult
 
 import numpy as np
 import pandas as pd

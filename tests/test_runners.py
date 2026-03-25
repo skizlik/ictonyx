@@ -352,6 +352,61 @@ class TestVariabilityStudyResults:
         assert "Mean:" in summary
 
 
+class TestTestAgainstNull:
+    """VariabilityStudyResults.test_against_null() — EXT-2."""
+
+    def _make_results(self, values, metric="val_accuracy"):
+        return VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={metric: values},
+            final_test_metrics=[],
+            seed=42,
+        )
+
+    def test_method_exists(self):
+        """Must not raise AttributeError — the ghost API is now real."""
+        results = self._make_results([0.8, 0.85, 0.82, 0.79, 0.88, 0.83, 0.81, 0.86, 0.84, 0.87])
+        result = results.test_against_null(null_value=0.5)
+        assert result is not None
+
+    def test_returns_statistical_test_result(self):
+        from ictonyx.analysis import StatisticalTestResult
+
+        results = self._make_results([0.8, 0.85, 0.82, 0.79, 0.88, 0.83, 0.81, 0.86, 0.84, 0.87])
+        result = results.test_against_null(null_value=0.5)
+        assert isinstance(result, StatisticalTestResult)
+        assert hasattr(result, "p_value")
+        assert hasattr(result, "is_significant")
+        assert hasattr(result, "conclusion")
+
+    def test_significant_result_above_null(self):
+        """Values clearly above 0.5 should produce a significant result."""
+        results = self._make_results([0.90, 0.91, 0.89, 0.92, 0.88, 0.93, 0.90, 0.91, 0.89, 0.92])
+        result = results.test_against_null(null_value=0.5)
+        assert result.is_significant
+        assert result.p_value < 0.05
+
+    def test_null_result_near_null_value(self):
+        """Values near the null should not be significant."""
+        results = self._make_results([0.50, 0.51, 0.49, 0.52, 0.48, 0.50, 0.51, 0.49, 0.50, 0.51])
+        result = results.test_against_null(null_value=0.5)
+        assert not result.is_significant
+
+    def test_invalid_metric_raises_value_error(self):
+        results = self._make_results([0.8, 0.85, 0.82], metric="val_accuracy")
+        with pytest.raises(ValueError, match="not found"):
+            results.test_against_null(metric="nonexistent_metric")
+
+    def test_migration_guidance_no_longer_raises(self):
+        """The exact call from the removal stub must work without AttributeError."""
+        results = self._make_results([0.8, 0.85, 0.82, 0.79, 0.88, 0.83, 0.81, 0.86, 0.84, 0.87])
+        # This is the exact call directed to in the compare_models_statistically stub
+        try:
+            results.test_against_null(null_value=0.5, metric="val_accuracy")
+        except AttributeError:
+            pytest.fail("test_against_null raised AttributeError — ghost API not resolved")
+
+
 class TestConvenienceFunction:
     """Test run_variability_study convenience function."""
 

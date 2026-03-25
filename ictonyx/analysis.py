@@ -762,6 +762,7 @@ def wilcoxon_signed_rank_test(
             wilcoxon_result = wilcoxon(non_zero_data, alternative=alternative, method="approx")
             result.statistic = float(wilcoxon_result.statistic)
             result.p_value = float(wilcoxon_result.pvalue)
+            result.is_significant = result.p_value < alpha
 
             # Effect size r = |Z| / sqrt(N) using scipy's tie-corrected Z.
             # method='approx' populates WilcoxonResult.zstatistic, which

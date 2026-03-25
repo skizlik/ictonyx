@@ -875,6 +875,41 @@ class VariabilityStudyResults:
 
         return pd.DataFrame(rows)
 
+    def test_against_null(
+        self,
+        null_value: float = 0.5,
+        metric: str = "val_accuracy",
+        alpha: float = 0.05,
+    ) -> "StatisticalTestResult":
+        """Test whether a metric's distribution differs from a null value.
+
+        Applies a one-sample Wilcoxon signed-rank test to the per-run final
+        values of ``metric``.
+
+        Args:
+            null_value: The null hypothesis value. Use 0.5 for chance-level
+                binary classification accuracy.
+            metric: Metric name. Must be a key in ``final_metrics``.
+            alpha: Significance threshold (default 0.05).
+
+        Returns:
+            A StatisticalTestResult with ``is_significant``, ``p_value``,
+            ``statistic``, and ``conclusion``.
+
+        Note:
+            The Wilcoxon signed-rank test requires at least 6 non-zero
+            differences for reliable results. Use ``num_runs >= 10`` for
+            reliable inference.
+        """
+        from .analysis import wilcoxon_signed_rank_test
+
+        if metric not in self.final_metrics:
+            available = list(self.final_metrics.keys())
+            raise ValueError(f"Metric '{metric}' not found. Available: {available}")
+
+        values = pd.Series(self.get_metric_values(metric))
+        return wilcoxon_signed_rank_test(values, null_value=null_value, alpha=alpha)
+
     def compare_models_statistically(self, *args, **kwargs):
         """Removed in v0.3.10.
 

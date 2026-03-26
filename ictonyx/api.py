@@ -152,6 +152,7 @@ def variability_study(
         use_process_isolation=use_process_isolation,
         gpu_memory_limit=kwargs.get("gpu_memory_limit"),
         seed=seed,
+        verbose=verbose,
     )
 
 

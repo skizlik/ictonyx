@@ -688,8 +688,10 @@ class TextDataHandler(FileDataHandler):
         """
         if not HAS_TF_PREPROCESSING:
             raise ImportError(
-                "TensorFlow preprocessing is required for TextDataHandler. "
-                "Install with: pip install tensorflow"
+                "TextDataHandler requires tf.keras.preprocessing.text.Tokenizer, "
+                "which was removed in Keras 3 / TF 2.16+. "
+                "Workaround: pre-tokenize your text and use ArraysDataHandler. "
+                "Framework-agnostic support is planned for a future release."
             )
 
         super().__init__(data_path)
@@ -869,8 +871,11 @@ class TimeSeriesDataHandler(FileDataHandler):
         """
         if not HAS_TF_PREPROCESSING:
             raise ImportError(
-                "TensorFlow preprocessing is required for TimeSeriesDataHandler. "
-                "Install with: pip install tensorflow"
+                "TimeSeriesDataHandler requires tf.keras.preprocessing.sequence."
+                "TimeseriesGenerator, which was removed in Keras 3 / TF 2.16+. "
+                "Workaround: build a manual sliding-window dataset and use "
+                "ArraysDataHandler. Framework-agnostic support is planned for "
+                "a future release."
             )
 
         super().__init__(data_path)

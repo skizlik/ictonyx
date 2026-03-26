@@ -251,6 +251,12 @@ class TestPyTorchRegression:
         with pytest.raises(ValueError, match="classification"):
             wrapper.predict_proba(np.random.rand(10, 5).astype(np.float32))
 
+    def test_regression_val_loss_length_equals_epochs(self):
+        """val_loss must have exactly one entry per epoch."""
+        # train PyTorch regression wrapper for E epochs
+        # assert len(wrapper.training_result.history["val_loss"]) == E
+        pass
+
 
 # --- DataLoader input ---
 

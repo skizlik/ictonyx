@@ -1242,8 +1242,6 @@ if PYTORCH_AVAILABLE:
                 history["val_loss"] = []
                 if self.task == "classification":
                     history["val_accuracy"] = []
-                else:
-                    history["val_loss"] = []
 
             # Training loop
             for epoch in range(epochs):
@@ -1285,8 +1283,6 @@ if PYTORCH_AVAILABLE:
                     history["val_loss"].append(val_loss)
                     if self.task == "classification":
                         history["val_accuracy"].append(val_metric)
-                    else:
-                        history["val_loss"].append(val_metric)
 
             self.training_result = TrainingResult(
                 history=history,

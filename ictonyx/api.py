@@ -111,7 +111,9 @@ def variability_study(
         print(results.summarize())
     """
 
-    # Separate infrastructure kwargs from model kwargs
+    # Separate infrastructure kwargs (forwarded to the data handler) from
+    # model kwargs (forwarded to ModelConfig). Add new DataHandler constructor
+    # parameters to _INFRA_KWARGS to prevent them from appearing in ModelConfig.
     _INFRA_KWARGS = {
         "image_size",
         "test_split",

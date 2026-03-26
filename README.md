@@ -86,12 +86,6 @@ print(results.summarize())
 ```
 
 ```
-Study Summary:
-  Successful runs: 10/10
-  train_loss: 0.4799 (SD = 0.0479)
-  train_accuracy: 0.8267 (SD = 0.0182)
-  val_loss: 1.1786 (SD = 0.0356)
-  val_accuracy: 0.6553 (SD = 0.0138)
 Variability Study Results
 ==============================
 Successful runs: 10

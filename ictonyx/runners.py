@@ -72,8 +72,10 @@ class ExperimentRunner:
             Default ``False``.
         gpu_memory_limit: Optional GPU memory cap in MB, applied per run
             when using TensorFlow. Default ``None`` (no limit).
-        seed: Base random seed for reproducibility. Run *i* uses
-            ``seed + i``. If ``None``, a random seed is generated and stored.
+        seed: Base random seed for reproducibility. Each run receives an
+            independent child seed derived via ``np.random.SeedSequence.spawn()``,
+            which guarantees statistically uncorrelated RNG streams.
+            If ``None``, a random seed is generated and stored.
         verbose: If ``True``, log study progress to stdout. If ``tqdm`` is
             installed, a progress bar replaces per-run log messages.
             Default ``True``.
@@ -182,9 +184,10 @@ class ExperimentRunner:
     def _set_seeds(seed: int):
         """Set all relevant RNGs for reproducibility.
 
-        Called before each run with a unique per-run seed (base_seed + run_id).
-        This controls the environment's randomness; model-internal RNGs
-        (e.g. sklearn's random_state) remain the user's responsibility.
+        Called before each run with a unique per-run seed derived via
+        SeedSequence.spawn(). This controls global RNGs for numpy, Python,
+        TensorFlow, and PyTorch. sklearn estimators that accept random_state
+        are seeded at wrapper construction time when possible.
         """
         random.seed(seed)
         np.random.seed(seed)
@@ -1195,9 +1198,10 @@ def run_grid_study(
                                before committing to a long run.
         verbose:               If ``True``, log study progress.
                                Default ``True``.
-        seed:                  Base random seed for reproducibility. Configuration
-                               i uses seed + i. If ``None``, each configuration
-                               uses a random seed.
+        seed:                  Base random seed for reproducibility. Each
+                               configuration receives an independent child seed
+                               derived via ``SeedSequence.spawn()``. If ``None``,
+                               each configuration uses a random seed.
 
     Returns:
         :class:`GridStudyResults`

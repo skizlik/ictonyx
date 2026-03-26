@@ -6,7 +6,7 @@ This module provides a interface for running variability studies
 and model comparisons. It abstracts away the complexity of DataHandlers,
 ModelConfigs, and ExperimentRunners into single function calls.
 """
-
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -122,6 +122,20 @@ def variability_study(
     model_kwargs = {k: v for k, v in kwargs.items() if k not in _INFRA_KWARGS}
     infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
 
+    # Apply verbose setting to global logger
+    from .settings import set_verbose
+
+    set_verbose(verbose)
+
+    if runs < 10:
+        warnings.warn(
+            f"runs={runs} may be insufficient for reliable statistical inference. "
+            "At n=5, Mann-Whitney U has very low power against small effects. "
+            "Consider runs >= 20 for publication-quality results.",
+            UserWarning,
+            stacklevel=2,
+        )
+
     # 1. Prepare Data
     handler = auto_resolve_handler(data, target_column=target_column, **infra_kwargs)
 
@@ -217,6 +231,19 @@ def compare_models(
         )
         print(results.get_summary())
     """
+    # Apply verbose setting to global logger
+    from .settings import set_verbose
+
+    set_verbose(verbose)
+
+    if runs < 10:
+        warnings.warn(
+            f"runs={runs} may be insufficient for reliable statistical inference. "
+            "At n=5, Mann-Whitney U has very low power against small effects. "
+            "Consider runs >= 20 for publication-quality results.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Resolve seed once — all models use the same base seed for reproducibility
     if seed is None:
@@ -265,14 +292,11 @@ def compare_models(
         series_a = results_store[names[0]]
         series_b = results_store[names[1]]
         if len(series_a) != len(series_b):
-            import warnings
-
-            warnings.warn(
-                f"compare_models(paired=True): '{names[0]}' has {len(series_a)} runs "
-                f"but '{names[1]}' has {len(series_b)} runs. "
-                "Paired comparison requires equal run counts.",
-                UserWarning,
-                stacklevel=2,
+            raise ValueError(
+                f"compare_models(paired=True) requires equal run counts. "
+                f"'{names[0]}' has {len(series_a)} runs but "
+                f"'{names[1]}' has {len(series_b)} runs. "
+                "Use paired=False for independent comparison."
             )
         paired_result = paired_wilcoxon_test(series_a, series_b)
         return ModelComparisonResults(
@@ -328,7 +352,18 @@ def _get_model_builder(model: Any) -> Callable:
 
     # If it's a class (like RandomForestClassifier), instantiate it per run.
     if isinstance(model, type):
-        return lambda conf: _ensure_wrapper(model())
+
+        def _build_from_class(conf, _model_class=model):
+            import inspect
+
+            if "random_state" in inspect.signature(_model_class).parameters:
+                try:
+                    return _ensure_wrapper(_model_class(random_state=conf.get("run_seed")))
+                except TypeError:
+                    return _ensure_wrapper(_model_class())
+            return _ensure_wrapper(_model_class())
+
+        return _build_from_class
 
     # If it's an instance, we need to clone it per run for independence.
     if hasattr(model, "fit"):

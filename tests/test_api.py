@@ -124,16 +124,19 @@ def test_variability_study_missing_target(sample_df):
         api.variability_study(lambda x: x, data=sample_df)
 
 
-def test_variability_study_verbose_false_suppresses_output(capsys):
+def test_variability_study_verbose_false_suppresses_output(capsys, sample_df):
     """verbose=False must produce no stdout output."""
-    ix.variability_study(
-        model=RandomForestClassifier,
-        data=df,
-        target_column="target",
-        runs=3,
-        verbose=False,
-        seed=42,
-    )
+    from sklearn.ensemble import RandomForestClassifier
+
+    with pytest.warns(UserWarning, match="runs=3"):
+        api.variability_study(
+            model=RandomForestClassifier,
+            data=sample_df,
+            target_column="target",
+            runs=3,
+            verbose=False,
+            seed=42,
+        )
     captured = capsys.readouterr()
     assert captured.out == ""
 

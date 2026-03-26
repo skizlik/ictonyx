@@ -114,11 +114,14 @@ class MemoryManager:
         """Setup process isolation with appropriate serialization."""
         # Check serialization capability
         if not HAS_CLOUDPICKLE:
-            if self.verbose:
-                logger.info(
-                    "CloudPickle not found. Install it to enable notebook-defined "
-                    "functions with process isolation: pip install cloudpickle"
-                )
+            warnings.warn(
+                "cloudpickle is not installed. Process isolation will use "
+                "standard pickle, which cannot serialize notebook-defined "
+                "functions or lambdas and will fail silently in Jupyter. "
+                "Install with: pip install ictonyx[isolation]",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # Use get_context() rather than set_start_method() to avoid mutating
         # global process state. set_start_method(force=True) would break any
@@ -186,10 +189,21 @@ class MemoryManager:
                         if self.verbose:
                             logger.debug(f"Set GPU memory limit: {self.gpu_memory_limit}MB")
                     elif self.allow_memory_growth:
-                        # Growth mode
-                        tf.config.experimental.set_memory_growth(gpu, True)
-                        if self.verbose:
-                            logger.debug("Enabled GPU memory growth")
+                        # Growth mode — must be called before any TF computation.
+                        # If TF was already initialized this will raise RuntimeError.
+                        try:
+                            tf.config.experimental.set_memory_growth(gpu, True)
+                            if self.verbose:
+                                logger.debug("Enabled GPU memory growth")
+                        except RuntimeError:
+                            warnings.warn(
+                                "Could not enable GPU memory growth — TensorFlow "
+                                "was already initialized before MemoryManager was "
+                                "constructed. To avoid this, construct MemoryManager "
+                                "before importing or running any TensorFlow code.",
+                                UserWarning,
+                                stacklevel=3,
+                            )
                 except RuntimeError as e:
                     if "visible devices" in str(e).lower():
                         warnings.warn(

@@ -25,14 +25,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+from scipy.special import ndtri as _ndtri
+from scipy.stats import norm as _norm
 
-try:
-    from scipy.special import ndtri as _ndtri
-    from scipy.stats import norm as _norm
-
-    HAS_SCIPY = True
-except ImportError:
-    HAS_SCIPY = False
+HAS_SCIPY = True  # always True; kept for backward compatibility
 
 
 # ---------------------------------------------------------------------------

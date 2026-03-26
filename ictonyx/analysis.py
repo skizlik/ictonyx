@@ -18,26 +18,23 @@ try:
 except ImportError:
     HAS_BOOTSTRAP = False
 
-# Optional scipy imports
-try:
-    from scipy import stats
-    from scipy.stats import (
-        beta,
-        f_oneway,
-        jarque_bera,
-        kruskal,
-        levene,
-        mannwhitneyu,
-        normaltest,
-        shapiro,
-        ttest_ind,
-        ttest_rel,
-        wilcoxon,
-    )
+# Scipy imports
+from scipy import stats
+from scipy.stats import (
+    beta,
+    f_oneway,
+    jarque_bera,
+    kruskal,
+    levene,
+    mannwhitneyu,
+    normaltest,
+    shapiro,
+    ttest_ind,
+    ttest_rel,
+    wilcoxon,
+)
 
-    HAS_SCIPY = True
-except ImportError:
-    HAS_SCIPY = False
+HAS_SCIPY = True  # always True; kept for backward compatibility with any callers
 
 # Optional sklearn import (only for confusion matrix)
 try:

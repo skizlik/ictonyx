@@ -70,7 +70,7 @@ class BaseLogger:
         self.history["params"].update(params)
 
         if self.verbose and self.print_params:
-            print(f"Parameters: {params}")
+            logger.info(f"Parameters: {params}")
 
     def log_metric(self, key: str, value: float, step: int = 0):
         """Logs a single metric and stores it in history."""
@@ -78,7 +78,7 @@ class BaseLogger:
         self.history["metrics"].append(metric_entry)
 
         if self.verbose and self.print_metrics:
-            print(f" - Step {step}: {key} = {value:.4f}")
+            logger.info(f" - Step {step}: {key} = {value:.4f}")
 
     def log_metrics(self, metrics: Dict[str, float], step: int = 0):
         """Logs multiple metrics at once."""
@@ -100,12 +100,12 @@ class BaseLogger:
     def set_tags(self, tags: Dict[str, str]):
         """Sets tags for the run - base implementation does nothing."""
         if self.verbose:
-            print(f"Would set tags: {tags}")
+            logger.info(f"Would set tags: {tags}")
 
     def end_run(self):
         """Called at the end of a run to finalize logging."""
         if self.verbose:
-            print("-" * 50)
+            logger.info("-" * 50)
 
     def get_history(self) -> Dict[str, Any]:
         """Returns the logged history."""

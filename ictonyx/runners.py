@@ -193,13 +193,14 @@ class ExperimentRunner:
         if HAS_TENSORFLOW:
             tf.random.set_seed(seed)
 
-        # PyTorch (will require revision when full PyTorch support is added)
         try:
             import torch
 
             torch.manual_seed(seed)
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(seed)
+                torch.backends.cudnn.deterministic = True
+                torch.backends.cudnn.benchmark = False
         except ImportError:
             pass
 
@@ -651,7 +652,11 @@ def _isolated_training_function(
         except ImportError:
             pass
 
-    # Build model in subprocess
+    # Build model in subprocess — inject run_seed so class-based builders
+    # can pass it as random_state to sklearn estimators.
+    if run_seed is not None:
+        config = config.copy()
+        config.set("run_seed", run_seed)
     model = model_builder(config)
 
     # Train model
@@ -1244,6 +1249,14 @@ def run_grid_study(
 
     results_dict: Dict[Tuple, VariabilityStudyResults] = {}
 
+    # Pre-generate independent child seeds via SeedSequence rather than
+    # seed+i, which can produce correlated RNG states for nearby seeds.
+    if seed is not None:
+        _ss = np.random.SeedSequence(seed)
+        config_seeds: list[int | None] = [int(s.generate_state(1)[0]) for s in _ss.spawn(n_configs)]
+    else:
+        config_seeds = [None] * n_configs
+
     for i, param_combo in enumerate(combinations, 1):
         if verbose:
             logger.info(f"\n{'=' * 50}")
@@ -1258,7 +1271,7 @@ def run_grid_study(
             model_config=config,
             num_runs=num_runs,
             use_process_isolation=use_process_isolation,
-            seed=(seed + i) if seed is not None else None,
+            seed=config_seeds[i - 1],
         )
 
         key = GridStudyResults._config_key(param_combo)

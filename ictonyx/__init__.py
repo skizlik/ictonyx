@@ -256,6 +256,7 @@ try:
         plot_comparison_boxplots,
         plot_comparison_forest,
         plot_confusion_matrix,
+        plot_grid_study_heatmap,
         plot_pacf_vs_lag,
         plot_pairwise_comparison_matrix,
         plot_precision_recall_curve,
@@ -280,6 +281,7 @@ try:
             "plot_training_stability",
             "plot_comparison_boxplots",
             "plot_comparison_forest",
+            "plot_grid_study_heatmap",
         ]
     )
     _has_plotting_functions = True

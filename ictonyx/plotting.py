@@ -68,14 +68,13 @@ def _check_tensorflow_utils():
 def _finalize_plot(fig: "Figure", show_arg: Optional[bool]) -> Optional["Figure"]:
     """
     Centralized logic for showing/returning plots.
-    If showing: returns None (to prevent Jupyter double-display).
-    If not showing: returns the Figure object (for saving/modification).
+    Always returns the Figure object. Calls plt.show() when appropriate
+    but does not suppress the return value.
     """
     should_show = show_arg if show_arg is not None else settings.should_display()
 
     if should_show:
         plt.show()
-        return None  # Prevents Jupyter from rendering the return value
 
     return fig
 
@@ -380,8 +379,8 @@ def plot_precision_recall_curve(
 
 
 def plot_variability_summary(
-    all_runs_metrics_list: List[pd.DataFrame],
-    final_metrics_series: Union[pd.Series, List],
+    all_runs_metrics_list: Optional[List[pd.DataFrame]] = None,
+    final_metrics_series: Optional[Union[pd.Series, List]] = None,
     final_test_series: Optional[Union[pd.Series, List]] = None,
     metric: str = "accuracy",
     show_histogram: bool = True,
@@ -394,6 +393,7 @@ def plot_variability_summary(
     figsize: Optional[Tuple[float, float]] = None,
     dpi: int = 300,
     show: Optional[bool] = None,
+    results: Optional[Any] = None,
 ) -> Optional["Figure"]:
     """Plot a multi-panel variability summary for a completed study.
 
@@ -439,9 +439,19 @@ def plot_variability_summary(
 
     _check_plotting()
 
+    # Allow passing a VariabilityStudyResults object directly via results=
+    if results is not None:
+        all_runs_metrics_list = results.all_runs_metrics
+        try:
+            final_metrics_series = pd.Series(results.get_metric_values(f"val_{metric}"))
+        except (KeyError, ValueError):
+            final_metrics_series = pd.Series(results.get_metric_values(metric))
+
     if not all_runs_metrics_list:
         settings.logger.warning("No run metrics provided to plot.")
         return None
+    if final_metrics_series is None:
+        final_metrics_series = pd.Series([], dtype=float)
 
     if histogram_orientation not in ("vertical", "horizontal"):
         raise ValueError(
@@ -899,6 +909,74 @@ def plot_pairwise_comparison_matrix(
     plt.suptitle(f"Pairwise Comparison Matrix ({n_models} models)", fontsize=14, fontweight="bold")
     plt.tight_layout(rect=(0, 0, 1, 0.96))
 
+    return _finalize_plot(fig, show)
+
+
+def plot_grid_study_heatmap(
+    grid_results: Any,
+    x_param: str,
+    y_param: str,
+    metric: Optional[str] = None,
+    stat: str = "mean",
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Heatmap of a grid study metric across two swept parameters.
+
+    Args:
+        grid_results: A :class:`~ictonyx.runners.GridStudyResults` object.
+        x_param: Parameter name for the x-axis (columns of heatmap).
+        y_param: Parameter name for the y-axis (rows of heatmap).
+        metric: Metric to display. Defaults to ``grid_results.metric``.
+        stat: Statistic to display — ``'mean'`` (default) or ``'sd'``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``.
+    """
+    _check_plotting()
+
+    df = grid_results.to_dataframe(metric=metric)
+
+    if x_param not in df.columns:
+        raise ValueError(f"x_param '{x_param}' not found in grid results.")
+    if y_param not in df.columns:
+        raise ValueError(f"y_param '{y_param}' not found in grid results.")
+    if stat not in ("mean", "sd"):
+        raise ValueError(f"stat must be 'mean' or 'sd', got '{stat}'.")
+
+    pivot = df.pivot(index=y_param, columns=x_param, values=stat)
+
+    fig, ax = plt.subplots(
+        figsize=(max(6, len(pivot.columns) * 1.2), max(4, len(pivot.index) * 1.0))
+    )
+
+    cmap = "YlGnBu" if stat == "mean" else "Reds"
+    im = ax.imshow(pivot.values, cmap=cmap, aspect="auto")
+    plt.colorbar(im, ax=ax, label=stat)
+
+    ax.set_xticks(range(len(pivot.columns)))
+    ax.set_xticklabels([str(v) for v in pivot.columns])
+    ax.set_yticks(range(len(pivot.index)))
+    ax.set_yticklabels([str(v) for v in pivot.index])
+    ax.set_xlabel(x_param)
+    ax.set_ylabel(y_param)
+    ax.set_title(f"Grid Study — {stat} {metric or grid_results.metric} " f"({x_param} × {y_param})")
+
+    for i in range(len(pivot.index)):
+        for j in range(len(pivot.columns)):
+            val = pivot.values[i, j]
+            if not np.isnan(val):
+                ax.text(
+                    j,
+                    i,
+                    f"{val:.4f}",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color="white" if val > pivot.values.max() * 0.7 else "black",
+                )
+
+    fig.tight_layout()
     return _finalize_plot(fig, show)
 
 

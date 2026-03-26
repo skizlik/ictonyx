@@ -1,3 +1,4 @@
+import time
 import warnings
 from typing import Any, Callable, Dict
 
@@ -28,6 +29,12 @@ except ImportError:
 from .config import ModelConfig
 from .core import BaseModelWrapper
 from .data import DataHandler
+
+
+def _should_minimize(metric: str) -> bool:
+    """Return True if lower values are better for this metric."""
+    maximize_keywords = ("accuracy", "precision", "recall", "r2", "f1", "auc")
+    return not any(kw in metric.lower() for kw in maximize_keywords)
 
 
 class HyperparameterTuner:
@@ -128,19 +135,21 @@ class HyperparameterTuner:
 
                     # Create a copy of the base config to avoid modifying the original
                     trial_config = ModelConfig(self.model_config.params.copy())
-                    trial_config.merge(params)
+                    trial_config.update(params)
 
                     # Build a new model with the trial hyperparameters
                     wrapped_model = self.model_builder(trial_config)
 
                     # Train the model. fit() returns None for all wrappers;
                     # results are stored on wrapped_model.training_result.
+                    _trial_start = time.time()
                     wrapped_model.fit(
                         train_data=self.train_data,
                         validation_data=self.val_data,
                         epochs=trial_config.get("epochs", 10),
                         verbose=0,
                     )
+                    _trial_elapsed = time.time() - _trial_start
 
                     # Read training result via the standard TrainingResult API.
                     training_result = wrapped_model.training_result
@@ -173,24 +182,17 @@ class HyperparameterTuner:
                         )
 
                     # Hyperopt minimises; negate metrics that should be maximised.
-                    if (
-                        "accuracy" in self.metric.lower()
-                        or "precision" in self.metric.lower()
-                        or "recall" in self.metric.lower()
-                        or "r2" in self.metric.lower()
-                        or "f1" in self.metric.lower()
-                        or "auc" in self.metric.lower()
-                    ):
-                        loss = -float(final_metric_value)
-                    else:
+                    if _should_minimize(self.metric):
                         loss = float(final_metric_value)
+                    else:
+                        loss = -float(final_metric_value)
 
                     logger.info(f"  Result: {self.metric} = {final_metric_value:.4f}")
 
                     return {
                         "loss": loss,
                         "status": STATUS_OK,
-                        "eval_time": training_result.params.get("epochs", 0),
+                        "eval_time": _trial_elapsed,
                         "final_metric": final_metric_value,
                     }
 

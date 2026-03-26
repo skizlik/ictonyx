@@ -316,18 +316,8 @@ def bootstrap_mean_difference_ci(
             f"Both groups need at least 2 observations. " f"Got {len(g1)} and {len(g2)}."
         )
 
-    # Stack into single array for the engine, with a length marker
-    # so the statistic function knows where to split.
-    combined = np.concatenate([g1, g2])
-    split_at = len(g1)
-
-    def _mean_diff(data: np.ndarray) -> float:
-        return float(np.mean(data[:split_at]) - np.mean(data[split_at:]))
-
-    # For two-sample bootstrap, we resample each group independently.
-    # This requires a custom bootstrap loop rather than the single-sample
-    # engine, because resampling the combined array would lose the group
-    # structure.
+    # Resample each group independently to preserve group structure.
+    # Resampling the combined array would lose the group boundary.
     return _two_sample_bootstrap(
         g1,
         g2,

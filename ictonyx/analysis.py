@@ -815,7 +815,8 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
 
     A parametric test that assumes normality and equal variances. If
     assumptions are violated, consider :func:`kruskal_wallis_test` instead.
-    Includes eta-squared effect size.
+    Emits a ``UserWarning`` when any group has fewer than 30 samples, as
+    normality cannot be reliably assumed at small n.
 
     Args:
         model_metrics: Dict mapping model names to ``pd.Series`` of metric
@@ -827,7 +828,15 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
         eta-squared effect size, and interpretation.
     """
     _check_scipy()
-
+    all_sizes = [len(s.dropna()) for s in model_metrics.values()]
+    if any(n < 30 for n in all_sizes):
+        warnings.warn(
+            "anova_test(): one or more groups have fewer than 30 samples. "
+            "ANOVA assumes normality, which is unreliable at small n. "
+            "Consider kruskal_wallis_test() instead.",
+            UserWarning,
+            stacklevel=2,
+        )
     result = StatisticalTestResult(
         test_name="One-Way ANOVA", statistic=float("nan"), p_value=float("nan")
     )

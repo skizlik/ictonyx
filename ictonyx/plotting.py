@@ -87,8 +87,8 @@ def _find_metric_columns(df: pd.DataFrame, metric: str) -> Tuple[Optional[str], 
     base = metric.replace("train_", "").replace("val_", "")
 
     # Candidates for training
-    train_candidates = [f"train_{base}", base, f"{base}_train", "loss" if base == "loss" else None]
-    train_col = next((c for c in train_candidates if c and c in df.columns), None)
+    train_candidates = [f"train_{base}", base, f"{base}_train"]
+    train_col = next((c for c in train_candidates if c in df.columns), None)
 
     # Candidates for validation
     val_candidates = [f"val_{base}", f"{base}_val", f"test_{base}"]
@@ -1114,6 +1114,13 @@ def plot_autocorr_vs_lag(
     if not isinstance(data, pd.Series):
         data = pd.Series(data)
     if len(data) <= max_lag:
+        warnings.warn(
+            f"plot_autocorr_vs_lag(): data length ({len(data)}) is not greater "
+            f"than max_lag ({max_lag}). Cannot compute autocorrelation. "
+            "Provide a longer series or reduce max_lag.",
+            UserWarning,
+            stacklevel=2,
+        )
         return None
 
     autocorr_values = [data.autocorr(lag) for lag in range(1, max_lag + 1)]

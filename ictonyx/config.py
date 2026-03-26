@@ -34,6 +34,7 @@ class ModelConfig:
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the config with a dictionary of parameters."""
         self.params = params if params is not None else {}
+        self._frozen = False
 
     def __repr__(self) -> str:
         """Provides a clean string representation."""
@@ -49,6 +50,11 @@ class ModelConfig:
 
     def __setitem__(self, key: str, value: Any):
         """Allow dictionary-style setting like `config['epochs'] = 10`."""
+        if self._frozen:
+            raise RuntimeError(
+                "ModelConfig is frozen and cannot be modified. "
+                "Create a copy with config.copy() before making changes."
+            )
         self.params[key] = value
 
     def __contains__(self, key: str) -> bool:
@@ -78,6 +84,8 @@ class ModelConfig:
             return self.params == other
         return NotImplemented
 
+    __hash__ = None  # type: ignore[assignment]
+
     def to_dict(self) -> Dict[str, Any]:
         """Return a shallow copy of the parameters dictionary."""
         return dict(self.params)
@@ -88,11 +96,21 @@ class ModelConfig:
 
     def set(self, key: str, value: Any) -> "ModelConfig":
         """Set parameter and return self for chaining."""
+        if self._frozen:
+            raise RuntimeError(
+                "ModelConfig is frozen and cannot be modified. "
+                "Create a copy with config.copy() before making changes."
+            )
         self.params[key] = value
         return self
 
     def update(self, other_params: Dict[str, Any]) -> "ModelConfig":
         """Update multiple parameters at once and return self for chaining."""
+        if self._frozen:
+            raise RuntimeError(
+                "ModelConfig is frozen and cannot be modified. "
+                "Create a copy with config.copy() before making changes."
+            )
         self.params.update(other_params)
         return self
 
@@ -147,6 +165,20 @@ class ModelConfig:
         import copy
 
         return ModelConfig(copy.deepcopy(self.params))
+
+    def freeze(self) -> "ModelConfig":
+        """Make this config read-only to prevent mutation after construction.
+
+        Once frozen, any attempt to set or update parameters raises
+        ``RuntimeError``. Returns ``self`` for method chaining.
+
+        Example::
+
+            config = ModelConfig({"epochs": 10}).freeze()
+            config.set("epochs", 20)  # raises RuntimeError
+        """
+        self._frozen = True
+        return self
 
     def validate_required(self, required_params: List[str]) -> List[str]:
         """

@@ -163,16 +163,26 @@ class ImageDataHandler(FileDataHandler):
         return "tf_datasets"
 
     def __init__(
-        self, data_path: str, image_size: Tuple[int, int], batch_size: int = 32, seed: int = 42
+        self,
+        data_path: str,
+        image_size: Tuple[int, int],
+        batch_size: int = 32,
+        seed: int = 42,
+        color_mode: str = "rgb",
+        val_split: float = 0.2,
+        test_split: float = 0.1,
     ):
         """
         Initialize the image data handler.
 
         Args:
-            data_path: Path to directory containing class subdirectories
-            image_size: (height, width) tuple for resizing images
-            batch_size: Batch size for the datasets
-            seed: Random seed for reproducibility
+            data_path: Path to directory containing class subdirectories.
+            image_size: ``(height, width)`` tuple for resizing images.
+            batch_size: Batch size for the datasets. Default 32.
+            seed: Random seed for reproducibility. Default 42.
+            color_mode: ``'rgb'`` (default) or ``'grayscale'``.
+            val_split: Fraction of data for validation. Default 0.2.
+            test_split: Fraction of data for test. Default 0.1.
         """
         if not HAS_TENSORFLOW:
             raise ImportError(
@@ -188,6 +198,11 @@ class ImageDataHandler(FileDataHandler):
         self.image_size = image_size
         self.batch_size = batch_size
         self.seed = seed
+        if color_mode not in ("rgb", "grayscale"):
+            raise ValueError(f"color_mode must be 'rgb' or 'grayscale', got '{color_mode}'.")
+        self.color_mode = color_mode
+        self.val_split = val_split
+        self.test_split = test_split
 
         # Discover class names
         try:

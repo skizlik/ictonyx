@@ -746,8 +746,16 @@ class VariabilityStudyResults:
     def get_final_metrics(self, metric_name: str = "val_accuracy") -> Dict[str, float]:
         """Extract final metric values for each run (labeled run_1, run_2, ...).
 
-        For backward compatibility with plotting and statistical comparison code.
+        .. deprecated::
+            Use :meth:`get_metric_values` instead. ``get_final_metrics()``
+            will be removed in v0.5.0.
         """
+        warnings.warn(
+            "get_final_metrics() is deprecated and will be removed in v0.5.0. "
+            "Use get_metric_values() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         metrics = {}
         for i, df in enumerate(self.all_runs_metrics):
             if metric_name in df.columns:

@@ -389,22 +389,19 @@ if TENSORFLOW_AVAILABLE:
 
         def _cleanup_implementation(self):
             """TensorFlow/Keras specific cleanup."""
-            # Delete the model reference first
-            if hasattr(self, "model"):
-                try:
-                    del self.model
-                except Exception:
-                    pass
-
-            # Perform TensorFlow cleanup
+            # Clear the TF session before deleting the model reference.
+            # Reversing this order can leave dangling references in the session.
             try:
                 import tensorflow as tf
 
                 tf.keras.backend.clear_session()
             except Exception:
                 pass
-
-            # Basic garbage collection
+            if hasattr(self, "model"):
+                try:
+                    del self.model
+                except Exception:
+                    pass
             gc.collect()
 
         def fit(self, train_data: Any, validation_data: Optional[Any] = None, **kwargs):
@@ -899,7 +896,7 @@ if SKLEARN_AVAILABLE:
                             f"been ignored. If it is a valid sklearn fit() parameter, "
                             f"add it to _SKLEARN_FIT_KWARGS in core.py.",
                             UserWarning,
-                            stacklevel=3,
+                            stacklevel=2,
                         )
 
                 # Fit the model (sklearn models ignore epochs/batch_size/verbose from signature)
@@ -1075,26 +1072,48 @@ if SKLEARN_AVAILABLE:
             return {"r2": r2, "mse": mse, "mae": mae}
 
         def save_model(self, path: str):
-            with open(path, "wb") as f:
-                pickle.dump(self.model, f)
+            """Save the sklearn model using joblib.
+            Warning:
+                Only load files from **trusted sources**. Joblib files
+                from untrusted sources can execute arbitrary code.
+            Args:
+                path: Destination file path (e.g. ``'model.joblib'``).
+            """
+            try:
+                import joblib
+
+                joblib.dump(self.model, path)
+            except ImportError:
+                import pickle
+
+                with open(path, "wb") as f:
+                    pickle.dump(self.model, f)
+                logger.warning(
+                    "joblib not available — model saved with pickle. "
+                    "Install joblib for faster, more efficient serialization."
+                )
             logger.info(f"Model saved to {path}")
 
         @classmethod
         def load_model(cls, path: str) -> "ScikitLearnModelWrapper":
-            """Load a pickled scikit-learn model.
-
+            """Load a saved scikit-learn model.
             Warning:
-                Uses ``pickle``. Only load files from **trusted sources**.
-                Pickle files from untrusted sources can execute arbitrary code.
-
+                Only load files from **trusted sources**. Serialized files
+                from untrusted sources can execute arbitrary code.
             Args:
                 path: Path written by :meth:`save_model`.
-
             Returns:
                 ScikitLearnModelWrapper wrapping the loaded model.
             """
-            with open(path, "rb") as f:
-                loaded_model = pickle.load(f)
+            try:
+                import joblib
+
+                loaded_model = joblib.load(path)
+            except ImportError:
+                import pickle
+
+                with open(path, "rb") as f:
+                    loaded_model = pickle.load(f)
             return cls(loaded_model)
 
 else:

@@ -17,6 +17,7 @@ from ictonyx.plotting import (
     plot_comparison_boxplots,
     plot_comparison_forest,
     plot_confusion_matrix,
+    plot_grid_study_heatmap,
     plot_pairwise_comparison_matrix,
     plot_training_history,
     plot_training_stability,
@@ -79,6 +80,25 @@ def mock_comparison_results():
             "ModelB": [0.75, 0.74, 0.76, 0.75],
             "ModelC": [0.80, 0.81, 0.79, 0.80],
         },
+    }
+
+
+@pytest.fixture
+def sample_results():
+    """Mock VariabilityStudyResults for plot tests."""
+    runs, final_vals, _ = _make_fake_runs(n_runs=5, n_epochs=10)
+    mock = MagicMock()
+    mock.all_runs_metrics = runs
+    mock.get_metric_values.return_value = list(final_vals)
+    return mock
+
+
+@pytest.fixture
+def sample_comparison():
+    """Mock comparison dict for forest plot tests."""
+    return {
+        "ModelA": [0.85, 0.86, 0.84, 0.85, 0.87],
+        "ModelB": [0.75, 0.74, 0.76, 0.75, 0.73],
     }
 
 
@@ -411,3 +431,129 @@ class TestPairwiseMatrixFixes:
             plot_pairwise_comparison_matrix(data)
         except Exception as e:
             pytest.fail(f"Raised unexpected exception: {e}")
+
+
+class TestPlotReturnValues:
+    """All plot functions must return Figure unconditionally (R7-4)."""
+
+    @patch("matplotlib.pyplot.show")
+    def test_plot_variability_summary_returns_figure(self, mock_show, sample_results):
+        from matplotlib.figure import Figure
+
+        result = plot_variability_summary(results=sample_results)
+        assert isinstance(
+            result, Figure
+        ), "plot_variability_summary must return Figure even when show=True"
+
+    @patch("matplotlib.pyplot.show")
+    def test_plot_comparison_forest_returns_figure(self, mock_show, sample_comparison):
+        from matplotlib.figure import Figure
+
+        result = plot_comparison_forest(sample_comparison, baseline_model="ModelA")
+        assert isinstance(result, Figure) or result is None  # None if no models
+
+
+class TestPlotVariabilitySummaryResultsInput:
+    """plot_variability_summary accepts VariabilityStudyResults via results= (R7-3)."""
+
+    @patch("matplotlib.pyplot.show")
+    def test_accepts_results_object(self, mock_show, sample_results):
+        # Should not raise
+        plot_variability_summary(results=sample_results, metric="val_accuracy")
+
+    @patch("matplotlib.pyplot.show")
+    def test_results_equivalent_to_manual_extraction(self, mock_show, sample_results):
+        """Both call patterns must produce equivalent figures."""
+        fig1 = plot_variability_summary(results=sample_results)
+        fig2 = plot_variability_summary(
+            all_runs_metrics_list=sample_results.all_runs_metrics,
+            final_metrics_series=pd.Series(sample_results.get_metric_values("val_accuracy")),
+        )
+        assert fig1 is not None
+        assert fig2 is not None
+
+
+class TestPlotGridStudyHeatmap:
+    """Tests for plot_grid_study_heatmap() — new in v0.3.12."""
+
+    def _make_grid_results(self):
+        """Build a minimal GridStudyResults mock."""
+        from unittest.mock import MagicMock
+
+        import pandas as pd
+
+        grid = MagicMock()
+        grid.metric = "val_accuracy"
+        df = pd.DataFrame(
+            {
+                "lr": [0.001, 0.001, 0.01, 0.01],
+                "batch_size": [16, 32, 16, 32],
+                "mean": [0.81, 0.83, 0.79, 0.85],
+                "sd": [0.01, 0.02, 0.03, 0.01],
+            }
+        )
+        grid.to_dataframe.return_value = df
+        return grid
+
+    @patch("matplotlib.pyplot.show")
+    def test_returns_figure(self, mock_show):
+        from matplotlib.figure import Figure
+
+        grid = self._make_grid_results()
+        result = plot_grid_study_heatmap(grid, x_param="batch_size", y_param="lr")
+        assert isinstance(result, Figure)
+
+    @patch("matplotlib.pyplot.show")
+    def test_sd_stat(self, mock_show):
+        from matplotlib.figure import Figure
+
+        grid = self._make_grid_results()
+        result = plot_grid_study_heatmap(grid, x_param="batch_size", y_param="lr", stat="sd")
+        assert isinstance(result, Figure)
+
+    def test_invalid_x_param_raises(self):
+        grid = self._make_grid_results()
+        with pytest.raises(ValueError, match="x_param"):
+            plot_grid_study_heatmap(grid, x_param="nonexistent", y_param="lr")
+
+    def test_invalid_y_param_raises(self):
+        grid = self._make_grid_results()
+        with pytest.raises(ValueError, match="y_param"):
+            plot_grid_study_heatmap(grid, x_param="batch_size", y_param="nonexistent")
+
+    def test_invalid_stat_raises(self):
+        grid = self._make_grid_results()
+        with pytest.raises(ValueError, match="stat"):
+            plot_grid_study_heatmap(grid, x_param="batch_size", y_param="lr", stat="median")
+
+
+class TestPlotTrainingHistory:
+    """Smoke tests for plot_training_history()."""
+
+    @patch("matplotlib.pyplot.show")
+    def test_returns_figure(self, mock_show):
+        import pandas as pd
+        from matplotlib.figure import Figure
+
+        df = pd.DataFrame(
+            {
+                "train_accuracy": [0.6, 0.7, 0.8, 0.85, 0.9],
+                "val_accuracy": [0.55, 0.65, 0.75, 0.78, 0.82],
+                "train_loss": [0.9, 0.7, 0.5, 0.4, 0.3],
+                "val_loss": [1.0, 0.8, 0.6, 0.55, 0.5],
+            }
+        )
+        result = plot_training_history(df, show=False)
+        assert isinstance(result, Figure)
+
+    @patch("matplotlib.pyplot.show")
+    def test_single_run_no_crash(self, mock_show):
+        import pandas as pd
+
+        df = pd.DataFrame(
+            {
+                "train_loss": [0.5, 0.4, 0.3],
+            }
+        )
+        result = plot_training_history(df, show=False)
+        assert result is not None

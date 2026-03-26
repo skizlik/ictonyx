@@ -5,6 +5,8 @@ regression tests for fixed bugs (B1/B2 result-overwrite),
 and property-based sanity checks for effect sizes and corrections.
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -995,3 +997,97 @@ class TestR2NanOnConstantTarget:
         assert ss_tot == 0.0
         # After fix: the function should return NaN
         # Insert your actual call here once you have confirmed the function name
+
+
+class TestPairedWilcoxonTest:
+    """Tests for paired_wilcoxon_test() — exported in v0.3.12."""
+
+    def test_significant_difference(self):
+        from ictonyx.analysis import paired_wilcoxon_test
+
+        a = pd.Series([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89, 0.93, 0.90])
+        b = pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69, 0.73, 0.70])
+        result = paired_wilcoxon_test(a, b)
+        assert result.p_value < 0.05
+        assert result.statistic is not None
+
+    def test_no_significant_difference(self):
+        from ictonyx.analysis import paired_wilcoxon_test
+
+        rng = np.random.RandomState(42)
+        a = pd.Series(rng.normal(0.80, 0.01, 10))
+        b = pd.Series(rng.normal(0.80, 0.01, 10))
+        result = paired_wilcoxon_test(a, b)
+        assert result.p_value is not None
+        assert not np.isnan(result.p_value)
+
+    def test_unequal_lengths_handled(self):
+        from ictonyx.analysis import paired_wilcoxon_test
+
+        a = pd.Series([0.8, 0.9, 0.85, 0.88, 0.87])
+        b = pd.Series([0.7, 0.75, 0.72])
+        # Should not crash — dropna alignment handles mismatched lengths
+        result = paired_wilcoxon_test(a, b)
+        assert result is not None
+
+    def test_all_zero_differences_warns(self):
+        from ictonyx.analysis import paired_wilcoxon_test
+
+        a = pd.Series([0.8, 0.8, 0.8, 0.8, 0.8])
+        b = pd.Series([0.8, 0.8, 0.8, 0.8, 0.8])
+        result = paired_wilcoxon_test(a, b)
+        assert len(result.warnings) > 0
+
+
+class TestCheckNormalityRequireAllTests:
+    """Tests for check_normality() require_all_tests parameter."""
+
+    def test_require_all_tests_false_any_passing(self):
+        """Default: is_normal=True if ANY test passes."""
+        rng = np.random.RandomState(42)
+        data = pd.Series(rng.normal(0, 1, 25))
+        is_normal, _ = check_normality(data, require_all_tests=False)
+        assert isinstance(is_normal, bool)
+
+    def test_require_all_tests_true_all_must_pass(self):
+        """Strict mode: is_normal=True only if ALL tests pass."""
+        rng = np.random.RandomState(42)
+        data = pd.Series(rng.normal(0, 1, 25))
+        is_normal_strict, _ = check_normality(data, require_all_tests=True)
+        is_normal_lenient, _ = check_normality(data, require_all_tests=False)
+        # Strict can only be equal to or more conservative than lenient
+        assert not (is_normal_strict and not is_normal_lenient)
+
+    def test_n_less_than_3_returns_false(self):
+        data = pd.Series([0.5, 0.6])
+        is_normal, details = check_normality(data)
+        assert is_normal is False
+        assert "error" in details
+
+
+class TestAnovaTestWarning:
+    """Tests for anova_test() n<30 warning."""
+
+    def test_warns_when_n_lt_30(self):
+        groups = {
+            "A": pd.Series([0.8, 0.82, 0.79, 0.81, 0.83]),
+            "B": pd.Series([0.70, 0.71, 0.69, 0.72, 0.68]),
+        }
+        with pytest.warns(UserWarning, match="fewer than 30"):
+            anova_test(groups)
+
+    def test_no_warning_when_n_gte_30(self):
+        rng = np.random.RandomState(42)
+        groups = {
+            "A": pd.Series(rng.normal(0.8, 0.01, 30)),
+            "B": pd.Series(rng.normal(0.75, 0.01, 30)),
+        }
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            anova_test(groups)
+        user_warnings = [
+            x
+            for x in w
+            if issubclass(x.category, UserWarning) and "fewer than 30" in str(x.message)
+        ]
+        assert len(user_warnings) == 0

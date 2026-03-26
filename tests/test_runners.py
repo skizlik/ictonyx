@@ -1262,3 +1262,131 @@ class TestGetEpochStatisticsCI:
         row = df.iloc[0]
         np.testing.assert_allclose(row["ci_lower"], expected_lower, rtol=1e-3)
         np.testing.assert_allclose(row["ci_upper"], expected_upper, rtol=1e-3)
+
+
+class TestGridStudySeedStrategy:
+    """SeedSequence used in grid study, not seed+i."""
+
+    def test_grid_study_seeds_are_not_arithmetic_offsets(self, mocker):
+        """Seeds passed to run_variability_study must not be seed+i pattern."""
+        captured_seeds = []
+        original = run_variability_study
+
+        def capturing_run(*args, **kwargs):
+            captured_seeds.append(kwargs.get("seed"))
+            return MagicMock(get_metric_values=lambda m: [0.8, 0.82, 0.81])
+
+        mocker.patch("ictonyx.runners.run_variability_study", capturing_run)
+        run_grid_study(
+            model_builder=lambda c: MagicMock(),
+            data_handler=MagicMock(),
+            base_config=ModelConfig({"epochs": 1}),
+            param_grid={"lr": [0.001, 0.01, 0.1]},
+            num_runs=3,
+            seed=42,
+        )
+        # seed+i pattern would give [43, 44, 45]
+        arithmetic = [42 + i for i in range(1, len(captured_seeds) + 1)]
+        assert captured_seeds != arithmetic, (
+            "Grid study is using seed+i instead of SeedSequence — statistical "
+            "independence not guaranteed."
+        )
+
+    def test_grid_study_with_seed_is_reproducible(self, mocker):
+        """Same seed must produce identical per-configuration seeds."""
+        seeds_run1 = []
+        seeds_run2 = []
+        mock_handler = MagicMock()
+        mock_handler.load.return_value = None
+        base_config = ModelConfig({"epochs": 1})
+        param_grid = {"lr": [0.001, 0.01, 0.1]}
+
+        def capture_1(*args, **kwargs):
+            seeds_run1.append(kwargs.get("seed"))
+            return MagicMock(get_metric_values=lambda m: [0.8])
+
+        def capture_2(*args, **kwargs):
+            seeds_run2.append(kwargs.get("seed"))
+            return MagicMock(get_metric_values=lambda m: [0.8])
+
+        mocker.patch("ictonyx.runners.run_variability_study", capture_1)
+        run_grid_study(
+            model_builder=lambda c: MagicMock(),
+            data_handler=mock_handler,
+            base_config=base_config,
+            param_grid=param_grid,
+            num_runs=3,
+            seed=42,
+        )
+        mocker.patch("ictonyx.runners.run_variability_study", capture_2)
+        run_grid_study(
+            model_builder=lambda c: MagicMock(),
+            data_handler=mock_handler,
+            base_config=base_config,
+            param_grid=param_grid,
+            num_runs=3,
+            seed=42,
+        )
+        assert seeds_run1 == seeds_run2
+
+
+class TestNRunsWarning:
+    @pytest.fixture
+    def small_df(self):
+        return pd.DataFrame(
+            {
+                "feature1": range(20),
+                "feature2": [x * 0.1 for x in range(20)],
+                "target": [0, 1] * 10,
+            }
+        )
+
+    def test_warns_when_runs_lt_10(self):
+        import warnings
+
+        from ictonyx import api
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with (
+                patch("ictonyx.api._run_study"),
+                patch("ictonyx.api.auto_resolve_handler"),
+                patch("ictonyx.api._get_model_builder"),
+            ):
+                try:
+                    api.variability_study(
+                        model=MagicMock,
+                        data=MagicMock(),
+                        runs=5,
+                        seed=42,
+                    )
+                except Exception:
+                    pass
+        user_warnings = [
+            x for x in w if issubclass(x.category, UserWarning) and "runs=5" in str(x.message)
+        ]
+        assert len(user_warnings) > 0
+
+    def test_no_warning_when_runs_gte_10(self, small_df):
+        import warnings
+
+        from ictonyx import api
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with patch("ictonyx.api._run_study") as mock_run:
+                mock_run.return_value = MagicMock()
+                try:
+                    api.variability_study(
+                        model=RandomForestClassifier,
+                        data=small_df,
+                        target_column="target",
+                        runs=10,
+                        seed=42,
+                    )
+                except Exception:
+                    pass
+        assert not any(
+            "runs=10" in str(warning.message) and issubclass(warning.category, UserWarning)
+            for warning in w
+        )

@@ -836,3 +836,40 @@ class TestArraysDataHandlerSplitDefaults:
         splits = handler.load(test_split=0.3, val_split=0.2)
         X_test, _ = splits["test_data"]
         assert len(X_test) == pytest.approx(30, abs=3)
+
+
+class TestTextDataHandlerKeras3:
+    """TextDataHandler must fail cleanly on Keras 3 (R5-2)."""
+
+    def test_raises_import_error_with_guidance_when_preprocessing_absent(self, mocker):
+        mocker.patch("ictonyx.data.HAS_TF_PREPROCESSING", False)
+        with pytest.raises(ImportError, match="Keras 3"):
+            TextDataHandler(data_path="/tmp/fake.csv")
+
+
+class TestImageDataHandlerColorMode:
+    """ImageDataHandler must accept color_mode (QUALITY-7)."""
+
+    def test_accepts_color_mode_rgb(self):
+        from ictonyx.data import HAS_TENSORFLOW
+
+        if not HAS_TENSORFLOW:
+            pytest.skip("TensorFlow not installed")
+        handler = ImageDataHandler(data_path="/tmp", image_size=(32, 32), color_mode="rgb")
+        assert handler.color_mode == "rgb"
+
+    def test_accepts_color_mode_grayscale(self):
+        from ictonyx.data import HAS_TENSORFLOW
+
+        if not HAS_TENSORFLOW:
+            pytest.skip("TensorFlow not installed")
+        handler = ImageDataHandler(data_path="/tmp", image_size=(32, 32), color_mode="grayscale")
+        assert handler.color_mode == "grayscale"
+
+    def test_rejects_invalid_color_mode(self):
+        from ictonyx.data import HAS_TENSORFLOW
+
+        if not HAS_TENSORFLOW:
+            pytest.skip("TensorFlow not installed")
+        with pytest.raises((ValueError, TypeError)):
+            ImageDataHandler(data_path="/tmp", image_size=(32, 32), color_mode="invalid")

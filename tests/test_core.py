@@ -1,5 +1,6 @@
 """Test core model wrapper functionality."""
 
+import os
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -904,3 +905,17 @@ class TestTrainingResult:
     def test_empty_history(self):
         result = TrainingResult(history={})
         assert result.history == {}
+
+
+class TestScikitLearnSaveLoadJoblib:
+    """save_model uses joblib not pickle (R8-3)."""
+
+    def test_save_load_roundtrip(self, tmp_path):
+        from sklearn.ensemble import RandomForestClassifier
+
+        wrapper = ScikitLearnModelWrapper(RandomForestClassifier())
+        path = str(tmp_path / "model.joblib")
+        wrapper.save_model(path)
+        assert os.path.exists(path)
+        loaded = ScikitLearnModelWrapper.load_model(path)
+        assert hasattr(loaded.model, "predict")

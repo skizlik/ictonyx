@@ -1,20 +1,23 @@
 """Regression tests for verbose parameter forwarding. Prevents silent
 re-introduction of the v0.3.11 regression where verbose=False was ignored.
 
-Implementation note on capture fixture choice
----------------------------------------------
-ictonyx's logger (name="ictonyx") has propagate=False and a StreamHandler
-attached to sys.stdout at module-import time.
+Why we test logger level, not output
+-------------------------------------
+The ictonyx logger has propagate=False and a StreamHandler bound to
+sys.stdout at module-import time. No pytest capture fixture reliably
+captures its output across all CI environments:
+  - capsys: misses it (stale StreamHandler reference bypasses attribute redirect)
+  - caplog: misses it (propagate=False blocks records from reaching root)
+  - capfd:  misses it in some CI configurations (coverage instrumentation
+            interferes with fd-level dup2 redirection)
 
-- ``capsys`` replaces the sys.stdout *attribute* after import. The handler
-  holds a reference to the original object, so capsys sees nothing.
-- ``caplog`` captures from the root logger. With propagate=False, records
-  never reach root, so caplog sees nothing.
-- ``capfd`` captures at the OS file-descriptor level (fd 1 / fd 2). All
-  writes to fd 1 are intercepted regardless of which Python object initiated
-  them. This is the only fixture that reliably captures ictonyx logging output.
+The behavior under test is: verbose=True/False causes set_verbose() to be
+called, which sets the ictonyx logger level to INFO or WARNING respectively.
+Testing the logger level directly is exact, environment-independent, and
+tests the actual mechanism the verbose flag controls.
 """
 
+import logging
 import warnings
 
 import pandas as pd
@@ -22,6 +25,7 @@ import pytest
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 
+import ictonyx.settings as ict_settings
 from ictonyx import api
 
 
@@ -37,31 +41,30 @@ def small_df():
 
 
 class TestVerboseForwarding:
-    def test_variability_study_verbose_false_no_output(self, capfd, small_df):
-        """verbose=False must produce no stdout output from the ictonyx logger.
+    def test_variability_study_verbose_false_sets_warning_level(self, small_df):
+        """verbose=False must set the ictonyx logger to WARNING level.
 
-        set_verbose(False) sets the logger level to WARNING. No INFO records
-        are emitted, so nothing is written to fd 1.
+        Regression guard for v0.3.11: verbose=False was ignored and the
+        logger stayed at INFO, producing output that should have been suppressed.
         """
-        api.variability_study(
-            model=RandomForestClassifier,
-            data=small_df,
-            target_column="target",
-            runs=3,
-            verbose=False,
-            seed=42,
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            api.variability_study(
+                model=RandomForestClassifier,
+                data=small_df,
+                target_column="target",
+                runs=3,
+                verbose=False,
+                seed=42,
+            )
+        assert ict_settings.logger.level == logging.WARNING, (
+            f"verbose=False must set logger to WARNING, "
+            f"got level {ict_settings.logger.level} ({logging.getLevelName(ict_settings.logger.level)}). "
+            "set_verbose(False) may not be reaching the logger."
         )
-        captured = capfd.readouterr()
-        assert captured.out == "", f"verbose=False produced stdout output: {captured.out[:300]!r}"
 
-    def test_variability_study_verbose_true_produces_output(self, capfd, small_df):
-        """verbose=True must produce output to stdout or stderr.
-
-        set_verbose(True) sets the logger level to INFO. The study emits
-        multiple INFO records ("Starting Variability Study", run summaries,
-        etc.) via the StreamHandler on stdout. tqdm (if installed) writes
-        a progress bar to stderr. Either constitutes passing output.
-        """
+    def test_variability_study_verbose_true_sets_info_level(self, small_df):
+        """verbose=True must set the ictonyx logger to INFO level."""
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             api.variability_study(
@@ -72,24 +75,25 @@ class TestVerboseForwarding:
                 verbose=True,
                 seed=42,
             )
-        captured = capfd.readouterr()
-        assert len(captured.out) > 0 or len(captured.err) > 0, (
-            "verbose=True produced no output on stdout or stderr. "
-            "Check that set_verbose(True) is called and the ictonyx "
-            "logger level is set to INFO."
+        assert ict_settings.logger.level == logging.INFO, (
+            f"verbose=True must set logger to INFO, "
+            f"got level {ict_settings.logger.level} ({logging.getLevelName(ict_settings.logger.level)}). "
+            "set_verbose(True) may not be reaching the logger."
         )
 
-    def test_compare_models_verbose_false_no_output(self, capfd, small_df):
-        """verbose=False in compare_models must produce no stdout output."""
-        api.compare_models(
-            models=[RandomForestClassifier, DecisionTreeClassifier],
-            data=small_df,
-            target_column="target",
-            runs=3,
-            verbose=False,
-            seed=42,
-        )
-        captured = capfd.readouterr()
-        assert captured.out == "", (
-            f"verbose=False in compare_models produced stdout output: " f"{captured.out[:300]!r}"
+    def test_compare_models_verbose_false_sets_warning_level(self, small_df):
+        """verbose=False in compare_models must set the ictonyx logger to WARNING level."""
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            api.compare_models(
+                models=[RandomForestClassifier, DecisionTreeClassifier],
+                data=small_df,
+                target_column="target",
+                runs=3,
+                verbose=False,
+                seed=42,
+            )
+        assert ict_settings.logger.level == logging.WARNING, (
+            f"verbose=False in compare_models must set logger to WARNING, "
+            f"got {ict_settings.logger.level}."
         )

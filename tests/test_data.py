@@ -1032,26 +1032,33 @@ class TestAutoResolveHandlerEdgeCases:
 class TestImageDataHandlerColorMode:
     """ImageDataHandler must accept color_mode (QUALITY-7)."""
 
-    def test_accepts_color_mode_rgb(self):
+    def test_accepts_color_mode_rgb(self, tmp_path):
         from ictonyx.data import HAS_TENSORFLOW
 
         if not HAS_TENSORFLOW:
             pytest.skip("TensorFlow not installed")
-        handler = ImageDataHandler(data_path="/tmp", image_size=(32, 32), color_mode="rgb")
+        # ImageDataHandler requires at least one class subdirectory.
+        (tmp_path / "class_a").mkdir()
+        handler = ImageDataHandler(data_path=str(tmp_path), image_size=(32, 32), color_mode="rgb")
         assert handler.color_mode == "rgb"
 
-    def test_accepts_color_mode_grayscale(self):
+    def test_accepts_color_mode_grayscale(self, tmp_path):
         from ictonyx.data import HAS_TENSORFLOW
 
         if not HAS_TENSORFLOW:
             pytest.skip("TensorFlow not installed")
-        handler = ImageDataHandler(data_path="/tmp", image_size=(32, 32), color_mode="grayscale")
+        (tmp_path / "class_a").mkdir()
+        handler = ImageDataHandler(
+            data_path=str(tmp_path), image_size=(32, 32), color_mode="grayscale"
+        )
         assert handler.color_mode == "grayscale"
 
-    def test_rejects_invalid_color_mode(self):
+    def test_rejects_invalid_color_mode(self, tmp_path):
         from ictonyx.data import HAS_TENSORFLOW
 
         if not HAS_TENSORFLOW:
             pytest.skip("TensorFlow not installed")
-        with pytest.raises((ValueError, TypeError)):
-            ImageDataHandler(data_path="/tmp", image_size=(32, 32), color_mode="invalid")
+        # color_mode is validated before class subdirectory discovery,
+        # so no subdirs are needed — just a valid directory path.
+        with pytest.raises(ValueError):
+            ImageDataHandler(data_path=str(tmp_path), image_size=(32, 32), color_mode="invalid")

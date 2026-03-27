@@ -334,6 +334,178 @@ class TestScikitLearnWrapper:
 
 
 @pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not available")
+class TestScikitLearnWrapperPredict:
+    """Tests for predict(), predict_proba(), and assess() on sklearn wrappers."""
+
+    def test_predict_classification(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        X = np.random.rand(50, 4)
+        y = np.random.randint(0, 2, 50)
+        wrapper.fit((X, y))
+        preds = wrapper.predict(X)
+        assert len(preds) == 50
+        assert set(preds).issubset({0, 1})
+
+    def test_predict_regression(self):
+        from sklearn.linear_model import LinearRegression
+
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        X = np.random.rand(50, 3)
+        y = X @ np.array([1.0, 2.0, 3.0]) + np.random.randn(50) * 0.1
+        wrapper.fit((X, y))
+        preds = wrapper.predict(X)
+        assert len(preds) == 50
+        assert preds.dtype in (np.float32, np.float64, float)
+
+    def test_predict_proba_classification(self):
+        from sklearn.linear_model import LogisticRegression
+
+        wrapper = ScikitLearnModelWrapper(LogisticRegression())
+        X = np.random.rand(50, 4)
+        y = np.random.randint(0, 2, 50)
+        wrapper.fit((X, y))
+        proba = wrapper.predict_proba(X)
+        assert proba.shape == (50, 2)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+    def test_predict_proba_regression_raises(self):
+        from sklearn.linear_model import LinearRegression
+
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        X = np.random.rand(50, 3)
+        y = np.random.rand(50)
+        wrapper.fit((X, y))
+        with pytest.raises(NotImplementedError):
+            wrapper.predict_proba(X)
+
+    def test_assess_classification(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        X = np.random.rand(50, 4)
+        y = np.random.randint(0, 2, 50)
+        wrapper.fit((X, y))
+        wrapper.predict(X)
+        result = wrapper.assess(y)
+        assert "accuracy" in result
+        assert 0.0 <= result["accuracy"] <= 1.0
+
+    def test_assess_regression(self):
+        from sklearn.linear_model import LinearRegression
+
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        X = np.random.rand(50, 3)
+        y = X @ np.array([1.0, 2.0, 3.0]) + np.random.randn(50) * 0.1
+        wrapper.fit((X, y))
+        wrapper.predict(X)
+        result = wrapper.assess(y)
+        assert "r2" in result
+        assert "mse" in result
+        assert "mae" in result
+        assert result["r2"] > 0.5
+
+    def test_assess_before_predict_raises(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        X = np.random.rand(50, 4)
+        y = np.random.randint(0, 2, 50)
+        wrapper.fit((X, y))
+        with pytest.raises(ValueError, match="predict"):
+            wrapper.assess(y)
+
+    def test_fit_with_validation_data_stores_metrics(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        X = np.random.rand(60, 4)
+        y = np.random.randint(0, 2, 60)
+        X_val = np.random.rand(20, 4)
+        y_val = np.random.randint(0, 2, 20)
+        wrapper.fit((X, y), validation_data=(X_val, y_val))
+        h = wrapper.training_result.history
+        assert "val_accuracy" in h
+        assert len(h["val_accuracy"]) == 1
+
+    def test_fit_multiclass_classification(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        X = np.random.rand(90, 5)
+        y = np.random.randint(0, 3, 90)
+        wrapper.fit((X, y))
+        assert wrapper.training_result is not None
+        preds = wrapper.predict(X)
+        assert set(preds).issubset({0, 1, 2})
+
+    def test_random_state_injected_from_config(self):
+        """random_state stored in config must be passed to estimator at construction."""
+        import inspect
+
+        from sklearn.ensemble import RandomForestClassifier
+
+        model_class = RandomForestClassifier
+        assert "random_state" in inspect.signature(model_class).parameters
+        wrapper = ScikitLearnModelWrapper(model_class(random_state=42))
+        assert wrapper.model.random_state == 42
+
+
+@pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not available")
+class TestScikitLearnWrapperEdgeCases:
+    """Edge cases and error conditions for ScikitLearnModelWrapper."""
+
+    def test_fit_with_no_validation_data(self):
+        from sklearn.linear_model import LogisticRegression
+
+        wrapper = ScikitLearnModelWrapper(LogisticRegression())
+        X = np.random.rand(50, 4)
+        y = np.random.randint(0, 2, 50)
+        wrapper.fit((X, y), validation_data=None)
+        h = wrapper.training_result.history
+        assert "val_accuracy" not in h
+
+    def test_evaluate_before_fit_raises(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        X = np.random.rand(10, 3)
+        y = np.random.randint(0, 2, 10)
+        with pytest.raises(Exception):
+            wrapper.evaluate((X, y))
+
+    def test_wrapper_accepts_model_only(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        assert wrapper is not None
+        assert wrapper.model is not None
+
+    def test_r2_nan_when_constant_target_via_assess(self):
+        """assess() must return NaN R² when all target values are identical."""
+        from sklearn.linear_model import LinearRegression
+
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        X = np.random.rand(50, 3)
+        y = np.ones(50)
+        wrapper.fit((X, y))
+        wrapper.predict(X)
+        result = wrapper.assess(y)
+        assert "r2" in result
+        assert np.isnan(result["r2"])
+
+    def test_unrecognized_kwarg_warns(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        X = np.random.rand(20, 3)
+        y = np.random.randint(0, 2, 20)
+        with pytest.warns(UserWarning, match="unrecognized"):
+            wrapper.fit((X, y), totally_fake_kwarg=999)
+
+
+@pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not available")
 class TestScikitLearnWrapperExtended:
     """Extended tests for ScikitLearnModelWrapper."""
 

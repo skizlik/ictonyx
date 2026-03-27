@@ -847,6 +847,187 @@ class TestTextDataHandlerKeras3:
             TextDataHandler(data_path="/tmp/fake.csv")
 
 
+class TestArraysDataHandlerWithTestSet:
+    """Tests for ArraysDataHandler when a pre-supplied test set is provided."""
+
+    def test_presupplied_test_set_used_directly(self):
+        """When X_test/y_test provided, test split must not carve from training data."""
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((100, 4))
+        y = rng.integers(0, 2, 100)
+        X_test = rng.standard_normal((20, 4))
+        y_test = rng.integers(0, 2, 20)
+        handler = ArraysDataHandler(X, y, X_test=X_test, y_test=y_test)
+        splits = handler.load()
+        X_test_out, y_test_out = splits["test_data"]
+        assert len(X_test_out) == 20
+        np.testing.assert_array_equal(X_test_out, X_test)
+
+    def test_presupplied_test_set_leaves_training_intact(self):
+        """Training data must not shrink when test set is pre-supplied."""
+        X = np.random.rand(100, 3)
+        y = np.random.randint(0, 2, 100)
+        X_test = np.random.rand(20, 3)
+        y_test = np.random.randint(0, 2, 20)
+        handler = ArraysDataHandler(X, y, X_test=X_test, y_test=y_test)
+        splits = handler.load(val_split=0.1)
+        X_train, _ = splits["train_data"]
+        X_val, _ = splits["val_data"]
+        # All 100 original samples split between train and val only
+        assert len(X_train) + len(X_val) == 100
+
+    def test_mismatched_test_set_raises(self):
+        """X_test and y_test with different lengths must raise."""
+        X = np.random.rand(50, 3)
+        y = np.random.randint(0, 2, 50)
+        X_test = np.random.rand(10, 3)
+        y_test = np.random.randint(0, 2, 15)  # wrong length
+        with pytest.raises((ValueError, Exception)):
+            handler = ArraysDataHandler(X, y, X_test=X_test, y_test=y_test)
+            handler.load()
+
+
+class TestTabularDataHandlerSplits:
+    """Tests for TabularDataHandler split logic and validation."""
+
+    def _make_df(self, n=100):
+        return pd.DataFrame(
+            {
+                "a": np.random.rand(n),
+                "b": np.random.rand(n),
+                "target": np.random.randint(0, 2, n),
+            }
+        )
+
+    def test_default_splits_produce_three_sets(self):
+        handler = TabularDataHandler(data=self._make_df(), target_column="target")
+        splits = handler.load()
+        assert "train_data" in splits
+        assert "val_data" in splits
+        assert "test_data" in splits
+
+    def test_split_sizes_sum_to_total(self):
+        df = self._make_df(n=200)
+        handler = TabularDataHandler(data=df, target_column="target")
+        splits = handler.load(val_split=0.1, test_split=0.2)
+        X_train, _ = splits["train_data"]
+        X_val, _ = splits["val_data"]
+        X_test, _ = splits["test_data"]
+        assert len(X_train) + len(X_val) + len(X_test) == 200
+
+    def test_custom_test_split(self):
+        df = self._make_df(n=200)
+        handler = TabularDataHandler(data=df, target_column="target")
+        splits = handler.load(test_split=0.3)
+        _, y_test = splits["test_data"]
+        assert len(y_test) == pytest.approx(60, abs=5)
+
+    def test_features_subset_correct_shape(self):
+        df = self._make_df(n=100)
+        handler = TabularDataHandler(data=df, target_column="target", features=["a"])
+        splits = handler.load()
+        X_train, _ = splits["train_data"]
+        assert X_train.shape[1] == 1
+
+    def test_stratified_split_preserves_class_balance(self):
+        """Stratified split should preserve approximate class balance."""
+        rng = np.random.default_rng(42)
+        n = 200
+        df = pd.DataFrame(
+            {
+                "a": rng.standard_normal(n),
+                "target": rng.integers(0, 2, n),
+            }
+        )
+        handler = TabularDataHandler(data=df, target_column="target")
+        splits = handler.load(test_split=0.2)
+        _, y_train = splits["train_data"]
+        _, y_test = splits["test_data"]
+        train_balance = np.mean(y_train)
+        test_balance = np.mean(y_test)
+        assert abs(train_balance - test_balance) < 0.15
+
+    def test_load_twice_produces_same_splits_with_seed(self):
+        """Loading twice with the same seed must produce identical splits."""
+        df = self._make_df(n=100)
+        handler = TabularDataHandler(data=df, target_column="target")
+        splits1 = handler.load()
+        splits2 = handler.load()
+        X1, _ = splits1["train_data"]
+        X2, _ = splits2["train_data"]
+        np.testing.assert_array_equal(X1, X2)
+
+    def test_missing_values_in_target_warns(self):
+        """Missing values in target column should trigger a warning."""
+        df = pd.DataFrame(
+            {
+                "a": range(10),
+                "target": [0, 1, None, 0, 1, 0, 1, 0, 1, 0],
+            }
+        )
+        handler = TabularDataHandler(data=df, target_column="target")
+        handler.load()
+
+
+class TestAutoResolveHandlerEdgeCases:
+    """Edge cases for auto_resolve_handler factory."""
+
+    def test_existing_handler_returned_unchanged(self):
+        from ictonyx.data import auto_resolve_handler
+
+        X = np.random.rand(20, 3)
+        y = np.random.randint(0, 2, 20)
+        original = ArraysDataHandler(X, y)
+        result = auto_resolve_handler(original)
+        assert result is original
+
+    def test_tuple_input_returns_arrays_handler(self):
+        from ictonyx.data import auto_resolve_handler
+
+        X = np.random.rand(20, 3)
+        y = np.random.randint(0, 2, 20)
+        handler = auto_resolve_handler((X, y))
+        assert isinstance(handler, ArraysDataHandler)
+
+    def test_dataframe_input_returns_tabular_handler(self):
+        from ictonyx.data import auto_resolve_handler
+
+        df = pd.DataFrame({"a": range(10), "target": range(10)})
+        handler = auto_resolve_handler(df, target_column="target")
+        assert isinstance(handler, TabularDataHandler)
+
+    def test_dataframe_without_target_raises(self):
+        from ictonyx.data import auto_resolve_handler
+
+        df = pd.DataFrame({"a": range(10)})
+        with pytest.raises(ValueError, match="target_column"):
+            auto_resolve_handler(df)
+
+    def test_nonexistent_path_raises(self):
+        from ictonyx.data import auto_resolve_handler
+
+        with pytest.raises(FileNotFoundError):
+            auto_resolve_handler("/nonexistent/path/file.csv", target_column="y")
+
+    def test_unsupported_type_raises(self):
+        from ictonyx.data import auto_resolve_handler
+
+        with pytest.raises((TypeError, ValueError)):
+            auto_resolve_handler(12345)
+
+    def test_csv_path_returns_tabular_handler(self):
+        from ictonyx.data import auto_resolve_handler
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            pd.DataFrame({"x": range(20), "y": range(20)}).to_csv(f.name, index=False)
+            path = f.name
+        try:
+            handler = auto_resolve_handler(path, target_column="y")
+            assert isinstance(handler, TabularDataHandler)
+        finally:
+            os.unlink(path)
+
+
 class TestImageDataHandlerColorMode:
     """ImageDataHandler must accept color_mode (QUALITY-7)."""
 

@@ -23,15 +23,24 @@ Ictonyx trains a model N times under independent random seeds, collects the full
 ---
 
 ## Installation
-
 ```bash
-pip install ictonyx tensorflow
+# scikit-learn (no deep learning)
+pip install ictonyx[sklearn]
+
+# TensorFlow / Keras
+pip install ictonyx[tensorflow]
+
+# PyTorch
+pip install ictonyx[torch]
+
+# Everything
+pip install ictonyx[all]
+
+# Process isolation for long GPU runs (recommended with tensorflow or torch)
+pip install "ictonyx[tensorflow,isolation]"
 ```
 
-Requires Python 3.10+. Current release: **0.3.12** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
-
-scikit-learn and PyTorch are also supported. See the [examples](examples/) directory.
-
+Requires Python 3.10+. Current release: **0.3.13** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
 ---
 
 ## Quick start

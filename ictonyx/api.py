@@ -18,6 +18,7 @@ from .analysis import compare_multiple_models as _stat_compare
 from .config import ModelConfig
 from .core import PYTORCH_AVAILABLE, SKLEARN_AVAILABLE, TENSORFLOW_AVAILABLE, BaseModelWrapper
 from .data import DataHandler, auto_resolve_handler
+from .exceptions import ConfigurationError
 from .loggers import BaseLogger
 from .runners import VariabilityStudyResults
 from .runners import run_variability_study as _run_study
@@ -34,7 +35,7 @@ def variability_study(
     model: Any,
     data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray]],
     target_column: Optional[str] = None,
-    runs: int = 5,
+    runs: int = 10,
     epochs: int = 10,
     batch_size: int = 32,
     tracker: Optional[BaseLogger] = None,
@@ -73,7 +74,7 @@ def variability_study(
 
         target_column: Column name containing labels. Required when ``data``
             is a DataFrame or CSV path.
-        runs: Number of independent training runs. Default 5.
+        runs: Number of independent training runs. Default 10.
         epochs: Training epochs per run. Ignored by scikit-learn models.
             Default 10.
         batch_size: Batch size per run. Ignored by scikit-learn models.
@@ -275,9 +276,32 @@ def compare_models(
             **kwargs,
         )
 
-        metric_values = study_results.get_metric_values(metric)
+        try:
+            metric_values = study_results.get_metric_values(metric)
+        except KeyError:
+            available = study_results.get_available_metrics()
+            hint = ""
+            if metric == "val_accuracy" and "accuracy" in available:
+                hint = (
+                    " Tip: sklearn models only record 'val_accuracy' when "
+                    "validation data is provided. Pass val_split=0.2 to your "
+                    "DataHandler, or use metric='accuracy' instead."
+                )
+            elif metric.startswith("val_") and metric[4:] in available:
+                hint = (
+                    f" '{metric[4:]}' was recorded but '{metric}' was not. "
+                    "Ensure your DataHandler provides a validation split."
+                )
+            raise ConfigurationError(
+                f"compare_models() could not find metric '{metric}' for model "
+                f"'{name}'. Available metrics: {available}.{hint}"
+            ) from None
+
         if not metric_values:
-            settings.logger.warning(f"No '{metric}' data found for {name}")
+            settings.logger.warning(
+                f"Metric '{metric}' was tracked for '{name}' but contains no "
+                "values — all training runs for this model may have failed."
+            )
             continue
         results_store[name] = pd.Series(metric_values)
 

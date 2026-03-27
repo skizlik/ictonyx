@@ -905,7 +905,7 @@ class TimeSeriesDataHandler(FileDataHandler):
             )
 
         warnings.warn(
-            "TextDataHandler depends on tf.keras.preprocessing APIs removed in "
+            "TimeSeriesDataHandler depends on tf.keras.preprocessing APIs removed in "
             "TF 2.16+. This handler is deprecated and will be replaced with a "
             "framework-agnostic implementation in v0.4.0. Do not build production "
             "workflows on this class. Workaround: use TfidfVectorizer and "

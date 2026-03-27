@@ -229,6 +229,10 @@ def check_normality(
             *all* available tests pass. Default ``False`` (any single
             test passing is sufficient). For n < 20, D'Agostino-Pearson
             does not run, so this reduces to evaluating Shapiro-Wilk alone.
+        require_all_tests: If ``True``, normality is declared only when
+            *all* available tests pass. Default ``False`` (any single
+            test passing is sufficient). For n < 20, D'Agostino-Pearson
+            does not run, so this reduces to evaluating Shapiro-Wilk alone.
 
     Returns:
         Tuple of ``(is_normal, details_dict)`` where ``is_normal`` is

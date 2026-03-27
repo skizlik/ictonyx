@@ -1267,24 +1267,24 @@ class TestGetEpochStatisticsCI:
 class TestGridStudySeedStrategy:
     """SeedSequence used in grid study, not seed+i."""
 
-    def test_grid_study_seeds_are_not_arithmetic_offsets(self, mocker):
+    def test_grid_study_seeds_are_not_arithmetic_offsets(self):
         """Seeds passed to run_variability_study must not be seed+i pattern."""
         captured_seeds = []
-        original = run_variability_study
 
         def capturing_run(*args, **kwargs):
             captured_seeds.append(kwargs.get("seed"))
             return MagicMock(get_metric_values=lambda m: [0.8, 0.82, 0.81])
 
-        mocker.patch("ictonyx.runners.run_variability_study", capturing_run)
-        run_grid_study(
-            model_builder=lambda c: MagicMock(),
-            data_handler=MagicMock(),
-            base_config=ModelConfig({"epochs": 1}),
-            param_grid={"lr": [0.001, 0.01, 0.1]},
-            num_runs=3,
-            seed=42,
-        )
+        with patch("ictonyx.runners.run_variability_study", capturing_run):
+            run_grid_study(
+                model_builder=lambda c: MagicMock(),
+                data_handler=MagicMock(),
+                base_config=ModelConfig({"epochs": 1}),
+                param_grid={"lr": [0.001, 0.01, 0.1]},
+                num_runs=3,
+                seed=42,
+                verbose=False,
+            )
         # seed+i pattern would give [43, 44, 45]
         arithmetic = [42 + i for i in range(1, len(captured_seeds) + 1)]
         assert captured_seeds != arithmetic, (
@@ -1292,12 +1292,10 @@ class TestGridStudySeedStrategy:
             "independence not guaranteed."
         )
 
-    def test_grid_study_with_seed_is_reproducible(self, mocker):
+    def test_grid_study_with_seed_is_reproducible(self):
         """Same seed must produce identical per-configuration seeds."""
         seeds_run1 = []
         seeds_run2 = []
-        mock_handler = MagicMock()
-        mock_handler.load.return_value = None
         base_config = ModelConfig({"epochs": 1})
         param_grid = {"lr": [0.001, 0.01, 0.1]}
 
@@ -1309,24 +1307,28 @@ class TestGridStudySeedStrategy:
             seeds_run2.append(kwargs.get("seed"))
             return MagicMock(get_metric_values=lambda m: [0.8])
 
-        mocker.patch("ictonyx.runners.run_variability_study", capture_1)
-        run_grid_study(
-            model_builder=lambda c: MagicMock(),
-            data_handler=mock_handler,
-            base_config=base_config,
-            param_grid=param_grid,
-            num_runs=3,
-            seed=42,
-        )
-        mocker.patch("ictonyx.runners.run_variability_study", capture_2)
-        run_grid_study(
-            model_builder=lambda c: MagicMock(),
-            data_handler=mock_handler,
-            base_config=base_config,
-            param_grid=param_grid,
-            num_runs=3,
-            seed=42,
-        )
+        with patch("ictonyx.runners.run_variability_study", capture_1):
+            run_grid_study(
+                model_builder=lambda c: MagicMock(),
+                data_handler=MagicMock(),
+                base_config=base_config,
+                param_grid=param_grid,
+                num_runs=3,
+                seed=42,
+                verbose=False,
+            )
+
+        with patch("ictonyx.runners.run_variability_study", capture_2):
+            run_grid_study(
+                model_builder=lambda c: MagicMock(),
+                data_handler=MagicMock(),
+                base_config=base_config,
+                param_grid=param_grid,
+                num_runs=3,
+                seed=42,
+                verbose=False,
+            )
+
         assert seeds_run1 == seeds_run2
 
 

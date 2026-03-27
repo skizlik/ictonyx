@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -841,10 +842,10 @@ class TestArraysDataHandlerSplitDefaults:
 class TestTextDataHandlerKeras3:
     """TextDataHandler must fail cleanly on Keras 3 (R5-2)."""
 
-    def test_raises_import_error_with_guidance_when_preprocessing_absent(self, mocker):
-        mocker.patch("ictonyx.data.HAS_TF_PREPROCESSING", False)
-        with pytest.raises(ImportError, match="Keras 3"):
-            TextDataHandler(data_path="/tmp/fake.csv")
+    def test_raises_import_error_with_guidance_when_preprocessing_absent(self):
+        with patch("ictonyx.data.HAS_TF_PREPROCESSING", False):
+            with pytest.raises(ImportError, match="Keras 3"):
+                TextDataHandler(data_path="/tmp/fake.csv")
 
 
 class TestArraysDataHandlerWithTestSet:

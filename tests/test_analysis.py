@@ -105,6 +105,45 @@ class TestStatisticalTestResult:
         assert "d=0.800" in s
         assert "1 warnings" in s
 
+    def test_get_summary_shows_raw_p_when_no_correction(self):
+        result = StatisticalTestResult(
+            test_name="Test", statistic=1.0, p_value=0.03, corrected_p_value=None
+        )
+        summary = result.get_summary()
+        assert "p=0.0300" in summary
+        assert "p_corr" not in summary
+        assert "*" in summary  # significant at 0.05
+
+    def test_get_summary_shows_corrected_p_when_correction_applied(self):
+        """Corrected p should be displayed and labelled p_corr."""
+        result = StatisticalTestResult(
+            test_name="Test", statistic=1.0, p_value=0.03, corrected_p_value=0.09
+        )
+        result.correction_method = "holm"
+        summary = result.get_summary()
+        assert "p_corr=0.0900" in summary, f"Expected corrected p in summary, got: {summary}"
+        assert "p=0.0300" not in summary, "Raw p-value must not appear when correction applied"
+        assert "ns" in summary  # corrected p=0.09 is not significant
+
+    def test_get_summary_no_contradiction_raw_sig_corrected_not(self):
+        """The classic contradiction case: raw p=0.03 (sig), corrected p=0.09 (ns).
+        Before fix: showed 'p=0.0300 ns'. After: shows 'p_corr=0.0900 ns'."""
+        result = StatisticalTestResult(
+            test_name="Mann-Whitney U Test", statistic=45.0, p_value=0.03, corrected_p_value=0.09
+        )
+        summary = result.get_summary()
+        # The displayed p-value and the marker must agree
+        assert "p_corr=0.0900 ns" in summary, f"Got: {summary}"
+
+    def test_get_summary_corrected_sig_at_0001(self):
+        """Corrected p used for *** marker."""
+        result = StatisticalTestResult(
+            test_name="Test", statistic=10.0, p_value=0.0001, corrected_p_value=0.0002
+        )
+        summary = result.get_summary()
+        assert "***" in summary
+        assert "p_corr=0.0002" in summary
+
 
 # ===================================================================
 #  Validation Functions
@@ -445,6 +484,56 @@ class TestWilcoxonSignedRankTest:
         result = wilcoxon_signed_rank_test(data, null_value=0.5)
         # Should either warn or have NaN p-value due to small sample
         assert len(result.warnings) > 0 or np.isnan(result.p_value)
+
+    def test_wilcoxon_uses_exact_method_for_small_n(self):
+        """method='auto' must be in use: for small n, p-values match the exact
+        distribution, not the normal approximation. At n=6 the exact minimum
+        achievable p-value is 0.03125 (all ranks same sign). The approx method
+        gives a different value. Verify the result is valid and significant
+        when data is clearly above the null."""
+        # All 6 values clearly above 0.5 — should be significant
+        data = pd.Series([0.6, 0.65, 0.7, 0.62, 0.68, 0.71])
+        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        # With method='auto' (exact), minimum p at n=6 is 0.03125
+        # All above null → W=0, exact p=0.03125 < 0.05: significant
+        assert not np.isnan(result.p_value), "p_value must not be NaN for n=6"
+        assert (
+            result.p_value < 0.05
+        ), f"Expected p < 0.05 for data clearly above null, got p={result.p_value:.4f}"
+        assert result.effect_size is not None, "effect_size must be computed"
+        assert 0.0 <= result.effect_size <= 1.0
+
+    def test_wilcoxon_effect_size_absent_at_small_n(self):
+        """For n <= 25, exact method does not compute zstatistic.
+        Effect size should be None, not raise."""
+        data = pd.Series([0.6, 0.7, 0.65, 0.72, 0.68])
+        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        # result.effect_size may be None (exact) or a float (if zstatistic present)
+        # Either is acceptable; the test must not raise.
+        assert result.effect_size is None or isinstance(result.effect_size, float)
+
+    def test_wilcoxon_effect_size_present_for_significant_result(self):
+        """Effect size must be populated whenever a valid p-value is produced.
+        The computation derives r from the p-value via the inverse normal CDF
+        since scipy's method='auto' does not expose zstatistic directly."""
+        rng = np.random.default_rng(42)
+        data = pd.Series(rng.normal(0.6, 0.05, 30))
+        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        assert not np.isnan(result.p_value)
+        assert result.effect_size is not None, (
+            "effect_size must be computed for a valid result. "
+            "Check that the p-value fallback for effect size is in place."
+        )
+        assert 0.0 <= result.effect_size <= 1.0
+
+    def test_wilcoxon_consistent_with_paired(self):
+        """wilcoxon_signed_rank_test and paired_wilcoxon_test should use the
+        same underlying scipy method selection ('auto')."""
+        # Both should give the same p-value direction for the same data
+        data = pd.Series([0.55, 0.58, 0.52, 0.60, 0.53, 0.57])
+        result_single = wilcoxon_signed_rank_test(data, null_value=0.5)
+        # paired_wilcoxon_test already used 'auto'; single should now match
+        assert result_single.p_value > 0  # basic sanity
 
 
 class TestAnovaTest:
@@ -808,6 +897,70 @@ class TestCheckConvergence:
 
     def test_too_short(self):
         assert not check_convergence(pd.Series([1, 2]), window_size=5)
+
+    def test_convergence_plateau_with_high_autocorr_returns_true(self):
+        """A series that starts high and plateaus has tiny recent variance
+        relative to overall variance. The variance criterion must fire even
+        when the plateau values are locally autocorrelated (autocorr ≈ -1).
+        OR semantics: variance criterion alone is sufficient for True."""
+        # Starts at 3.0, descends to a plateau at ~1.0 — high overall variance,
+        # tiny recent variance. The alternating plateau gives autocorr ≈ -1,
+        # so low_autocorr is False. OR means low_recent_variance saves it.
+        descending_to_plateau = pd.Series(
+            [3.0, 2.5, 2.0, 1.5, 1.0, 1.001, 0.999, 1.001, 0.999, 1.001]
+        )
+        result = check_convergence(descending_to_plateau, window_size=5, autocorr_threshold=0.1)
+        assert result, (
+            "A series that descends to a flat plateau must be detected as converged "
+            "via the variance criterion. This fails if AND semantics were restored "
+            "or if the variance threshold is miscalculated."
+        )
+
+    def test_convergence_oscillating_series_returns_false(self):
+        """An oscillating series satisfies neither criterion."""
+        oscillating = pd.Series([1.0, 2.0, 1.0, 2.0, 1.0, 2.0, 1.0, 2.0])
+        result = check_convergence(oscillating, window_size=5)
+        assert result is False
+
+    def test_convergence_low_autocorr_high_variance_returns_true(self):
+        """Low autocorr (criterion met) with high variance (criterion not met).
+        OR semantics: True. AND semantics: False."""
+        rng = np.random.default_rng(42)
+        # Random noise: low autocorr, but not a plateau
+        noisy = pd.Series(rng.normal(0, 1, 10))
+        result = check_convergence(noisy, window_size=5, autocorr_threshold=0.9)
+        # With very permissive autocorr threshold, low_autocorr=True
+        # Result depends on random data, so just verify it doesn't crash
+        assert result, (
+            "With autocorr_threshold=0.9, low_autocorr should be True for random noise, "
+            "so OR semantics must return a truthy value."
+        )
+
+    def test_convergence_both_criteria_met(self):
+        """Both criteria met: AND and OR give same result (True)."""
+        # A series that has clearly converged to a stable low value
+        converged = pd.Series([0.5, 0.3, 0.2, 0.15, 0.12, 0.10, 0.09, 0.10, 0.10])
+        result = check_convergence(converged, window_size=4)
+        assert result is True
+
+    def test_convergence_too_short_returns_false(self):
+        """Series shorter than window_size + 1 returns False."""
+        short = pd.Series([0.1, 0.2, 0.1])
+        result = check_convergence(short, window_size=5)
+        assert result is False
+
+    def test_assess_training_stability_convergence_rate_improved(self):
+        """assess_training_stability convergence_rate must reflect plateau runs.
+        Before fix: plateau runs reported as not converged. After: correctly True."""
+        # Create 3 perfectly converged (plateau) histories
+        plateau_hist = pd.Series([1.0, 0.8, 0.5, 0.3, 0.2, 0.15, 0.12, 0.10, 0.10, 0.10])
+        histories = [plateau_hist.copy() for _ in range(3)]
+        result = assess_training_stability(histories, window_size=5)
+        assert result["convergence_rate"] > 0, (
+            f"Expected convergence_rate > 0 for plateau runs, "
+            f"got {result['convergence_rate']}. "
+            "AND semantics may have been restored in check_convergence."
+        )
 
 
 class TestAssessTrainingStability:

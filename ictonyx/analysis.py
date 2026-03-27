@@ -124,14 +124,28 @@ class StatisticalTestResult:
         return p_val < alpha
 
     def get_summary(self) -> str:
-        """Get a concise summary of the test result."""
+        """Get a concise summary of the test result.
+
+        Displays the corrected p-value (``corrected_p_value``) when a
+        multiple-comparison correction has been applied, labelled ``p_corr``.
+        Displays the raw p-value otherwise, labelled ``p``. The significance
+        marker always derives from the same p-value shown, so the label and
+        marker are never contradictory.
+        """
         sig_marker = (
             "***"
             if self.is_significant(0.001)
             else "**" if self.is_significant(0.01) else "*" if self.is_significant(0.05) else "ns"
         )
 
-        summary = f"{self.test_name}: {self.statistic:.3f}, p={self.p_value:.4f} {sig_marker}"
+        if self.corrected_p_value is not None:
+            display_p = self.corrected_p_value
+            p_label = "p_corr"
+        else:
+            display_p = self.p_value
+            p_label = "p"
+
+        summary = f"{self.test_name}: {self.statistic:.3f}, {p_label}={display_p:.4f} {sig_marker}"
 
         if self.effect_size is not None:
             summary += f", {self.effect_size_name}={self.effect_size:.3f}"
@@ -781,21 +795,31 @@ def wilcoxon_signed_rank_test(
             if len(non_zero_data) < 6:
                 raise ValueError("Insufficient non-zero differences for Wilcoxon test")
 
-            wilcoxon_result = wilcoxon(non_zero_data, alternative=alternative, method="approx")
+            wilcoxon_result = wilcoxon(non_zero_data, alternative=alternative, method="auto")
             result.statistic = float(wilcoxon_result.statistic)
             result.p_value = float(wilcoxon_result.pvalue)
 
-            # Effect size r = |Z| / sqrt(N) using scipy's tie-corrected Z.
-            # method='approx' populates WilcoxonResult.zstatistic, which
-            # applies the tie-corrected variance denominator internally.
-            # The hasattr guard protects against future scipy API changes.
+            # Effect size r = |Z| / sqrt(N).
+            # method='auto' (scipy 1.10+) does not populate zstatistic even
+            # when the approximation is used internally. Derive Z from the
+            # p-value using the inverse normal CDF — standard practice when
+            # the exact Z is not available from the test output.
+            # Clamp r to [0, 1] since very small p-values can produce Z > sqrt(n).
             n = len(non_zero_data)
-            if n > 0 and hasattr(wilcoxon_result, "zstatistic"):
-                z_score = float(wilcoxon_result.zstatistic)
-                r = abs(z_score) / np.sqrt(n)
+            p_val = float(wilcoxon_result.pvalue)
+            if n > 0 and 0 < p_val < 1:
+                from scipy.stats import norm as _norm
+
+                z_score = abs(_norm.ppf(p_val / 2))
+                r = min(z_score / np.sqrt(n), 1.0)
                 result.effect_size = r
                 result.effect_size_name = "r (effect size)"
                 result.effect_size_interpretation = _interpret_wilcoxon_r(r)
+            elif n > 0 and p_val <= 0:
+                # Perfect separation: all differences same sign. r = 1.0 by convention.
+                result.effect_size = 1.0
+                result.effect_size_name = "r (effect size)"
+                result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
 
         except Exception as e:
             result.warnings.append(f"Test failed: {str(e)}")
@@ -1685,7 +1709,7 @@ def check_convergence(
         return low_recent_variance
 
     low_autocorr = abs(autocorr) < autocorr_threshold
-    return low_autocorr and low_recent_variance
+    return low_autocorr or low_recent_variance
 
 
 # CONFUSION MATRIX FUNCTION (enhanced)

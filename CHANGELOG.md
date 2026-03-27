@@ -16,6 +16,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.12] — 2026-03-27
+
+### Fixed — critical
+- `variability_study()`: `verbose=False` now correctly suppresses output.
+  The parameter was stored in `ModelConfig` but never forwarded to the
+  runner — full output was always produced regardless.
+- `PyTorchModelWrapper.fit()`: regression validation history no longer
+  doubles in length per epoch. `val_loss` was appended twice — once
+  unconditionally and once in the regression branch — corrupting every
+  PyTorch regression variability study silently.
+- `TextDataHandler` and `TimeSeriesDataHandler`: now raise `ImportError`
+  with clear guidance when `tf.keras.preprocessing` APIs are unavailable
+  (removed in Keras 3 / TF 2.16+). Full framework-agnostic rewrites
+  of both handlers are planned for v0.4.0.
+
+### Fixed — reproducibility
+- `_set_seeds()`: `torch.backends.cudnn.deterministic = True` and
+  `benchmark = False` now set when CUDA is available. GPU PyTorch
+  studies were not reproducible across invocations without this.
+- `run_grid_study()`: child seeds now derived via `SeedSequence.spawn()`
+  for statistical independence, consistent with `run_study()`. Previously
+  used `seed + i`, which can produce correlated RNG states.
+- sklearn `random_state` now injected at wrapper construction when the
+  estimator accepts it, making sklearn studies reproducible with the
+  stored seed.
+- `compare_models(paired=True)`: raises `ValueError` on unequal run
+  counts instead of warning and proceeding into a scipy error.
+- `MemoryManager`: warns when `cloudpickle` is absent and process
+  isolation falls back to standard pickle, which cannot serialize
+  notebook-defined functions or lambdas.
+- `allow_memory_growth`: wrapped in try/except with a clear warning
+  when TF was already initialized before `MemoryManager` construction.
+
+### Fixed — statistical correctness
+- `anova_test()`: emits `UserWarning` when any group has fewer than 30
+  samples, noting that normality cannot be assumed at small n and
+  suggesting `kruskal_wallis_test()` instead.
+
+### Fixed — API and wrappers
+- `_ensure_wrapper()`: dead comments moved out of unreachable block;
+  refactored to clean `if/elif` structure.
+- `KerasModelWrapper._cleanup_implementation()`: `clear_session()` now
+  called before `del self.model`, preventing dangling session references.
+- `ScikitLearnModelWrapper.fit()`: warning `stacklevel` corrected from
+  3 to 2.
+- `ScikitLearnModelWrapper.save_model()`: uses `joblib.dump()` instead
+  of raw pickle; significantly faster for ensemble models.
+- `ImageDataHandler`: now accepts `color_mode` (default `'rgb'`),
+  `val_split` (default `0.2`), and `test_split` (default `0.1`)
+  constructor parameters, consistent with other data handlers.
+  Invalid `color_mode` values raise `ValueError` at construction time.
+- `ModelConfig.__hash__ = None` made explicit.
+- `ModelConfig.for_cnn()`: docstring clarifies that the `"loss"` key
+  is advisory only and is not read by any runner or wrapper.
+
+### Fixed — plotting
+- All plot functions now unconditionally return `plt.Figure`. Previously
+  `_finalize_plot()` returned `None` when display was enabled, making
+  plots untestable and uncomposable programmatically.
+- `plot_autocorr_vs_lag()`: emits `UserWarning` when series is too short
+  to compute autocorrelation at the requested lag, instead of returning
+  `None` silently.
+- `_find_metric_columns()`: `None` removed from training column candidate
+  list, preventing spurious column matches.
+
+### Added
+- `variability_study()` and `compare_models()`: emit `UserWarning` when
+  `runs < 10`, noting low statistical power at small n.
+- `paired_wilcoxon_test` exported from `ictonyx` top-level namespace.
+- `plot_variability_summary()`: accepts a `VariabilityStudyResults`
+  object directly via `results=` parameter, eliminating manual
+  extraction of `all_runs_metrics` and `final_metrics_series`.
+- `plot_grid_study_heatmap()`: heatmap visualization for 2D parameter
+  sweeps from `GridStudyResults`, showing mean or SD across two swept
+  parameters with annotated cells.
+- `ModelConfig.freeze()`: makes a config instance read-only after
+  construction. Attempting to set or update parameters on a frozen
+  config raises `RuntimeError`.
+
+### Deprecated
+- `get_final_metrics()` now emits `DeprecationWarning`. Use
+  `get_metric_values()` instead. Will be removed in v0.5.0.
+
+### Internal
+- `scipy`, `matplotlib`, and `seaborn` committed as unconditional core
+  dependencies; dead try/except fallback paths removed from
+  `analysis.py` and `bootstrap.py`.
+- `loggers.py`: all `print()` calls replaced with `logger.info()` so
+  output respects the global verbose setting.
+- `verbose=False` now propagates through the full stack including data
+  loading, via `set_verbose()` in the high-level API.
+- `GridStudyResults.to_dataframe()`: values no longer rounded at storage
+  time; full float precision preserved for downstream analysis.
+- `HyperparameterTuner`: `eval_time` now stores wall-clock seconds;
+  `_should_minimize()` helper extracted; deprecated `merge()` replaced
+  with `update()`.
+- Dead code removed from `bootstrap_mean_difference_ci`.
+- `import warnings` and `import datetime` moved to module top in
+  `core.py` and `exceptions.py` respectively; `exceptions.py` timestamps
+  now use UTC.
+- `joblib` removed from required dependencies in `pyproject.toml`.
+- `ExperimentRunner`, `run_grid_study()`, and `_set_seeds()` docstrings
+  corrected to describe `SeedSequence.spawn()` accurately.
+- `_INFRA_KWARGS` documented in `variability_study()` docstring.
+- README `summarize()` output block updated to match current format.
+
+---
+
 ## [0.3.11] — 2026-03-25
 
 ### Added
@@ -93,7 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from label binarization; falls back to `np.eye()` when TF is absent.
 - `BaseLogger`: debug-only messages removed from stdout.
 
-===
+---
 
 ## [0.3.10] — 2026-03-24
 

@@ -1706,10 +1706,10 @@ def check_convergence(
     # If autocorrelation cannot be computed (e.g. constant series),
     # fall back to variance criterion alone
     if autocorr is None or np.isnan(autocorr):
-        return low_recent_variance
+        return bool(low_recent_variance)
 
     low_autocorr = abs(autocorr) < autocorr_threshold
-    return low_autocorr or low_recent_variance
+    return bool(low_autocorr or low_recent_variance)
 
 
 # CONFUSION MATRIX FUNCTION (enhanced)

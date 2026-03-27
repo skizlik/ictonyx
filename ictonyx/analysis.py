@@ -225,6 +225,10 @@ def check_normality(
     Args:
         data: A ``pd.Series`` of metric values.
         alpha: Significance level. Default 0.05.
+        require_all_tests: If ``True``, normality is declared only when
+            *all* available tests pass. Default ``False`` (any single
+            test passing is sufficient). For n < 20, D'Agostino-Pearson
+            does not run, so this reduces to evaluating Shapiro-Wilk alone.
 
     Returns:
         Tuple of ``(is_normal, details_dict)`` where ``is_normal`` is
@@ -262,9 +266,9 @@ def check_normality(
     if not results:
         return False, {"error": "Could not perform normality tests"}
 
-        # For n < 20, D'Agostino-Pearson does not run — only Shapiro-Wilk is
-        # evaluated. In that regime the "ALL tests" rule reduces to a single test.
-        # Set require_all_tests=True to enforce the strict conjunction regardless.
+    # For n < 20, D'Agostino-Pearson does not run — only Shapiro-Wilk is
+    # evaluated. In that regime the "ALL tests" rule reduces to a single test.
+    # Set require_all_tests=True to enforce the strict conjunction regardless.
     passing = [t["p_value"] > alpha for t in results.values() if t is not None]
     is_normal = all(passing) if require_all_tests else any(passing)
 
@@ -379,7 +383,6 @@ def check_independence(
 
     is_independent = len(significant_lags) == 0
 
-    n = len(data.dropna())
     details = {
         "autocorrelations": autocorr_results,
         "significant_lags": significant_lags,

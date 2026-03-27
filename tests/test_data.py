@@ -1062,3 +1062,122 @@ class TestImageDataHandlerColorMode:
         # so no subdirs are needed — just a valid directory path.
         with pytest.raises(ValueError):
             ImageDataHandler(data_path=str(tmp_path), image_size=(32, 32), color_mode="invalid")
+
+
+class TestArraysDataHandlerLoadPaths:
+    """Cover the zero-test-split and zero-val-split paths in ArraysDataHandler.load()."""
+
+    def test_zero_test_split_no_test_data(self):
+        """test_split=0 must return test_data=None."""
+        X = np.random.default_rng(0).standard_normal((50, 4))
+        y = np.zeros(50)
+        handler = ArraysDataHandler(X, y)
+        result = handler.load(test_split=0.0, val_split=0.1)
+        assert result["test_data"] is None
+        assert result["train_data"] is not None
+
+    def test_zero_val_split_no_val_data(self):
+        """val_split=0 must return val_data=None."""
+        X = np.random.default_rng(1).standard_normal((50, 4))
+        y = np.zeros(50)
+        handler = ArraysDataHandler(X, y)
+        result = handler.load(test_split=0.2, val_split=0.0)
+        assert result["val_data"] is None
+
+    def test_splits_sum_too_high_raises(self):
+        X = np.random.default_rng(2).standard_normal((50, 4))
+        y = np.zeros(50)
+        handler = ArraysDataHandler(X, y)
+        with pytest.raises(ValueError):
+            handler.load(test_split=0.6, val_split=0.5)
+
+    def test_x_y_length_mismatch_raises(self):
+        X = np.zeros((50, 3))
+        y = np.zeros(40)
+        with pytest.raises(ValueError, match="Length mismatch"):
+            ArraysDataHandler(X, y)
+
+    def test_only_x_test_raises(self):
+        X = np.zeros((50, 3))
+        y = np.zeros(50)
+        with pytest.raises(ValueError, match="both"):
+            ArraysDataHandler(X, y, X_test=np.zeros((10, 3)))
+
+    def test_default_splits_used_when_not_overridden(self):
+        X = np.random.default_rng(3).standard_normal((100, 4))
+        y = np.zeros(100)
+        handler = ArraysDataHandler(X, y, val_split=0.15, test_split=0.25)
+        result = handler.load()  # uses stored defaults
+        X_train, _ = result["train_data"]
+        X_test, _ = result["test_data"]
+        assert len(X_test) == pytest.approx(25, abs=2)
+
+    def test_data_type_and_return_format(self):
+        handler = ArraysDataHandler(np.zeros((30, 4)), np.zeros((30,)))
+        assert handler.data_type == "arrays"
+        assert handler.return_format == "split_arrays"
+
+
+class TestAutoResolveHandlerPaths:
+    """Cover auto_resolve_handler dispatch branches."""
+
+    def test_passthrough_existing_handler(self):
+        handler = ArraysDataHandler(np.zeros((20, 2)), np.zeros(20))
+        result = auto_resolve_handler(handler)
+        assert result is handler
+
+    def test_tuple_input_returns_arrays_handler(self):
+        X = np.zeros((30, 4))
+        y = np.zeros(30)
+        handler = auto_resolve_handler((X, y))
+        assert isinstance(handler, ArraysDataHandler)
+
+    def test_dataframe_without_target_raises(self):
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        with pytest.raises(ValueError, match="target_column"):
+            auto_resolve_handler(df)
+
+    def test_string_path_nonexistent_raises(self):
+        with pytest.raises(FileNotFoundError):
+            auto_resolve_handler("/nonexistent/path/data.csv")
+
+
+class TestTabularDataHandlerCSVPaths:
+    """Cover TabularDataHandler load() from a CSV file."""
+
+    def test_load_from_csv(self, tmp_path):
+        csv = tmp_path / "data.csv"
+        df = pd.DataFrame(
+            {
+                "f1": [1.0, 2.0, 3.0, 4.0, 5.0] * 10,
+                "f2": [0.1, 0.2, 0.3, 0.4, 0.5] * 10,
+                "label": [0, 1] * 25,
+            }
+        )
+        df.to_csv(csv, index=False)
+        handler = TabularDataHandler(str(csv), target_column="label")
+        result = handler.load(test_split=0.2, val_split=0.1)
+        assert result["train_data"] is not None
+        X_train, y_train = result["train_data"]
+        assert len(X_train) > 0
+
+    def test_missing_target_column_raises(self, tmp_path):
+        csv = tmp_path / "data.csv"
+        pd.DataFrame({"f1": [1, 2, 3], "f2": [4, 5, 6]}).to_csv(csv, index=False)
+        handler = TabularDataHandler(str(csv), target_column="nonexistent")
+        with pytest.raises(ValueError, match="nonexistent"):
+            handler.load()
+
+    def test_empty_csv_raises(self, tmp_path):
+        csv = tmp_path / "empty.csv"
+        csv.write_text("col1,col2,target\n")  # header only
+        handler = TabularDataHandler(str(csv), target_column="target")
+        with pytest.raises(ValueError):
+            handler.load()
+
+    def test_dataframe_mode_no_val_split(self):
+        df = pd.DataFrame({"f1": range(40), "f2": range(40, 80), "y": [0, 1] * 20})
+        handler = TabularDataHandler(df, target_column="y")
+        result = handler.load(val_split=0.0, test_split=0.2)
+        assert result["val_data"] is None
+        assert result["train_data"] is not None

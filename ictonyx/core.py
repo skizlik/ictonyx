@@ -889,9 +889,7 @@ if SKLEARN_AVAILABLE:
                     if key in _SKLEARN_FIT_KWARGS:
                         sklearn_kwargs[key] = value
                     elif key not in _KNOWN_IGNORED_KWARGS:
-                        import warnings as _warnings
-
-                        _warnings.warn(
+                        warnings.warn(
                             f"ScikitLearnModelWrapper.fit() received unrecognized "
                             f"keyword argument '{key}={value!r}'. This argument has "
                             f"been ignored. If it is a valid sklearn fit() parameter, "

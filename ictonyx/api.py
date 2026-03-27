@@ -482,10 +482,10 @@ def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
     """
     if isinstance(obj, BaseModelWrapper):
         return obj
-        # Framework-specific checks MUST come before the generic duck-typing check.
-        # Keras models expose .fit() and .predict(), so they would be mis-wrapped as
-        # ScikitLearnModelWrapper if the duck-typing branch ran first.
-        # Keras / TensorFlow detection via string inspection — avoids a hard TF import.
+    # Framework-specific checks MUST come before the generic duck-typing check.
+    # Keras models expose .fit() and .predict(), so they would be mis-wrapped as
+    # ScikitLearnModelWrapper if the duck-typing branch ran first.
+    # Keras / TensorFlow detection via string inspection — avoids a hard TF import.
     if "keras" in str(type(obj)).lower() or "tensorflow" in str(type(obj)).lower():
         if not TENSORFLOW_AVAILABLE:
             raise ImportError(

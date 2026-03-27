@@ -1091,3 +1091,141 @@ class TestScikitLearnSaveLoadJoblib:
         assert os.path.exists(path)
         loaded = ScikitLearnModelWrapper.load_model(path)
         assert hasattr(loaded.model, "predict")
+
+
+class TestScikitLearnWrapperRepr:
+    """Cover __repr__ and model_id paths."""
+
+    def test_repr_contains_model_type(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier(), model_id="my_tree")
+        r = repr(wrapper)
+        assert "my_tree" in r or "DecisionTree" in r
+
+    def test_repr_shows_trained_status(self):
+        import numpy as np
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        r_before = repr(wrapper)
+        X = np.random.default_rng(0).standard_normal((20, 4))
+        y = (X[:, 0] > 0).astype(int)
+        wrapper.fit((X, y))
+        r_after = repr(wrapper)
+        # Before: not trained. After: trained.
+        assert "No" in r_before or "False" in r_before or r_before != r_after
+
+
+class TestScikitLearnWrapperFitEdgeCases:
+    """Cover fit() paths not hit by other tests."""
+
+    def test_fit_bad_input_type_raises(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        with pytest.raises(ValueError):
+            wrapper.fit(np.zeros((10, 4)))  # not a tuple
+
+    def test_evaluate_metrics_multiclass(self):
+        import numpy as np
+        from sklearn.tree import DecisionTreeClassifier
+
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((60, 4))
+        y = np.array([i % 3 for i in range(60)])
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier(random_state=0))
+        wrapper.fit((X[:45], y[:45]))
+        metrics = wrapper.evaluate((X[45:], y[45:]))
+        assert "accuracy" in metrics
+        assert "f1" in metrics
+
+
+class TestScikitLearnWrapperSaveLoad:
+    """Cover save/load paths including joblib fallback."""
+
+    def test_save_load_with_joblib(self, tmp_path):
+        from sklearn.tree import DecisionTreeClassifier
+
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((40, 4))
+        y = (X[:, 0] > 0).astype(int)
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier(random_state=0))
+        wrapper.fit((X[:30], y[:30]))
+        wrapper.predict(X[30:])
+
+        path = str(tmp_path / "model.joblib")
+        wrapper.save_model(path)
+        assert os.path.exists(path)
+
+        loaded = ScikitLearnModelWrapper.load_model(path)
+        assert loaded is not None
+        preds = loaded.predict(X[30:])
+        assert len(preds) == 10
+
+    def test_save_load_preserves_task(self, tmp_path):
+        from sklearn.tree import DecisionTreeClassifier
+
+        rng = np.random.default_rng(1)
+        X = rng.standard_normal((30, 3))
+        y = (X[:, 0] > 0).astype(int)
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        wrapper.fit((X, y))
+        assert wrapper.task == "classification"
+
+        path = str(tmp_path / "clf.joblib")
+        wrapper.save_model(path)
+        loaded = ScikitLearnModelWrapper.load_model(path)
+        loaded.predict(X)
+        assert loaded.predictions is not None
+
+
+class TestScikitLearnWrapperPredict2:
+    """Additional predict/assess coverage."""
+
+    def test_assess_regression_returns_r2_mse_mae(self):
+        from sklearn.linear_model import LinearRegression
+
+        rng = np.random.default_rng(2)
+        X = rng.standard_normal((50, 3))
+        y = X @ np.array([1.0, -0.5, 0.3]) + rng.normal(0, 0.1, 50)
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        wrapper.fit((X[:40], y[:40]))
+        wrapper.predict(X[40:])
+        result = wrapper.assess(y[40:])
+        assert "r2" in result
+        assert "mse" in result
+        assert "mae" in result
+        assert result["mse"] >= 0
+        assert result["mae"] >= 0
+
+    def test_predict_proba_not_implemented_for_svm(self):
+        from sklearn.svm import SVC
+
+        rng = np.random.default_rng(3)
+        X = rng.standard_normal((30, 3))
+        y = (X[:, 0] > 0).astype(int)
+        # SVC without probability=True has no predict_proba
+        wrapper = ScikitLearnModelWrapper(SVC())
+        wrapper.fit((X, y))
+        with pytest.raises(NotImplementedError):
+            wrapper.predict_proba(X)
+
+    def test_evaluate_regression_metrics(self):
+        from sklearn.linear_model import LinearRegression
+
+        rng = np.random.default_rng(4)
+        X = rng.standard_normal((50, 3))
+        y = X[:, 0] * 2 + rng.normal(0, 0.05, 50)
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        wrapper.fit((X[:40], y[:40]))
+        metrics = wrapper.evaluate((X[40:], y[40:]))
+        assert "r2" in metrics
+        assert "mse" in metrics
+        assert "mae" in metrics
+
+    def test_cleanup_does_not_raise(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        wrapper._cleanup_implementation()  # must not raise

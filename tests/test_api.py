@@ -332,3 +332,64 @@ class TestGetModelName:
         from sklearn.tree import DecisionTreeClassifier
 
         assert _get_model_name(DecisionTreeClassifier()) == "DecisionTreeClassifier"
+
+
+class TestCompareModelsConfigurationError:
+    """compare_models() must raise ConfigurationError with an actionable message
+    when the requested metric is absent from a model's results."""
+
+    def test_val_accuracy_missing_raises_configuration_error(self):
+        """When sklearn produces no val_accuracy (no validation data),
+        ConfigurationError must be raised with a hint about val_split."""
+        import warnings
+
+        from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+
+        import ictonyx as ix
+        from ictonyx.data import ArraysDataHandler
+        from ictonyx.exceptions import ConfigurationError
+
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((60, 4))
+        y = (X[:, 0] > 0).astype(int)
+        # val_split=0.0 means no validation data → sklearn produces only 'accuracy',
+        # not 'val_accuracy'. compare_models(metric='val_accuracy') must raise.
+        handler = ArraysDataHandler(X, y, val_split=0.0, test_split=0.0)
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            with warnings.catch_warnings(record=True):
+                warnings.simplefilter("always")
+                ix.compare_models(
+                    models=[RandomForestClassifier, GradientBoostingClassifier],
+                    data=handler,
+                    runs=3,
+                    metric="val_accuracy",
+                    seed=42,
+                )
+        msg = str(exc_info.value)
+        assert "val_accuracy" in msg
+        assert "accuracy" in msg or "val_split" in msg
+
+
+class TestGetModelBuilderEdgeCases:
+    """Cover _build_instance_cloner branches."""
+
+    def test_invalid_model_object_raises(self):
+        """An object with no fit method must raise ValueError."""
+        from ictonyx.api import _get_model_builder
+
+        with pytest.raises((ValueError, TypeError)):
+            _get_model_builder(42)
+
+    def test_callable_not_class_returned_directly(self):
+        """A plain callable (not a class) is wrapped and returned."""
+        from sklearn.tree import DecisionTreeClassifier
+
+        from ictonyx.api import _get_model_builder
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        def my_builder(config):
+            return ScikitLearnModelWrapper(DecisionTreeClassifier())
+
+        builder = _get_model_builder(my_builder)
+        assert callable(builder)

@@ -214,3 +214,77 @@ def test_setup_mlflow_import_error():
     with patch.dict("sys.modules", {"mlflow": None}):
         # If mlflow is actually installed, this test just verifies the function exists
         assert callable(setup_mlflow)
+
+
+class TestSaveLoadEdgeCases:
+
+    def test_save_overwrites_existing_file(self, tmp_path):
+        path = str(tmp_path / "obj.pkl")
+        save_object({"v": 1}, path)
+        save_object({"v": 2}, path)
+        loaded = load_object(path)
+        assert loaded["v"] == 2
+
+    def test_roundtrip_nested_structure(self, tmp_path):
+        path = str(tmp_path / "nested.pkl")
+        obj = {"a": [1, 2, 3], "b": {"c": "hello"}, "d": (4, 5)}
+        save_object(obj, path)
+        assert load_object(path) == obj
+
+    def test_roundtrip_none(self, tmp_path):
+        path = str(tmp_path / "none.pkl")
+        save_object(None, path)
+        assert load_object(path) is None
+
+
+class TestTrainValTestSplitEdgeCases:
+
+    def test_no_overlap_between_splits(self):
+        X = np.arange(100).reshape(100, 1)
+        y = np.arange(100)
+        X_train, X_val, X_test, y_train, y_val, y_test = train_val_test_split(
+            X, y, test_size=0.2, val_size=0.2, random_state=0
+        )
+        train_idx = set(X_train.flatten())
+        val_idx = set(X_val.flatten())
+        test_idx = set(X_test.flatten())
+        assert train_idx.isdisjoint(val_idx)
+        assert train_idx.isdisjoint(test_idx)
+        assert val_idx.isdisjoint(test_idx)
+
+    def test_y_labels_aligned_with_X(self):
+        X = np.arange(50).reshape(50, 1).astype(float)
+        y = np.arange(50, 100).astype(float)
+        X_train, X_val, X_test, y_train, y_val, y_test = train_val_test_split(X, y, random_state=42)
+        # y[i] must equal X[i] + 50 for all splits
+        np.testing.assert_array_equal(y_train, X_train.flatten() + 50)
+        np.testing.assert_array_equal(y_val, X_val.flatten() + 50)
+        np.testing.assert_array_equal(y_test, X_test.flatten() + 50)
+
+    def test_dataframe_input(self):
+        df = pd.DataFrame({"a": range(50), "b": range(50, 100)})
+        y = np.zeros(50)
+        X_train, X_val, X_test, _, _, _ = train_val_test_split(df, y, random_state=42)
+        assert isinstance(X_train, pd.DataFrame)
+
+
+class TestTrainValTestSplitValidation:
+
+    def test_returns_six_elements(self):
+        X = np.random.rand(50, 3)
+        y = np.random.randint(0, 2, 50)
+        result = train_val_test_split(X, y)
+        assert len(result) == 6
+
+    def test_total_samples_preserved(self):
+        X = np.random.rand(100, 4)
+        y = np.zeros(100)
+        X_tr, X_v, X_te, y_tr, y_v, y_te = train_val_test_split(X, y)
+        assert len(X_tr) + len(X_v) + len(X_te) == 100
+
+    def test_different_random_states_give_different_splits(self):
+        X = np.arange(100).reshape(100, 1).astype(float)
+        y = np.zeros(100)
+        _, _, X_te1, _, _, _ = train_val_test_split(X, y, random_state=0)
+        _, _, X_te2, _, _, _ = train_val_test_split(X, y, random_state=99)
+        assert not np.array_equal(X_te1, X_te2)

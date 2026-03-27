@@ -1,6 +1,7 @@
 # ictonyx/data.py
 
 import os
+import warnings
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -709,6 +710,16 @@ class TextDataHandler(FileDataHandler):
                 "Framework-agnostic support is planned for a future release."
             )
 
+        warnings.warn(
+            "TextDataHandler depends on tf.keras.preprocessing APIs removed in "
+            "TF 2.16+. This handler is deprecated and will be replaced with a "
+            "framework-agnostic implementation in v0.4.0. Do not build production "
+            "workflows on this class. Workaround: use TfidfVectorizer and "
+            "ArraysDataHandler.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         super().__init__(data_path)
 
         if not os.path.isfile(self.data_path):
@@ -892,6 +903,16 @@ class TimeSeriesDataHandler(FileDataHandler):
                 "ArraysDataHandler. Framework-agnostic support is planned for "
                 "a future release."
             )
+
+        warnings.warn(
+            "TextDataHandler depends on tf.keras.preprocessing APIs removed in "
+            "TF 2.16+. This handler is deprecated and will be replaced with a "
+            "framework-agnostic implementation in v0.4.0. Do not build production "
+            "workflows on this class. Workaround: use TfidfVectorizer and "
+            "ArraysDataHandler.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         super().__init__(data_path)
 

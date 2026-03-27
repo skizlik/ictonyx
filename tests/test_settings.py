@@ -9,6 +9,7 @@ from ictonyx.settings import (
     set_theme,
     set_verbose,
     should_display,
+    should_verbose,
 )
 
 
@@ -128,3 +129,16 @@ class TestSetTheme:
         for theme in ("default", "dark", "publication"):
             set_theme(theme)
             assert expected == set(THEME.keys()), f"Missing keys after set_theme('{theme}')"
+
+
+class TestShouldVerbose:
+    def teardown_method(self):
+        set_verbose(True)
+
+    def test_should_verbose_true_by_default(self):
+        set_verbose(True)
+        assert should_verbose() is True
+
+    def test_should_verbose_false_after_set(self):
+        set_verbose(False)
+        assert should_verbose() is False

@@ -85,9 +85,10 @@ def variability_study(
         use_process_isolation: If ``True``, each run executes in a subprocess
             to guarantee GPU memory cleanup. Useful for Keras/TF models that
             leak memory across runs. Default ``False``.
-        seed: Base random seed. Run *i* uses ``seed + i``, so every run is
-            different but the full study is reproducible. If ``None``, a
-            random seed is generated and stored in the results.
+        seed: Base random seed. Each run receives an independent child seed
+            derived via ``np.random.SeedSequence.spawn()``, guaranteeing
+            statistically uncorrelated RNG streams. If ``None``, a random
+            seed is generated and stored in the results.
         verbose: If ``False``, suppress all training output. Default ``True``.
         **kwargs: Additional arguments forwarded to both the
             :class:`~ictonyx.config.ModelConfig` and the data handler

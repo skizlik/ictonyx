@@ -1027,7 +1027,7 @@ class TestGridStudyResults:
         df = gr.to_dataframe()
         result = gr.get_results_for_config({"learning_rate": 0.001})
         values = pd.Series(result.get_metric_values("val_accuracy"))
-        assert df.loc[df["learning_rate"] == 0.001, "sd"].iloc[0] == round(values.std(), 4)
+        assert df.loc[df["learning_rate"] == 0.001, "sd"].iloc[0] == pytest.approx(values.std())
 
     def test_summarize_returns_string(self):
         gr = self._make_grid_results()

@@ -1061,11 +1061,11 @@ class GridStudyResults:
                 n = len(values)
                 row = {
                     **param_combo,
-                    "mean": round(values.mean(), 4),
-                    "sd": round(values.std(), 4),
-                    "se": round(values.std() / np.sqrt(n), 4),
-                    "min": round(values.min(), 4),
-                    "max": round(values.max(), 4),
+                    "mean": float(values.mean()),
+                    "sd": float(values.std()),
+                    "se": float(values.std() / np.sqrt(n)),
+                    "min": float(values.min()),
+                    "max": float(values.max()),
                     "n": n,
                 }
             except KeyError:

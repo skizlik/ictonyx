@@ -7,6 +7,7 @@ providing clear error categorization, context information, and
 better debugging experience.
 """
 
+import datetime
 import traceback
 from typing import Any, Dict, List, Optional, Union
 
@@ -23,12 +24,8 @@ class IctonyxError(Exception):
         super().__init__(message)
         self.message = message
         self.context = context or {}
-        self.timestamp = None
-
-        # Capture timestamp when error occurs
-        import datetime
-
-        self.timestamp = datetime.datetime.now()
+        # Capture timestamp when error occurs (UTC for timezone-safe logging)
+        self.timestamp = datetime.datetime.now(datetime.timezone.utc)
 
     def add_context(self, key: str, value: Any) -> "IctonyxError":
         """Add contextual information to the exception."""

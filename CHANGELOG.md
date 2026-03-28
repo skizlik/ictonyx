@@ -16,6 +16,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.13] — 2026-03-28
+
+### Fixed — Critical (statistical correctness)
+- `wilcoxon_signed_rank_test()`: replaced `method='approx'` with `method='auto'`.
+  At n=5 the normal approximation produced false positives (p=0.043 vs exact
+  p=0.063), reversing significance decisions at α=0.05. Effect size is now
+  derived from the p-value via inverse normal CDF, since scipy's `auto` mode
+  does not expose `zstatistic` directly.
+- `check_convergence()`: corrected `and` to `or` in the final return statement.
+  The docstring specified OR semantics; the code used AND, causing plateaued
+  training runs to be reported as not converged and deflating `convergence_rate`
+  in `assess_training_stability()` output.
+- `check_convergence()`: return values now wrapped in `bool()` to prevent
+  `numpy.bool_` identity-check failures under NumPy 2.0.
+
+### Fixed — Misleading output
+- `StatisticalTestResult.get_summary()`: the corrected p-value is now displayed
+  and labelled `p_corr` when a multiple-comparison correction has been applied.
+  Previously the raw p-value was shown alongside a marker derived from the
+  corrected value, producing contradictory output such as `p=0.0300 ns`.
+
+### Fixed — Adoption
+- `pyproject.toml`: ML framework extras are now installable via pip.
+  `pip install ictonyx[tensorflow]`, `ictonyx[torch]`, `ictonyx[mlflow]`, and
+  `ictonyx[all]` now install their respective dependencies. Previously all ML
+  frameworks were in a Poetry dev group, inaccessible through pip extras.
+- `variability_study()` and `compare_models()`: default `runs` raised from 5
+  to 10. The previous default triggered the library's own `runs < 10` warning
+  on every first call.
+- `compare_models()`: raises `ConfigurationError` with an actionable message
+  when the requested metric is absent from a model's results, instead of
+  propagating a bare `KeyError`. Includes a targeted hint when `val_accuracy`
+  is requested but only `accuracy` is available.
+
+### Fixed — Stale claims from v0.3.12
+- `GridStudyResults.to_dataframe()`: values now stored at full float precision.
+  `round(..., 4)` was still applied to all five summary columns.
+- `variability_study()` docstring: corrected seed derivation from the stale
+  `seed + i` description to `SeedSequence.spawn()`.
+- `exceptions.py`: `import datetime` moved to module top; timestamps now use
+  UTC via `datetime.timezone.utc`.
+
+### Fixed — Code quality
+- `check_normality()`: misplaced comment moved out of unreachable position
+  (after an early `return`) to before the line it documents.
+- `check_normality()`: added missing `require_all_tests` parameter to the
+  docstring Args section.
+- `check_independence()`: removed redundant `n = len(data.dropna())`
+  recomputation.
+- `_ensure_wrapper()`: explanatory comments moved to before the `if` blocks
+  they describe, rather than after the preceding `return` statements.
+- `ScikitLearnModelWrapper.fit()`: removed inline `import warnings as _warnings`;
+  uses the module-top import directly.
+
+### Deprecated
+- `TextDataHandler` and `TimeSeriesDataHandler` now emit `DeprecationWarning`
+  at construction. Both handlers are inoperable under TF 2.16+ (the required
+  version) and will be replaced with framework-agnostic implementations in
+  v0.4.0.
+
+### Changed
+- README installation section rewritten with per-framework install commands.
+
+---
+
 ## [0.3.12] — 2026-03-27
 
 ### Fixed — critical

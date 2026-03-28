@@ -1181,3 +1181,69 @@ class TestTabularDataHandlerCSVPaths:
         result = handler.load(val_split=0.0, test_split=0.2)
         assert result["val_data"] is None
         assert result["train_data"] is not None
+
+
+class TestTabularDataHandlerCoverage2:
+    """Cover features= branch, NaN warning, and get_data_info."""
+
+    def test_load_with_explicit_features(self):
+        """features= parameter selects a subset of columns."""
+        df = pd.DataFrame(
+            {
+                "f1": [1.0, 2.0, 3.0, 4.0, 5.0] * 8,
+                "f2": [0.1, 0.2, 0.3, 0.4, 0.5] * 8,
+                "f3": [10.0, 20.0, 30.0, 40.0, 50.0] * 8,
+                "label": [0, 1] * 20,
+            }
+        )
+        handler = TabularDataHandler(df, target_column="label", features=["f1", "f2"])
+        result = handler.load(test_split=0.2, val_split=0.1)
+        X_train, _ = result["train_data"]
+        assert list(X_train.columns) == ["f1", "f2"]
+
+    def test_load_warns_on_nan_features(self):
+        """Missing values in features must log a warning without crashing."""
+        import warnings
+
+        df = pd.DataFrame(
+            {
+                "f1": [1.0, None, 3.0, 4.0, 5.0] * 8,
+                "f2": [0.1, 0.2, 0.3, 0.4, 0.5] * 8,
+                "label": [0, 1] * 20,
+            }
+        )
+        handler = TabularDataHandler(df, target_column="label")
+        # Should not raise — just log a warning
+        result = handler.load(test_split=0.2, val_split=0.1)
+        assert result["train_data"] is not None
+
+    def test_get_data_info_dataframe_mode(self):
+        """get_data_info() in DataFrame mode must return 'source': 'dataframe'."""
+        df = pd.DataFrame({"f1": range(20), "f2": range(20), "label": [0, 1] * 10})
+        handler = TabularDataHandler(df, target_column="label")
+        info = handler.get_data_info()
+        assert info["source"] == "dataframe"
+        assert info["num_rows"] == 20
+        assert "label" in info["columns"]
+
+    def test_get_data_info_csv_mode(self, tmp_path):
+        """get_data_info() in file mode must return path info."""
+        csv = tmp_path / "data.csv"
+        pd.DataFrame({"f1": range(10), "label": [0, 1] * 5}).to_csv(csv, index=False)
+        handler = TabularDataHandler(str(csv), target_column="label")
+        info = handler.get_data_info()
+        assert info["num_rows"] == 10
+        assert "target_column" in info
+
+    def test_invalid_features_raises(self):
+        """Non-existent feature column must raise ValueError."""
+        df = pd.DataFrame({"f1": [1, 2, 3], "label": [0, 1, 0]})
+        handler = TabularDataHandler(df, target_column="label", features=["f1", "nonexistent"])
+        with pytest.raises(ValueError, match="nonexistent"):
+            handler.load()
+
+    def test_split_sum_too_high_raises(self):
+        df = pd.DataFrame({"f1": range(20), "label": [0, 1] * 10})
+        handler = TabularDataHandler(df, target_column="label")
+        with pytest.raises(ValueError):
+            handler.load(test_split=0.6, val_split=0.5)

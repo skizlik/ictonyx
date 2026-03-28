@@ -14,11 +14,15 @@ from ictonyx import settings
 from ictonyx.plotting import (
     plot_autocorr_vs_lag,
     plot_averaged_autocorr,
+    plot_averaged_pacf,
     plot_comparison_boxplots,
     plot_comparison_forest,
     plot_confusion_matrix,
     plot_grid_study_heatmap,
+    plot_pacf_vs_lag,
     plot_pairwise_comparison_matrix,
+    plot_precision_recall_curve,
+    plot_roc_curve,
     plot_training_history,
     plot_training_stability,
     plot_variability_summary,
@@ -557,3 +561,155 @@ class TestPlotTrainingHistory:
         )
         result = plot_training_history(df, show=False)
         assert result is not None
+
+
+class TestROCAndPRCurves:
+    """plot_roc_curve and plot_precision_recall_curve with TF utils patched out."""
+
+    def setup_method(self):
+        settings.set_display_plots(False)
+
+    def _make_mock_wrapper(self):
+        """A mock model wrapper with predict_proba returning 2-class probabilities."""
+        mock = MagicMock()
+        rng = np.random.default_rng(0)
+        proba = rng.dirichlet([1, 1], size=30)  # shape (30, 2)
+        mock.predict_proba.return_value = proba
+        return mock
+
+    @patch("matplotlib.pyplot.show")
+    @patch("ictonyx.plotting._check_tensorflow_utils")
+    def test_plot_roc_curve_returns_figure(self, mock_tf_check, mock_show):
+        rng = np.random.default_rng(0)
+        X_test = rng.standard_normal((30, 4))
+        y_test = rng.integers(0, 2, 30)
+        wrapper = self._make_mock_wrapper()
+        fig = plot_roc_curve(wrapper, X_test, y_test)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    @patch("ictonyx.plotting._check_tensorflow_utils")
+    def test_plot_roc_curve_custom_title(self, mock_tf_check, mock_show):
+        rng = np.random.default_rng(1)
+        X_test = rng.standard_normal((30, 3))
+        y_test = rng.integers(0, 2, 30)
+        wrapper = self._make_mock_wrapper()
+        fig = plot_roc_curve(wrapper, X_test, y_test, title="My ROC")
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_plot_roc_curve_no_predict_proba_returns_none(self, mock_show):
+        """Model without predict_proba must return None, not raise."""
+        mock = MagicMock(spec=[])  # no attributes
+        rng = np.random.default_rng(2)
+        X = rng.standard_normal((10, 3))
+        y = rng.integers(0, 2, 10)
+        # _check_tensorflow_utils raises ImportError if TF absent — patch it
+        with patch("ictonyx.plotting._check_tensorflow_utils"):
+            with patch("ictonyx.plotting._check_sklearn_metrics"):
+                result = plot_roc_curve(mock, X, y)
+        assert result is None
+
+    @patch("matplotlib.pyplot.show")
+    @patch("ictonyx.plotting._check_tensorflow_utils")
+    def test_plot_precision_recall_returns_figure(self, mock_tf_check, mock_show):
+        rng = np.random.default_rng(3)
+        X_test = rng.standard_normal((30, 4))
+        y_test = rng.integers(0, 2, 30)
+        wrapper = self._make_mock_wrapper()
+        fig = plot_precision_recall_curve(wrapper, X_test, y_test)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    @patch("ictonyx.plotting._check_tensorflow_utils")
+    def test_plot_precision_recall_custom_title(self, mock_tf_check, mock_show):
+        rng = np.random.default_rng(4)
+        X_test = rng.standard_normal((30, 3))
+        y_test = rng.integers(0, 2, 30)
+        wrapper = self._make_mock_wrapper()
+        fig = plot_precision_recall_curve(wrapper, X_test, y_test, title="My PR")
+        assert fig is not None
+
+
+class TestPACFPlots:
+    """plot_pacf_vs_lag and plot_averaged_pacf."""
+
+    def setup_method(self):
+        settings.set_display_plots(False)
+
+    def test_plot_pacf_vs_lag_without_statsmodels_returns_none(self):
+        """When statsmodels is absent, must return None without raising."""
+        import sys
+        from unittest.mock import patch
+
+        data = pd.Series(np.random.default_rng(0).standard_normal(50))
+        with patch.dict(
+            sys.modules,
+            {"statsmodels": None, "statsmodels.tsa": None, "statsmodels.tsa.stattools": None},
+        ):
+            result = plot_pacf_vs_lag(data, max_lag=10)
+        assert result is None
+
+    def test_plot_pacf_vs_lag_too_short_returns_none(self):
+        """Series too short (len <= max_lag + 1) must return None."""
+        data = pd.Series([0.1, 0.2, 0.3])
+        result = plot_pacf_vs_lag(data, max_lag=10)
+        assert result is None
+
+    @patch("matplotlib.pyplot.show")
+    def test_plot_averaged_pacf_returns_figure(self, mock_show):
+        lags = list(range(1, 6))
+        mean_pacf = [0.4, 0.2, 0.1, 0.05, 0.02]
+        std_pacf = [0.05, 0.04, 0.03, 0.02, 0.01]
+        fig = plot_averaged_pacf(lags, mean_pacf, std_pacf)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_plot_averaged_pacf_custom_title(self, mock_show):
+        lags = [1, 2, 3]
+        fig = plot_averaged_pacf(lags, [0.3, 0.1, 0.05], [0.02, 0.01, 0.01], title="My PACF")
+        assert fig is not None
+
+
+class TestPlotTrainingStabilityPaths:
+    """Additional plot_training_stability coverage."""
+
+    def setup_method(self):
+        settings.set_display_plots(False)
+
+    def test_error_key_returns_none(self):
+        """Stability dict with 'error' key must return None immediately."""
+        result = plot_training_stability({"error": "Too few histories"})
+        assert result is None
+
+    @patch("matplotlib.pyplot.show")
+    def test_high_stability(self, mock_show):
+        results = {
+            "n_runs": 10,
+            "common_length": 20,
+            "final_loss_mean": 0.2,
+            "final_loss_std": 0.01,
+            "final_loss_cv": 0.05,
+            "stability_assessment": "high",
+            "convergence_rate": 1.0,
+            "converged_runs": 10,
+            "final_losses_list": [0.19 + i * 0.001 for i in range(10)],
+        }
+        fig = plot_training_stability(results)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_low_stability(self, mock_show):
+        results = {
+            "n_runs": 5,
+            "common_length": 10,
+            "final_loss_mean": 1.0,
+            "final_loss_std": 0.8,
+            "final_loss_cv": 0.8,
+            "stability_assessment": "low",
+            "convergence_rate": 0.2,
+            "converged_runs": 1,
+            "final_losses_list": [0.3, 1.2, 0.8, 1.5, 0.9],
+        }
+        fig = plot_training_stability(results)
+        assert fig is not None

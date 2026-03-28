@@ -149,3 +149,70 @@ def test_accuracy_best_value_positive(regression_handler):
     )
     result = tuner.tune({"learning_rate": hp.uniform("lr", 0.01, 0.2)}, max_evals=3)
     assert result["best_metric_value"] > 0
+
+
+class TestShouldMinimize:
+    """_should_minimize() does not require hyperopt."""
+
+    def test_loss_should_minimize(self):
+        from ictonyx.tuning import _should_minimize
+
+        assert _should_minimize("val_loss") is True
+        assert _should_minimize("train_loss") is True
+        assert _should_minimize("loss") is True
+
+    def test_accuracy_should_not_minimize(self):
+        from ictonyx.tuning import _should_minimize
+
+        assert _should_minimize("val_accuracy") is False
+        assert _should_minimize("accuracy") is False
+
+    def test_r2_should_not_minimize(self):
+        from ictonyx.tuning import _should_minimize
+
+        assert _should_minimize("r2") is False
+        assert _should_minimize("val_r2") is False
+
+    def test_f1_should_not_minimize(self):
+        from ictonyx.tuning import _should_minimize
+
+        assert _should_minimize("f1") is False
+        assert _should_minimize("val_f1") is False
+
+    def test_auc_should_not_minimize(self):
+        from ictonyx.tuning import _should_minimize
+
+        assert _should_minimize("auc") is False
+
+
+class TestTuningImportErrors:
+    """ImportError paths do not require hyperopt to be installed."""
+
+    def test_hyperparameter_tuner_raises_without_hyperopt(self):
+        from unittest.mock import MagicMock, patch
+
+        import numpy as np
+
+        from ictonyx.config import ModelConfig
+        from ictonyx.data import ArraysDataHandler
+
+        with patch("ictonyx.tuning.HAS_HYPEROPT", False):
+            from ictonyx.tuning import HyperparameterTuner
+
+            X = np.zeros((20, 2))
+            y = np.zeros(20)
+            with pytest.raises(ImportError, match="Hyperopt"):
+                HyperparameterTuner(
+                    model_builder=MagicMock(),
+                    data_handler=ArraysDataHandler(X, y),
+                    model_config=ModelConfig({}),
+                )
+
+    def test_create_search_space_raises_without_hyperopt(self):
+        from unittest.mock import patch
+
+        with patch("ictonyx.tuning.HAS_HYPEROPT", False):
+            from ictonyx.tuning import create_search_space
+
+            with pytest.raises(ImportError, match="Hyperopt"):
+                create_search_space()

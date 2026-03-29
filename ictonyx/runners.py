@@ -155,14 +155,44 @@ class ExperimentRunner:
             self._validate_process_isolation()
 
     def _validate_process_isolation(self):
-        """Validate that process isolation can work with current setup."""
-        import pickle
+        """Validate that process isolation can work with current setup.
 
-        # Check if model builder is picklable
+        Uses cloudpickle when available (matching actual execution), falling
+        back to standard pickle. This correctly validates lambdas and
+        notebook-defined functions that cloudpickle supports but pickle does not.
+        """
         try:
-            pickle.dumps(self.model_builder)
+            import cloudpickle as _serializer
+        except ImportError:
+            import pickle as _serializer
+
+        try:
+            _serializer.dumps(self.model_builder)
         except Exception as e:
-            raise ValueError(f"model_builder must be picklable for process isolation: {e}")
+            serializer_name = getattr(_serializer, "__name__", "pickle")
+            raise ValueError(
+                f"model_builder could not be serialised with {serializer_name} "
+                f"for process isolation: {e}\n"
+                "Ensure your model builder is a picklable function, class, or lambda. "
+                "Notebook cells that reference closed-over variables may fail "
+                "with standard pickle; install cloudpickle for broader support."
+            )
+
+        # Check data size
+        try:
+            import sys
+
+            data_size = sys.getsizeof(_serializer.dumps(self.train_data))
+            if data_size > 500_000_000:
+                warnings.warn(
+                    f"Training data is large ({data_size / 1e6:.0f}MB). "
+                    "Process isolation may use significant memory for serialization."
+                )
+        except Exception:
+            warnings.warn(
+                "Could not determine data size. Process isolation may have issues "
+                "with non-picklable data types like tf.data.Dataset"
+            )
 
         # Check if data is picklable (warn if large)
         try:

@@ -481,19 +481,11 @@ if TENSORFLOW_AVAILABLE:
                 self.predictions = raw_predictions.flatten().astype(float)
             else:
                 if n_outputs == 1:
-                    # >= 0.5: a sigmoid output of exactly 0.5 (maximum uncertainty)
-                    # is assigned to class 1, consistent with sklearn convention.
                     self.predictions = (raw_predictions.flatten() >= 0.5).astype(int)
                 else:
                     self.predictions = np.argmax(raw_predictions, axis=1).astype(int)
 
-            if self.predictions is None:  # pragma: no branch
-                raise ModelError(
-                    "KerasModelWrapper.predict() completed but self.predictions is None. "
-                    "This is an internal bug in the wrapper.",
-                    operation="predict",
-                )
-            return self.predictions
+                return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
             """
@@ -944,13 +936,14 @@ if SKLEARN_AVAILABLE:
                 )
 
         def predict(self, data: np.ndarray, **kwargs) -> np.ndarray:
-            self.predictions = self.model.predict(data, **kwargs)
-            if self.predictions is None:  # pragma: no branch
+            raw = self.model.predict(data, **kwargs)
+            if raw is None:
                 raise ModelError(
-                    "ScikitLearnModelWrapper.predict() completed but self.predictions is None. "
-                    "This is an internal bug in the wrapper.",
+                    "sklearn model.predict() returned None. "
+                    "This is unexpected behaviour from the underlying estimator.",
                     operation="predict",
                 )
+            self.predictions = raw
             return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
@@ -1369,13 +1362,8 @@ if PYTORCH_AVAILABLE:
                     outputs = outputs.squeeze(-1)
                 self.predictions = outputs.cpu().numpy()
 
-            if self.predictions is None:  # pragma: no branch
-                raise ModelError(
-                    "PyTorchModelWrapper.predict() completed but self.predictions is None. "
-                    "This is an internal bug in the wrapper.",
-                    operation="predict",
-                )
-            return self.predictions
+                # self.predictions was just assigned above; return directly.
+                return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
             """

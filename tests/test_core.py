@@ -451,6 +451,20 @@ class TestScikitLearnWrapperPredict:
         wrapper = ScikitLearnModelWrapper(model_class(random_state=42))
         assert wrapper.model.random_state == 42
 
+    def test_sklearn_predict_returns_array_not_none(self):
+        """predict() must return a numpy array, never None."""
+        from sklearn.tree import DecisionTreeClassifier
+
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((30, 3))
+        y = (X[:, 0] > 0).astype(int)
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier(random_state=0))
+        wrapper.fit((X[:24], y[:24]))
+        result = wrapper.predict(X[24:])
+        assert result is not None
+        assert isinstance(result, np.ndarray)
+        assert len(result) == 6
+
 
 @pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not available")
 class TestScikitLearnWrapperEdgeCases:

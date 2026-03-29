@@ -1247,3 +1247,32 @@ class TestTabularDataHandlerCoverage2:
         handler = TabularDataHandler(df, target_column="label")
         with pytest.raises(ValueError):
             handler.load(test_split=0.6, val_split=0.5)
+
+
+class TestDeprecatedHandlerWarningVisibility:
+
+    def test_text_data_handler_emits_user_warning(self):
+        """TextDataHandler must emit UserWarning (not DeprecationWarning) so it
+        is visible without custom warning filters."""
+        from unittest.mock import patch
+
+        with patch("ictonyx.data.HAS_TF_PREPROCESSING", True):
+            import warnings
+
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                try:
+                    from ictonyx.data import TextDataHandler
+
+                    TextDataHandler(data_path="/nonexistent/fake.csv")
+                except Exception:
+                    pass
+            user_warnings = [
+                x
+                for x in w
+                if issubclass(x.category, UserWarning) and "deprecated" in str(x.message).lower()
+            ]
+            assert len(user_warnings) > 0, (
+                "TextDataHandler must emit UserWarning. "
+                "DeprecationWarning is silenced by default."
+            )

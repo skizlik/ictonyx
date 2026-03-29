@@ -161,10 +161,16 @@ class ModelConfig:
         return self.params.items()
 
     def copy(self) -> "ModelConfig":
-        """Create a deep copy of the configuration."""
+        """Create a deep copy of the configuration.
+
+        The frozen state is preserved: a frozen config produces a frozen copy.
+        """
         import copy
 
-        return ModelConfig(copy.deepcopy(self.params))
+        new = ModelConfig(copy.deepcopy(self.params))
+        if self._frozen:
+            new.freeze()
+        return new
 
     def freeze(self) -> "ModelConfig":
         """Make this config read-only to prevent mutation after construction.

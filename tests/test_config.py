@@ -348,3 +348,31 @@ class TestModelConfigNumpyInteger:
             config = ModelConfig()
             config.epochs = epochs  # this was raising ValueError before the fix
             assert config.epochs == int(epochs)
+
+
+class TestModelConfigCopy:
+
+    def test_copy_unfrozen_config_is_mutable(self):
+        config = ModelConfig({"epochs": 10})
+        copied = config.copy()
+        copied.set("epochs", 20)  # should not raise
+        assert copied.get("epochs") == 20
+
+    def test_copy_frozen_config_is_also_frozen(self):
+        """A frozen config must produce a frozen copy."""
+        config = ModelConfig({"epochs": 10}).freeze()
+        copied = config.copy()
+        with pytest.raises(RuntimeError):
+            copied.set("epochs", 20)
+
+    def test_copy_does_not_mutate_original(self):
+        config = ModelConfig({"epochs": 10})
+        copied = config.copy()
+        copied.set("epochs", 99)
+        assert config.get("epochs") == 10
+
+    def test_copy_frozen_does_not_mutate_original(self):
+        config = ModelConfig({"epochs": 10}).freeze()
+        copied = config.copy()
+        # Even though copy is frozen, original should be unchanged
+        assert config.get("epochs") == 10

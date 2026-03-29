@@ -504,6 +504,48 @@ class TestScikitLearnWrapperEdgeCases:
         with pytest.warns(UserWarning, match="unrecognized"):
             wrapper.fit((X, y), totally_fake_kwarg=999)
 
+    def test_evaluate_regression_excludes_classification_metrics(self):
+        """Regression evaluate() must not include precision, recall, or f1."""
+        import numpy as np
+        from sklearn.linear_model import LinearRegression
+
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((50, 3))
+        y = X @ np.array([1.0, -0.5, 0.3]) + rng.normal(0, 0.1, 50)
+
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        wrapper.fit((X[:40], y[:40]))
+        metrics = wrapper.evaluate((X[40:], y[40:]))
+
+        assert "precision" not in metrics, (
+            "Regression evaluate() must not compute precision. "
+            "Check that the precision/recall/f1 block is inside if is_classifier:."
+        )
+        assert "recall" not in metrics
+        assert "f1" not in metrics
+        assert "r2" in metrics
+        assert "mse" in metrics
+        assert "mae" in metrics
+
+    def test_evaluate_classification_still_includes_precision_recall_f1(self):
+        """Classification evaluate() must still return precision, recall, f1."""
+        import numpy as np
+        from sklearn.tree import DecisionTreeClassifier
+
+        rng = np.random.default_rng(1)
+        X = rng.standard_normal((60, 4))
+        y = (X[:, 0] > 0).astype(int)
+
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier(random_state=0))
+        wrapper.fit((X[:45], y[:45]))
+        metrics = wrapper.evaluate((X[45:], y[45:]))
+
+        assert "precision" in metrics
+        assert "recall" in metrics
+        assert "f1" in metrics
+        assert "accuracy" in metrics
+        assert "r2" not in metrics
+
 
 @pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not available")
 class TestScikitLearnWrapperExtended:

@@ -178,7 +178,7 @@ def compare_models(
     models: List[Any],
     data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray]],
     target_column: Optional[str] = None,
-    runs: int = 5,
+    runs: int = 10,
     epochs: int = 10,
     metric: str = "val_accuracy",
     seed: Optional[int] = None,

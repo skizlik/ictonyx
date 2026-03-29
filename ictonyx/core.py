@@ -993,24 +993,26 @@ if SKLEARN_AVAILABLE:
             if is_classifier:
                 metrics["accuracy"] = accuracy_score(y_test, y_pred)
 
-            try:
-                from sklearn.metrics import f1_score, precision_score, recall_score
+                try:
+                    from sklearn.metrics import f1_score, precision_score, recall_score
 
-                # Use the class count from training, not from the test batch.
-                # A small or imbalanced test batch may be missing some classes,
-                # causing np.unique(y_test) to return fewer classes than the model
-                # actually knows about and selecting the wrong averaging strategy.
-                # getattr fallback: if evaluate() is called before fit() (e.g. on a
-                # freshly loaded model), fall back to the test-set count.
-                n_classes = getattr(self, "_n_classes", len(np.unique(y_test)))
-                average = "binary" if n_classes == 2 else "weighted"
-                metrics["precision"] = precision_score(
-                    y_test, y_pred, average=average, zero_division=0
-                )
-                metrics["recall"] = recall_score(y_test, y_pred, average=average, zero_division=0)
-                metrics["f1"] = f1_score(y_test, y_pred, average=average, zero_division=0)
-            except Exception as exc:
-                logger.warning(f"Could not compute precision/recall/f1: {exc}")
+                    # Use the class count from training, not from the test batch.
+                    # A small or imbalanced test batch may be missing some classes,
+                    # causing np.unique(y_test) to return fewer classes than the model
+                    # actually knows about and selecting the wrong averaging strategy.
+                    # getattr fallback: if evaluate() is called before fit() (e.g. on a
+                    # freshly loaded model), fall back to the test-set count.
+                    n_classes = getattr(self, "_n_classes", len(np.unique(y_test)))
+                    average = "binary" if n_classes == 2 else "weighted"
+                    metrics["precision"] = precision_score(
+                        y_test, y_pred, average=average, zero_division=0
+                    )
+                    metrics["recall"] = recall_score(
+                        y_test, y_pred, average=average, zero_division=0
+                    )
+                    metrics["f1"] = f1_score(y_test, y_pred, average=average, zero_division=0)
+                except Exception as exc:
+                    logger.warning(f"Could not compute precision/recall/f1: {exc}")
 
             try:
                 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score

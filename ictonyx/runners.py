@@ -8,6 +8,7 @@ import gc
 import itertools
 import random
 import warnings
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -154,6 +155,27 @@ class ExperimentRunner:
         if use_process_isolation:
             self._validate_process_isolation()
 
+    @staticmethod
+    @contextmanager
+    def _deterministic_cudnn():
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                prev_det = torch.backends.cudnn.deterministic
+                prev_bench = torch.backends.cudnn.benchmark
+                torch.backends.cudnn.deterministic = True
+                torch.backends.cudnn.benchmark = False
+                try:
+                    yield
+                finally:
+                    torch.backends.cudnn.deterministic = prev_det
+                    torch.backends.cudnn.benchmark = prev_bench
+            else:
+                yield
+        except ImportError:
+            yield
+
     def _validate_process_isolation(self):
         """Validate that process isolation can work with current setup.
 
@@ -232,8 +254,6 @@ class ExperimentRunner:
             torch.manual_seed(seed)
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(seed)
-                torch.backends.cudnn.deterministic = True
-                torch.backends.cudnn.benchmark = False
         except ImportError:
             pass
 
@@ -423,14 +443,15 @@ class ExperimentRunner:
             # Build model
             wrapped_model = self.model_builder(self.model_config)
 
-            # Train
-            wrapped_model.fit(
-                train_data=self.train_data,
-                validation_data=self.val_data,
-                epochs=epochs,
-                batch_size=self.model_config.get("batch_size", 32),
-                verbose=self.model_config.get("verbose", 0),
-            )
+            # Train — use deterministic cudnn for reproducibility, restore after
+            with self._deterministic_cudnn():
+                wrapped_model.fit(
+                    train_data=self.train_data,
+                    validation_data=self.val_data,
+                    epochs=epochs,
+                    batch_size=self.model_config.get("batch_size", 32),
+                    verbose=self.model_config.get("verbose", 0),
+                )
 
             # Extract training result
             if wrapped_model.training_result is None:
@@ -459,10 +480,11 @@ class ExperimentRunner:
             # Evaluate on test data
             if self.test_data is not None:
                 try:
-                    test_metrics = wrapped_model.evaluate(data=self.test_data)
-                    self.final_test_metrics.append({"run_id": run_id, **test_metrics})
-                    for key, value in test_metrics.items():
-                        self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
+                    with self._deterministic_cudnn():
+                        test_metrics = wrapped_model.evaluate(data=self.test_data)
+                        self.final_test_metrics.append({"run_id": run_id, **test_metrics})
+                        for key, value in test_metrics.items():
+                            self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
                 except Exception as e:
                     self._run_log(f"   Warning: Test evaluation failed: {e}", level="warning")
 

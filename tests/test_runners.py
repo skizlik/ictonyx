@@ -1499,3 +1499,80 @@ class TestRunSeedInjection:
             "Got None — check _run_single_fit_standard."
         )
         assert len(set(received_seeds)) == 3, "Each run must receive a distinct seed."
+
+
+class TestDeterministicCudnn:
+    """Tests for ExperimentRunner._deterministic_cudnn() context manager."""
+
+    def test_context_manager_exists(self):
+        """_deterministic_cudnn must be a static method on ExperimentRunner."""
+        from ictonyx.runners import ExperimentRunner
+
+        assert hasattr(
+            ExperimentRunner, "_deterministic_cudnn"
+        ), "_deterministic_cudnn context manager is missing from ExperimentRunner."
+
+    def test_context_manager_does_not_raise_without_cuda(self):
+        """Must not raise when CUDA is unavailable or torch is absent."""
+        from ictonyx.runners import ExperimentRunner
+
+        # Should work on any machine regardless of GPU availability
+        with ExperimentRunner._deterministic_cudnn():
+            pass  # must not raise
+
+    def test_context_manager_restores_settings_when_torch_available(self):
+        """If torch is installed, prior cudnn settings must be restored on exit."""
+        from ictonyx.runners import ExperimentRunner
+
+        try:
+            import torch
+        except ImportError:
+            pytest.skip("PyTorch not installed")
+
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA not available — cudnn settings irrelevant")
+
+        # Set known prior state
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
+
+        with ExperimentRunner._deterministic_cudnn():
+            # Inside: determinism must be enabled
+            assert torch.backends.cudnn.deterministic is True
+            assert torch.backends.cudnn.benchmark is False
+
+        # After: prior state must be restored
+        assert (
+            torch.backends.cudnn.deterministic is False
+        ), "cudnn.deterministic was not restored after context exit."
+        assert (
+            torch.backends.cudnn.benchmark is True
+        ), "cudnn.benchmark was not restored after context exit."
+
+    def test_context_manager_restores_on_exception(self):
+        """cudnn settings must be restored even when an exception is raised inside."""
+        from ictonyx.runners import ExperimentRunner
+
+        try:
+            import torch
+        except ImportError:
+            pytest.skip("PyTorch not installed")
+
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA not available")
+
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
+
+        try:
+            with ExperimentRunner._deterministic_cudnn():
+                raise RuntimeError("simulated training failure")
+        except RuntimeError:
+            pass
+
+        assert (
+            torch.backends.cudnn.deterministic is False
+        ), "cudnn.deterministic was not restored after exception."
+        assert (
+            torch.backends.cudnn.benchmark is True
+        ), "cudnn.benchmark was not restored after exception."

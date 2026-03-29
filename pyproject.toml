@@ -39,17 +39,23 @@ tensorflow = {version = "^2.16.0", optional = true}
 keras      = {version = "^3.0.0",  optional = true}
 torch      = {version = "^2.0.0",  optional = true}
 mlflow     = {version = "^2.0.0",  optional = true}
+shap     = {version = "^0.43.0", optional = true}
+hyperopt = {version = "^0.2.7",  optional = true}
+joblib   = {version = "^1.2.0",  optional = true}
 
 [tool.poetry.extras]
 tensorflow = ["tensorflow", "keras"]
 torch      = ["torch"]
 mlflow     = ["mlflow"]
-sklearn    = ["scikit-learn"]
+sklearn    = ["scikit-learn", "joblib"]
+explain    = ["shap"]
+tuning     = ["hyperopt"]
 isolation  = ["cloudpickle", "psutil"]
 progress   = ["tqdm"]
-ml         = ["tensorflow", "keras", "torch", "mlflow"]
+ml         = ["tensorflow", "keras", "torch", "mlflow", "shap", "hyperopt"]
 all        = ["scikit-learn", "cloudpickle", "psutil", "tqdm",
-              "tensorflow", "keras", "torch", "mlflow"]
+              "tensorflow", "keras", "torch", "mlflow",
+              "shap", "hyperopt", "joblib"]
 
 [tool.poetry.group.ml.dependencies]
 tensorflow = "^2.16.0"

@@ -1152,7 +1152,7 @@ def paired_wilcoxon_test(
         )
 
     try:
-        stat, p = wilcoxon(nonzero)
+        stat, p = wilcoxon(nonzero, method="auto")
         result.statistic = float(stat)
         result.p_value = float(p)
         direction = "A" if float(differences.median()) > 0 else "B"

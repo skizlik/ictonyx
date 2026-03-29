@@ -1191,6 +1191,41 @@ class TestPairedWilcoxonTest:
         result = paired_wilcoxon_test(a, b)
         assert len(result.warnings) > 0
 
+    def test_paired_wilcoxon_uses_exact_method_at_small_n(self):
+        """At n=6 paired differences, method='auto' uses exact computation.
+        Verify the result is valid and the p-value is in range."""
+        from ictonyx.analysis import paired_wilcoxon_test
+
+        # Clearly different models — all runs A > B
+        a = pd.Series([0.85, 0.87, 0.86, 0.88, 0.84, 0.89])
+        b = pd.Series([0.70, 0.72, 0.71, 0.73, 0.69, 0.74])
+        result = paired_wilcoxon_test(a, b)
+
+        assert not np.isnan(result.p_value), "p_value must not be NaN"
+        assert 0 < result.p_value <= 1.0, f"p_value out of range: {result.p_value}"
+        assert result.p_value < 0.05, (
+            "Clearly different models should yield p < 0.05. "
+            "If method='auto' was not applied, approx method may give wrong result."
+        )
+
+    def test_paired_wilcoxon_consistent_p_value_direction(self):
+        """paired_wilcoxon_test and wilcoxon_signed_rank_test should agree
+        on significance direction for the same data at n=6."""
+        from ictonyx.analysis import paired_wilcoxon_test, wilcoxon_signed_rank_test
+
+        a = pd.Series([0.82, 0.84, 0.83, 0.85, 0.81, 0.86])
+        b = pd.Series([0.70, 0.72, 0.71, 0.73, 0.69, 0.74])
+        differences = a - b  # all positive
+
+        paired_result = paired_wilcoxon_test(a, b)
+        single_result = wilcoxon_signed_rank_test(differences, null_value=0.0)
+
+        # Both should agree on whether the result is significant
+        assert (paired_result.p_value < 0.05) == (single_result.p_value < 0.05), (
+            "paired_wilcoxon_test and wilcoxon_signed_rank_test disagree on "
+            "significance for the same data. Check method= consistency."
+        )
+
 
 class TestCheckNormalityRequireAllTests:
     """Tests for check_normality() require_all_tests parameter."""

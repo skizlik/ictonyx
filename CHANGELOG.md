@@ -16,6 +16,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.14] — 2026-03-29
+
+### Fixed — Silent correctness
+- `ScikitLearnModelWrapper.evaluate()`: precision, recall, and F1 were
+  computed on regression models due to a `try` block outside `if is_classifier:`.
+  On regression models this produced nonsensical metrics or swallowed exceptions
+  silently. The block is now correctly gated behind `is_classifier`.
+- `_build_instance_cloner()`: unknown instance types now raise `ValueError`
+  instead of silently reusing the same instance across all runs, which caused
+  trained weights to leak between runs and invalidated study independence.
+- `_run_single_fit_standard()`: `run_seed` is now injected into `model_config`
+  before `model_builder()`, matching isolated mode. Previously, class-based
+  sklearn builders received `random_state=None` in standard mode.
+- `PyTorchModelWrapper.predict_proba()`: single-output sigmoid binary classifiers
+  (output shape `(n, 1)`) now return valid probability pairs via `sigmoid`.
+  `softmax` on `(n, 1)` produces all-ones, not probabilities.
+
+### Fixed — PyTorch / GPU
+- `ExperimentRunner`: `cudnn.deterministic` and `cudnn.benchmark` are now
+  restored to their prior values after each run via a `_deterministic_cudnn()`
+  context manager. Previously these were set permanently, silently degrading
+  GPU throughput in any PyTorch code running in the same process afterwards.
+
+### Fixed — Statistical correctness
+- `paired_wilcoxon_test()`: added `method='auto'`, matching the fix applied
+  to `wilcoxon_signed_rank_test()` in v0.3.13. Ensures exact computation at
+  small n rather than the normal approximation.
+- `compare_models()`: default `runs` corrected to 10, matching
+  `variability_study()` and the v0.3.13 CHANGELOG.
+- Warning threshold raised from `runs < 10` to `runs < 20` in both
+  `variability_study()` and `compare_models()`, matching the `>= 20`
+  recommendation stated in the warning message.
+
+### Fixed — Config and process isolation
+- `ModelConfig.copy()`: frozen state is now propagated to the copy. Previously
+  a frozen config became mutable after copying.
+- `_validate_process_isolation()`: now uses `cloudpickle` when available,
+  matching the serialiser used during execution. Previously, lambdas and
+  notebook-defined functions were incorrectly rejected by validation.
+
+### Fixed — Packaging and output
+- `shap`, `hyperopt`, and `joblib` added to pip-installable extras:
+  `ictonyx[explain]`, `ictonyx[tuning]`, and `ictonyx[sklearn]` respectively.
+- `TextDataHandler` and `TimeSeriesDataHandler`: deprecation warnings changed
+  from `DeprecationWarning` (silenced by Python by default outside `__main__`)
+  to `UserWarning`, ensuring visibility in notebooks and imported modules.
+- `VariabilityStudyResults.summarize()`: SD label clarified to `SD (sample, N-1)`
+  to distinguish Bessel-corrected sample SD from population SD.
+
+### Internal
+- Removed unreachable `if self.predictions is None` guards from `predict()`
+  in all three model wrappers. The branch was dead by construction and the
+  `# pragma: no branch` annotation was suppressing coverage tooling.
+
+---
+
 ## [0.3.13] — 2026-03-28
 
 ### Fixed — Critical (statistical correctness)

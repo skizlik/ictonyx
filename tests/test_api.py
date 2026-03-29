@@ -393,3 +393,63 @@ class TestGetModelBuilderEdgeCases:
 
         builder = _get_model_builder(my_builder)
         assert callable(builder)
+
+
+class TestVariabilityStudy:
+    """VariabilityStudy tests."""
+
+    def test_variability_study_warns_when_runs_lt_20(small_df):
+        """runs=15 must trigger the low-power warning."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with (
+                patch("ictonyx.api._run_study"),
+                patch("ictonyx.api.auto_resolve_handler"),
+                patch("ictonyx.api._get_model_builder"),
+            ):
+                try:
+                    api.variability_study(
+                        model=MagicMock,
+                        data=small_df,
+                        target_column="target",
+                        runs=15,
+                        seed=42,
+                    )
+                except Exception:
+                    pass
+        low_power = [
+            x
+            for x in w
+            if issubclass(x.category, UserWarning) and "insufficient" in str(x.message).lower()
+        ]
+        assert len(low_power) > 0, "runs=15 should trigger the low-power warning"
+
+    def test_variability_study_no_warning_at_runs_20(small_df):
+        """runs=20 must NOT trigger the low-power warning."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with (
+                patch("ictonyx.api._run_study"),
+                patch("ictonyx.api.auto_resolve_handler"),
+                patch("ictonyx.api._get_model_builder"),
+            ):
+                try:
+                    api.variability_study(
+                        model=MagicMock,
+                        data=small_df,
+                        target_column="target",
+                        runs=20,
+                        seed=42,
+                    )
+                except Exception:
+                    pass
+        low_power = [
+            x
+            for x in w
+            if issubclass(x.category, UserWarning) and "insufficient" in str(x.message).lower()
+        ]
+        assert len(low_power) == 0, "runs=20 must not trigger the low-power warning"

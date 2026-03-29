@@ -131,7 +131,7 @@ def variability_study(
 
     set_verbose(verbose)
 
-    if runs < 10:
+    if runs < 20:
         warnings.warn(
             f"runs={runs} may be insufficient for reliable statistical inference. "
             "At n=5, Mann-Whitney U has very low power against small effects. "
@@ -240,7 +240,7 @@ def compare_models(
 
     set_verbose(verbose)
 
-    if runs < 10:
+    if runs < 20:
         warnings.warn(
             f"runs={runs} may be insufficient for reliable statistical inference. "
             "At n=5, Mann-Whitney U has very low power against small effects. "

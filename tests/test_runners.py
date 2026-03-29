@@ -351,6 +351,19 @@ class TestVariabilityStudyResults:
         assert "val_accuracy:" in summary
         assert "Mean:" in summary
 
+    def test_summarize_sd_label_specifies_sample(self):
+        """summarize() output must indicate sample SD (ddof=1)."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[pd.DataFrame({"val_accuracy": [0.8, 0.82, 0.79]}) for _ in range(5)],
+            final_metrics={"val_accuracy": [0.80, 0.82, 0.79, 0.81, 0.78]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        summary = results.summarize()
+        assert "sample" in summary.lower() or "N-1" in summary, (
+            "summarize() must label SD as sample (N-1) to avoid ambiguity " "in publication use."
+        )
+
 
 class TestTestAgainstNull:
     """VariabilityStudyResults.test_against_null() — EXT-2."""
@@ -558,7 +571,7 @@ class TestVariabilityStudyResultsExtended:
         assert "train_accuracy" in summary
         assert "Seed: 99" in summary
         assert "Mean:" in summary
-        assert "Std:" in summary
+        assert "SD (sample" in summary
 
     def test_n_runs(self):
         """Test n_runs property."""
@@ -1180,11 +1193,11 @@ class TestDdof1:
         expected_std = float(np.std(values, ddof=1))
         summary = results.summarize()
         for line in summary.split("\n"):
-            if "Std:" in line:
+            if "SD (sample" in line and ":" in line:
                 reported = float(line.split(":")[-1].strip())
-                np.testing.assert_allclose(reported, round(expected_std, 4), atol=0.00005)
+                np.testing.assert_allclose(reported, expected_std, atol=0.00005)
                 return
-        pytest.fail("No Std line found in summarize() output")
+        pytest.fail("No SD (sample) line found in summarize() output")
 
 
 class TestInputValidation:

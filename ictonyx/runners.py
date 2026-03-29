@@ -817,7 +817,7 @@ class VariabilityStudyResults:
                     [
                         f"{metric_name}:",
                         f"  Mean: {np.mean(values):.4f}",
-                        f"  Std:  {np.std(values, ddof=1):.4f}",
+                        f"  SD (sample, N-1):  {np.std(values, ddof=1):.4f}",
                         f"  Min:  {np.min(values):.4f}",
                         f"  Max:  {np.max(values):.4f}",
                     ]

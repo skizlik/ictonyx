@@ -453,3 +453,40 @@ class TestVariabilityStudy:
             if issubclass(x.category, UserWarning) and "insufficient" in str(x.message).lower()
         ]
         assert len(low_power) == 0, "runs=20 must not trigger the low-power warning"
+
+
+class TestBuilderInstanceClonerSafety:
+    def test_build_instance_cloner_raises_for_unknown_instance(self):
+        """An unknown instance type must raise ValueError, not silently reuse state."""
+        from ictonyx.api import _get_model_builder
+
+        class UnknownModel:
+            def fit(self, X, y):
+                pass
+
+            def predict(self, X):
+                return X
+
+        instance = UnknownModel()
+        with pytest.raises(ValueError, match="cannot be cloned"):
+            _get_model_builder(instance)
+
+    def test_build_instance_cloner_sklearn_clones_correctly(self):
+        """sklearn instances must be cloned, not reused."""
+        from sklearn.tree import DecisionTreeClassifier
+
+        from ictonyx.api import _get_model_builder
+
+        instance = DecisionTreeClassifier(max_depth=3)
+        builder = _get_model_builder(instance)
+
+        # Build twice — must produce different objects
+        from ictonyx.config import ModelConfig
+
+        config = ModelConfig({})
+        wrapper_1 = builder(config)
+        wrapper_2 = builder(config)
+        assert wrapper_1 is not wrapper_2, (
+            "Each builder call must produce a new wrapper instance. "
+            "If the same instance is returned, weights would leak between runs."
+        )

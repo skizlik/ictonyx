@@ -449,13 +449,17 @@ def _build_instance_cloner(model: Any) -> Callable:
             "  ix.variability_study(model=build_model, ...)"
         )
 
-    # Unknown instance with a fit method — warn and allow, but this is risky
-    settings.logger.warning(
-        f"Passed an instance of {type(model).__name__}. Cannot clone — "
-        f"weights may persist between runs. Consider passing a class or "
-        f"builder function for independent runs."
+    # Unknown instance with a fit method — cannot safely clone.
+    # Reusing the same instance across runs would leak trained weights,
+    # invalidating the independence assumption of the variability study.
+    raise ValueError(
+        f"Passed an instance of {type(model).__name__} that cannot be cloned. "
+        "Reusing the same instance across runs would leak trained weights between "
+        "runs, invalidating the variability study.\n\n"
+        "Pass a class or builder function instead:\n"
+        f"  ix.variability_study(model={type(model).__name__}, ...)\n"
+        "  ix.variability_study(model=lambda config: MyModel(**config.params), ...)"
     )
-    return lambda conf: _ensure_wrapper(model)
 
 
 def _ensure_wrapper(obj: Any) -> BaseModelWrapper:

@@ -409,7 +409,11 @@ class ExperimentRunner:
 
         # Set deterministic seeds for this run
         if self._child_seeds:
-            self._set_seeds(self._child_seeds[run_id - 1])
+            child_seed = self._child_seeds[run_id - 1]
+            self._set_seeds(child_seed)
+            # Inject run_seed into config so class-based builders can pass it
+            # as random_state. Mirrors the behaviour of isolated mode.
+            self.model_config.set("run_seed", child_seed)
 
         # Log run start (Metric Tracker)
         self.tracker.log_params({"run_id": run_id, "mode": "standard"})

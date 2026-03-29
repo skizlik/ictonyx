@@ -1453,3 +1453,49 @@ class TestProcessIsolationValidation:
             # Just verify the logic path — full integration test requires
             # actual cloudpickle installation
         assert True  # if no ImportError, cloudpickle path is reachable
+
+
+class TestRunSeedInjection:
+
+    def test_run_seed_present_in_config_during_standard_mode(self):
+        """Standard mode must inject run_seed into model_config before model build."""
+        import numpy as np
+
+        from ictonyx.config import ModelConfig
+        from ictonyx.data import ArraysDataHandler
+        from ictonyx.runners import ExperimentRunner
+
+        received_seeds = []
+
+        def capturing_builder(config):
+            received_seeds.append(config.get("run_seed"))
+            from unittest.mock import MagicMock
+
+            from ictonyx.core import TrainingResult
+
+            wrapper = MagicMock()
+            wrapper.training_result = TrainingResult(
+                history={"val_accuracy": [0.8], "train_accuracy": [0.85]}
+            )
+            wrapper.fit.return_value = None
+            return wrapper
+
+        X = np.random.default_rng(0).standard_normal((30, 3))
+        y = (X[:, 0] > 0).astype(int)
+        handler = ArraysDataHandler(X, y)
+
+        runner = ExperimentRunner(
+            model_builder=capturing_builder,
+            data_handler=handler,
+            model_config=ModelConfig({"epochs": 1}),
+            use_process_isolation=False,
+            verbose=False,
+        )
+        runner.run_study(num_runs=3, epochs_per_run=1)
+
+        assert len(received_seeds) == 3
+        assert all(s is not None for s in received_seeds), (
+            "run_seed must be injected into model_config in standard mode. "
+            "Got None — check _run_single_fit_standard."
+        )
+        assert len(set(received_seeds)) == 3, "Each run must receive a distinct seed."

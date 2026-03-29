@@ -1285,3 +1285,49 @@ class TestScikitLearnWrapperPredict2:
 
         wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
         wrapper._cleanup_implementation()  # must not raise
+
+
+class TestPyTorchPredictProbaSingleOutput:
+    """predict_proba() must handle single-output binary classifiers correctly."""
+
+    @pytest.mark.skipif(
+        not __import__("ictonyx.core", fromlist=["PYTORCH_AVAILABLE"]).PYTORCH_AVAILABLE,
+        reason="PyTorch not installed",
+    )
+    def test_predict_proba_single_output_returns_valid_probabilities(self):
+        """Single-output sigmoid binary classifier must return valid [0,1] probabilities."""
+        import numpy as np
+        import torch
+        import torch.nn as nn
+
+        from ictonyx.core import PyTorchModelWrapper
+
+        class SingleOutputBinaryNet(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = nn.Linear(4, 1)
+
+            def forward(self, x):
+                return self.linear(x)
+
+        wrapper = PyTorchModelWrapper(
+            model=SingleOutputBinaryNet(),
+            task="classification",
+        )
+        # Simulate trained state
+        X = np.random.default_rng(0).standard_normal((20, 4)).astype(np.float32)
+        proba = wrapper.predict_proba(X)
+
+        assert proba.shape == (20, 2), (
+            f"Expected shape (20, 2), got {proba.shape}. "
+            "Single-output binary must produce 2-column probability array."
+        )
+        # All rows must sum to 1.0
+        np.testing.assert_allclose(proba.sum(axis=1), np.ones(20), atol=1e-5)
+        # No column should be all-ones (which would indicate softmax on (n,1))
+        assert not np.allclose(
+            proba[:, 0], 1.0
+        ), "Class 0 probabilities are all 1.0 — softmax on (n,1) bug is present."
+        assert not np.allclose(
+            proba[:, 1], 1.0
+        ), "Class 1 probabilities are all 1.0 — softmax on (n,1) bug is present."

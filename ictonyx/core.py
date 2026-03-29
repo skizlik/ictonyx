@@ -1389,6 +1389,14 @@ if PYTORCH_AVAILABLE:
 
             with torch.no_grad():
                 outputs = self.model(X_t)
+
+                # Single-output sigmoid: binary classifier with one output neuron.
+                # softmax on (n, 1) produces all-ones rather than probabilities.
+                if outputs.dim() > 1 and outputs.shape[-1] == 1:
+                    p_pos = torch.sigmoid(outputs).squeeze(-1).cpu().numpy()
+                    return np.column_stack([1.0 - p_pos, p_pos])
+
+                # Multi-output softmax (standard multi-class case).
                 probabilities = torch.softmax(outputs, dim=1)
 
             return probabilities.cpu().numpy()

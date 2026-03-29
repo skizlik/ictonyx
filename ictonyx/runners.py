@@ -220,7 +220,7 @@ class ExperimentRunner:
         try:
             import sys
 
-            data_size = sys.getsizeof(pickle.dumps(self.train_data))
+            data_size = sys.getsizeof(_serializer.dumps(self.train_data))
             if data_size > 500_000_000:  # 500MB
                 warnings.warn(
                     f"Training data is large ({data_size / 1e6:.0f}MB). "

@@ -18,6 +18,12 @@ from ictonyx.runners import (
 )
 
 
+def _picklable_builder(config):
+    from unittest.mock import MagicMock
+
+    return MagicMock()
+
+
 class MockModel(BaseModelWrapper):
     """Mock model for testing."""
 
@@ -1423,13 +1429,13 @@ class TestProcessIsolationValidation:
             return MagicMock()
 
         runner = ExperimentRunner(
-            model_builder=builder,
+            model_builder=_picklable_builder,
             data_handler=ArraysDataHandler(np.zeros((20, 2)), np.zeros(20)),
             model_config=ModelConfig({}),
             use_process_isolation=False,
             verbose=False,
         )
-        runner.model_builder = builder
+        runner.model_builder = _picklable_builder
         runner.train_data = (np.zeros((16, 2)), np.zeros(16))
         runner._validate_process_isolation()  # must not raise
 

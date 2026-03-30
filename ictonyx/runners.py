@@ -183,10 +183,12 @@ class ExperimentRunner:
         back to standard pickle. This correctly validates lambdas and
         notebook-defined functions that cloudpickle supports but pickle does not.
         """
+        import pickle as _serializer
+
         try:
             import cloudpickle as _serializer
         except ImportError:
-            import pickle as _serializer
+            pass
 
         try:
             _serializer.dumps(self.model_builder)
@@ -200,21 +202,21 @@ class ExperimentRunner:
                 "with standard pickle; install cloudpickle for broader support."
             )
 
-    # Check data size and serialisability
-    try:
+        # Check data size and serialisability
         import sys
 
-        data_size = sys.getsizeof(_serializer.dumps(self.train_data))
-        if data_size > 500_000_000:
+        try:
+            data_size = sys.getsizeof(_serializer.dumps(self.train_data))
+            if data_size > 500_000_000:
+                warnings.warn(
+                    f"Training data is large ({data_size / 1e6:.0f}MB). "
+                    "Process isolation may use significant memory for serialization."
+                )
+        except Exception:
             warnings.warn(
-                f"Training data is large ({data_size / 1e6:.0f}MB). "
-                "Process isolation may use significant memory for serialization."
+                "Could not determine data size. Process isolation may have issues "
+                "with non-picklable data types like tf.data.Dataset"
             )
-    except Exception:
-        warnings.warn(
-            "Could not determine data size. Process isolation may have issues "
-            "with non-picklable data types like tf.data.Dataset"
-        )
 
     @staticmethod
     def _set_seeds(seed: int):

@@ -200,37 +200,21 @@ class ExperimentRunner:
                 "with standard pickle; install cloudpickle for broader support."
             )
 
-        # Check data size
-        try:
-            import sys
+    # Check data size and serialisability
+    try:
+        import sys
 
-            data_size = sys.getsizeof(_serializer.dumps(self.train_data))
-            if data_size > 500_000_000:
-                warnings.warn(
-                    f"Training data is large ({data_size / 1e6:.0f}MB). "
-                    "Process isolation may use significant memory for serialization."
-                )
-        except Exception:
+        data_size = sys.getsizeof(_serializer.dumps(self.train_data))
+        if data_size > 500_000_000:
             warnings.warn(
-                "Could not determine data size. Process isolation may have issues "
-                "with non-picklable data types like tf.data.Dataset"
+                f"Training data is large ({data_size / 1e6:.0f}MB). "
+                "Process isolation may use significant memory for serialization."
             )
-
-        # Check if data is picklable (warn if large)
-        try:
-            import sys
-
-            data_size = sys.getsizeof(_serializer.dumps(self.train_data))
-            if data_size > 500_000_000:  # 500MB
-                warnings.warn(
-                    f"Training data is large ({data_size / 1e6:.0f}MB). "
-                    "Process isolation may use significant memory for serialization."
-                )
-        except Exception:
-            warnings.warn(
-                "Could not determine data size. Process isolation may have issues "
-                "with non-picklable data types like tf.data.Dataset"
-            )
+    except Exception:
+        warnings.warn(
+            "Could not determine data size. Process isolation may have issues "
+            "with non-picklable data types like tf.data.Dataset"
+        )
 
     @staticmethod
     def _set_seeds(seed: int):
@@ -806,13 +790,13 @@ class VariabilityStudyResults:
         """Extract final metric values for each run (labeled run_1, run_2, ...).
 
         .. deprecated::
-            Use :meth:`get_metric_values` instead. ``get_final_metrics()``
-            will be removed in v0.5.0.
+            Emits :class:`UserWarning`. Use :meth:`get_metric_values` instead.
+            ``get_final_metrics()`` will be removed in v0.5.0.
         """
         warnings.warn(
             "get_final_metrics() is deprecated and will be removed in v0.5.0. "
             "Use get_metric_values() instead.",
-            DeprecationWarning,
+            UserWarning,
             stacklevel=2,
         )
         metrics = {}

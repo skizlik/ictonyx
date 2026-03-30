@@ -299,7 +299,7 @@ def check_equal_variances(
 
 def check_independence(
     data: pd.Series, max_lag: int = 5, alpha: float = 0.05
-) -> Tuple[bool, Dict[str, Any]]:
+) -> Tuple[Optional[bool], Dict[str, Any]]:
     """Check for autocorrelation that would violate the independence assumption.
 
     Computes autocorrelation at lags 1 through ``effective_max_lag`` and flags
@@ -332,13 +332,18 @@ def check_independence(
             threshold.
           - ``'max_autocorr'``: the largest absolute autocorrelation
             observed across all checked lags. ``0`` if no lags were checked.
-          - ``'threshold'``: the significance threshold used, equal to
-            ``norm.ppf(1 - alpha/2) / sqrt(n)``.
+          ``'threshold'``: the significance threshold at lag 1, equal to
+            ``norm.ppf(1 - alpha/2) / sqrt(n - 1)``. Thresholds at
+            higher lags are ``norm.ppf(1 - alpha/2) / sqrt(n - lag)``.
           - ``'n'``: the number of valid (non-NaN) observations.
 
-        Returns ``(False, {'error': '...'})`` immediately if the number of
-        valid observations is less than ``max_lag + 2``, without performing
-        any autocorrelation checks.
+        Returns:
+        Tuple of ``(is_independent, details_dict)`` where:
+
+        * ``is_independent`` is ``True`` if no lag exceeds the threshold,
+          ``False`` if at least one lag does, or ``None`` if the series is
+          too short to test (fewer than ``max_lag + 2`` observations).
+          Callers must handle ``None`` as "untestable", not as "dependent".
     """
 
     autocorr_results = {}
@@ -349,10 +354,11 @@ def check_independence(
 
     n = len(data.dropna())
     if n < max_lag + 2:
-        return False, {
+        return None, {
             "error": (
                 f"Series too short: {n} observations for max_lag={max_lag}. "
-                f"Need at least {max_lag + 2} observations."
+                f"Need at least {max_lag + 2} observations. "
+                "Independence could not be assessed."
             )
         }
 
@@ -363,7 +369,7 @@ def check_independence(
             if not np.isnan(autocorr):
                 autocorr_results[f"lag_{lag}"] = autocorr
 
-                se = 1.0 / np.sqrt(n)
+                se = 1.0 / np.sqrt(n - lag)
                 if abs(autocorr) > critical_value * se:
                     significant_lags.append(lag)
         except Exception:
@@ -678,12 +684,23 @@ def mann_whitney_test(
     is_indep1, indep_details1 = check_independence(clean1)
     is_indep2, indep_details2 = check_independence(clean2)
 
-    if not is_indep1 or not is_indep2:
+    if is_indep1 is False or is_indep2 is False:
+        # Explicitly False means the test ran and found autocorrelation.
+        # None means the series was too short to test — not a violation.
         result.warnings.append(
             "Data shows evidence of autocorrelation, violating independence assumption"
         )
 
-    result.assumptions_met["independence"] = is_indep1 and is_indep2
+    if is_indep1 is None or is_indep2 is None:
+        result.warnings.append(
+            "Independence could not be assessed: too few observations for "
+            "the autocorrelation test."
+        )
+
+    # Record assumption only when the test actually ran.
+    if is_indep1 is not None and is_indep2 is not None:
+        result.assumptions_met["independence"] = is_indep1 and is_indep2
+    # If either was untestable, omit the key rather than recording False.
     result.assumption_details["independence"] = {"group1": indep_details1, "group2": indep_details2}
 
     # Perform test
@@ -986,6 +1003,27 @@ def kruskal_wallis_test(
         # Add validation warnings
         result.warnings.extend(size_warnings)
         result.assumptions_met["adequate_sample_size"] = adequate_size
+
+        # Equal-variance assumption check (Levene's test).
+        # Kruskal-Wallis tests location; unequal variances can cause spurious
+        # rejection of H₀ unrelated to location differences.
+        if len(clean_groups) >= 2:
+            try:
+                levene_stat, levene_p = levene(*clean_groups)
+                equal_vars = levene_p > alpha
+                result.assumptions_met["equal_variances"] = equal_vars
+                result.assumption_details["levene"] = {
+                    "levene_statistic": float(levene_stat),
+                    "levene_p": float(levene_p),
+                }
+                if not equal_vars:
+                    result.warnings.append(
+                        f"Groups have unequal variances (Levene p={levene_p:.4f}). "
+                        "Kruskal-Wallis may detect variance differences rather than "
+                        "location differences. Interpret results with caution."
+                    )
+            except Exception:
+                pass  # Levene check is advisory; never fail the primary test
 
         # Calculate effect size (epsilon-squared)
         N = sum(len(group) for group in clean_groups)
@@ -1641,7 +1679,7 @@ def calculate_averaged_autocorr(
 
     autocorrs_np = np.array(autocorrs)
     mean_autocorr = np.nanmean(autocorrs_np, axis=0)
-    std_autocorr = np.nanstd(autocorrs_np, axis=0)
+    std_autocorr = np.nanstd(autocorrs_np, axis=0, ddof=1)
 
     lags = list(range(1, max_lag + 1))
 

@@ -249,12 +249,14 @@ class TestCheckIndependence:
     def test_short_data(self):
         data = pd.Series([1, 2, 3])
         is_indep, details = check_independence(data)
-        assert isinstance(is_indep, bool)
+        assert is_indep is None
 
-
-# ===================================================================
-#  Effect Size Calculations
-# ===================================================================
+    def test_check_independence_returns_none_for_short_series(self):
+        """Series with n < max_lag + 2 must return None, not False."""
+        short = pd.Series([0.8, 0.82, 0.79])  # n=3, default max_lag=5 → 3 < 7
+        result, details = check_independence(short)
+        assert result is None
+        assert "error" in details
 
 
 class TestCohensD:
@@ -420,7 +422,7 @@ class TestMannWhitneyTest:
         g1, g2 = clear_difference_groups
         result = mann_whitney_test(g1, g2)
         assert "adequate_sample_size" in result.assumptions_met
-        assert "independence" in result.assumptions_met
+        assert "independence" not in result.assumptions_met
 
     def test_nan_handling(self):
         g1 = pd.Series([1, 2, np.nan, 4, 5, 6])
@@ -443,6 +445,24 @@ class TestMannWhitneyTest:
         g2 = pd.Series([4, 5, 6])
         result = mann_whitney_test(g1, g2)
         assert len(result.warnings) > 0
+
+    def test_mann_whitney_short_series_does_not_flag_autocorrelation(self):
+        """Mann-Whitney on 3-run results must not warn that autocorrelation was detected."""
+        a = pd.Series([0.80, 0.82, 0.79])
+        b = pd.Series([0.75, 0.74, 0.76])
+        result = mann_whitney_test(a, b)
+        # Must not claim autocorrelation was *found* — only that it could not be tested.
+        detected_warnings = [
+            w for w in result.warnings if "evidence of autocorrelation" in w.lower()
+        ]
+        assert (
+            not detected_warnings
+        ), "Untestable series should not produce a detected-autocorrelation warning"
+        # The untestable warning is expected and acceptable.
+        untestable_warnings = [w for w in result.warnings if "could not be assessed" in w.lower()]
+        assert (
+            untestable_warnings
+        ), "Expected an 'Independence could not be assessed' warning for a short series"
 
 
 class TestWilcoxonSignedRankTest:
@@ -595,6 +615,28 @@ class TestKruskalWallisTest:
         }
         result = kruskal_wallis_test(groups)
         assert not np.isnan(result.statistic)
+
+    def test_kruskal_wallis_records_levene_result(self):
+        """KW result should contain Levene assumption check."""
+        groups = {
+            "a": pd.Series([0.80, 0.82, 0.79, 0.81, 0.80]),
+            "b": pd.Series([0.75, 0.74, 0.76, 0.75, 0.74]),
+            "c": pd.Series([0.70, 0.71, 0.69, 0.70, 0.71]),
+        }
+        result = kruskal_wallis_test(groups)
+        assert "equal_variances" in result.assumptions_met
+        assert "levene" in result.assumption_details
+
+    def test_kruskal_wallis_warns_on_unequal_variances(self):
+        """KW should warn when groups have substantially unequal variance."""
+        # One group with much higher spread
+        groups = {
+            "tight": pd.Series([0.80, 0.80, 0.80, 0.80, 0.80]),
+            "wide": pd.Series([0.50, 0.70, 0.90, 0.60, 0.85]),
+        }
+        result = kruskal_wallis_test(groups)
+        variance_warnings = [w for w in result.warnings if "variances" in w.lower()]
+        assert variance_warnings
 
 
 class TestKruskalWallisEffectSizeLabel:
@@ -1111,7 +1153,7 @@ class TestCheckIndependenceGuard:
         """n < max_lag + 2 must return (False, {'error': ...}), not silent True."""
         data = pd.Series([0.8, 0.82, 0.79])  # n=3, max_lag=5 → too short
         result, details = check_independence(data, max_lag=5)
-        assert result is False
+        assert result is None
         assert "error" in details
         assert "too short" in details["error"].lower()
 

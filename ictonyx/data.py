@@ -898,7 +898,6 @@ class TimeSeriesDataHandler(FileDataHandler):
         if not HAS_TF_PREPROCESSING:
             raise ImportError(
                 "TimeSeriesDataHandler requires tf.keras.preprocessing.sequence."
-                "TimeSeriesDataHandler requires tf.keras.preprocessing.sequence."
                 "TimeseriesGenerator, which was removed in Keras 3 / TF 2.16+. "
                 "Workaround: build a manual sliding-window dataset and use "
                 "ArraysDataHandler. Framework-agnostic support is planned for "

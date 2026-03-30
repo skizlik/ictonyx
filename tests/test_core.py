@@ -16,6 +16,10 @@ from ictonyx.core import (
     TrainingResult,
 )
 
+_PYTORCH_AVAILABLE = __import__("ictonyx.core", fromlist=["PYTORCH_AVAILABLE"]).PYTORCH_AVAILABLE
+
+SKIP_NO_TORCH = pytest.mark.skipif(not _PYTORCH_AVAILABLE, reason="PyTorch not installed")
+
 
 class DummyModel:
     """Dummy model for testing."""
@@ -279,6 +283,39 @@ class TestKerasModelWrapperPredict:
         assert wrapper.predictions[0] == 1
         assert wrapper.predictions[1] == 0
         assert wrapper.predictions[2] == 1
+
+    def test_regression_predict_returns_array_not_none(self):
+        """predict() must return its result, not None, for regression models."""
+        wrapper = self._make_regression_wrapper()
+        raw = np.array([[2.7], [0.03], [1.5]])
+        wrapper.model.predict = MagicMock(return_value=raw)
+        result = wrapper.predict(MagicMock())
+        assert result is not None
+        assert isinstance(result, np.ndarray)
+        np.testing.assert_array_equal(result, wrapper.predictions)
+
+    def test_regression_predict_returns_array_not_none(self):
+        """Regression predict() must return self.predictions, not None."""
+        wrapper = self._make_regression_wrapper()
+        raw = np.array([[2.7], [0.03], [1.5]])
+        wrapper.model.predict = MagicMock(return_value=raw)
+        result = wrapper.predict(MagicMock())
+        assert result is not None, (
+            "predict() returned None for Keras regression. "
+            "Add 'return self.predictions' to the regression branch."
+        )
+        assert isinstance(result, np.ndarray)
+        np.testing.assert_array_equal(result, wrapper.predictions)
+
+    def test_classification_predict_returns_array_not_none(self):
+        """Classification path already returned correctly — confirm it still does."""
+        wrapper = self._make_classification_wrapper()
+        raw = np.array([[0.3], [0.8], [0.6]])
+        wrapper.model.predict = MagicMock(return_value=raw)
+        result = wrapper.predict(MagicMock())
+        assert result is not None
+        assert isinstance(result, np.ndarray)
+        np.testing.assert_array_equal(result, wrapper.predictions)
 
 
 @pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not available")
@@ -1285,6 +1322,284 @@ class TestScikitLearnWrapperPredict2:
 
         wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
         wrapper._cleanup_implementation()  # must not raise
+
+
+@SKIP_NO_TORCH
+class TestPyTorchWrapperPredictReturnValue:
+    """
+    Regression tests for BUG-CORE-02.
+
+    PyTorchModelWrapper.predict() must return self.predictions for BOTH
+    task types. Prior to the fix, the classification branch set
+    self.predictions but fell through with no return statement, so callers
+    received None.
+
+    All tests here assert on the *return value* of predict(), not on the
+    wrapper attribute. Testing only the attribute (wrapper.predictions) is
+    what allowed the bug to survive the existing test suite undetected.
+    """
+
+    def _make_binary_classification_wrapper(self):
+        """
+        Lightweight 2-layer classifier: 4 inputs → 2 class logits.
+        Uses CrossEntropyLoss which requires integer labels and 2-d logits.
+        No training — we call predict() on random weights.
+        """
+        import torch
+        import torch.nn as nn
+
+        from ictonyx.core import PyTorchModelWrapper
+
+        model = nn.Sequential(
+            nn.Linear(4, 8),
+            nn.ReLU(),
+            nn.Linear(8, 2),  # 2 outputs → torch.max gives class 0 or 1
+        )
+        return PyTorchModelWrapper(
+            model=model,
+            criterion=nn.CrossEntropyLoss(),
+            optimizer_class=torch.optim.Adam,
+            optimizer_params={"lr": 0.001},
+            task="classification",
+            device="cpu",
+        )
+
+    def _make_multiclass_classification_wrapper(self):
+        """3-class classifier: 6 inputs → 3 class logits."""
+        import torch
+        import torch.nn as nn
+
+        from ictonyx.core import PyTorchModelWrapper
+
+        model = nn.Sequential(
+            nn.Linear(6, 16),
+            nn.ReLU(),
+            nn.Linear(16, 3),
+        )
+        return PyTorchModelWrapper(
+            model=model,
+            criterion=nn.CrossEntropyLoss(),
+            optimizer_class=torch.optim.Adam,
+            optimizer_params={"lr": 0.001},
+            task="classification",
+            device="cpu",
+        )
+
+    def _make_regression_wrapper(self):
+        """Simple regression wrapper for symmetric comparison."""
+        import torch
+        import torch.nn as nn
+
+        from ictonyx.core import PyTorchModelWrapper
+
+        model = nn.Sequential(
+            nn.Linear(4, 8),
+            nn.ReLU(),
+            nn.Linear(8, 1),
+        )
+        return PyTorchModelWrapper(
+            model=model,
+            criterion=nn.MSELoss(),
+            optimizer_class=torch.optim.Adam,
+            optimizer_params={"lr": 0.001},
+            task="regression",
+            device="cpu",
+        )
+
+    def _make_X(self, n_samples=20, n_features=4, seed=0):
+        rng = np.random.default_rng(seed)
+        return rng.standard_normal((n_samples, n_features)).astype(np.float32)
+
+    def _make_X6(self, n_samples=20, seed=0):
+        rng = np.random.default_rng(seed)
+        return rng.standard_normal((n_samples, 6)).astype(np.float32)
+
+    def test_binary_classification_predict_is_not_none(self):
+        """
+        BUG-CORE-02: binary classifier predict() must not return None.
+        This is the canonical regression test for the missing-return bug.
+        """
+        wrapper = self._make_binary_classification_wrapper()
+        X = self._make_X()
+        result = wrapper.predict(X)
+        assert result is not None, (
+            "predict() returned None for a binary classification task. "
+            "Add 'return self.predictions' to the classification branch."
+        )
+
+    def test_multiclass_classification_predict_is_not_none(self):
+        """predict() must not return None for 3-class output either."""
+        wrapper = self._make_multiclass_classification_wrapper()
+        X = self._make_X6()
+        result = wrapper.predict(X)
+        assert result is not None, "predict() returned None for a 3-class classification task."
+
+    def test_regression_predict_is_not_none(self):
+        """
+        Symmetric check: regression already worked before the fix, but we
+        test it here to ensure the fix did not break the regression path.
+        """
+        wrapper = self._make_regression_wrapper()
+        X = self._make_X()
+        result = wrapper.predict(X)
+        assert result is not None, (
+            "predict() returned None for a regression task — the fix broke " "the regression path."
+        )
+
+    def test_binary_classification_return_equals_attribute(self):
+        """Return value must be the same object as wrapper.predictions."""
+        wrapper = self._make_binary_classification_wrapper()
+        X = self._make_X()
+        result = wrapper.predict(X)
+        np.testing.assert_array_equal(
+            result,
+            wrapper.predictions,
+            err_msg=(
+                "predict() return value differs from wrapper.predictions. "
+                "The method must return self.predictions, not a copy."
+            ),
+        )
+
+    def test_multiclass_classification_return_equals_attribute(self):
+        wrapper = self._make_multiclass_classification_wrapper()
+        X = self._make_X6()
+        result = wrapper.predict(X)
+        np.testing.assert_array_equal(result, wrapper.predictions)
+
+    def test_regression_return_equals_attribute(self):
+        wrapper = self._make_regression_wrapper()
+        X = self._make_X()
+        result = wrapper.predict(X)
+        np.testing.assert_array_equal(result, wrapper.predictions)
+
+    def test_binary_classification_predict_shape(self):
+        """predict() for n_samples inputs must return a 1-D array of length n_samples."""
+        wrapper = self._make_binary_classification_wrapper()
+        n = 20
+        X = self._make_X(n_samples=n)
+        result = wrapper.predict(X)
+        assert result.shape == (n,), (
+            f"Expected shape ({n},), got {result.shape}. "
+            "Classification predict() must return a 1-D integer label array."
+        )
+
+    def test_multiclass_predict_shape(self):
+        wrapper = self._make_multiclass_classification_wrapper()
+        n = 15
+        X = self._make_X6(n_samples=n)
+        result = wrapper.predict(X)
+        assert result.shape == (n,), f"Expected shape ({n},), got {result.shape}."
+
+    def test_regression_predict_shape(self):
+        wrapper = self._make_regression_wrapper()
+        n = 20
+        X = self._make_X(n_samples=n)
+        result = wrapper.predict(X)
+        assert result.shape == (n,), f"Expected shape ({n},), got {result.shape}."
+
+    def test_binary_classification_predict_dtype_is_integer(self):
+        """Classification must return integer class indices, not floats."""
+        wrapper = self._make_binary_classification_wrapper()
+        X = self._make_X()
+        result = wrapper.predict(X)
+        assert np.issubdtype(result.dtype, np.integer), (
+            f"Classification predict() returned dtype {result.dtype}. "
+            "Expected integer dtype (class indices)."
+        )
+
+    def test_regression_predict_dtype_is_float(self):
+        """Regression must return float values, not integers."""
+        wrapper = self._make_regression_wrapper()
+        X = self._make_X()
+        result = wrapper.predict(X)
+        assert np.issubdtype(result.dtype, np.floating), (
+            f"Regression predict() returned dtype {result.dtype}. " "Expected float dtype."
+        )
+
+    def test_binary_classification_labels_are_zero_or_one(self):
+        """Binary classifier must return only labels in {0, 1}."""
+        wrapper = self._make_binary_classification_wrapper()
+        X = self._make_X(n_samples=50)
+        result = wrapper.predict(X)
+        unique = set(result.tolist())
+        assert unique.issubset({0, 1}), (
+            f"Binary classification returned unexpected labels: {unique}. "
+            "Expected only {{0, 1}}."
+        )
+
+    def test_multiclass_labels_are_in_valid_range(self):
+        """3-class classifier must return labels in {0, 1, 2}."""
+        wrapper = self._make_multiclass_classification_wrapper()
+        X = self._make_X6(n_samples=60)
+        result = wrapper.predict(X)
+        unique = set(result.tolist())
+        assert unique.issubset({0, 1, 2}), (
+            f"3-class classification returned unexpected labels: {unique}. "
+            "Expected a subset of {{0, 1, 2}}."
+        )
+
+    def test_classification_predict_is_deterministic(self):
+        """
+        Two consecutive predict() calls on the same input must return
+        identical results (model is in eval mode, no dropout).
+        """
+        wrapper = self._make_binary_classification_wrapper()
+        X = self._make_X(n_samples=20)
+        result_1 = wrapper.predict(X)
+        result_2 = wrapper.predict(X)
+        np.testing.assert_array_equal(
+            result_1,
+            result_2,
+            err_msg="predict() is non-deterministic for the same input.",
+        )
+
+    def test_regression_predict_is_deterministic(self):
+        wrapper = self._make_regression_wrapper()
+        X = self._make_X(n_samples=20)
+        result_1 = wrapper.predict(X)
+        result_2 = wrapper.predict(X)
+        np.testing.assert_array_equal(result_1, result_2)
+
+    def test_classification_predict_updates_attribute(self):
+        """wrapper.predictions must be set after predict(), not remain None."""
+        wrapper = self._make_binary_classification_wrapper()
+        assert (
+            wrapper.predictions is None
+        ), "wrapper.predictions should be None before the first predict() call."
+        wrapper.predict(self._make_X())
+        assert wrapper.predictions is not None, (
+            "wrapper.predictions is still None after predict(). "
+            "The attribute must be set even if the caller ignores the return value."
+        )
+
+    def test_classification_predict_updates_attribute_on_second_call(self):
+        """predictions attribute must be refreshed on every predict() call."""
+        wrapper = self._make_binary_classification_wrapper()
+        X1 = self._make_X(n_samples=10, seed=0)
+        X2 = self._make_X(n_samples=5, seed=99)
+        wrapper.predict(X1)
+        first_len = len(wrapper.predictions)
+        wrapper.predict(X2)
+        second_len = len(wrapper.predictions)
+        assert first_len == 10
+        assert second_len == 5, "wrapper.predictions was not updated on the second predict() call."
+
+    def test_classification_predict_single_sample(self):
+        """predict() must work for a batch of exactly one sample."""
+        wrapper = self._make_binary_classification_wrapper()
+        X = self._make_X(n_samples=1)
+        result = wrapper.predict(X)
+        assert result is not None
+        assert result.shape == (
+            1,
+        ), f"Single-sample predict() returned shape {result.shape}, expected (1,)."
+
+    def test_regression_predict_single_sample(self):
+        wrapper = self._make_regression_wrapper()
+        X = self._make_X(n_samples=1)
+        result = wrapper.predict(X)
+        assert result is not None
+        assert result.shape == (1,)
 
 
 class TestPyTorchPredictProbaSingleOutput:

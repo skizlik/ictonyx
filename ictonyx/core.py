@@ -479,6 +479,7 @@ if TENSORFLOW_AVAILABLE:
             if not is_classification:
                 # Regression: return raw predicted values as floats.
                 self.predictions = raw_predictions.flatten().astype(float)
+                return self.predictions
             else:
                 if n_outputs == 1:
                     self.predictions = (raw_predictions.flatten() >= 0.5).astype(int)
@@ -1357,6 +1358,7 @@ if PYTORCH_AVAILABLE:
             if self.task == "classification":
                 _, predicted = torch.max(outputs, 1)
                 self.predictions = predicted.cpu().numpy()
+                return self.predictions
             else:
                 if outputs.dim() > 1 and outputs.shape[-1] == 1:
                     outputs = outputs.squeeze(-1)

@@ -35,7 +35,7 @@ def variability_study(
     model: Any,
     data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray]],
     target_column: Optional[str] = None,
-    runs: int = 10,
+    runs: int = 20,
     epochs: int = 10,
     batch_size: int = 32,
     tracker: Optional[BaseLogger] = None,
@@ -74,7 +74,7 @@ def variability_study(
 
         target_column: Column name containing labels. Required when ``data``
             is a DataFrame or CSV path.
-        runs: Number of independent training runs. Default 10.
+        runs: Number of independent training runs. Default 20.
         epochs: Training epochs per run. Ignored by scikit-learn models.
             Default 10.
         batch_size: Batch size per run. Ignored by scikit-learn models.
@@ -134,7 +134,7 @@ def variability_study(
     if runs < 20:
         warnings.warn(
             f"runs={runs} may be insufficient for reliable statistical inference. "
-            "At n=5, Mann-Whitney U has very low power against small effects. "
+            "Mann-Whitney U has limited power against small effects below n=20. "
             "Consider runs >= 20 for publication-quality results.",
             UserWarning,
             stacklevel=2,
@@ -178,7 +178,7 @@ def compare_models(
     models: List[Any],
     data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray]],
     target_column: Optional[str] = None,
-    runs: int = 10,
+    runs: int = 20,
     epochs: int = 10,
     metric: str = "val_accuracy",
     seed: Optional[int] = None,
@@ -204,7 +204,7 @@ def compare_models(
             :func:`variability_study` (classes, callables, instances, etc.).
         data: The dataset, in any form accepted by :func:`variability_study`.
         target_column: Column name containing labels, if applicable.
-        runs: Number of independent training runs per model. Default 5.
+        runs: Number of independent training runs per model. Default 20.
         epochs: Training epochs per run. Default 10.
         metric: Metric name to compare across models. Must be a key in
             the training history (e.g. ``'val_accuracy'``, ``'val_loss'``,
@@ -243,7 +243,7 @@ def compare_models(
     if runs < 20:
         warnings.warn(
             f"runs={runs} may be insufficient for reliable statistical inference. "
-            "At n=5, Mann-Whitney U has very low power against small effects. "
+            "Mann-Whitney U has limited power against small effects below n=20. "
             "Consider runs >= 20 for publication-quality results.",
             UserWarning,
             stacklevel=2,

@@ -28,13 +28,6 @@ import pandas as pd
 from scipy.special import ndtri as _ndtri
 from scipy.stats import norm as _norm
 
-HAS_SCIPY = True  # always True; kept for backward compatibility
-
-
-# ---------------------------------------------------------------------------
-#  Result container
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class BootstrapCIResult:
@@ -126,10 +119,6 @@ def bootstrap_ci(
     method = method.lower()
     if method not in ("percentile", "bca"):
         raise ValueError(f"Unknown method '{method}'. Use 'percentile' or 'bca'.")
-    if method == "bca" and not HAS_SCIPY:
-        raise ImportError(
-            "scipy is required for BCa confidence intervals. " "Install with: pip install scipy"
-        )
 
     rng = np.random.RandomState(random_state)
     n = len(data)
@@ -473,10 +462,6 @@ def _two_sample_bootstrap(
     method = method.lower()
     if method not in ("percentile", "bca"):
         raise ValueError(f"Unknown method '{method}'. Use 'percentile' or 'bca'.")
-    if method == "bca" and not HAS_SCIPY:
-        raise ImportError(
-            "scipy is required for BCa confidence intervals. " "Install with: pip install scipy"
-        )
 
     rng = np.random.RandomState(random_state)
     n1, n2 = len(group1), len(group2)

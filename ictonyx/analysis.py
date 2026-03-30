@@ -34,8 +34,6 @@ from scipy.stats import (
     wilcoxon,
 )
 
-HAS_SCIPY = True  # always True; kept for backward compatibility with any callers
-
 # Optional sklearn import (only for confusion matrix)
 try:
     from sklearn.metrics import confusion_matrix
@@ -160,12 +158,6 @@ class StatisticalTestResult:
         return summary
 
 
-def _check_scipy():
-    """Check scipy availability."""
-    if not HAS_SCIPY:
-        raise ImportError("scipy required for statistical tests. Install with: pip install scipy")
-
-
 def _check_sklearn():
     """Check sklearn availability."""
     if not HAS_SKLEARN:
@@ -229,18 +221,12 @@ def check_normality(
             *all* available tests pass. Default ``False`` (any single
             test passing is sufficient). For n < 20, D'Agostino-Pearson
             does not run, so this reduces to evaluating Shapiro-Wilk alone.
-        require_all_tests: If ``True``, normality is declared only when
-            *all* available tests pass. Default ``False`` (any single
-            test passing is sufficient). For n < 20, D'Agostino-Pearson
-            does not run, so this reduces to evaluating Shapiro-Wilk alone.
 
     Returns:
         Tuple of ``(is_normal, details_dict)`` where ``is_normal`` is
         ``True`` if the sample does not reject normality, and
         ``details_dict`` contains test statistics and p-values.
     """
-
-    _check_scipy()
 
     results = {}
 
@@ -297,8 +283,6 @@ def check_equal_variances(
         ``variances_equal`` is ``True`` if Levene's test does not reject
         the null hypothesis of equal variances.
     """
-
-    _check_scipy()
 
     try:
         stat, p_val = levene(data1, data2)
@@ -485,8 +469,6 @@ def rank_biserial_correlation(group1: pd.Series, group2: pd.Series) -> Tuple[flo
         is ``'negligible'``, ``'small'``, ``'medium'``, or ``'large'``.
     """
 
-    _check_scipy()
-
     n1, n2 = len(group1), len(group2)
 
     try:
@@ -672,7 +654,6 @@ def mann_whitney_test(
     Raises:
         TypeError: If inputs are not ``pd.Series``.
     """
-    _check_scipy()
 
     result = StatisticalTestResult(
         test_name="Mann-Whitney U Test", statistic=float("nan"), p_value=float("nan")
@@ -761,7 +742,6 @@ def wilcoxon_signed_rank_test(
         :class:`StatisticalTestResult` with test statistic, p-value,
         effect size (Wilcoxon r), and interpretation.
     """
-    _check_scipy()
 
     result = StatisticalTestResult(
         test_name="Wilcoxon Signed-Rank Test", statistic=float("nan"), p_value=float("nan")
@@ -858,7 +838,7 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
         :class:`StatisticalTestResult` with F-statistic, p-value,
         eta-squared effect size, and interpretation.
     """
-    _check_scipy()
+
     all_sizes = [len(s.dropna()) for s in model_metrics.values()]
     if any(n < 30 for n in all_sizes):
         warnings.warn(
@@ -967,7 +947,6 @@ def kruskal_wallis_test(
         :class:`StatisticalTestResult` with H-statistic, p-value,
         epsilon-squared effect size, and interpretation.
     """
-    _check_scipy()
 
     # Validate input
     if len(model_metrics) < 2:
@@ -1054,7 +1033,6 @@ def shapiro_wilk_test(model_metrics: pd.Series, alpha: float = 0.05) -> Statisti
         :class:`StatisticalTestResult` with W-statistic, p-value, and
         interpretation.
     """
-    _check_scipy()
 
     result = StatisticalTestResult(
         test_name="Shapiro-Wilk Normality Test", statistic=float("nan"), p_value=float("nan")

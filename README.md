@@ -40,12 +40,12 @@ pip install ictonyx[all]
 pip install "ictonyx[tensorflow,isolation]"
 ```
 
-Requires Python 3.10+. Current release: **0.3.14** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
+Requires Python 3.10+. Current release: **0.3.15** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
 ---
 
 ## Quick start
 
-Train a small CNN on CIFAR-10 ten times and observe the distribution of outcomes. The task is genuinely difficult — 10 classes, colour images, a non-convex loss landscape — so initialisation matters and the spread across runs is real.
+Train a small CNN on CIFAR-10 twenty times and observe the distribution of outcomes. The task is genuinely difficult — 10 classes, colour images, a non-convex loss landscape — so initialisation matters and the spread across runs is real.
 
 ```python
 import numpy as np
@@ -87,7 +87,7 @@ results = run_variability_study(
     model_builder=build_cnn,
     data_handler=data_handler,
     model_config=config,
-    num_runs=10,
+    num_runs=20,
     seed=42,
 )
 
@@ -97,31 +97,31 @@ print(results.summarize())
 ```
 Variability Study Results
 ==============================
-Successful runs: 10
+Successful runs: 20
 Seed: 42
 train_accuracy:
-  Mean: 0.8267
-  Std:  0.0182
-  Min:  0.7962
-  Max:  0.8542
+  Mean: 0.8198
+  SD (sample, N-1):  0.0182
+  Min:  0.7869
+  Max:  0.8491
 train_loss:
-  Mean: 0.4799
-  Std:  0.0479
-  Min:  0.4066
-  Max:  0.5564
+  Mean: 0.4975
+  SD (sample, N-1):  0.0489
+  Min:  0.4177
+  Max:  0.5945
 val_accuracy:
-  Mean: 0.6553
-  Std:  0.0138
-  Min:  0.6275
-  Max:  0.6705
+  Mean: 0.6448
+  SD (sample, N-1):  0.0101
+  Min:  0.6260
+  Max:  0.6615
 val_loss:
-  Mean: 1.1786
-  Std:  0.0356
-  Min:  1.1083
-  Max:  1.2164
+  Mean: 1.1925
+  SD (sample, N-1):  0.0523
+  Min:  1.1163
+  Max:  1.2751
 ```
 
-Here we have a 4.3 percent range for validation accuracy — from 62.8% to 67.1% — across ten runs of the same architecture on the same data.  This represents a source of variability that shouldn't be neglected.
+Here we have a 3.7 percent range for validation accuracy across twenty runs of the same architecture on the same data.  This represents a source of variability that shouldn't be neglected.
 
 ```python
 ix.plot_variability_summary(
@@ -161,7 +161,7 @@ def build_dense(config: ModelConfig) -> KerasModelWrapper:
 comparison = ix.compare_models(
     models=[build_cnn, build_dense],
     data=data_handler,
-    runs=10,
+    runs=20,
     metric='val_accuracy',
     seed=42,
 )
@@ -173,10 +173,10 @@ print(comparison.get_summary())
 Model Comparison Results (val_accuracy)
 ========================================
 Models compared: 2
-Omnibus test: Kruskal-Wallis H-Test: 14.296, p=0.0002 ***, epsilon-squared=0.739
+Omnibus test: Kruskal-Wallis H-Test: 29.279, p=0.0000 ***, epsilon-squared=0.744
 
 Pairwise comparisons (holm correction):
-  build_cnn_vs_build_dense: Mann-Whitney U Test: 100.000, p=0.0002 ***, rank-biserial correlation=1.000 *
+  build_cnn_vs_build_dense: Mann-Whitney U Test: 400.000, p_corr=0.0000 ***, rank-biserial correlation=1.000 *
 
 Significant pairs: build_cnn_vs_build_dense
 ```
@@ -339,7 +339,7 @@ on the GitHub repository page.
 @software{kizlik_ictonyx,
   author  = {Kizlik, Stephen},
   title   = {Ictonyx: A Framework for Variability Analysis in Machine Learning Training},
-  version = {0.3.14},
+  version = {0.3.15},
   url     = {https://github.com/skizlik/ictonyx},
   license = {MIT},
 }

@@ -16,6 +16,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.15] — 2026-03-31
+
+### Fixed — Critical correctness
+
+- `KerasModelWrapper.predict()`: regression branch now returns `self.predictions`
+  instead of implicitly returning `None`. Any caller capturing the return value
+  of `predict()` on a Keras regression model received `None` silently; `assess()`
+  then raised `ValueError: Model has not generated predictions yet` even though
+  predictions were computed and stored correctly.
+- `PyTorchModelWrapper.predict()`: classification branch now returns
+  `self.predictions` instead of implicitly returning `None`. Mirror of the Keras
+  regression bug; affected all PyTorch classifiers. The regression branch was
+  unaffected.
+
+### Fixed — Statistical correctness
+
+- `check_independence()`: short series (n < max_lag + 2) now returns `None`
+  instead of `False` as the independence flag. `False` signals detected
+  autocorrelation; `None` signals untestable. `mann_whitney_test()` updated to
+  treat `None` as untestable rather than emitting a spurious autocorrelation
+  warning on studies with fewer than 7 runs. Return type annotation updated to
+  `Optional[bool]`.
+- `check_independence()`: SE formula corrected from `1 / sqrt(n)` to
+  `1 / sqrt(n - lag)`. The prior formula made the significance threshold too
+  tight at higher lags, inflating false-positive autocorrelation detection.
+- `calculate_averaged_autocorr()`: standard deviation now uses `ddof=1`
+  (Bessel-corrected sample SD). Prior `ddof=0` produced systematically narrow
+  error bands in `plot_averaged_autocorr()`.
+- `kruskal_wallis_test()`: now performs a Levene equal-variance check and records
+  the result in `assumptions_met["equal_variances"]`, mirroring the existing check
+  in `anova_test()`. A warning is added when groups have unequal variances, since
+  KW can reject H₀ for variance differences rather than location differences.
+
+### Fixed — API and usability
+
+- `variability_study()` and `compare_models()`: default `runs` raised from 10 to
+  20. The prior default of 10 triggered the library's own `runs < 20` warning on
+  every invocation that accepted the default — a self-contradictory design.
+  **Behavioural change:** existing code that relies on the default will now run
+  twice as many experiments. Pass `runs=10` explicitly to restore prior behaviour.
+- `compare_models()`: docstring for `runs` parameter corrected from stale
+  "Default 5" to "Default 20."
+- `get_final_metrics()`: deprecation warning changed from `DeprecationWarning`
+  to `UserWarning`. Python silences `DeprecationWarning` in all non-`__main__`
+  contexts by default, making the warning invisible in notebooks and imported
+  modules. Consistent with the identical fix applied to `TextDataHandler` and
+  `TimeSeriesDataHandler` in v0.3.14.
+
+### Fixed — Dead code removal
+
+- `analysis.py`, `bootstrap.py`: removed `HAS_SCIPY = True` dead flag, the
+  `_check_scipy()` guard function, and all 8 call sites in `analysis.py`. scipy
+  is a mandatory hard dependency; the flag was always `True` and the guard could
+  never raise. Removed the two dead `if method == "bca" and not HAS_SCIPY`
+  branches in `bootstrap.py`.
+- `_validate_process_isolation()`: removed a verbatim-duplicate data-size
+  serialisation check that ran twice back-to-back. For large datasets this
+  serialised training data twice unnecessarily; on failure it emitted the same
+  warning twice.
+
+### Fixed — Data handlers
+
+- `TextDataHandler` and `TimeSeriesDataHandler`: now raise `ImportError` at
+  construction when the required `tf.keras.preprocessing` APIs are absent (Keras
+  3 / TF 2.16+), rather than emitting a warning and proceeding to crash in
+  `load()`. Fail-fast behaviour at object construction.
+- `TimeSeriesDataHandler`: corrected a copy-paste duplicate in the `ImportError`
+  message body where the first line of the error string appeared twice.
+
+### Fixed — Documentation
+
+- `check_normality()`: removed verbatim-duplicate `require_all_tests` parameter
+  entry from the docstring Args section.
+- `README.md`: all quickstart examples updated from `runs=10` / `num_runs=10` to
+  `runs=20` to match the library's own statistical recommendation. All
+  `summarize()` output blocks updated from `Std:` to `SD (sample, N-1):` to
+  match the v0.3.14 label change. All output blocks re-executed.
+
+### Internal
+
+- `core.py`: added `assert self.predictions is not None` before all four
+  `predict()` return sites to satisfy mypy `Optional` narrowing. The assertion
+  is true by construction — the preceding assignment guarantees it — and is
+  checked at runtime.
+- `runners.py`: hoisted `import pickle as _serializer` above the `try/except`
+  block in `_validate_process_isolation()` to resolve a flake8 F821 false
+  positive caused by assignment inside a `try` block.
+
+---
+
 ## [0.3.14] — 2026-03-29
 
 ### Fixed — Silent correctness

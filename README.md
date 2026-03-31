@@ -194,7 +194,7 @@ results = run_variability_study(
     model_builder=build_cnn,
     data_handler=data_handler,
     model_config=config,
-    num_runs=10,
+    num_runs=20,
     use_process_isolation=True,
     gpu_memory_limit=4096,
     seed=42,
@@ -276,7 +276,7 @@ results = run_variability_study(
     model_builder=build_net,
     data_handler=ArraysDataHandler(X, y, val_split=0.2, test_split=0.1),
     model_config=ModelConfig({'epochs': 30, 'batch_size': 32, 'learning_rate': 0.001}),
-    num_runs=10,
+    num_runs=20,
     seed=42,
 )
 
@@ -286,7 +286,7 @@ ix.plot_variability_summary(
     metric='accuracy',
 )
 ```
-![Variability summary for PyTorch classifier across 10 runs](images/pytorch_variability.png)
+![Variability summary for PyTorch classifier across 20 runs](images/pytorch_variability.png)
 
 
 ---

@@ -503,6 +503,7 @@ class ExperimentRunner:
         num_runs: int = 5,
         epochs_per_run: Optional[int] = None,
         stop_on_failure_rate: float = 0.8,
+        checkpoint_dir: Optional[str] = None,
     ) -> "VariabilityStudyResults":
         """Execute the complete variability study.
 
@@ -521,6 +522,11 @@ class ExperimentRunner:
             stop_on_failure_rate: If the fraction of failed runs exceeds this
                 threshold, the study halts early. Set to ``1.0`` to never
                 stop early. Default ``0.8``.
+            checkpoint_dir: Optional path to a directory for saving progress
+                after each completed run. If the directory contains a
+                ``checkpoint.joblib`` file from a previous interrupted run,
+                execution resumes from where it left off. Default ``None``
+                (no checkpointing).
 
         Returns:
             :class:`VariabilityStudyResults` with per-run DataFrames, final
@@ -529,6 +535,39 @@ class ExperimentRunner:
 
         if num_runs < 1:
             raise ValueError(f"num_runs must be at least 1, got {num_runs}.")
+
+        # Resume from checkpoint if available
+        completed_run_ids: set = set()
+        if checkpoint_dir is not None:
+            import os
+
+            import joblib as _joblib
+
+            checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.joblib")
+            if os.path.exists(checkpoint_path):
+                try:
+                    import pickle as _pickle
+
+                    with open(checkpoint_path, "rb") as _f:
+                        _prior_data = _pickle.load(_f)
+                    prior = VariabilityStudyResults(
+                        all_runs_metrics=_prior_data["all_runs_metrics"],
+                        final_metrics=_prior_data["final_metrics"],
+                        final_test_metrics=_prior_data["final_test_metrics"],
+                        seed=_prior_data.get("seed"),
+                    )
+                    self.all_runs_metrics = list(prior.all_runs_metrics)
+                    self.final_metrics = dict(prior.final_metrics)
+                    self.final_test_metrics = list(prior.final_test_metrics)
+                    settings.logger.info(
+                        f"Resuming from checkpoint: "
+                        f"{len(completed_run_ids)} of {num_runs} runs already complete."
+                    )
+                except Exception as e:
+                    settings.logger.warning(
+                        f"Could not load checkpoint from {checkpoint_path}: {e}. "
+                        "Starting from scratch."
+                    )
 
         # Reset state from any previous run
         self.all_runs_metrics.clear()
@@ -577,6 +616,10 @@ class ExperimentRunner:
 
         try:
             for i in run_iter:
+                # Skip runs already completed in a prior checkpoint
+                if (i + 1) in completed_run_ids:
+                    continue
+
                 # Check failure rate
                 if i > 0:
                     completed = i  # runs 0..i-1 have completed
@@ -594,6 +637,22 @@ class ExperimentRunner:
                     self.all_runs_metrics.append(metrics_df)
                     if self._progress_bar:
                         self._update_progress_postfix(run_iter, metrics_df)
+
+                    # Save checkpoint after each successful run
+                    if checkpoint_dir is not None:
+                        import os
+                        import pickle as _pickle
+
+                        os.makedirs(checkpoint_dir, exist_ok=True)
+                        _checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
+                        _checkpoint_data = {
+                            "all_runs_metrics": list(self.all_runs_metrics),
+                            "final_metrics": dict(self.final_metrics),
+                            "final_test_metrics": list(self.final_test_metrics),
+                            "seed": self.seed,
+                        }
+                        with open(_checkpoint_path, "wb") as _f:
+                            _pickle.dump(_checkpoint_data, _f)
 
                 # Log memory info periodically (suppressed when progress bar is active)
                 if (i + 1) % 10 == 0 and self.verbose and not self._progress_bar:
@@ -1063,11 +1122,25 @@ class VariabilityStudyResults:
         if metric is None:
             metric = self.preferred_metric("accuracy")
 
-        if metric not in self.final_metrics:
-            available = list(self.final_metrics.keys())
-            raise ValueError(f"Metric '{metric}' not found. Available: {available}")
+            # Route to the correct metric store based on prefix
+        if metric.startswith("test_"):
+            try:
+                values = pd.Series(self.get_test_metric_values(metric))
+            except KeyError:
+                available_test = sorted(
+                    {k for m in self.final_test_metrics for k in m if k != "run_id"}
+                )
+                raise ValueError(
+                    f"Metric '{metric}' not found in test metrics. "
+                    f"Available test metrics: {available_test}. "
+                    f"Available val metrics: {list(self.final_metrics.keys())}"
+                )
+        else:
+            if metric not in self.final_metrics:
+                available = list(self.final_metrics.keys())
+                raise ValueError(f"Metric '{metric}' not found. Available: {available}")
+            values = pd.Series(self.get_metric_values(metric))
 
-        values = pd.Series(self.get_metric_values(metric))
         return wilcoxon_signed_rank_test(values, null_value=null_value, alpha=alpha)
 
     def compare_models_statistically(self, *args, **kwargs):
@@ -1091,6 +1164,69 @@ class VariabilityStudyResults:
             "producing statistically incoherent results.\n\n"
             "For single-model null testing: results.test_against_null(null_value=0.5)\n"
             "For cross-model comparison:    ix.compare_models([model_a, model_b], data=...)"
+        )
+
+    def save(self, path: str) -> None:
+        """Persist results to disk as a plain dict via pickle.
+
+        Preserves all_runs_metrics, final_metrics, final_test_metrics,
+        and seed. Restore with :meth:`load`.
+
+        Args:
+            path: File path. Recommended extension: ``.pkl``.
+        """
+        import pickle
+
+        data = {
+            "all_runs_metrics": self.all_runs_metrics,
+            "final_metrics": self.final_metrics,
+            "final_test_metrics": self.final_test_metrics,
+            "seed": self.seed,
+        }
+        with open(path, "wb") as f:
+            pickle.dump(data, f)
+
+    @classmethod
+    def load(cls, path: str) -> "VariabilityStudyResults":
+        """Restore results previously saved with :meth:`save`.
+
+        Args:
+            path: File path written by :meth:`save`.
+
+        Returns:
+            Reconstructed VariabilityStudyResults.
+        """
+        import pickle
+
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+        return cls(
+            all_runs_metrics=data["all_runs_metrics"],
+            final_metrics=data["final_metrics"],
+            final_test_metrics=data["final_test_metrics"],
+            seed=data.get("seed"),
+        )
+
+    def to_json(self) -> str:
+        """Serialise final metrics to a compact JSON string.
+
+        Does not include ``all_runs_metrics`` (per-epoch DataFrames).
+        Use :meth:`save` / :meth:`load` for full round-trip fidelity.
+
+        Returns:
+            JSON string containing ``final_metrics``, ``final_test_metrics``,
+            ``seed``, and ``n_runs``.
+        """
+        import json
+
+        return json.dumps(
+            {
+                "n_runs": self.n_runs,
+                "seed": self.seed,
+                "final_metrics": self.final_metrics,
+                "final_test_metrics": self.final_test_metrics,
+            },
+            indent=2,
         )
 
 

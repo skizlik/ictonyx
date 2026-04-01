@@ -1582,3 +1582,313 @@ class TestDeterministicCudnn:
         assert (
             torch.backends.cudnn.benchmark is True
         ), "cudnn.benchmark was not restored after exception."
+
+
+class TestVariabilityStudyResultsTestMetrics:
+    """Tests for test-metric surfacing: has_test_data, preferred_metric,
+    get_test_metric_values, summarize, and test_against_null auto-resolution.
+    Added in v0.4.0 (Priority 1).
+    """
+
+    def _make_results_no_test(self, values=None):
+        """VariabilityStudyResults with only validation metrics."""
+        if values is None:
+            values = [0.80, 0.82, 0.79, 0.83, 0.81, 0.84, 0.80, 0.82, 0.83, 0.81]
+        return VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": values},
+            final_test_metrics=[],
+            seed=42,
+        )
+
+    def _make_results_with_test(self, val_values=None, test_values=None):
+        """VariabilityStudyResults with both validation and test metrics."""
+        if val_values is None:
+            val_values = [0.80, 0.82, 0.79, 0.83, 0.81, 0.84, 0.80, 0.82, 0.83, 0.81]
+        if test_values is None:
+            test_values = [0.78, 0.80, 0.77, 0.81, 0.79, 0.82, 0.78, 0.80, 0.81, 0.79]
+        return VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": val_values},
+            final_test_metrics=[
+                {"run_id": i + 1, "test_accuracy": v} for i, v in enumerate(test_values)
+            ],
+            seed=42,
+        )
+
+    # --- has_test_data ---
+
+    def test_has_test_data_false_when_empty(self):
+        results = self._make_results_no_test()
+        assert results.has_test_data is False
+
+    def test_has_test_data_true_when_populated(self):
+        results = self._make_results_with_test()
+        assert results.has_test_data is True
+
+    def test_has_test_data_false_when_final_test_metrics_is_empty_list(self):
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": [0.8, 0.82]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        assert results.has_test_data is False
+
+    # --- preferred_metric ---
+
+    def test_preferred_metric_returns_val_when_no_test_data(self):
+        results = self._make_results_no_test()
+        assert results.preferred_metric("accuracy") == "val_accuracy"
+
+    def test_preferred_metric_returns_test_when_test_data_present(self):
+        results = self._make_results_with_test()
+        assert results.preferred_metric("accuracy") == "test_accuracy"
+
+    def test_preferred_metric_falls_back_to_val_when_test_key_not_tracked(self):
+        """Test data present but doesn't contain the requested base metric."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_loss": [0.3, 0.28, 0.31]},
+            final_test_metrics=[{"run_id": 1, "test_loss": 0.32}],
+            seed=42,
+        )
+        # test_accuracy not tracked — should fall back to val_accuracy
+        assert results.preferred_metric("accuracy") == "val_accuracy"
+
+    def test_preferred_metric_different_bases(self):
+        results = self._make_results_with_test()
+        assert results.preferred_metric("accuracy") == "test_accuracy"
+        # loss not in test metrics — falls back
+        assert results.preferred_metric("loss") == "val_loss"
+
+    # --- get_test_metric_values ---
+
+    def test_get_test_metric_values_returns_list(self):
+        results = self._make_results_with_test()
+        values = results.get_test_metric_values("test_accuracy")
+        assert isinstance(values, list)
+        assert len(values) == 10
+
+    def test_get_test_metric_values_correct_values(self):
+        test_vals = [0.78, 0.80, 0.77, 0.81, 0.79, 0.82, 0.78, 0.80, 0.81, 0.79]
+        results = self._make_results_with_test(test_values=test_vals)
+        retrieved = results.get_test_metric_values("test_accuracy")
+        assert retrieved == test_vals
+
+    def test_get_test_metric_values_raises_when_metric_absent(self):
+        results = self._make_results_with_test()
+        with pytest.raises(KeyError, match="test_loss"):
+            results.get_test_metric_values("test_loss")
+
+    def test_get_test_metric_values_raises_when_no_test_data(self):
+        results = self._make_results_no_test()
+        with pytest.raises(KeyError):
+            results.get_test_metric_values("test_accuracy")
+
+    # --- summarize ---
+
+    def test_summarize_contains_ci_line(self):
+        results = self._make_results_no_test()
+        summary = results.summarize()
+        assert "95% CI" in summary
+
+    def test_summarize_no_test_data_contains_note(self):
+        results = self._make_results_no_test()
+        summary = results.summarize()
+        assert "no held-out test data" in summary
+
+    def test_summarize_with_test_data_has_test_section_before_val(self):
+        results = self._make_results_with_test()
+        summary = results.summarize()
+        assert "Test Set Metrics" in summary
+        assert "Validation Metrics" in summary
+        assert summary.index("Test Set Metrics") < summary.index("Validation Metrics")
+
+    def test_summarize_with_test_data_does_not_show_absent_note(self):
+        results = self._make_results_with_test()
+        summary = results.summarize()
+        assert "no held-out test data" not in summary
+
+    def test_summarize_ci_requires_at_least_two_values(self):
+        """Single-run results should not crash — CI line omitted at n=1."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": [0.82]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        summary = results.summarize()
+        # Should not raise; CI line should be absent for n=1
+        assert "Mean" in summary
+
+    # --- test_against_null auto-resolution ---
+
+    def test_test_against_null_resolves_val_when_no_test_data(self):
+        """metric=None with no test data should resolve to val_accuracy."""
+        results = self._make_results_no_test(
+            [0.80, 0.82, 0.79, 0.83, 0.81, 0.84, 0.80, 0.82, 0.83, 0.81]
+        )
+        result = results.test_against_null(null_value=0.5)
+        assert result is not None
+        assert result.p_value is not None
+
+    def test_test_against_null_resolves_test_when_test_data_present(self):
+        """metric=None with test data should resolve to test_accuracy."""
+        results = self._make_results_with_test()
+        result = results.test_against_null(null_value=0.5)
+        assert result is not None
+
+    def test_test_against_null_explicit_metric_overrides_auto(self):
+        """Explicitly passing metric= must override auto-resolution."""
+        results = self._make_results_with_test()
+        # Ask for val_accuracy explicitly even though test data is present
+        result = results.test_against_null(null_value=0.5, metric="val_accuracy")
+        assert result is not None
+
+    def test_test_against_null_raises_for_unknown_explicit_metric(self):
+        results = self._make_results_no_test()
+        with pytest.raises(ValueError):
+            results.test_against_null(null_value=0.5, metric="nonexistent_metric")
+
+
+class TestVariabilityStudyResultsPersistence:
+    """Tests for save(), load(), and to_json() on VariabilityStudyResults.
+    Added in v0.4.0 (Priority 1).
+    """
+
+    def _make_results(self):
+        return VariabilityStudyResults(
+            all_runs_metrics=[
+                pd.DataFrame(
+                    {"val_accuracy": [0.75, 0.78, 0.80], "train_accuracy": [0.80, 0.83, 0.85]}
+                ),
+                pd.DataFrame(
+                    {"val_accuracy": [0.77, 0.79, 0.82], "train_accuracy": [0.82, 0.84, 0.87]}
+                ),
+            ],
+            final_metrics={"val_accuracy": [0.80, 0.82]},
+            final_test_metrics=[
+                {"run_id": 1, "test_accuracy": 0.78},
+                {"run_id": 2, "test_accuracy": 0.80},
+            ],
+            seed=99,
+        )
+
+    # --- save / load ---
+
+    def test_save_creates_file(self, tmp_path):
+        results = self._make_results()
+        path = str(tmp_path / "results.joblib")
+        results.save(path)
+        import os
+
+        assert os.path.exists(path)
+
+    def test_load_restores_n_runs(self, tmp_path):
+        results = self._make_results()
+        path = str(tmp_path / "results.joblib")
+        results.save(path)
+        loaded = VariabilityStudyResults.load(path)
+        assert loaded.n_runs == results.n_runs
+
+    def test_load_restores_seed(self, tmp_path):
+        results = self._make_results()
+        path = str(tmp_path / "results.joblib")
+        results.save(path)
+        loaded = VariabilityStudyResults.load(path)
+        assert loaded.seed == results.seed
+
+    def test_load_restores_final_metrics(self, tmp_path):
+        results = self._make_results()
+        path = str(tmp_path / "results.joblib")
+        results.save(path)
+        loaded = VariabilityStudyResults.load(path)
+        assert loaded.final_metrics == results.final_metrics
+
+    def test_load_restores_final_test_metrics(self, tmp_path):
+        results = self._make_results()
+        path = str(tmp_path / "results.joblib")
+        results.save(path)
+        loaded = VariabilityStudyResults.load(path)
+        assert loaded.final_test_metrics == results.final_test_metrics
+
+    def test_load_restores_all_runs_metrics(self, tmp_path):
+        results = self._make_results()
+        path = str(tmp_path / "results.joblib")
+        results.save(path)
+        loaded = VariabilityStudyResults.load(path)
+        assert len(loaded.all_runs_metrics) == len(results.all_runs_metrics)
+        for orig, restored in zip(results.all_runs_metrics, loaded.all_runs_metrics):
+            pd.testing.assert_frame_equal(orig, restored)
+
+    def test_has_test_data_preserved_after_roundtrip(self, tmp_path):
+        results = self._make_results()
+        path = str(tmp_path / "results.joblib")
+        results.save(path)
+        loaded = VariabilityStudyResults.load(path)
+        assert loaded.has_test_data is True
+
+    def test_save_load_roundtrip_no_test_data(self, tmp_path):
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": [0.80, 0.82, 0.81]},
+            final_test_metrics=[],
+            seed=7,
+        )
+        path = str(tmp_path / "results_no_test.joblib")
+        results.save(path)
+        loaded = VariabilityStudyResults.load(path)
+        assert loaded.has_test_data is False
+        assert loaded.final_metrics == results.final_metrics
+
+    # --- to_json ---
+
+    def test_to_json_returns_string(self):
+        results = self._make_results()
+        assert isinstance(results.to_json(), str)
+
+    def test_to_json_is_valid_json(self):
+        import json
+
+        results = self._make_results()
+        data = json.loads(results.to_json())
+        assert isinstance(data, dict)
+
+    def test_to_json_contains_n_runs(self):
+        import json
+
+        results = self._make_results()
+        data = json.loads(results.to_json())
+        assert data["n_runs"] == results.n_runs
+
+    def test_to_json_contains_seed(self):
+        import json
+
+        results = self._make_results()
+        data = json.loads(results.to_json())
+        assert data["seed"] == results.seed
+
+    def test_to_json_contains_final_metrics(self):
+        import json
+
+        results = self._make_results()
+        data = json.loads(results.to_json())
+        assert "final_metrics" in data
+        assert data["final_metrics"] == results.final_metrics
+
+    def test_to_json_contains_final_test_metrics(self):
+        import json
+
+        results = self._make_results()
+        data = json.loads(results.to_json())
+        assert "final_test_metrics" in data
+        assert len(data["final_test_metrics"]) == len(results.final_test_metrics)
+
+    def test_to_json_omits_all_runs_metrics(self):
+        """all_runs_metrics (per-epoch DataFrames) must not appear in JSON output."""
+        import json
+
+        results = self._make_results()
+        data = json.loads(results.to_json())
+        assert "all_runs_metrics" not in data

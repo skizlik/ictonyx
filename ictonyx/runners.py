@@ -686,12 +686,17 @@ class ExperimentRunner:
                     std_val = np.std(values, ddof=1)
                     logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {std_val:.4f})")
 
-        return VariabilityStudyResults(
+        results = VariabilityStudyResults(
             all_runs_metrics=self.all_runs_metrics,
             final_metrics=self.final_metrics,
             final_test_metrics=self.final_test_metrics,
             seed=self.seed,
         )
+
+        if hasattr(self.tracker, "log_study_summary"):
+            self.tracker.log_study_summary(results)
+
+        return results
 
     def get_summary_stats(self) -> Dict[str, Any]:
         """Get summary statistics for the completed study.
@@ -1227,6 +1232,83 @@ class VariabilityStudyResults:
                 "final_test_metrics": self.final_test_metrics,
             },
             indent=2,
+        )
+
+    @classmethod
+    def from_mlflow_experiment(
+        cls,
+        experiment_name: str,
+        metric: str,
+        run_filter: Optional[str] = None,
+        tracking_uri: Optional[str] = None,
+    ) -> "VariabilityStudyResults":
+        """Reconstruct results from a completed MLflow experiment.
+
+        Allows running ictonyx statistical analysis on existing MLflow
+        experiments without re-running training.
+
+        Args:
+            experiment_name: Name of the MLflow experiment.
+            metric: Metric to extract per run (e.g. 'val_accuracy').
+            run_filter: Optional MLflow filter string
+                (e.g. "params.seed = '42'").
+            tracking_uri: MLflow tracking URI. Uses the environment's
+                MLFLOW_TRACKING_URI if not set.
+
+        Returns:
+            VariabilityStudyResults with final_metrics populated from
+            the experiment's runs. all_runs_metrics is empty —
+            per-epoch history is not reconstructed from MLflow.
+
+        Raises:
+            ImportError: If mlflow is not installed.
+            ValueError: If no matching runs are found, or if the
+                requested metric is not present in the runs.
+        """
+        try:
+            import mlflow
+        except ImportError:
+            raise ImportError(
+                "mlflow is required for from_mlflow_experiment(). "
+                "Install with: pip install ictonyx[mlflow]"
+            )
+
+        if tracking_uri:
+            mlflow.set_tracking_uri(tracking_uri)
+
+        runs_df = mlflow.search_runs(
+            experiment_names=[experiment_name],
+            filter_string=run_filter or "",
+            order_by=["start_time ASC"],
+        )
+
+        if runs_df.empty:
+            raise ValueError(
+                f"No runs found in experiment '{experiment_name}' " f"with filter: {run_filter!r}"
+            )
+
+        col = f"metrics.{metric}"
+        if col not in runs_df.columns:
+            available = [
+                c.replace("metrics.", "") for c in runs_df.columns if c.startswith("metrics.")
+            ]
+            raise ValueError(
+                f"Metric '{metric}' not found in experiment '{experiment_name}'. "
+                f"Available metrics: {available}"
+            )
+
+        values = runs_df[col].dropna().tolist()
+        if not values:
+            raise ValueError(
+                f"Metric '{metric}' exists in experiment '{experiment_name}' "
+                "but contains no non-null values."
+            )
+
+        return cls(
+            all_runs_metrics=[],
+            final_metrics={metric: values},
+            final_test_metrics=[],
+            seed=None,
         )
 
 

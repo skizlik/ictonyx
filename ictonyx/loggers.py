@@ -107,6 +107,14 @@ class BaseLogger:
         if self.verbose:
             logger.info("-" * 50)
 
+    def start_child_run(self, run_name: Optional[str] = None) -> str:
+        """No-op for base logger. Returns empty string."""
+        return ""
+
+    def end_child_run(self) -> None:
+        """No-op for base logger."""
+        pass
+
     def get_history(self) -> Dict[str, Any]:
         """Returns the logged history."""
         return self.history
@@ -179,6 +187,7 @@ class MLflowLogger(BaseLogger):
         self._run = mlflow.start_run(run_name=run_name)
         self._run_id = self._run.info.run_id
 
+        self._current_child_run_id: Optional[str] = None
         if self.verbose:
             logger.info(f"Started MLflow run: {self._run_id}")
             logger.info(f"Experiment: {experiment_name}")
@@ -395,6 +404,21 @@ class MLflowLogger(BaseLogger):
 
         self.set_tags(system_tags)
 
+    def start_child_run(self, run_name: Optional[str] = None) -> str:
+        """Start a nested child run under the current parent run."""
+        if not HAS_MLFLOW:
+            return ""
+        child_run = mlflow.start_run(run_name=run_name, nested=True)
+        self._current_child_run_id = child_run.info.run_id
+        return child_run.info.run_id
+
+    def end_child_run(self) -> None:
+        """End the current nested child run."""
+        if not HAS_MLFLOW:
+            return
+        mlflow.end_run()
+        self._current_child_run_id = None
+
     def end_run(self):
         """Ends the MLflow run."""
         super().end_run()
@@ -403,6 +427,34 @@ class MLflowLogger(BaseLogger):
         if self.verbose:
             logger.info(f"Ended MLflow run: {self._run_id}")
             logger.info(f"View results at: {mlflow.get_tracking_uri()}")
+
+    def log_study_summary(self, results: Any) -> None:
+        """Log statistical summary of a completed study to the parent run.
+
+        Logs mean and SD for all tracked validation metrics, and mean
+        and SD for all tracked test metrics when test data is present.
+
+        Args:
+            results: A VariabilityStudyResults object from run_study()
+                or variability_study().
+        """
+        if not HAS_MLFLOW:
+            return
+
+        for metric_name, values in results.final_metrics.items():
+            if values:
+                self.log_metric(f"{metric_name}_mean", float(np.mean(values)))
+                self.log_metric(f"{metric_name}_sd", float(np.std(values, ddof=1)))
+                self.log_metric(f"{metric_name}_min", float(np.min(values)))
+                self.log_metric(f"{metric_name}_max", float(np.max(values)))
+
+        if results.has_test_data:
+            test_keys = sorted({k for m in results.final_test_metrics for k in m if k != "run_id"})
+            for key in test_keys:
+                vals = [m[key] for m in results.final_test_metrics if key in m]
+                if vals:
+                    self.log_metric(f"{key}_mean", float(np.mean(vals)))
+                    self.log_metric(f"{key}_sd", float(np.std(vals, ddof=1)))
 
     def get_run_url(self) -> str:
         """Gets the URL to view this run in MLflow UI."""

@@ -180,7 +180,7 @@ def compare_models(
     target_column: Optional[str] = None,
     runs: int = 20,
     epochs: int = 10,
-    metric: str = "val_accuracy",
+    metric: Optional[str] = None,
     seed: Optional[int] = None,
     verbose: bool = True,
     paired: bool = False,
@@ -254,20 +254,22 @@ def compare_models(
         seed = int(np.random.default_rng().integers(0, 2**31))
 
     handler = auto_resolve_handler(data, target_column=target_column, **kwargs)
-    results_store = {}
 
     settings.logger.info(f"--- Starting Comparison of {len(models)} Models (seed={seed}) ---")
+
+    # --- Loop 1: run all studies, store full VariabilityStudyResults objects ---
+    studies: Dict[str, VariabilityStudyResults] = {}
 
     for model_input in models:
         base_name = _get_model_name(model_input)
         name = base_name
         counter = 1
-        while name in results_store:
+        while name in studies:
             name = f"{base_name}_{counter}"
             counter += 1
         settings.logger.info(f"Evaluating: {name}")
 
-        study_results = variability_study(
+        study_result = variability_study(
             model=model_input,
             data=handler,
             runs=runs,
@@ -276,11 +278,32 @@ def compare_models(
             verbose=verbose,
             **kwargs,
         )
+        studies[name] = study_result
 
+    # --- Resolve metric now that all studies are complete ---
+    if metric is None:
+        if all(r.has_test_data for r in studies.values()):
+            metric = list(studies.values())[0].preferred_metric("accuracy")
+            settings.logger.info(f"Test data present for all models — comparing on '{metric}'.")
+        else:
+            if any(r.has_test_data for r in studies.values()):
+                warnings.warn(
+                    "Some models have test data and some do not. "
+                    "Falling back to 'val_accuracy'. Provide test data for all "
+                    "models to enable test-set comparison.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            metric = "val_accuracy"
+
+    # --- Loop 2: extract metric values now that metric is a concrete string ---
+    results_store = {}
+
+    for name, study_result in studies.items():
         try:
-            metric_values = study_results.get_metric_values(metric)
+            metric_values = study_result.get_metric_values(metric)
         except KeyError:
-            available = study_results.get_available_metrics()
+            available = study_result.get_available_metrics()
             hint = ""
             if metric == "val_accuracy" and "accuracy" in available:
                 hint = (

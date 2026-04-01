@@ -771,6 +771,11 @@ class VariabilityStudyResults:
         """Number of successful runs."""
         return len(self.all_runs_metrics)
 
+    @property
+    def has_test_data(self) -> bool:
+        """True if at least one run produced test-set metrics."""
+        return bool(self.final_test_metrics)
+
     def get_metric_values(self, metric_name: str) -> List[float]:
         """Get collected final values for a specific metric.
 
@@ -844,8 +849,28 @@ class VariabilityStudyResults:
 
         return pd.DataFrame(rows)
 
+    def preferred_metric(self, base: str = "accuracy") -> str:
+        """Return the preferred metric name for this study.
+
+        Returns ``f"test_{base}"`` when test data is present and the metric
+        was tracked, ``f"val_{base}"`` otherwise.
+
+        Args:
+            base: Base metric name without prefix. Default ``"accuracy"``.
+
+        Returns:
+            The most appropriate metric key for this study's results.
+        """
+        test_key = f"test_{base}"
+        if self.has_test_data:
+            tracked = {k for m in self.final_test_metrics for k in m if k != "run_id"}
+            if test_key in tracked:
+                return test_key
+        return f"val_{base}"
+
     def summarize(self) -> str:
-        """Generate text summary of results."""
+        from scipy.stats import t as _t
+
         lines = [
             "Variability Study Results",
             "=" * 30,
@@ -853,17 +878,43 @@ class VariabilityStudyResults:
             f"Seed: {self.seed}",
         ]
 
+        def _format_metric_block(metric_name: str, values: list) -> list:
+            n = len(values)
+            mean = np.mean(values)
+            sd = np.std(values, ddof=1)
+            block = [
+                f"{metric_name}:",
+                f"  Mean:             {mean:.4f}",
+                f"  SD (sample, N-1): {sd:.4f}",
+            ]
+            if n > 1:
+                se = sd / np.sqrt(n)
+                margin = _t.ppf(0.975, df=n - 1) * se
+                block.append(f"  95% CI:           [{mean - margin:.4f}, {mean + margin:.4f}]")
+            block += [
+                f"  Min:              {np.min(values):.4f}",
+                f"  Max:              {np.max(values):.4f}",
+            ]
+            return block
+
+        if self.has_test_data:
+            lines += ["", "Test Set Metrics:", "-" * 20]
+            test_keys = sorted({k for m in self.final_test_metrics for k in m if k != "run_id"})
+            for key in test_keys:
+                values = [m[key] for m in self.final_test_metrics if key in m]
+                if values:
+                    lines.extend(_format_metric_block(key, values))
+            lines += ["", "Validation Metrics:", "-" * 20]
+        else:
+            lines += [
+                "",
+                "Note: no held-out test data — validation metrics shown. "
+                "Provide test data via DataHandler for unbiased evaluation.",
+            ]
+
         for metric_name, values in sorted(self.final_metrics.items()):
             if values:
-                lines.extend(
-                    [
-                        f"{metric_name}:",
-                        f"  Mean: {np.mean(values):.4f}",
-                        f"  SD (sample, N-1):  {np.std(values, ddof=1):.4f}",
-                        f"  Min:  {np.min(values):.4f}",
-                        f"  Max:  {np.max(values):.4f}",
-                    ]
-                )
+                lines.extend(_format_metric_block(metric_name, values))
 
         return "\n".join(lines)
 
@@ -957,10 +1008,34 @@ class VariabilityStudyResults:
 
         return pd.DataFrame(rows)
 
+    def get_test_metric_values(self, metric: str) -> List[float]:
+        """Get per-run final values for a test-set metric.
+
+        Args:
+            metric: Metric key, e.g. 'test_accuracy', 'test_loss'.
+
+        Returns:
+            List of values, one per run, in run order.
+
+        Raises:
+            KeyError: If the metric was not tracked, or if no test data
+                was provided (final_test_metrics will be empty).
+        """
+        values = [m[metric] for m in self.final_test_metrics if metric in m]
+        if not values:
+            available = sorted({k for m in self.final_test_metrics for k in m if k != "run_id"})
+            raise KeyError(
+                f"Test metric '{metric}' not found. "
+                f"Available test metrics: {available}. "
+                "If no test data was provided, use get_metric_values() "
+                "to access validation metrics."
+            )
+        return values
+
     def test_against_null(
         self,
         null_value: float = 0.5,
-        metric: str = "val_accuracy",
+        metric: Optional[str] = None,
         alpha: float = 0.05,
     ) -> "StatisticalTestResult":
         """Test whether a metric's distribution differs from a null value.
@@ -984,6 +1059,9 @@ class VariabilityStudyResults:
             reliable inference.
         """
         from .analysis import wilcoxon_signed_rank_test
+
+        if metric is None:
+            metric = self.preferred_metric("accuracy")
 
         if metric not in self.final_metrics:
             available = list(self.final_metrics.keys())

@@ -566,7 +566,7 @@ class TestAnovaTest:
         result = anova_test(groups)
         assert result.p_value < 0.05
         assert result.effect_size is not None
-        assert result.effect_size_name == "eta-squared"
+        assert result.effect_size_name == "omega-squared"
 
     def test_no_significant_difference(self, three_model_results_similar):
         result = anova_test(three_model_results_similar)

@@ -221,7 +221,10 @@ def check_normality(
             *all* available tests pass. Default ``False`` (any single
             test passing is sufficient). For n < 20, D'Agostino-Pearson
             does not run, so this reduces to evaluating Shapiro-Wilk alone.
-
+        deprecated:
+            The default ``require_all_tests=False`` will change to ``True``
+            in v0.5.0. Pass ``require_all_tests=True`` to adopt the stricter
+            behavior now.
     Returns:
         Tuple of ``(is_normal, details_dict)`` where ``is_normal`` is
         ``True`` if the sample does not reject normality, and
@@ -260,6 +263,18 @@ def check_normality(
     # evaluated. In that regime the "ALL tests" rule reduces to a single test.
     # Set require_all_tests=True to enforce the strict conjunction regardless.
     passing = [t["p_value"] > alpha for t in results.values() if t is not None]
+
+    if not require_all_tests and len(passing) > 1 and any(passing) and not all(passing):
+        warnings.warn(
+            "check_normality() declared normality because one test passed but "
+            "another did not. In v0.5.0 the default will change to "
+            "require_all_tests=True (conservative conjunction). Pass "
+            "require_all_tests=True to silence this warning and adopt the "
+            "future behaviour now.",
+            FutureWarning,
+            stacklevel=3,
+        )
+
     is_normal = all(passing) if require_all_tests else any(passing)
 
     return is_normal, results
@@ -318,6 +333,15 @@ def check_independence(
         alpha: Significance level for autocorrelation detection. Default 0.05.
             A lag is flagged as significant if its autocorrelation exceeds
             ``norm.ppf(1 - alpha/2) / sqrt(n)``.
+
+    Note:
+        At n ≤ 10, this test has very low power to detect autocorrelation.
+        Absence of a warning is not a strong independence guarantee at
+        typical variability study sizes. Additionally, testing up to
+        ``max_lag`` lags without multiple-comparison correction inflates
+        the false-positive rate — at ``max_lag=5``, α=0.05, the familywise
+        rate for a spurious autocorrelation warning exceeds 22% even on
+        genuinely independent data.
 
     Returns:
         Tuple of ``(is_independent, details_dict)`` where:
@@ -400,7 +424,10 @@ def cohens_d(group1: pd.Series, group2: pd.Series, pooled: bool = True) -> Tuple
     Args:
         group1: First group's metric values.
         group2: Second group's metric values.
-        pooled: If ``True`` (default), use pooled standard deviation.
+        pooled: If ``True`` (default), use pooled standard deviation
+            (Cohen's d). If ``False``, divide by ``group2.std()`` only —
+            this is **Glass's delta**, which uses the control group as the
+            sole reference. Default ``True``.
 
     Returns:
         Tuple of ``(d_value, interpretation)`` where ``interpretation``
@@ -463,6 +490,9 @@ def _interpret_cohens_d(abs_d: float) -> str:
 def rank_biserial_correlation(group1: pd.Series, group2: pd.Series) -> Tuple[float, str]:
     """Calculate rank-biserial correlation as the effect size for the Mann-Whitney U test.
 
+    Algebraically equivalent to Cliff's delta (Cliff 1993):
+    r = 2U / (n₁·n₂) − 1 = (concordant pairs − discordant pairs) / (n₁·n₂).
+
     Ranges from -1 to 1, where 0 indicates no effect. Thresholds:
     small (0.1), medium (0.3), large (0.5).
 
@@ -502,7 +532,12 @@ def _interpret_rank_biserial(abs_r: float) -> str:
 
 
 def eta_squared(groups: List[pd.Series]) -> Tuple[float, str]:
-    """Calculate eta-squared effect size for ANOVA or Kruskal-Wallis.
+    """Calculate eta-squared effect size for ANOVA.
+
+    For Kruskal-Wallis, use the epsilon-squared value embedded in the
+    returned ``StatisticalTestResult`` — do not call this function on
+    KW results. See also ``anova_test()``, which now reports
+    omega-squared (bias-corrected) rather than eta-squared.
 
     Represents the proportion of variance in the dependent variable
     explained by group membership. Thresholds: small (0.01),
@@ -821,6 +856,9 @@ def wilcoxon_signed_rank_test(
                 result.effect_size_interpretation = _interpret_wilcoxon_r(r)
             elif n > 0 and p_val <= 0:
                 # Perfect separation: all differences same sign. r = 1.0 by convention.
+                # (p_val can also be exactly 0.0 due to floating-point underflow at
+                # large n, though this is unlikely at the small sample sizes typical
+                # of variability studies.)
                 result.effect_size = 1.0
                 result.effect_size_name = "r (effect size)"
                 result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
@@ -927,11 +965,25 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
         result.statistic = float(statistic)
         result.p_value = float(p_value)
 
-        # Effect size (eta-squared)
-        eta_sq, eta_interpretation = eta_squared(clean_groups)
-        result.effect_size = eta_sq
-        result.effect_size_name = "eta-squared"
-        result.effect_size_interpretation = eta_interpretation
+        # Effect size (omega-squared — bias-corrected, preferred for small n)
+        N = sum(len(g) for g in clean_groups)
+        k = len(clean_groups)
+        grand_mean = float(np.mean(np.concatenate([np.array(g) for g in clean_groups])))
+        ss_between = sum(len(g) * (float(np.mean(g)) - grand_mean) ** 2 for g in clean_groups)
+        ss_within = sum(float(np.sum((np.array(g) - np.mean(g)) ** 2)) for g in clean_groups)
+        ms_within = ss_within / (N - k) if N > k else float("nan")
+        ss_total = ss_between + ss_within
+        denom = ss_total + ms_within
+        if np.isfinite(ms_within) and denom > 0:
+            omega_sq = (ss_between - (k - 1) * ms_within) / denom
+            omega_sq = float(max(0.0, omega_sq))
+        else:
+            omega_sq = float("nan")
+        result.effect_size = omega_sq
+        result.effect_size_name = "omega-squared"
+        result.effect_size_interpretation = _interpret_eta_squared(
+            abs(omega_sq) if np.isfinite(omega_sq) else 0.0
+        )
 
     except Exception as e:
         result.warnings.append(f"ANOVA failed: {str(e)}")
@@ -1270,7 +1322,7 @@ def compare_two_models(
                 test_name = "Independent Comparison (Welch's t-test)"
                 statistic, p_value = ttest_ind(clean1, clean2, equal_var=False)
                 effect_size, es_interp = cohens_d(clean1, clean2, pooled=False)
-                es_name = "Cohen's d (unpooled)"
+                es_name = "Glass's delta"
 
             result = StatisticalTestResult(
                 test_name=test_name,
@@ -1687,7 +1739,10 @@ def calculate_averaged_autocorr(
 
 
 def check_convergence(
-    data: Union[pd.Series, List[float]], window_size: int = 5, autocorr_threshold: float = 0.1
+    data: Union[pd.Series, List[float]],
+    window_size: int = 5,
+    autocorr_threshold: float = 0.1,
+    variance_ratio_threshold: float = 0.1,
 ) -> bool:
     """Check whether a metric series has converged.
 
@@ -1699,7 +1754,10 @@ def check_convergence(
         window_size: Number of recent values to examine. Default 5.
         autocorr_threshold: Maximum acceptable autocorrelation at lag 1
             for convergence. Default 0.1.
-
+        variance_ratio_threshold: The recent-window variance must be below
+            this fraction of the full-series variance to declare convergence
+            by the variance criterion. Default 0.1. This is an empirically
+            motivated heuristic with no universally optimal value.
     Returns:
         ``True`` if either convergence criterion is met.
     """
@@ -1721,7 +1779,9 @@ def check_convergence(
         recent_variance = recent_data.var()
         overall_variance = data.var()
         low_recent_variance = (
-            recent_variance < 0.1 * overall_variance if overall_variance > 0 else True
+            recent_variance < variance_ratio_threshold * overall_variance
+            if overall_variance > 0
+            else True
         )
     else:
         low_recent_variance = False
@@ -1999,9 +2059,9 @@ def assess_training_stability(
         "final_loss_mean": np.mean(final_losses),
         "final_loss_std": np.std(final_losses, ddof=1),
         "final_loss_cv": (
-            np.std(final_losses, ddof=1) / np.mean(final_losses)
-            if np.mean(final_losses) > 0
-            else float("inf")
+            float("nan")
+            if np.mean(final_losses) <= 0
+            else float(np.std(final_losses, ddof=1) / np.mean(final_losses))
         ),
         "final_window_std_mean": np.mean(
             [np.std(run_window, ddof=1) for run_window in final_window_losses]
@@ -2037,7 +2097,13 @@ def assess_training_stability(
 
     # Stability interpretation
     cv = results["final_loss_cv"]
-    if cv < 0.05:
+    if not np.isfinite(cv):
+        results["stability_assessment"] = "undefined"
+        results["stability_assessment_note"] = (
+            "CV is undefined for non-positive mean loss. "
+            "This metric does not admit coefficient of variation analysis."
+        )
+    elif cv < 0.05:
         results["stability_assessment"] = "high"
     elif cv < 0.15:
         results["stability_assessment"] = "moderate"

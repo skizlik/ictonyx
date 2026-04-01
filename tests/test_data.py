@@ -842,9 +842,9 @@ class TestArraysDataHandlerSplitDefaults:
 class TestTextDataHandlerKeras3:
     """TextDataHandler must fail cleanly on Keras 3 (R5-2)."""
 
-    def test_raises_import_error_with_guidance_when_preprocessing_absent(self):
-        with patch("ictonyx.data.HAS_TF_PREPROCESSING", False):
-            with pytest.raises(ImportError, match="Keras 3"):
+    def test_raises_import_error_when_sklearn_absent(self):
+        with patch("ictonyx.data.HAS_SKLEARN", False):
+            with pytest.raises(ImportError, match="scikit-learn"):
                 TextDataHandler(data_path="/tmp/fake.csv")
 
 
@@ -1251,28 +1251,18 @@ class TestTabularDataHandlerCoverage2:
 
 class TestDeprecatedHandlerWarningVisibility:
 
-    def test_text_data_handler_emits_user_warning(self):
-        """TextDataHandler must emit UserWarning (not DeprecationWarning) so it
-        is visible without custom warning filters."""
-        from unittest.mock import patch
+    def test_text_data_handler_no_longer_emits_deprecation_warning(self):
+        """TextDataHandler is now framework-agnostic and does not emit
+        a deprecation warning. Verify construction succeeds without warnings."""
+        import warnings
 
-        with patch("ictonyx.data.HAS_TF_PREPROCESSING", True):
-            import warnings
-
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                try:
-                    from ictonyx.data import TextDataHandler
-
-                    TextDataHandler(data_path="/nonexistent/fake.csv")
-                except Exception:
-                    pass
-            user_warnings = [
-                x
-                for x in w
-                if issubclass(x.category, UserWarning) and "deprecated" in str(x.message).lower()
-            ]
-            assert len(user_warnings) > 0, (
-                "TextDataHandler must emit UserWarning. "
-                "DeprecationWarning is silenced by default."
-            )
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            try:
+                TextDataHandler(data_path="/nonexistent/fake.csv")
+            except (ImportError, ValueError, FileNotFoundError):
+                pass
+        deprecation_warnings = [x for x in w if "deprecated" in str(x.message).lower()]
+        assert (
+            len(deprecation_warnings) == 0
+        ), "New TextDataHandler should not emit deprecation warnings."

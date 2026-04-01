@@ -51,14 +51,16 @@ except ImportError:
     plt = None  # type: ignore[assignment]
     HAS_MATPLOTLIB = False
 
-# Optional sklearn for data splitting
+# Optional sklearn for data splitting and text vectorisation
 try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.model_selection import train_test_split
 
     HAS_SKLEARN = True
 except ImportError:
     HAS_SKLEARN = False
     train_test_split = None
+    TfidfVectorizer = None
 
 
 class DataHandler(ABC):
@@ -659,21 +661,24 @@ class TabularDataHandler(FileDataHandler):
 
 
 class TextDataHandler(FileDataHandler):
-    """Data handler for text classification datasets from CSV files.
+    """Framework-agnostic text classification data handler.
 
-    Loads text data from a CSV, tokenizes using a Keras ``Tokenizer``,
-    pads sequences to uniform length, and splits into train/val/test.
+    Converts raw text to TF-IDF feature vectors compatible with all three
+    model wrappers (Keras, PyTorch, sklearn). Does not require TensorFlow.
 
-    Requires TensorFlow for tokenization and padding. Install with
-    ``pip install tensorflow``.
+    Requires scikit-learn: ``pip install ictonyx[sklearn]``
 
     Args:
         data_path: Path to a CSV file containing text and label columns.
-        text_column: Name of the column containing raw text.
-        target_column: Name of the column containing labels.
-        max_features: Maximum vocabulary size. Default 10000.
-        max_length: Maximum sequence length (longer texts are truncated,
-            shorter texts are padded). Default 200.
+        text_column: Name of the column containing raw text. Default
+            ``'text'``.
+        label_column: Name of the column containing labels. Default
+            ``'label'``.
+        max_features: Maximum number of TF-IDF features. Default 10000.
+        val_split: Fraction of training data to use for validation.
+            Default 0.1.
+        test_split: Fraction of all data to hold out for testing.
+            Default 0.2.
     """
 
     @property
@@ -689,186 +694,155 @@ class TextDataHandler(FileDataHandler):
         data_path: str,
         text_column: str = "text",
         label_column: str = "label",
-        max_words: int = 10000,
-        max_len: int = 100,
+        max_features: int = 10000,
+        val_split: float = 0.1,
+        test_split: float = 0.2,
     ):
-        """
-        Initialize the text data handler.
-
-        Args:
-            data_path: Path to CSV file with text data
-            text_column: Name of column containing text
-            label_column: Name of column containing labels
-            max_words: Maximum vocabulary size
-            max_len: Maximum sequence length
-        """
-        if not HAS_TF_PREPROCESSING:
+        if not HAS_SKLEARN:
             raise ImportError(
-                "TextDataHandler requires tf.keras.preprocessing.text.Tokenizer, "
-                "which was removed in Keras 3 / TF 2.16+. "
-                "Workaround: pre-tokenize your text and use ArraysDataHandler. "
-                "Framework-agnostic support is planned for a future release."
+                "TextDataHandler requires scikit-learn. "
+                "Install with: pip install ictonyx[sklearn]"
             )
-
-        warnings.warn(
-            "TextDataHandler depends on tf.keras.preprocessing APIs removed in "
-            "TF 2.16+. This handler is deprecated and will be replaced with a "
-            "framework-agnostic implementation in v0.4.0. Do not build production "
-            "workflows on this class. Workaround: use TfidfVectorizer and "
-            "ArraysDataHandler.",
-            UserWarning,
-            stacklevel=2,
-        )
 
         super().__init__(data_path)
 
         if not os.path.isfile(self.data_path):
-            raise ValueError("TextDataHandler requires a CSV file path")
+            raise ValueError("TextDataHandler requires a path to an existing CSV file.")
 
         self.text_column = text_column
         self.label_column = label_column
-        self.max_words = max_words
-        self.max_len = max_len
-        self.tokenizer = None
-        self.data = None
-
-    def _load_and_validate_data(self):
-        """Load and validate the text data."""
-        try:
-            self.data = pd.read_csv(self.data_path)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load text data: {e}")
-
-        if self.text_column not in self.data.columns:
-            raise ValueError(
-                f"Text column '{self.text_column}' not found. "
-                f"Available columns: {list(self.data.columns)}"
-            )
-
-        if self.label_column not in self.data.columns:
-            raise ValueError(
-                f"Label column '{self.label_column}' not found. "
-                f"Available columns: {list(self.data.columns)}"
-            )
-
-        # Check for missing values
-        if self.data[self.text_column].isnull().any():
-            null_count = self.data[self.text_column].isnull().sum()
-            logger.warning(f"{null_count} missing values in text column")
-            # Fill with empty strings
-            self.data[self.text_column] = self.data[self.text_column].fillna("")
-
-        if self.data[self.label_column].isnull().any():
-            null_count = self.data[self.label_column].isnull().sum()
-            raise ValueError(f"{null_count} missing values in label column - cannot proceed")
-
-        logger.info(f"Loaded text data: {len(self.data)} samples")
+        self.max_features = max_features
+        self.val_split = val_split
+        self.test_split = test_split
+        self.vectorizer: Optional[Any] = None
 
     def load(
-        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42, **kwargs: Any
+        self,
+        test_split: Optional[float] = None,
+        val_split: Optional[float] = None,
+        random_state: int = 42,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
-        """
-        Load and split the text data.
+        """Load text data, vectorise with TF-IDF, and split.
 
         Returns:
-            Dict with 'train_data', 'val_data', 'test_data' as (X, y) tuples
-            where X contains tokenized and padded sequences
+            Dict with ``'train_data'``, ``'val_data'``, ``'test_data'`` as
+            ``(X, y)`` tuples of numpy arrays. ``X`` has shape
+            ``(n_samples, max_features)``.
         """
-        if not HAS_SKLEARN:
-            raise ImportError(
-                "scikit-learn is required for data splitting. "
-                "Install with: pip install scikit-learn"
-            )
+        _test_split = test_split if test_split is not None else self.test_split
+        _val_split = val_split if val_split is not None else self.val_split
 
-        if test_split + val_split >= 1.0:
+        if _test_split + _val_split >= 1.0:
             raise ValueError("Sum of test_split and val_split must be < 1.0")
 
-        self._load_and_validate_data()
-
-        # Initialize and fit tokenizer
-        assert Tokenizer is not None, "TensorFlow preprocessing not available"
-        assert pad_sequences is not None
-        assert self.data is not None
-        self.tokenizer = Tokenizer(num_words=self.max_words, oov_token="<OOV>")
-
         try:
-            self.tokenizer.fit_on_texts(self.data[self.text_column])
-            sequences = self.tokenizer.texts_to_sequences(self.data[self.text_column])
-            padded_sequences = pad_sequences(sequences, maxlen=self.max_len)
+            df = pd.read_csv(self.data_path)
         except Exception as e:
-            raise RuntimeError(f"Text preprocessing failed: {e}")
+            raise RuntimeError(f"Failed to load text data from {self.data_path}: {e}")
 
-        logger.info(f"Vocabulary size: {len(self.tokenizer.word_index)}")
-        logger.info(f"Sequence length: {self.max_len}")
-
-        # Split data
-        if test_split > 0:
-            X_train, X_test, y_train, y_test = train_test_split(
-                padded_sequences,
-                self.data[self.label_column],
-                test_size=test_split,
-                random_state=random_state,
-            )
-        else:
-            X_train, X_test = padded_sequences, None
-            y_train, y_test = self.data[self.label_column], None
-
-        X_val, y_val = None, None
-        if val_split > 0 and len(X_train) > 1:
-            adj_val_split = val_split / (1 - test_split) if test_split > 0 else val_split
-            if adj_val_split < 1.0:
-                X_train, X_val, y_train, y_val = train_test_split(
-                    X_train, y_train, test_size=adj_val_split, random_state=random_state
+        for col, name in [(self.text_column, "text"), (self.label_column, "label")]:
+            if col not in df.columns:
+                raise ValueError(
+                    f"{name} column '{col}' not found. " f"Available columns: {list(df.columns)}"
                 )
 
+        df[self.text_column] = df[self.text_column].fillna("")
+        if df[self.label_column].isnull().any():
+            raise ValueError(
+                f"{df[self.label_column].isnull().sum()} missing values in "
+                f"label column '{self.label_column}'."
+            )
+
+        texts = df[self.text_column].tolist()
+        labels = df[self.label_column].values
+
+        # First split: carve out test set
+        if _test_split > 0:
+            X_trainval, X_test, y_trainval, y_test = train_test_split(
+                texts, labels, test_size=_test_split, random_state=random_state
+            )
+        else:
+            X_trainval, y_trainval = texts, labels
+            X_test, y_test = None, None
+
+        # Second split: carve out val set from train
+        if _val_split > 0:
+            adj_val = _val_split / (1.0 - _test_split) if _test_split > 0 else _val_split
+            if adj_val < 1.0:
+                X_train, X_val, y_train, y_val = train_test_split(
+                    X_trainval, y_trainval, test_size=adj_val, random_state=random_state
+                )
+            else:
+                X_train, y_train = X_trainval, y_trainval
+                X_val, y_val = None, None
+        else:
+            X_train, y_train = X_trainval, y_trainval
+            X_val, y_val = None, None
+
+        # Fit TF-IDF on training text only; transform val and test
+        self.vectorizer = TfidfVectorizer(max_features=self.max_features)
+        X_train_vec = self.vectorizer.fit_transform(X_train).toarray().astype(np.float32)
+        X_val_vec = (
+            self.vectorizer.transform(X_val).toarray().astype(np.float32)
+            if X_val is not None
+            else None
+        )
+        X_test_vec = (
+            self.vectorizer.transform(X_test).toarray().astype(np.float32)
+            if X_test is not None
+            else None
+        )
+
+        logger.info(
+            f"TextDataHandler: {X_train_vec.shape[0]} train, "
+            f"{X_val_vec.shape[0] if X_val_vec is not None else 0} val, "
+            f"{X_test_vec.shape[0] if X_test_vec is not None else 0} test samples. "
+            f"Features: {X_train_vec.shape[1]}."
+        )
+
         return {
-            "train_data": (X_train, y_train),
-            "val_data": (X_val, y_val) if X_val is not None else None,
-            "test_data": (X_test, y_test) if X_test is not None else None,
+            "train_data": (X_train_vec, y_train),
+            "val_data": (X_val_vec, y_val) if X_val_vec is not None else None,
+            "test_data": (X_test_vec, y_test) if X_test_vec is not None else None,
         }
 
     def get_data_info(self) -> Dict[str, Any]:
         """Get information about the text dataset."""
         info = super().get_data_info()
-
-        try:
-            if self.data is None:
-                self._load_and_validate_data()
-            assert self.data is not None
-
-            info.update(
-                {
-                    "num_samples": len(self.data),
-                    "text_column": self.text_column,
-                    "label_column": self.label_column,
-                    "max_words": self.max_words,
-                    "max_len": self.max_len,
-                    "avg_text_length": self.data[self.text_column].str.len().mean(),
-                    "label_distribution": self.data[self.label_column].value_counts().to_dict(),
-                }
-            )
-
-            if self.tokenizer:
-                info["vocab_size"] = len(self.tokenizer.word_index)
-
-        except Exception as e:
-            info["error"] = f"Could not analyze dataset: {e}"
-
+        info.update(
+            {
+                "text_column": self.text_column,
+                "label_column": self.label_column,
+                "max_features": self.max_features,
+                "vectorizer": (
+                    "TfidfVectorizer" if self.vectorizer is None else str(self.vectorizer)
+                ),
+            }
+        )
         return info
 
 
 class TimeSeriesDataHandler(FileDataHandler):
-    """Data handler for time series data with sliding window extraction.
+    """Framework-agnostic time series data handler using NumPy sliding windows.
 
-    Converts a sequential dataset into supervised learning format by
-    creating input windows of length ``sequence_length`` and predicting
-    the next value. Supports both CSV files and DataFrames.
+    Creates overlapping input windows from a univariate or multivariate
+    time series. Compatible with all three model wrappers (Keras, PyTorch,
+    sklearn). Does not require TensorFlow.
 
     Args:
-        data_path: Path to a CSV file.
-        target_column: Name of the column to predict.
-        sequence_length: Number of time steps in each input window.
-        features: Optional list of feature column names.
+        data_path: Path to a CSV file containing time series data.
+        lookback: Number of time steps in each input window.
+        value_column: Name of the column to use as the target series.
+            Default ``'value'``.
+        target_column: Name of the column to predict. If ``None``, uses
+            ``value_column`` shifted by one step (next-step prediction).
+            Default ``None``.
+        stride: Step between consecutive windows. Default 1.
+        val_split: Fraction of data to use for validation (chronological).
+            Default 0.1.
+        test_split: Fraction of data to hold out for testing (chronological,
+            taken from the end). Default 0.2.
     """
 
     @property
@@ -877,142 +851,174 @@ class TimeSeriesDataHandler(FileDataHandler):
 
     @property
     def return_format(self) -> str:
-        return "generators"
+        return "split_arrays"
 
     def __init__(
         self,
         data_path: str,
-        sequence_length: int = 10,
+        lookback: int = 10,
+        sequence_length: Optional[int] = None,
         value_column: str = "value",
-        batch_size: int = 32,
+        target_column: Optional[str] = None,
+        stride: int = 1,
+        val_split: float = 0.1,
+        test_split: float = 0.2,
     ):
-        """
-        Initialize the time series data handler.
-
-        Args:
-            data_path: Path to CSV file with time series data
-            sequence_length: Length of input sequences
-            value_column: Name of column containing values
-            batch_size: Batch size for generators
-        """
-        if not HAS_TF_PREPROCESSING:
-            raise ImportError(
-                "TimeSeriesDataHandler requires tf.keras.preprocessing.sequence."
-                "TimeseriesGenerator, which was removed in Keras 3 / TF 2.16+. "
-                "Workaround: build a manual sliding-window dataset and use "
-                "ArraysDataHandler. Framework-agnostic support is planned for "
-                "a future release."
-            )
-
-        warnings.warn(
-            "TimeSeriesDataHandler depends on tf.keras.preprocessing APIs removed in "
-            "TF 2.16+. This handler is deprecated and will be replaced with a "
-            "framework-agnostic implementation in v0.4.0. Do not build production "
-            "workflows on this class. Workaround: use TfidfVectorizer and "
-            "ArraysDataHandler.",
-            UserWarning,
-            stacklevel=2,
-        )
-
+        # Accept sequence_length as an alias for lookback (backward compat)
+        if sequence_length is not None:
+            lookback = sequence_length
         super().__init__(data_path)
 
         if not os.path.isfile(self.data_path):
-            raise ValueError("TimeSeriesDataHandler requires a CSV file path")
+            raise ValueError("TimeSeriesDataHandler requires a path to an existing CSV file.")
+        if lookback < 1:
+            raise ValueError(f"lookback must be >= 1, got {lookback}.")
+        if stride < 1:
+            raise ValueError(f"stride must be >= 1, got {stride}.")
 
-        self.sequence_length = sequence_length
+        self.lookback = lookback
         self.value_column = value_column
-        self.batch_size = batch_size
-        self.data = None
+        self.target_column = target_column
+        self.stride = stride
+        self.val_split = val_split
+        self.test_split = test_split
 
-    def _load_and_validate_data(self):
-        """Load and validate the time series data."""
-        try:
-            self.data = pd.read_csv(self.data_path)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load time series data: {e}")
+    @staticmethod
+    def _make_windows(
+        data: np.ndarray,
+        targets: np.ndarray,
+        lookback: int,
+        stride: int = 1,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Create (X, y) pairs from a time series array.
 
-        if self.value_column not in self.data.columns:
-            raise ValueError(
-                f"Value column '{self.value_column}' not found. "
-                f"Available columns: {list(self.data.columns)}"
-            )
-
-        # Validate data types
-        try:
-            self.data[self.value_column] = pd.to_numeric(
-                self.data[self.value_column], errors="coerce"
-            )
-        except Exception:
-            raise ValueError(f"Cannot convert '{self.value_column}' to numeric values")
-
-        if self.data[self.value_column].isnull().any():
-            null_count = self.data[self.value_column].isnull().sum()
-            raise ValueError(f"{null_count} non-numeric or missing values in '{self.value_column}'")
-
-        if len(self.data) < self.sequence_length + 1:
-            raise ValueError(
-                f"Dataset too short ({len(self.data)} samples) for sequence_length={self.sequence_length}"
-            )
-
-        logger.info(f"Loaded time series: {len(self.data)} time points")
-
-    def load(
-        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42, **kwargs: Any
-    ) -> Dict[str, Any]:
-        """
-        Load and split the time series data.
+        Args:
+            data: Feature array of shape ``(n_timesteps, n_features)`` or
+                ``(n_timesteps,)`` for univariate series.
+            targets: Target array of shape ``(n_timesteps,)``.
+            lookback: Input window length.
+            stride: Step between consecutive windows.
 
         Returns:
-            Dict with 'train_data', 'val_data', 'test_data' as TimeseriesGenerator objects
+            Tuple of ``(X, y)`` where X has shape
+            ``(n_windows, lookback, n_features)`` and y has shape
+            ``(n_windows,)``.
         """
-        if test_split + val_split >= 1.0:
+        if data.ndim == 1:
+            data = data.reshape(-1, 1)
+
+        indices = range(lookback, len(data), stride)
+        X = np.stack([data[i - lookback : i] for i in indices]).astype(np.float32)
+        y = targets[list(indices)].astype(np.float32)
+        return X, y
+
+    def load(
+        self,
+        test_split: Optional[float] = None,
+        val_split: Optional[float] = None,
+        random_state: int = 42,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Load CSV, build sliding windows, and split chronologically.
+
+        Splits are chronological (not shuffled) to avoid data leakage.
+        ``random_state`` is accepted for API compatibility but not used.
+
+        Returns:
+            Dict with ``'train_data'``, ``'val_data'``, ``'test_data'`` as
+            ``(X, y)`` tuples. X has shape
+            ``(n_windows, lookback, n_features)``.
+        """
+        _test_split = test_split if test_split is not None else self.test_split
+        _val_split = val_split if val_split is not None else self.val_split
+
+        if _test_split + _val_split >= 1.0:
             raise ValueError("Sum of test_split and val_split must be < 1.0")
 
-        self._load_and_validate_data()
-        assert TimeseriesGenerator is not None
-        assert self.data is not None
+        try:
+            df = pd.read_csv(self.data_path)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load time series data from {self.data_path}: {e}")
 
-        # Convert to numpy array
-        data = self.data[self.value_column].values.reshape(-1, 1)
-        total_len = len(data)
-
-        # Calculate split indices (chronological splits for time series)
-        train_size = int(total_len * (1 - test_split - val_split))
-        val_size = int(total_len * val_split) if val_split > 0 else 0
-
-        # Split data chronologically
-        train_data = data[:train_size]
-
-        val_data = None
-        test_data = None
-
-        if val_size > 0:
-            val_data = data[train_size : train_size + val_size]
-            if test_split > 0:
-                test_data = data[train_size + val_size :]
-        elif test_split > 0:
-            test_data = data[train_size:]
-
-        # Create generators
-        def create_generator(data_array):
-            assert TimeseriesGenerator is not None, "TensorFlow preprocessing not available"
-            if data_array is None or len(data_array) < self.sequence_length + 1:
-                return None
-            return TimeseriesGenerator(
-                data_array, data_array, length=self.sequence_length, batch_size=self.batch_size
+        if self.value_column not in df.columns:
+            raise ValueError(
+                f"value_column '{self.value_column}' not found. "
+                f"Available columns: {list(df.columns)}"
             )
 
-        train_gen = create_generator(train_data)
-        val_gen = create_generator(val_data)
-        test_gen = create_generator(test_data)
+        # Build feature array and target array
+        feature_data = df[self.value_column].values.astype(np.float32)
+
+        target_col = self.target_column or self.value_column
+        if target_col not in df.columns:
+            raise ValueError(
+                f"target_column '{target_col}' not found. " f"Available columns: {list(df.columns)}"
+            )
+        target_data = df[target_col].values.astype(np.float32)
+
+        n = len(feature_data)
+        if n < self.lookback + 1:
+            raise ValueError(
+                f"Dataset too short ({n} rows) for lookback={self.lookback}. "
+                f"Need at least {self.lookback + 1} rows."
+            )
+
+        # Chronological split indices
+        test_size = int(n * _test_split)
+        val_size = int(n * _val_split)
+        train_size = n - test_size - val_size
+
+        if train_size < self.lookback + 1:
+            raise ValueError(
+                f"Training split too small ({train_size} rows) for " f"lookback={self.lookback}."
+            )
+
+        feat_train = feature_data[:train_size]
+        tgt_train = target_data[:train_size]
+
+        feat_val = feature_data[train_size : train_size + val_size] if val_size > 0 else None
+        tgt_val = target_data[train_size : train_size + val_size] if val_size > 0 else None
+
+        feat_test = feature_data[train_size + val_size :] if test_size > 0 else None
+        tgt_test = target_data[train_size + val_size :] if test_size > 0 else None
+
+        X_train, y_train = self._make_windows(feat_train, tgt_train, self.lookback, self.stride)
+
+        val_data = None
+        if feat_val is not None and len(feat_val) > self.lookback:
+            X_val, y_val = self._make_windows(feat_val, tgt_val, self.lookback, self.stride)
+            val_data = (X_val, y_val)
+
+        test_data = None
+        if feat_test is not None and len(feat_test) > self.lookback:
+            X_test, y_test = self._make_windows(feat_test, tgt_test, self.lookback, self.stride)
+            test_data = (X_test, y_test)
 
         logger.info(
-            f"Data splits - Train: {len(train_data) if train_data is not None else 0}, "
-            f"Val: {len(val_data) if val_data is not None else 0}, "
-            f"Test: {len(test_data) if test_data is not None else 0}"
+            f"TimeSeriesDataHandler: {len(X_train)} train windows, "
+            f"{len(val_data[0]) if val_data else 0} val, "
+            f"{len(test_data[0]) if test_data else 0} test. "
+            f"Window shape: {X_train.shape[1:]}."
         )
 
-        return {"train_data": train_gen, "val_data": val_gen, "test_data": test_gen}
+        return {
+            "train_data": (X_train, y_train),
+            "val_data": val_data,
+            "test_data": test_data,
+        }
+
+    def get_data_info(self) -> Dict[str, Any]:
+        """Get information about the time series dataset."""
+        info = super().get_data_info()
+        info.update(
+            {
+                "lookback": self.lookback,
+                "value_column": self.value_column,
+                "target_column": self.target_column,
+                "stride": self.stride,
+            }
+        )
+        return info
 
 
 class ArraysDataHandler(DataHandler):

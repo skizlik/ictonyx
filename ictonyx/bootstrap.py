@@ -20,6 +20,7 @@ References:
       Statistical Science, 11(3), 189-228.
 """
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -74,7 +75,7 @@ def bootstrap_ci(
     n_bootstrap: int = 10000,
     confidence: float = 0.95,
     method: str = "bca",
-    random_state: Optional[int] = None,
+    random_state: Optional[Union[int, np.random.Generator]] = None,
     return_distribution: bool = False,
 ) -> BootstrapCIResult:
     """Compute a bootstrap confidence interval for an arbitrary statistic.
@@ -120,22 +121,37 @@ def bootstrap_ci(
     if method not in ("percentile", "bca"):
         raise ValueError(f"Unknown method '{method}'. Use 'percentile' or 'bca'.")
 
-    rng = np.random.RandomState(random_state)
+    rng = np.random.default_rng(random_state)
     n = len(data)
+
+    if method == "bca" and n < 15:
+        warnings.warn(
+            f"BCa bootstrap CI with n={n} < 15: the jackknife acceleration "
+            "estimate is highly unstable at small sample sizes and may produce "
+            "poor CI coverage. Consider method='percentile' or collecting "
+            "more runs (n >= 15 recommended for BCa).",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # --- Point estimate on original data ---
     point_estimate = float(statistic_fn(data))
 
     # --- Generate bootstrap distribution ---
-    boot_indices = rng.randint(0, n, size=(n_bootstrap, n))
-    boot_stats = np.empty(n_bootstrap)
+    boot_indices = rng.integers(0, n, size=(n_bootstrap, n))
 
-    for i in range(n_bootstrap):
-        boot_sample = data[boot_indices[i]]
-        try:
-            boot_stats[i] = statistic_fn(boot_sample)
-        except Exception:
-            boot_stats[i] = np.nan
+    # Vectorised fast path for the mean — 10-100x faster than the loop
+    _fn_name = getattr(statistic_fn, "__name__", "")
+    if statistic_fn is np.mean or _fn_name == "mean":
+        boot_stats = np.mean(data[boot_indices], axis=1)
+    else:
+        boot_stats = np.empty(n_bootstrap)
+        for i in range(n_bootstrap):
+            boot_sample = data[boot_indices[i]]
+            try:
+                boot_stats[i] = statistic_fn(boot_sample)
+            except Exception:
+                boot_stats[i] = np.nan
 
     # Remove any failed bootstrap replicates
     valid_mask = np.isfinite(boot_stats)
@@ -307,10 +323,13 @@ def bootstrap_mean_difference_ci(
 
     # Resample each group independently to preserve group structure.
     # Resampling the combined array would lose the group boundary.
+    def _mean_difference(a: np.ndarray, b: np.ndarray) -> float:
+        return float(np.mean(a) - np.mean(b))
+
     return _two_sample_bootstrap(
         g1,
         g2,
-        statistic_fn=lambda a, b: float(np.mean(a) - np.mean(b)),
+        statistic_fn=_mean_difference,
         n_bootstrap=n_bootstrap,
         confidence=confidence,
         method=method,
@@ -447,7 +466,7 @@ def _two_sample_bootstrap(
     n_bootstrap: int = 10000,
     confidence: float = 0.95,
     method: str = "bca",
-    random_state: Optional[int] = None,
+    random_state: Optional[Union[int, np.random.Generator]] = None,
     return_distribution: bool = False,
 ) -> BootstrapCIResult:
     """Internal engine for two-sample independent bootstrap.
@@ -463,21 +482,36 @@ def _two_sample_bootstrap(
     if method not in ("percentile", "bca"):
         raise ValueError(f"Unknown method '{method}'. Use 'percentile' or 'bca'.")
 
-    rng = np.random.RandomState(random_state)
+    rng = np.random.default_rng(random_state)
     n1, n2 = len(group1), len(group2)
+
+    if method == "bca" and min(n1, n2) < 15:
+        warnings.warn(
+            f"BCa bootstrap CI with min(n1, n2)={min(n1, n2)} < 15: the jackknife "
+            "acceleration estimate is highly unstable at small sample sizes. "
+            "Consider method='percentile' or collecting more runs.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Point estimate on original data
     point_estimate = float(statistic_fn(group1, group2))
 
     # Generate bootstrap distribution
-    boot_stats = np.empty(n_bootstrap)
-    for i in range(n_bootstrap):
-        boot1 = group1[rng.randint(0, n1, size=n1)]
-        boot2 = group2[rng.randint(0, n2, size=n2)]
-        try:
-            boot_stats[i] = statistic_fn(boot1, boot2)
-        except Exception:
-            boot_stats[i] = np.nan
+    _fn_name = getattr(statistic_fn, "__name__", "")
+    if _fn_name == "_mean_difference":
+        b1 = group1[rng.integers(0, n1, size=(n_bootstrap, n1))]
+        b2 = group2[rng.integers(0, n2, size=(n_bootstrap, n2))]
+        boot_stats = b1.mean(axis=1) - b2.mean(axis=1)
+    else:
+        boot_stats = np.empty(n_bootstrap)
+        for i in range(n_bootstrap):
+            boot1 = group1[rng.integers(0, n1, size=n1)]
+            boot2 = group2[rng.integers(0, n2, size=n2)]
+            try:
+                boot_stats[i] = statistic_fn(boot1, boot2)
+            except Exception:
+                boot_stats[i] = np.nan
 
     valid_mask = np.isfinite(boot_stats)
     n_valid = valid_mask.sum()

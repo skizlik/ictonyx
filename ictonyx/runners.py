@@ -559,12 +559,12 @@ class ExperimentRunner:
                     self.all_runs_metrics = list(prior.all_runs_metrics)
                     self.final_metrics = dict(prior.final_metrics)
                     self.final_test_metrics = list(prior.final_test_metrics)
-                    settings.logger.info(
+                    logger.info(
                         f"Resuming from checkpoint: "
                         f"{len(completed_run_ids)} of {num_runs} runs already complete."
                     )
                 except Exception as e:
-                    settings.logger.warning(
+                    logger.warning(
                         f"Could not load checkpoint from {checkpoint_path}: {e}. "
                         "Starting from scratch."
                     )

@@ -841,31 +841,31 @@ class TestCompareMultipleModels:
                 "model_C": pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69]),
             }
         )
-        assert "overall_test" in results
-        assert results["overall_test"].is_significant()
+        assert results.overall_test is not None
+        assert results.overall_test.is_significant()
 
     def test_nonsignificant_skips_pairwise(self, three_model_results_similar):
         results = compare_multiple_models(three_model_results_similar)
-        assert "overall_test" in results
-        if not results["overall_test"].is_significant():
+        assert results.overall_test is not None
+        if not results.overall_test.is_significant():
             assert "message" in results
-            assert len(results["pairwise_comparisons"]) == 0
+            assert len(results.pairwise_comparisons) == 0
 
     def test_correct_number_of_pairwise_tests(self, three_model_results_different):
         results = compare_multiple_models(three_model_results_different)
         n = 3
         expected_pairs = n * (n - 1) // 2
-        assert results["n_comparisons"] == expected_pairs
-        if results["overall_test"].is_significant():
-            assert len(results["pairwise_comparisons"]) == expected_pairs
+        assert len(results.pairwise_comparisons) <= expected_pairs
+        if results.overall_test.is_significant():
+            assert len(results.pairwise_comparisons) == expected_pairs
 
     def test_correction_applied(self, three_model_results_different):
         results = compare_multiple_models(
             three_model_results_different, correction_method="bonferroni"
         )
-        assert results["correction_method"] == "bonferroni"
-        if results["overall_test"].is_significant():
-            for name, test in results["pairwise_comparisons"].items():
+        assert results.correction_method == "bonferroni"
+        if results.overall_test.is_significant():
+            for name, test in results.pairwise_comparisons.items():
                 assert test.corrected_p_value is not None
                 assert test.corrected_p_value >= test.p_value - 1e-10
 
@@ -878,7 +878,7 @@ class TestCompareMultipleModels:
             results = compare_multiple_models(
                 three_model_results_different, correction_method=method
             )
-            assert results["correction_method"] == method
+            assert results.correction_method == method
 
 
 # ===================================================================

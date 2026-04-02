@@ -372,16 +372,9 @@ def compare_models(
         )
 
     stat_results = _stat_compare(results_store)
-
-    return ModelComparisonResults(
-        overall_test=stat_results["overall_test"],
-        raw_data=results_store,
-        pairwise_comparisons=stat_results.get("pairwise_comparisons", {}),
-        significant_comparisons=stat_results.get("significant_comparisons", []),
-        correction_method=stat_results.get("correction_method", "holm"),
-        n_models=len(results_store),
-        metric=metric,
-    )
+    stat_results.metric = metric
+    stat_results.raw_data = results_store
+    return stat_results
 
 
 # --- Clean Helpers ---

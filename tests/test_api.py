@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from ictonyx import ModelConfig, api
+from ictonyx.analysis import ModelComparisonResults, StatisticalTestResult
 from ictonyx.api import _ensure_wrapper, _get_model_name
 from ictonyx.core import TENSORFLOW_AVAILABLE, BaseModelWrapper
 
@@ -157,7 +158,15 @@ def test_compare_models_flow(
     """Test that compare_models correctly orchestrates multiple studies."""
     # Arrange
     mock_var_study.return_value = mock_runner_results
-    mock_stat_compare.return_value = {"overall_test": "PASSED"}
+    mock_stat_compare.return_value = ModelComparisonResults(
+        overall_test=MagicMock(spec=StatisticalTestResult),
+        raw_data={},
+        pairwise_comparisons={},
+        significant_comparisons=[],
+        correction_method="holm",
+        n_models=2,
+        metric=None,
+    )
 
     models = [dummy_model_func, dummy_model_func_2]
 

@@ -186,8 +186,10 @@ try:
         get_confusion_matrix_df,
         kruskal_wallis_test,
         mann_whitney_test,
+        minimum_detectable_effect,
         paired_wilcoxon_test,
         rank_biserial_correlation,
+        required_runs,
         shapiro_wilk_test,
         validate_sample_sizes,
         wilcoxon_signed_rank_test,
@@ -220,6 +222,8 @@ try:
             "rank_biserial_correlation",
             "eta_squared",
             "apply_multiple_comparison_correction",
+            "required_runs",
+            "minimum_detectable_effect",
         ]
     )
     _has_statistical_functions = True

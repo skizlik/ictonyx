@@ -4,6 +4,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+from scipy import stats
+from scipy.stats import mannwhitneyu
 
 # Bootstrap confidence intervals
 try:
@@ -1438,7 +1440,7 @@ class ModelComparisonResults:
 
 def compare_multiple_models(
     model_results: Dict[str, pd.Series], alpha: float = 0.05, correction_method: str = "holm"
-) -> Dict[str, Any]:
+) -> ModelComparisonResults:
     """
     Compares three or more models using a robust, two-step procedure.
 
@@ -1469,17 +1471,8 @@ def compare_multiple_models(
             Options: 'holm', 'bonferroni', 'fdr_bh'. Defaults to 'holm'.
 
     Returns:
-        Dict[str, Any]: A dictionary containing the complete analysis, with
-        keys:
-            - 'overall_test' (StatisticalTestResult): The result of the
-              Kruskal-Wallis omnibus test.
-            - 'pairwise_comparisons' (Dict[str, StatisticalTestResult]):
-              A dictionary of results for each pair, (e.g., "ModelA_vs_ModelB").
-            - 'significant_comparisons' (List[str]): A list of the names
-              of pairs that were significant after correction.
-            - 'correction_method' (str): The correction method used.
-            - 'message' (str): A message if no pairwise tests were
-              performed (because the overall test was not significant).
+        :class:`ModelComparisonResults` containing the omnibus test,
+        pairwise comparisons, and significant comparison names.
 
     Raises:
         ValueError: If fewer than two models are provided in `model_results`.
@@ -1491,19 +1484,13 @@ def compare_multiple_models(
     if n_models < 2:
         raise ValueError("Need at least 2 models to compare")
 
-    # Overall test first (Kruskal-Wallis - more robust than ANOVA)
+    # Omnibus test (Kruskal-Wallis)
     overall_result = kruskal_wallis_test(model_results, alpha=alpha)
 
-    results: Dict[str, Any] = {
-        "overall_test": overall_result,
-        "pairwise_comparisons": {},
-        "correction_method": correction_method,
-        "family_wise_error_rate": alpha,
-        "n_comparisons": n_models * (n_models - 1) // 2,
-    }
+    pairwise_comparisons: Dict[str, StatisticalTestResult] = {}
+    significant_comparisons: List[str] = []
 
     if overall_result.is_significant(alpha):
-        # Perform pairwise comparisons
         pairwise_tests = []
         pairwise_names = []
 
@@ -1511,38 +1498,35 @@ def compare_multiple_models(
             for j in range(i + 1, n_models):
                 name1, name2 = model_names[i], model_names[j]
                 comparison_name = f"{name1}_vs_{name2}"
-
                 pairwise_result = mann_whitney_test(
                     model_results[name1], model_results[name2], alpha=alpha
                 )
-
                 pairwise_tests.append(pairwise_result)
                 pairwise_names.append(comparison_name)
+                pairwise_comparisons[comparison_name] = pairwise_result
 
-                results["pairwise_comparisons"][comparison_name] = pairwise_result
-
-        # Apply multiple comparison correction
+        # Multiple comparison correction
         p_values = [test.p_value for test in pairwise_tests]
-        corrected_p_values, correction_description = apply_multiple_comparison_correction(
+        corrected_p_values, _ = apply_multiple_comparison_correction(
             p_values, method=correction_method
         )
-
-        # Update results with corrected p-values
-        for i, (name, test) in enumerate(zip(pairwise_names, pairwise_tests)):
+        for i, test in enumerate(pairwise_tests):
             test.corrected_p_value = corrected_p_values[i]
             test.correction_method = correction_method
 
-        results["correction_description"] = correction_description
-        results["significant_comparisons"] = [
-            name
-            for name, test in results["pairwise_comparisons"].items()
-            if test.is_significant(alpha)
+        significant_comparisons = [
+            name for name, test in pairwise_comparisons.items() if test.is_significant(alpha)
         ]
-    else:
-        results["message"] = "Overall test not significant - no pairwise comparisons performed"
-        results["significant_comparisons"] = []
 
-    return results
+    return ModelComparisonResults(
+        overall_test=overall_result,
+        raw_data=model_results,
+        pairwise_comparisons=pairwise_comparisons,
+        significant_comparisons=significant_comparisons,
+        correction_method=correction_method,
+        n_models=n_models,
+        metric=None,
+    )
 
 
 # UTILITY FUNCTIONS FOR INTERPRETATION
@@ -2111,3 +2095,108 @@ def assess_training_stability(
         results["stability_assessment"] = "low"
 
     return results
+
+
+def required_runs(
+    effect_size: float,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    n_sim: int = 1000,
+    alternative: str = "two-sided",
+) -> int:
+    """Minimum runs per model to detect a given effect size at stated power.
+
+    Uses simulation-based power calculation for the Mann-Whitney U test,
+    which is the library's default comparison method.
+
+    Args:
+        effect_size: Expected rank-biserial correlation (0–1). Conventions:
+            small=0.1, medium=0.3, large=0.5 (Cohen 1988).
+        alpha: Type I error rate. Default 0.05.
+        power: Desired statistical power (0–1). Default 0.80.
+        n_sim: Number of simulations per candidate n. Default 1000.
+        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            Default ``'two-sided'``.
+
+    Returns:
+        Minimum number of runs per model.
+
+    Raises:
+        ValueError: If ``effect_size`` is not in (0, 1) or ``power`` is
+            not in (0, 1).
+    """
+    if not 0 < effect_size < 1:
+        raise ValueError(f"effect_size must be in (0, 1), got {effect_size}.")
+    if not 0 < power < 1:
+        raise ValueError(f"power must be in (0, 1), got {power}.")
+
+    rng = np.random.default_rng(42)
+    # Convert rank-biserial r to probability of superiority P(A > B)
+    # r = 2*P - 1  =>  P = (r + 1) / 2
+    p_superiority = (effect_size + 1.0) / 2.0
+
+    for n in range(2, 201):
+        rejections = 0
+        for _ in range(n_sim):
+            # Simulate two groups: group A stochastically dominates group B
+            # by generating from distributions separated by effect_size
+            shift = stats.norm.ppf(p_superiority)
+            a = rng.normal(shift / 2, 1.0, n)
+            b = rng.normal(-shift / 2, 1.0, n)
+            _, p = mannwhitneyu(a, b, alternative=alternative)
+            if p < alpha:
+                rejections += 1
+        empirical_power = rejections / n_sim
+        if empirical_power >= power:
+            return n
+
+    return 200  # cap — warn user if power not achievable within reasonable n
+
+
+def minimum_detectable_effect(
+    n_runs: int,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    n_sim: int = 1000,
+    alternative: str = "two-sided",
+) -> float:
+    """Minimum rank-biserial correlation detectable at given n, alpha, and power.
+
+    Args:
+        n_runs: Number of runs per model.
+        alpha: Type I error rate. Default 0.05.
+        power: Desired statistical power (0–1). Default 0.80.
+        n_sim: Number of simulations per candidate effect size. Default 1000.
+        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            Default ``'two-sided'``.
+
+    Returns:
+        Minimum detectable rank-biserial correlation in (0, 1).
+
+    Raises:
+        ValueError: If ``n_runs`` < 2 or ``power`` is not in (0, 1).
+    """
+    if n_runs < 2:
+        raise ValueError(f"n_runs must be >= 2, got {n_runs}.")
+    if not 0 < power < 1:
+        raise ValueError(f"power must be in (0, 1), got {power}.")
+
+    rng = np.random.default_rng(42)
+
+    for effect_size_pct in range(1, 100):
+        effect_size = effect_size_pct / 100.0
+        p_superiority = (effect_size + 1.0) / 2.0
+        shift = stats.norm.ppf(p_superiority)
+
+        rejections = 0
+        for _ in range(n_sim):
+            a = rng.normal(shift / 2, 1.0, n_runs)
+            b = rng.normal(-shift / 2, 1.0, n_runs)
+            _, p = mannwhitneyu(a, b, alternative=alternative)
+            if p < alpha:
+                rejections += 1
+        empirical_power = rejections / n_sim
+        if empirical_power >= power:
+            return effect_size
+
+    return 0.99  # cap

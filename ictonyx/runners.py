@@ -576,40 +576,49 @@ class ExperimentRunner:
                 stacklevel=2,
             )
 
-            # Reset state from any previous run — must happen BEFORE checkpoint load
-            self.all_runs_metrics.clear()
-            self.final_metrics.clear()
-            self.final_test_metrics.clear()
-            self.failed_runs.clear()
+        # Reset state from any previous run — must happen BEFORE checkpoint load
+        self.all_runs_metrics.clear()
+        self.final_metrics.clear()
+        self.final_test_metrics.clear()
+        self.failed_runs.clear()
 
-            # Resume from checkpoint if available
-            completed_run_ids: set = set()
-            if checkpoint_dir is not None:
-                import os
-                import pickle as _pickle
+        # Resume from checkpoint if available
+        completed_run_ids: set = set()
+        if checkpoint_dir is not None:
+            import os
+            import pickle as _pickle
 
-                checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
-                if os.path.exists(checkpoint_path):
-                    try:
-                        with open(checkpoint_path, "rb") as _f:
-                            _prior_data = _pickle.load(_f)
-                        self.all_runs_metrics = list(_prior_data["all_runs_metrics"])
-                        self.final_metrics = dict(_prior_data["final_metrics"])
-                        self.final_test_metrics = list(_prior_data["final_test_metrics"])
-                        completed_run_ids = {
-                            int(df["run_num"].iloc[0])
-                            for df in self.all_runs_metrics
-                            if not df.empty
-                        }
-                        logger.info(
-                            f"Resuming from checkpoint: "
-                            f"{len(completed_run_ids)} of {num_runs} runs already complete."
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Could not load checkpoint from {checkpoint_path}: {e}. "
-                            "Starting from scratch."
-                        )
+            checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
+            if os.path.exists(checkpoint_path):
+                try:
+                    with open(checkpoint_path, "rb") as _f:
+                        _prior_data = _pickle.load(_f)
+                    self.all_runs_metrics = list(_prior_data["all_runs_metrics"])
+                    self.final_metrics = dict(_prior_data["final_metrics"])
+                    self.final_test_metrics = list(_prior_data["final_test_metrics"])
+                    completed_run_ids = {
+                        int(df["run_num"].iloc[0]) for df in self.all_runs_metrics if not df.empty
+                    }
+                    logger.info(
+                        f"Resuming from checkpoint: "
+                        f"{len(completed_run_ids)} of {num_runs} runs already complete."
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Could not load checkpoint from {checkpoint_path}: {e}. "
+                        "Starting from scratch."
+                    )
+
+        if use_parallel and self.test_data is not None:
+            warnings.warn(
+                "use_parallel=True: test set evaluation is not supported in parallel "
+                "mode. Each training run executes in a joblib worker process; test "
+                "metrics cannot be returned to the parent. has_test_data will be "
+                "False and final_test_metrics will be empty. Use "
+                "use_process_isolation=True if you need per-run test evaluation.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # Generate independent child seeds up front.
         # SeedSequence guarantees uncorrelated children regardless of proximity.

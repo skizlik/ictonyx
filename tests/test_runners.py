@@ -2041,11 +2041,115 @@ class TestCompareResults:
         assert result.overall_test is not None
 
 
+class TestCheckpointResume:
+    """Verify that checkpoint_dir saves progress and a resumed run
+    skips already-completed runs exactly."""
+
+    def _make_runner(self, verbose=False):
+        def model_builder(config):
+            return MockModel(config)
+
+        return ExperimentRunner(
+            model_builder=model_builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig({"epochs": 2}),
+            verbose=verbose,
+        )
+
+    def test_checkpoint_file_is_created(self, tmp_path):
+        """A checkpoint.pkl file must exist after the first run completes."""
+        runner = self._make_runner()
+        runner.run_study(num_runs=3, checkpoint_dir=str(tmp_path))
+        assert (tmp_path / "checkpoint.pkl").exists()
+
+    def test_checkpoint_resumes_correctly(self, tmp_path):
+        """A fresh runner loading the checkpoint must produce exactly
+        num_runs results, not 2x, and must not re-run completed runs."""
+        checkpoint_dir = str(tmp_path)
+
+        # First run: complete 3 runs and save checkpoint
+        runner1 = self._make_runner()
+        results1 = runner1.run_study(num_runs=3, checkpoint_dir=checkpoint_dir)
+        assert results1.n_runs == 3
+
+        # Second run: same runner type, same checkpoint dir.
+        # Since all 3 runs are already complete, 0 new runs should execute.
+        runner2 = self._make_runner()
+        results2 = runner2.run_study(num_runs=3, checkpoint_dir=checkpoint_dir)
+
+        assert results2.n_runs == 3
+        assert len(results2.all_runs_metrics) == 3
+        assert len(results2.final_metrics.get("val_accuracy", [])) == 3
+
+    def test_checkpoint_missing_file_starts_fresh(self, tmp_path):
+        """If checkpoint dir exists but has no checkpoint.pkl, start fresh."""
+        runner = self._make_runner()
+        # Point at a real directory with no checkpoint file
+        results = runner.run_study(num_runs=3, checkpoint_dir=str(tmp_path))
+        assert results.n_runs == 3
+
+
+class TestParallelExecution:
+    """Verify that use_parallel=True produces exactly num_runs results
+    with final_metrics fully populated — not doubled, not empty."""
+
+    def _make_runner(self, verbose=False):
+        def model_builder(config):
+            return MockModel(config)
+
+        return ExperimentRunner(
+            model_builder=model_builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig({"epochs": 2}),
+            verbose=verbose,
+        )
+
+    def test_parallel_all_runs_metrics_count(self):
+        """all_runs_metrics must have exactly num_runs entries, not 2x."""
+        runner = self._make_runner()
+        results = runner.run_study(num_runs=4, use_parallel=True, n_jobs=2)
+        assert len(results.all_runs_metrics) == 4
+
+    def test_parallel_final_metrics_populated(self):
+        """final_metrics must be populated after a parallel run."""
+        runner = self._make_runner()
+        results = runner.run_study(num_runs=4, use_parallel=True, n_jobs=2)
+        assert "val_accuracy" in results.final_metrics
+        assert len(results.final_metrics["val_accuracy"]) == 4
+
+    def test_parallel_n_runs_matches(self):
+        """VariabilityStudyResults.n_runs must equal num_runs."""
+        runner = self._make_runner()
+        results = runner.run_study(num_runs=4, use_parallel=True, n_jobs=2)
+        assert results.n_runs == 4
+
+    def test_parallel_get_metric_values_works(self):
+        """get_metric_values() must succeed after a parallel run."""
+        runner = self._make_runner()
+        results = runner.run_study(num_runs=4, use_parallel=True, n_jobs=2)
+        values = results.get_metric_values("val_accuracy")
+        assert len(values) == 4
+        assert all(isinstance(v, float) for v in values)
+
+    def test_sequential_and_parallel_same_count(self):
+        """Sequential and parallel runs on the same setup must produce
+        the same number of results."""
+        runner_seq = self._make_runner()
+        runner_par = self._make_runner()
+        results_seq = runner_seq.run_study(num_runs=4)
+        results_par = runner_par.run_study(num_runs=4, use_parallel=True, n_jobs=2)
+        assert results_seq.n_runs == results_par.n_runs
+        assert len(results_seq.final_metrics["val_accuracy"]) == len(
+            results_par.final_metrics["val_accuracy"]
+        )
+
+
 class TestSetupMlflow:
     def test_setup_mlflow_raises_without_mlflow(self):
+        import sys
         from unittest.mock import patch
 
-        with patch("ictonyx.utils.HAS_MLFLOW", False, create=True):
+        with patch.dict(sys.modules, {"mlflow": None}):
             from ictonyx.utils import setup_mlflow
 
             with pytest.raises(ImportError, match="MLflow"):

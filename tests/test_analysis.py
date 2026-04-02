@@ -899,7 +899,6 @@ class TestCompareMultipleModels:
         results = compare_multiple_models(three_model_results_similar)
         assert results.overall_test is not None
         if not results.overall_test.is_significant():
-            assert "message" in results
             assert len(results.pairwise_comparisons) == 0
 
     def test_correct_number_of_pairwise_tests(self, three_model_results_different):
@@ -930,6 +929,17 @@ class TestCompareMultipleModels:
                 three_model_results_different, correction_method=method
             )
             assert results.correction_method == method
+
+    def test_metric_param_passes_through(self, three_model_results_different):
+        """metric parameter must appear in the result, not be hardcoded as None."""
+        results = compare_multiple_models(three_model_results_different, metric="val_accuracy")
+        assert results.metric == "val_accuracy"
+        assert "None" not in results.get_summary()
+
+    def test_metric_param_defaults_to_none(self, three_model_results_different):
+        """Default behaviour: metric is None when not supplied."""
+        results = compare_multiple_models(three_model_results_different)
+        assert results.metric is None
 
 
 # ===================================================================

@@ -10,7 +10,7 @@ import random
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
 if TYPE_CHECKING:
     from .analysis import StatisticalTestResult
@@ -504,6 +504,8 @@ class ExperimentRunner:
         epochs_per_run: Optional[int] = None,
         stop_on_failure_rate: float = 0.8,
         checkpoint_dir: Optional[str] = None,
+        use_parallel: bool = False,
+        n_jobs: int = -1,
     ) -> "VariabilityStudyResults":
         """Execute the complete variability study.
 
@@ -527,6 +529,12 @@ class ExperimentRunner:
                 ``checkpoint.joblib`` file from a previous interrupted run,
                 execution resumes from where it left off. Default ``None``
                 (no checkpointing).
+            use_parallel: If ``True``, fan training runs across multiple
+                processes using ``joblib.Parallel``. Safe for sklearn
+                models. Not recommended for Keras/TF. Mutually exclusive
+                with ``use_process_isolation``. Default ``False``.
+            n_jobs: Number of parallel workers. ``-1`` uses all available
+                CPUs. Ignored when ``use_parallel=False``. Default ``-1``.
 
         Returns:
             :class:`VariabilityStudyResults` with per-run DataFrames, final
@@ -535,6 +543,20 @@ class ExperimentRunner:
 
         if num_runs < 1:
             raise ValueError(f"num_runs must be at least 1, got {num_runs}.")
+
+        if use_parallel and self.use_process_isolation:
+            raise ValueError(
+                "use_parallel=True and use_process_isolation=True are mutually exclusive. "
+                "Use one or the other, not both."
+            )
+
+        if use_parallel and HAS_TENSORFLOW:
+            warnings.warn(
+                "use_parallel=True with Keras/TF models may cause GPU memory conflicts "
+                "or session state corruption. Consider use_process_isolation=True instead.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # Resume from checkpoint if available
         completed_run_ids: set = set()
@@ -673,30 +695,51 @@ class ExperimentRunner:
 
             self.tracker.end_run()
 
-        # Print summary
-        if self.verbose:
-            successful = len(self.all_runs_metrics)
-            logger.info("\nStudy Summary:")
-            logger.info(f"  Successful runs: {successful}/{num_runs}")
-            if self.failed_runs:
-                logger.warning(f"  Failed runs: {self.failed_runs}")
-            for metric_name, values in self.final_metrics.items():
-                if values:
-                    mean_val = np.mean(values)
-                    std_val = np.std(values, ddof=1)
-                    logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {std_val:.4f})")
+            # --- Parallel execution path ---
+            if use_parallel and not self.use_process_isolation:
+                try:
+                    from joblib import Parallel, delayed
+                except ImportError:
+                    raise ImportError(
+                        "joblib is required for parallel execution. "
+                        "Install with: pip install joblib"
+                    )
 
-        results = VariabilityStudyResults(
-            all_runs_metrics=self.all_runs_metrics,
-            final_metrics=self.final_metrics,
-            final_test_metrics=self.final_test_metrics,
-            seed=self.seed,
-        )
+                logger.info(f"Running {num_runs} runs in parallel (n_jobs={n_jobs})...")
 
-        if hasattr(self.tracker, "log_study_summary"):
-            self.tracker.log_study_summary(results)
+                parallel_results = Parallel(n_jobs=n_jobs, backend="loky")(
+                    delayed(self._run_single_fit)(run_id=i + 1, epochs=epochs_per_run)
+                    for i in range(num_runs)
+                )
 
-        return results
+                for metrics_df in parallel_results:
+                    if metrics_df is not None:
+                        self.all_runs_metrics.append(metrics_df)
+
+            # Print summary
+            if self.verbose:
+                successful = len(self.all_runs_metrics)
+                logger.info("\nStudy Summary:")
+                logger.info(f"  Successful runs: {successful}/{num_runs}")
+                if self.failed_runs:
+                    logger.warning(f"  Failed runs: {self.failed_runs}")
+                for metric_name, values in self.final_metrics.items():
+                    if values:
+                        mean_val = np.mean(values)
+                        std_val = np.std(values, ddof=1)
+                        logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {std_val:.4f})")
+
+            results = VariabilityStudyResults(
+                all_runs_metrics=self.all_runs_metrics,
+                final_metrics=self.final_metrics,
+                final_test_metrics=self.final_test_metrics,
+                seed=self.seed,
+            )
+
+            if hasattr(self.tracker, "log_study_summary"):
+                self.tracker.log_study_summary(results)
+
+            return results
 
     def get_summary_stats(self) -> Dict[str, Any]:
         """Get summary statistics for the completed study.
@@ -1276,10 +1319,13 @@ class VariabilityStudyResults:
         if tracking_uri:
             mlflow.set_tracking_uri(tracking_uri)
 
-        runs_df = mlflow.search_runs(
-            experiment_names=[experiment_name],
-            filter_string=run_filter or "",
-            order_by=["start_time ASC"],
+        runs_df = cast(
+            pd.DataFrame,
+            mlflow.search_runs(
+                experiment_names=[experiment_name],
+                filter_string=run_filter or "",
+                order_by=["start_time ASC"],
+            ),
         )
 
         if runs_df.empty:
@@ -1454,6 +1500,8 @@ def run_variability_study(
     gpu_memory_limit: Optional[int] = None,
     seed: Optional[int] = None,
     verbose: bool = True,
+    use_parallel: bool = False,
+    n_jobs: int = -1,
 ) -> VariabilityStudyResults:
     """Run a complete variability study (convenience function).
 
@@ -1488,7 +1536,12 @@ def run_variability_study(
         verbose=verbose,
     )
 
-    return runner.run_study(num_runs=num_runs, epochs_per_run=epochs_per_run)
+    return runner.run_study(
+        num_runs=num_runs,
+        epochs_per_run=epochs_per_run,
+        use_parallel=use_parallel,
+        n_jobs=n_jobs,
+    )
 
 
 def run_grid_study(

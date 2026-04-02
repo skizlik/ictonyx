@@ -42,6 +42,8 @@ def variability_study(
     use_process_isolation: bool = False,
     seed: Optional[int] = None,
     verbose: bool = True,
+    use_parallel: bool = False,
+    n_jobs: int = -1,
     **kwargs,
 ) -> VariabilityStudyResults:
     """Run a variability study: train a model N times and collect distributions.
@@ -90,6 +92,12 @@ def variability_study(
             statistically uncorrelated RNG streams. If ``None``, a random
             seed is generated and stored in the results.
         verbose: If ``False``, suppress all training output. Default ``True``.
+        use_parallel: If ``True``, fan training runs across multiple
+            processes using ``joblib``. Safe for sklearn models. Not
+            recommended for Keras/TF models. Mutually exclusive with
+            ``use_process_isolation``. Default ``False``.
+        n_jobs: Number of parallel workers. ``-1`` uses all CPUs.
+            Ignored when ``use_parallel=False``. Default ``-1``.
         **kwargs: Additional arguments forwarded to both the
             :class:`~ictonyx.config.ModelConfig` and the data handler
             (e.g. ``image_size``, ``test_split``, ``val_split``).
@@ -171,6 +179,8 @@ def variability_study(
         gpu_memory_limit=kwargs.get("gpu_memory_limit"),
         seed=seed,
         verbose=verbose,
+        use_parallel=use_parallel,
+        n_jobs=n_jobs,
     )
 
 

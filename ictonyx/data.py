@@ -982,15 +982,18 @@ class TimeSeriesDataHandler(FileDataHandler):
         feat_test = feature_data[train_size + val_size :] if test_size > 0 else None
         tgt_test = target_data[train_size + val_size :] if test_size > 0 else None
 
+        assert tgt_train is not None
         X_train, y_train = self._make_windows(feat_train, tgt_train, self.lookback, self.stride)
 
         val_data = None
         if feat_val is not None and len(feat_val) > self.lookback:
+            assert tgt_val is not None
             X_val, y_val = self._make_windows(feat_val, tgt_val, self.lookback, self.stride)
             val_data = (X_val, y_val)
 
         test_data = None
         if feat_test is not None and len(feat_test) > self.lookback:
+            assert tgt_test is not None
             X_test, y_test = self._make_windows(feat_test, tgt_test, self.lookback, self.stride)
             test_data = (X_test, y_test)
 

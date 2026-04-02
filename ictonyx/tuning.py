@@ -219,10 +219,11 @@ class HyperparameterTuner:
         study.optimize(objective, n_trials=max_evals, timeout=timeout, n_jobs=n_jobs)
 
         self._optuna_study = study
-        self.best_params = study.best_params
+        best = study.best_params
+        self.best_params = best
         logger.info(f"Optimisation complete. Best {self.metric}: {study.best_value:.4f}")
-        logger.info(f"Best parameters: {self.best_params}")
-        return self.best_params
+        logger.info(f"Best parameters: {best}")
+        return best
 
     def _tune_hyperopt(self, param_space: Dict[str, Any], max_evals: int) -> Dict[str, Any]:
         """Legacy Hyperopt backend. Deprecated — will be removed in v0.5.0."""
@@ -250,6 +251,7 @@ class HyperparameterTuner:
         logger.info(f"Starting hyperopt optimization with {max_evals} evaluations...")
 
         def objective(params: Dict[str, Any]) -> Dict[str, Any]:
+            assert self.trials is not None
             trial_num = len(self.trials.trials) + 1
             logger.info(f"\nTrial {trial_num}/{max_evals}: {params}")
             try:
@@ -303,8 +305,9 @@ class HyperparameterTuner:
                 trials=self.trials,
                 verbose=False,
             )
-            self.best_params = space_eval(param_space, best_params)
-            return self.best_params
+            result = space_eval(param_space, best_params)
+            self.best_params = result
+            return result
         except Exception as e:
             raise RuntimeError(f"Hyperopt optimization failed: {e}")
 
@@ -360,8 +363,9 @@ class HyperparameterTuner:
             return self._optuna_study.trials_dataframe()
         elif self.trials is not None and self.trials.trials:
             # Legacy hyperopt path
+            _trials = self.trials  # narrow type for mypy
             trial_data = []
-            for i, trial in enumerate(self.trials.trials):
+            for i, trial in enumerate(_trials.trials):
                 row: Dict[str, Any] = {"trial_id": i}
                 if "misc" in trial and "vals" in trial["misc"]:
                     for param_name, param_values in trial["misc"]["vals"].items():

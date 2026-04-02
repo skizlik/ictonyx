@@ -796,9 +796,9 @@ class TestRunnerDefaultEpochs:
             model_config=ModelConfig({"epochs": 7}),
             verbose=False,
         )
-        results = runner.run_study(num_runs=1, epochs_per_run=None)
+        results = runner.run_study(num_runs=2, epochs_per_run=None)
 
-        assert results.n_runs == 1
+        assert results.n_runs == 2
         # Each run's DataFrame should have 7 epochs
         df = results.all_runs_metrics[0]
         assert len(df) == 7

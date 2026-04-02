@@ -1439,7 +1439,10 @@ class ModelComparisonResults:
 
 
 def compare_multiple_models(
-    model_results: Dict[str, pd.Series], alpha: float = 0.05, correction_method: str = "holm"
+    model_results: Dict[str, pd.Series],
+    alpha: float = 0.05,
+    correction_method: str = "holm",
+    metric: Optional[str] = None,
 ) -> ModelComparisonResults:
     """
     Compares three or more models using a robust, two-step procedure.
@@ -1525,7 +1528,7 @@ def compare_multiple_models(
         significant_comparisons=significant_comparisons,
         correction_method=correction_method,
         n_models=n_models,
-        metric=None,
+        metric=metric,
     )
 
 
@@ -2103,6 +2106,7 @@ def required_runs(
     power: float = 0.80,
     n_sim: int = 1000,
     alternative: str = "two-sided",
+    random_state: Optional[int] = 42,
 ) -> int:
     """Minimum runs per model to detect a given effect size at stated power.
 
@@ -2130,7 +2134,7 @@ def required_runs(
     if not 0 < power < 1:
         raise ValueError(f"power must be in (0, 1), got {power}.")
 
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(random_state)
     # Convert rank-biserial r to probability of superiority P(A > B)
     # r = 2*P - 1  =>  P = (r + 1) / 2
     p_superiority = (effect_size + 1.0) / 2.0
@@ -2159,6 +2163,7 @@ def minimum_detectable_effect(
     power: float = 0.80,
     n_sim: int = 1000,
     alternative: str = "two-sided",
+    random_state: Optional[int] = 42,
 ) -> float:
     """Minimum rank-biserial correlation detectable at given n, alpha, and power.
 
@@ -2181,7 +2186,7 @@ def minimum_detectable_effect(
     if not 0 < power < 1:
         raise ValueError(f"power must be in (0, 1), got {power}.")
 
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(random_state)
 
     for effect_size_pct in range(1, 100):
         effect_size = effect_size_pct / 100.0

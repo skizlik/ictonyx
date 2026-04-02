@@ -24,20 +24,23 @@ Ictonyx trains a model N times under independent random seeds, collects the full
 
 ## Installation
 ```bash
-# scikit-learn (no deep learning)
-pip install ictonyx[sklearn]
+pip install ictonyx
 
-# TensorFlow / Keras
-pip install ictonyx[tensorflow]
+### Optional extras
 
-# PyTorch
-pip install ictonyx[torch]
+| Extra | What it includes | Install |
+|---|---|---|
+| `sklearn` | scikit-learn, joblib | `pip install ictonyx[sklearn]` |
+| `tensorflow` | TensorFlow, Keras | `pip install ictonyx[tensorflow]` |
+| `torch` | PyTorch | `pip install ictonyx[torch]` |
+| `mlflow` | MLflow tracking | `pip install ictonyx[mlflow]` |
+| `explain` | SHAP explainability | `pip install ictonyx[explain]` |
+| `tuning` | Optuna hyperparameter tuning | `pip install ictonyx[tuning]` |
+| `isolation` | Process isolation for GPU runs | `pip install ictonyx[isolation]` |
+| `progress` | tqdm progress bars | `pip install ictonyx[progress]` |
+| `all` | Everything above | `pip install ictonyx[all]` |
 
-# Everything
-pip install ictonyx[all]
-
-# Process isolation for long GPU runs (recommended with tensorflow or torch)
-pip install "ictonyx[tensorflow,isolation]"
+Extras can be combined: `pip install "ictonyx[tensorflow,isolation]"`
 ```
 
 Requires Python 3.10+. Current release: **0.3.15** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)

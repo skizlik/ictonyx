@@ -541,8 +541,12 @@ class ExperimentRunner:
             metric distributions, and optional test-set metrics.
         """
 
-        if num_runs < 1:
-            raise ValueError(f"num_runs must be at least 1, got {num_runs}.")
+        if num_runs < 2:
+            raise ValueError(
+                f"num_runs must be at least 2 to measure variability, got {num_runs}. "
+                "A single run produces no distribution to analyse. "
+                "Call wrapper.fit() and wrapper.evaluate() directly for single-run use."
+            )
 
         if use_parallel and self.use_process_isolation:
             raise ValueError(
@@ -1446,8 +1450,8 @@ class GridStudyResults:
                 row = {
                     **param_combo,
                     "mean": float(values.mean()),
-                    "sd": float(values.std()),
-                    "se": float(values.std() / np.sqrt(n)),
+                    "sd": float(values.std(ddof=1)),
+                    "se": float(values.std(ddof=1) / np.sqrt(n)),
                     "min": float(values.min()),
                     "max": float(values.max()),
                     "n": n,
@@ -1684,8 +1688,8 @@ def run_grid_study(
             values: pd.Series = pd.Series(result.get_metric_values(metric))
             if verbose:
                 logger.info(
-                    f"  Mean: {values.mean():.4f}  SD: {values.std():.4f}  "
-                    f"SE: {values.std() / np.sqrt(len(values)):.4f}"
+                    f"  Mean: {values.mean():.4f}  SD: {values.std(ddof=1):.4f}  "
+                    f"SE: {values.std(ddof=1) / np.sqrt(len(values)):.4f}"
                 )
         except KeyError:
             if verbose:

@@ -287,10 +287,8 @@ try:
         ]
     )
     _has_plotting_functions = True
-except ImportError as e:
+except ImportError:
     _has_plotting_functions = False
-    if os.getenv("DEBUG"):
-        logger.debug(f"Plotting functions not available: {e}")
 
 # MLflow logger and utilities
 try:

@@ -419,8 +419,20 @@ def _get_model_builder(model: Any) -> Callable:
             if "random_state" in inspect.signature(_model_class).parameters:
                 try:
                     return _ensure_wrapper(_model_class(random_state=conf.get("run_seed")))
-                except TypeError:
-                    return _ensure_wrapper(_model_class())
+                except TypeError as e:
+                    if "random_state" in str(e) or "unexpected keyword" in str(e):
+                        warnings.warn(
+                            f"Could not pass random_state to {_model_class.__name__}. "
+                            f"Reproducibility not guaranteed. Original error: {e}",
+                            UserWarning,
+                            stacklevel=3,
+                        )
+                        return _ensure_wrapper(_model_class())
+                    raise ValueError(
+                        f"Failed to construct {_model_class.__name__}: {e}. "
+                        "Check that the class accepts the arguments in your ModelConfig."
+                    ) from e
+
             return _ensure_wrapper(_model_class())
 
         return _build_from_class
@@ -520,26 +532,21 @@ def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
     if isinstance(obj, BaseModelWrapper):
         return obj
 
-        # Framework-specific checks MUST come before the generic duck-typing check.
-        # Keras models expose .fit() and .predict(), so they would be mis-wrapped as
-        # ScikitLearnModelWrapper if the duck-typing branch ran first.
-        # Keras / TensorFlow detection via string inspection — avoids a hard TF import.
-    if "keras" in str(type(obj)).lower() or "tensorflow" in str(type(obj)).lower():
-        if not TENSORFLOW_AVAILABLE:
-            raise ImportError(
-                "TensorFlow is required to auto-wrap Keras models. "
-                "Install with: pip install tensorflow"
-            )
-        from .core import KerasModelWrapper
+        # Framework-specific checks MUST come before generic duck-typing.
+        # Keras models expose .fit() and .predict() and would be mis-wrapped
+        # as ScikitLearnModelWrapper if the duck-typing branch ran first.
+    if TENSORFLOW_AVAILABLE:
+        import tensorflow as tf
 
-        return KerasModelWrapper(obj)
+        if isinstance(obj, tf.keras.Model):
+            from .core import KerasModelWrapper
 
-        # PyTorch nn.Module detection via isinstance — reliable, no string heuristics.
+            return KerasModelWrapper(obj)
+
     if PYTORCH_AVAILABLE and isinstance(obj, _torch_nn.Module):
         from .core import PyTorchModelWrapper
 
         return PyTorchModelWrapper(obj)
-    # Generic duck-typing — only reached if the object is not Keras or PyTorch.
 
     if hasattr(obj, "fit") and hasattr(obj, "predict"):
         if not SKLEARN_AVAILABLE:

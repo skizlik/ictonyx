@@ -1892,3 +1892,161 @@ class TestVariabilityStudyResultsPersistence:
         results = self._make_results()
         data = json.loads(results.to_json())
         assert "all_runs_metrics" not in data
+
+
+class TestVariabilityStudyResultsRepr:
+    """__repr__ must be concise and informative — not a wall of DataFrames."""
+
+    def _make_results(self, with_test_data: bool = False) -> "VariabilityStudyResults":
+        df = pd.DataFrame({"val_accuracy": [0.80, 0.82], "val_loss": [0.4, 0.38]})
+        test_metrics = (
+            [{"run_id": 1, "test_accuracy": 0.79}, {"run_id": 2, "test_accuracy": 0.81}]
+            if with_test_data
+            else []
+        )
+        return VariabilityStudyResults(
+            all_runs_metrics=[df, df],
+            final_metrics={"val_accuracy": [0.80, 0.82], "val_loss": [0.4, 0.38]},
+            final_test_metrics=test_metrics,
+            seed=42,
+        )
+
+    def test_repr_contains_n_runs(self):
+        results = self._make_results()
+        r = repr(results)
+        assert "n_runs=2" in r
+
+    def test_repr_contains_seed(self):
+        results = self._make_results()
+        r = repr(results)
+        assert "seed=42" in r
+
+    def test_repr_contains_metric_names(self):
+        results = self._make_results()
+        r = repr(results)
+        assert "val_accuracy" in r
+
+    def test_repr_does_not_contain_raw_dataframe(self):
+        """repr must not dump the full DataFrame content."""
+        results = self._make_results()
+        r = repr(results)
+        assert "dtype" not in r
+        assert "0.80" not in r
+
+    def test_repr_includes_test_metrics_when_present(self):
+        results = self._make_results(with_test_data=True)
+        r = repr(results)
+        assert "test_metrics" in r
+        assert "test_accuracy" in r
+
+    def test_repr_excludes_test_part_when_no_test_data(self):
+        results = self._make_results(with_test_data=False)
+        r = repr(results)
+        assert "test_metrics" not in r
+
+
+class TestVariabilityStudyResultsRunSeeds:
+    """run_seeds field must be populated from _child_seeds after run_study()."""
+
+    def test_run_seeds_default_empty(self):
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={},
+            final_test_metrics=[],
+            seed=1,
+        )
+        assert results.run_seeds == []
+
+    def test_run_seeds_accepts_list(self):
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={},
+            final_test_metrics=[],
+            seed=1,
+            run_seeds=[111, 222, 333],
+        )
+        assert results.run_seeds == [111, 222, 333]
+        assert len(results.run_seeds) == 3
+
+    def test_run_seeds_populated_by_run_study(self):
+        """run_study() must populate run_seeds from _child_seeds."""
+        from sklearn.linear_model import LogisticRegression
+
+        from ictonyx.data import ArraysDataHandler
+        from ictonyx.runners import ExperimentRunner
+
+        rng = np.random.default_rng(7)
+        X = rng.standard_normal((60, 3)).astype(np.float32)
+        y = (X[:, 0] > 0).astype(int).astype(float)
+        handler = ArraysDataHandler(X, y)
+        config = ModelConfig({"epochs": 2})
+        runner = ExperimentRunner(
+            model_builder=lambda cfg: __import__(
+                "ictonyx.core", fromlist=["ScikitLearnModelWrapper"]
+            ).ScikitLearnModelWrapper(LogisticRegression()),
+            data_handler=handler,
+            model_config=config,
+            verbose=False,
+            seed=42,
+        )
+        results = runner.run_study(num_runs=3)
+        assert len(results.run_seeds) == 3
+        assert all(isinstance(s, int) for s in results.run_seeds)
+        # All seeds must be distinct
+        assert len(set(results.run_seeds)) == 3
+
+
+class TestCompareResults:
+    """compare_results() compares two VariabilityStudyResults without re-training."""
+
+    def _make_results(self, values, seed=1):
+        return VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": values},
+            final_test_metrics=[],
+            seed=seed,
+        )
+
+    def test_returns_model_comparison_results(self):
+        from ictonyx.analysis import ModelComparisonResults
+        from ictonyx.api import compare_results
+
+        a = self._make_results([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89, 0.90, 0.91])
+        b = self._make_results([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69, 0.70, 0.71])
+        result = compare_results(a, b)
+        assert isinstance(result, ModelComparisonResults)
+
+    def test_resolves_metric_automatically(self):
+        from ictonyx.api import compare_results
+
+        a = self._make_results([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89, 0.90, 0.91])
+        b = self._make_results([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69, 0.70, 0.71])
+        result = compare_results(a, b)
+        assert result.overall_test is not None
+
+    def test_significant_difference_detected(self):
+        from ictonyx.api import compare_results
+
+        a = self._make_results([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89, 0.90, 0.91])
+        b = self._make_results([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69, 0.70, 0.71])
+        result = compare_results(a, b)
+        assert result.overall_test.is_significant()
+
+    def test_explicit_metric(self):
+        from ictonyx.api import compare_results
+
+        a = self._make_results([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89, 0.90, 0.91])
+        b = self._make_results([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69, 0.70, 0.71])
+        result = compare_results(a, b, metric="val_accuracy")
+        assert result.overall_test is not None
+
+
+class TestSetupMlflow:
+    def test_setup_mlflow_raises_without_mlflow(self):
+        from unittest.mock import patch
+
+        with patch("ictonyx.utils.HAS_MLFLOW", False, create=True):
+            from ictonyx.utils import setup_mlflow
+
+            with pytest.raises(ImportError, match="MLflow"):
+                setup_mlflow("test_experiment")

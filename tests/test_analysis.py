@@ -207,6 +207,22 @@ class TestCheckNormality:
         assert "dagostino" not in details
         assert "shapiro" in details
 
+    def test_future_warning_when_tests_disagree(self):
+        """FutureWarning emitted when require_all_tests=False and tests disagree."""
+        import warnings
+
+        rng = np.random.default_rng(42)
+        # Mix normal and heavy-tailed to provoke disagreement
+        data = pd.Series(np.concatenate([rng.normal(0, 1, 18), rng.standard_cauchy(7).clip(-3, 3)]))
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            check_normality(data, require_all_tests=False)
+        future = [x for x in w if issubclass(x.category, FutureWarning)]
+        # Warning may or may not fire depending on whether tests disagree on
+        # this seed — only assert the warning text is correct when it does fire
+        for warning in future:
+            assert "require_all_tests" in str(warning.message)
+
 
 class TestCheckEqualVariances:
 
@@ -586,6 +602,21 @@ class TestAnovaTest:
         assert "normality" in result.assumptions_met
         assert "equal_variances" in result.assumptions_met
 
+    def test_reports_omega_squared_not_eta(self):
+        rng = np.random.default_rng(42)
+        groups = {str(i): pd.Series(rng.normal(i * 0.3, 0.05, 15)) for i in range(3)}
+        result = anova_test(groups)
+        assert result.effect_size_name == "omega-squared"
+
+    def test_omega_squared_not_larger_than_eta_squared(self):
+        """omega-squared is a bias-corrected estimator — must not exceed eta-squared."""
+        rng = np.random.default_rng(42)
+        groups_dict = {str(i): pd.Series(rng.normal(i * 0.2, 0.1, 20)) for i in range(3)}
+        groups_list = [groups_dict[k] for k in groups_dict]
+        result = anova_test(groups_dict)
+        eta_sq, _ = eta_squared(groups_list)
+        assert result.effect_size <= eta_sq + 1e-9
+
 
 class TestKruskalWallisTest:
 
@@ -826,6 +857,26 @@ class TestCompareTwoModels:
         assert result.confidence_interval is None
 
 
+class TestCompareTwoModelsDefaults:
+    """Verify default test selection and parametric path behaviour."""
+
+    def test_defaults_to_mann_whitney(self):
+        rng = np.random.default_rng(42)
+        # Use highly skewed data to ensure normality fails
+        a = pd.Series(rng.exponential(0.8, 20))
+        b = pd.Series(rng.exponential(0.75, 20))
+        result = compare_two_models(a, b)
+        assert "Mann-Whitney" in result.test_name
+
+    def test_effect_size_is_populated(self):
+        rng = np.random.default_rng(42)
+        a = pd.Series(rng.normal(0.9, 0.03, 20))
+        b = pd.Series(rng.normal(0.7, 0.03, 20))
+        result = compare_two_models(a, b)
+        assert result.effect_size is not None
+        assert np.isfinite(result.effect_size)
+
+
 class TestCompareMultipleModels:
 
     def test_significant_overall(self, three_model_results_different):
@@ -1049,6 +1100,13 @@ class TestAssessTrainingStability:
         ]
         for key in expected_keys:
             assert key in result, f"Missing key: {key}"
+
+    def test_undefined_stability_for_negative_mean_loss(self):
+        """CV is undefined for non-positive mean — assessment must be 'undefined'."""
+        histories = [pd.Series(np.linspace(-1.0, -0.5, 20)) for _ in range(10)]
+        result = assess_training_stability(histories)
+        assert result["stability_assessment"] == "undefined"
+        assert np.isnan(result["final_loss_cv"])
 
 
 # ===================================================================

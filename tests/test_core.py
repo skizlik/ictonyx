@@ -1646,3 +1646,49 @@ class TestPyTorchPredictProbaSingleOutput:
         assert not np.allclose(
             proba[:, 1], 1.0
         ), "Class 1 probabilities are all 1.0 — softmax on (n,1) bug is present."
+
+
+class TestPredictReturnValues:
+    """predict() must return the same array it stores in wrapper.predictions.
+
+    This class exists to catch the regression pattern from BUG-CORE-01
+    and BUG-CORE-02, where a branch assigned self.predictions but forgot
+    to return it, silently returning None to the caller.
+    """
+
+    def test_sklearn_classification_predict_returns_array(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        rng = np.random.default_rng(10)
+        X = rng.standard_normal((40, 4)).astype(np.float32)
+        y = (X[:, 0] > 0).astype(int)
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        wrapper.fit((X, y))
+        result = wrapper.predict(X)
+        assert result is not None
+        assert isinstance(result, np.ndarray)
+        np.testing.assert_array_equal(result, wrapper.predictions)
+
+    def test_sklearn_regression_predict_returns_array(self):
+        from sklearn.linear_model import LinearRegression
+
+        rng = np.random.default_rng(11)
+        X = rng.standard_normal((40, 3)).astype(np.float32)
+        y = X[:, 0] * 2.0 + rng.normal(0, 0.1, 40)
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        wrapper.fit((X, y))
+        result = wrapper.predict(X)
+        assert result is not None
+        assert isinstance(result, np.ndarray)
+        np.testing.assert_array_equal(result, wrapper.predictions)
+
+    def test_sklearn_predict_length_matches_input(self):
+        from sklearn.tree import DecisionTreeClassifier
+
+        rng = np.random.default_rng(12)
+        X = rng.standard_normal((60, 4)).astype(np.float32)
+        y = (X[:, 0] > 0).astype(int)
+        wrapper = ScikitLearnModelWrapper(DecisionTreeClassifier())
+        wrapper.fit((X, y))
+        result = wrapper.predict(X)
+        assert len(result) == len(X)

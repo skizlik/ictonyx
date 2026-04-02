@@ -499,3 +499,37 @@ class TestBuilderInstanceClonerSafety:
             "Each builder call must produce a new wrapper instance. "
             "If the same instance is returned, weights would leak between runs."
         )
+
+
+class TestGetFeatureAvailability:
+    def test_returns_dict_with_expected_keys(self):
+        import ictonyx as ix
+
+        result = ix.get_feature_availability()
+        expected_keys = [
+            "tensorflow_support",
+            "sklearn_support",
+            "statistical_functions",
+            "bootstrap_ci",
+            "plotting_functions",
+            "mlflow_logger",
+            "hyperparameter_tuning",
+            "explainability",
+            "data_handlers",
+            "memory_management",
+            "process_isolation",
+        ]
+        for key in expected_keys:
+            assert key in result
+
+    def test_sklearn_support_is_bool(self):
+        import ictonyx as ix
+
+        result = ix.get_feature_availability()
+        assert isinstance(result["sklearn_support"], bool)
+
+    def test_data_handlers_is_list(self):
+        import ictonyx as ix
+
+        result = ix.get_feature_availability()
+        assert isinstance(result["data_handlers"], list)

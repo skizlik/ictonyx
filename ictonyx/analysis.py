@@ -1409,7 +1409,7 @@ class ModelComparisonResults:
     significant_comparisons: List[str] = field(default_factory=list)
     correction_method: str = "holm"
     n_models: int = 0
-    metric: str = "val_accuracy"
+    metric: Optional[str] = None
 
     def is_significant(self, alpha: float = 0.05) -> bool:
         """True if the omnibus test is significant at the given alpha."""
@@ -1418,7 +1418,7 @@ class ModelComparisonResults:
     def get_summary(self) -> str:
         """Concise text summary of the comparison results."""
         lines = [
-            f"Model Comparison Results ({self.metric})",
+            f"Model Comparison Results ({self.metric or 'unknown metric'})",
             "=" * 40,
             f"Models compared: {self.n_models}",
             f"Omnibus test: {self.overall_test.get_summary()}",

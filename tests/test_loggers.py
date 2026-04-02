@@ -110,6 +110,10 @@ class TestBaseLogger:
         captured = capsys.readouterr()
         assert captured.out == ""
 
+    def test_log_study_summary_not_available_on_base(self):
+        logger = BaseLogger(verbose=False)
+        assert not hasattr(logger, "log_study_summary")
+
 
 class TestLoggerVerboseBranches:
     """Verbose output for artifact, model, figure, tags, end_run."""
@@ -326,3 +330,47 @@ class TestMLflowLoggerMocked:
         logger.log_metric("loss", 0.5, step=0)
         assert logger.history["params"]["x"] == 1
         assert len(logger.history["metrics"]) == 1
+
+
+class TestBaseLoggerChildRunNoOps:
+    """BaseLogger.start_child_run() and end_child_run() are no-ops.
+
+    These methods exist so callers can call them unconditionally without
+    isinstance checks. Verify they don't raise and return the right types.
+    """
+
+    def test_start_child_run_returns_empty_string(self):
+        logger = BaseLogger(verbose=False)
+        result = logger.start_child_run()
+        assert result == ""
+
+    def test_start_child_run_with_name_returns_empty_string(self):
+        logger = BaseLogger(verbose=False)
+        result = logger.start_child_run(run_name="run_1")
+        assert result == ""
+
+    def test_end_child_run_returns_none(self):
+        logger = BaseLogger(verbose=False)
+        result = logger.end_child_run()
+        assert result is None
+
+    def test_child_run_lifecycle_does_not_raise(self):
+        """Full lifecycle: start then end must not raise."""
+        logger = BaseLogger(verbose=False)
+        run_id = logger.start_child_run(run_name="training_run_1")
+        assert isinstance(run_id, str)
+        logger.end_child_run()  # must not raise
+
+    def test_multiple_child_runs_do_not_raise(self):
+        """Multiple sequential child runs must not accumulate state or raise."""
+        logger = BaseLogger(verbose=False)
+        for i in range(5):
+            logger.start_child_run(run_name=f"run_{i}")
+            logger.log_metric("loss", 0.5 - i * 0.05, step=i)
+            logger.end_child_run()
+        assert len(logger.history["metrics"]) == 5
+
+    def test_log_study_summary_absent_on_base_logger(self):
+        """BaseLogger does not have log_study_summary — callers use hasattr."""
+        logger = BaseLogger(verbose=False)
+        assert not hasattr(logger, "log_study_summary")

@@ -578,3 +578,52 @@ def _get_model_name(obj: Any) -> str:
     if hasattr(obj, "__class__"):
         return obj.__class__.__name__
     return str(obj)
+
+
+def compare_results(
+    results_a: "VariabilityStudyResults",
+    results_b: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+) -> "ModelComparisonResults":
+    """Compare two pre-computed VariabilityStudyResults without re-running training.
+
+    Extracts metric values from each results object and runs a Mann-Whitney
+    U test directly. Use this when you already have results from
+    :func:`variability_study` and want to compare them statistically.
+
+    Args:
+        results_a: First model's results.
+        results_b: Second model's results.
+        metric: Metric to compare. If ``None``, resolves via
+            ``results_a.preferred_metric()``. Both results objects must
+            contain this metric.
+
+    Returns:
+        :class:`~ictonyx.analysis.ModelComparisonResults` with the
+        Mann-Whitney U test result.
+
+    Raises:
+        KeyError: If the resolved metric is not present in both results.
+    """
+    from .analysis import mann_whitney_test
+
+    resolved = metric if metric is not None else results_a.preferred_metric("accuracy")
+
+    if resolved.startswith("test_"):
+        values_a = pd.Series(results_a.get_test_metric_values(resolved))
+        values_b = pd.Series(results_b.get_test_metric_values(resolved))
+    else:
+        values_a = pd.Series(results_a.get_metric_values(resolved))
+        values_b = pd.Series(results_b.get_metric_values(resolved))
+
+    mw_result = mann_whitney_test(values_a, values_b)
+
+    return ModelComparisonResults(
+        overall_test=mw_result,
+        raw_data={"results_a": values_a, "results_b": values_b},
+        pairwise_comparisons={"results_a_vs_results_b": mw_result},
+        significant_comparisons=(["results_a_vs_results_b"] if mw_result.is_significant() else []),
+        correction_method="none",
+        n_models=2,
+        metric=resolved,
+    )

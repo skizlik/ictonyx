@@ -332,9 +332,9 @@ except ImportError:
 
 # Ultra-Simple API
 try:
-    from .api import compare_models, variability_study
+    from .api import compare_models, compare_results, variability_study
 
-    __all__.extend(["variability_study", "compare_models"])
+    __all__.extend(["variability_study", "compare_models", "compare_results"])
 except ImportError:
     pass
 

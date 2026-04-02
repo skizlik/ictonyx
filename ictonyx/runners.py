@@ -738,6 +738,7 @@ class ExperimentRunner:
                 final_metrics=self.final_metrics,
                 final_test_metrics=self.final_test_metrics,
                 seed=self.seed,
+                run_seeds=list(self._child_seeds),
             )
 
             if hasattr(self.tracker, "log_study_summary"):
@@ -870,17 +871,35 @@ class VariabilityStudyResults:
         final_test_metrics: List of dicts, one per run, containing test-set
             evaluation results (empty if no test set was used).
         seed: The base random seed used for the study, for reproducibility.
+        run_seeds: List of per-run child seeds generated from the base
+            seed via ``SeedSequence.spawn()``. Empty when results are
+            reconstructed from MLflow or loaded from JSON.
     """
 
     all_runs_metrics: List[pd.DataFrame]
     final_metrics: Dict[str, List[float]]
     final_test_metrics: List[Dict[str, Any]]
     seed: Optional[int] = None
+    run_seeds: List[int] = field(default_factory=list)
 
     @property
     def n_runs(self) -> int:
         """Number of successful runs."""
         return len(self.all_runs_metrics)
+
+    def __repr__(self) -> str:
+        metrics = list(self.final_metrics.keys())
+        test_part = ""
+        if self.has_test_data:
+            test_keys = list({k for m in self.final_test_metrics for k in m if k != "run_id"})
+            test_part = f", test_metrics={test_keys}"
+        return (
+            f"VariabilityStudyResults("
+            f"n_runs={self.n_runs}, "
+            f"seed={self.seed}, "
+            f"metrics={metrics}"
+            f"{test_part})"
+        )
 
     @property
     def has_test_data(self) -> bool:

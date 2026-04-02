@@ -455,13 +455,7 @@ class ExperimentRunner:
             history_df = self._standardize_history_df(history_df)
 
             # Store final values for ALL tracked metrics
-            for col in history_df.columns:
-                if col not in ("run_num", "epoch"):
-                    final_value = float(history_df[col].iloc[-1])
-                    if col not in self.final_metrics:
-                        self.final_metrics[col] = []
-                    self.final_metrics[col].append(final_value)
-                    self.tracker.log_metric(f"final_{col}", final_value, step=run_id)
+            self._extract_and_store_final_metrics(history_df, run_id=run_id)
 
             # Evaluate on test data
             if self.test_data is not None:
@@ -497,6 +491,26 @@ class ExperimentRunner:
             cleanup_result = self.memory_manager.cleanup()
             if cleanup_result.memory_freed_mb and cleanup_result.memory_freed_mb > 10:
                 self._run_log(f"   Freed {cleanup_result.memory_freed_mb:.1f}MB")
+
+    def _extract_and_store_final_metrics(self, history_df: pd.DataFrame, run_id: int = 0) -> None:
+        """Store final-epoch metric values from a completed run's history DataFrame.
+
+        Shared by both the sequential and parallel execution paths. The sequential
+        path (via _run_single_fit_standard) passes run_id for tracker logging.
+        The parallel collection loop passes no run_id, so tracker logging is skipped.
+
+        Args:
+            history_df: Per-epoch metrics DataFrame produced by a completed run.
+            run_id: 1-based run index for tracker logging. 0 means skip logging.
+        """
+        for col in history_df.columns:
+            if col not in ("run_num", "epoch"):
+                final_value = float(history_df[col].iloc[-1])
+                if col not in self.final_metrics:
+                    self.final_metrics[col] = []
+                self.final_metrics[col].append(final_value)
+                if run_id:
+                    self.tracker.log_metric(f"final_{col}", final_value, step=run_id)
 
     def run_study(
         self,
@@ -562,44 +576,40 @@ class ExperimentRunner:
                 stacklevel=2,
             )
 
-        # Resume from checkpoint if available
-        completed_run_ids: set = set()
-        if checkpoint_dir is not None:
-            import os
+            # Reset state from any previous run — must happen BEFORE checkpoint load
+            self.all_runs_metrics.clear()
+            self.final_metrics.clear()
+            self.final_test_metrics.clear()
+            self.failed_runs.clear()
 
-            import joblib as _joblib
+            # Resume from checkpoint if available
+            completed_run_ids: set = set()
+            if checkpoint_dir is not None:
+                import os
+                import pickle as _pickle
 
-            checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.joblib")
-            if os.path.exists(checkpoint_path):
-                try:
-                    import pickle as _pickle
-
-                    with open(checkpoint_path, "rb") as _f:
-                        _prior_data = _pickle.load(_f)
-                    prior = VariabilityStudyResults(
-                        all_runs_metrics=_prior_data["all_runs_metrics"],
-                        final_metrics=_prior_data["final_metrics"],
-                        final_test_metrics=_prior_data["final_test_metrics"],
-                        seed=_prior_data.get("seed"),
-                    )
-                    self.all_runs_metrics = list(prior.all_runs_metrics)
-                    self.final_metrics = dict(prior.final_metrics)
-                    self.final_test_metrics = list(prior.final_test_metrics)
-                    logger.info(
-                        f"Resuming from checkpoint: "
-                        f"{len(completed_run_ids)} of {num_runs} runs already complete."
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f"Could not load checkpoint from {checkpoint_path}: {e}. "
-                        "Starting from scratch."
-                    )
-
-        # Reset state from any previous run
-        self.all_runs_metrics.clear()
-        self.final_metrics.clear()
-        self.final_test_metrics.clear()
-        self.failed_runs.clear()
+                checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
+                if os.path.exists(checkpoint_path):
+                    try:
+                        with open(checkpoint_path, "rb") as _f:
+                            _prior_data = _pickle.load(_f)
+                        self.all_runs_metrics = list(_prior_data["all_runs_metrics"])
+                        self.final_metrics = dict(_prior_data["final_metrics"])
+                        self.final_test_metrics = list(_prior_data["final_test_metrics"])
+                        completed_run_ids = {
+                            int(df["run_num"].iloc[0])
+                            for df in self.all_runs_metrics
+                            if not df.empty
+                        }
+                        logger.info(
+                            f"Resuming from checkpoint: "
+                            f"{len(completed_run_ids)} of {num_runs} runs already complete."
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Could not load checkpoint from {checkpoint_path}: {e}. "
+                            "Starting from scratch."
+                        )
 
         # Generate independent child seeds up front.
         # SeedSequence guarantees uncorrelated children regardless of proximity.
@@ -640,111 +650,112 @@ class ExperimentRunner:
         if self._progress_bar:
             run_iter = tqdm(run_iter, desc="Variability Study", unit="run")
 
-        try:
-            for i in run_iter:
-                # Skip runs already completed in a prior checkpoint
-                if (i + 1) in completed_run_ids:
-                    continue
-
-                # Check failure rate
-                if i > 0:
-                    completed = i  # runs 0..i-1 have completed
-                    failure_rate = len(self.failed_runs) / completed
-                    if failure_rate >= stop_on_failure_rate:
-                        self._run_log(
-                            f"Stopping due to high failure rate: {failure_rate:.1%}",
-                            level="error",
-                        )
-                        break
-
-                # Run single training
-                metrics_df = self._run_single_fit(run_id=i + 1, epochs=epochs_per_run)
-                if metrics_df is not None:
-                    self.all_runs_metrics.append(metrics_df)
-                    if self._progress_bar:
-                        self._update_progress_postfix(run_iter, metrics_df)
-
-                    # Save checkpoint after each successful run
-                    if checkpoint_dir is not None:
-                        import os
-                        import pickle as _pickle
-
-                        os.makedirs(checkpoint_dir, exist_ok=True)
-                        _checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
-                        _checkpoint_data = {
-                            "all_runs_metrics": list(self.all_runs_metrics),
-                            "final_metrics": dict(self.final_metrics),
-                            "final_test_metrics": list(self.final_test_metrics),
-                            "seed": self.seed,
-                        }
-                        with open(_checkpoint_path, "wb") as _f:
-                            _pickle.dump(_checkpoint_data, _f)
-
-                # Log memory info periodically (suppressed when progress bar is active)
-                if (i + 1) % 10 == 0 and self.verbose and not self._progress_bar:
-                    memory_info = get_memory_info()
-                    if "process_rss_mb" in memory_info:
-                        logger.info(f"  Memory check: {memory_info['process_rss_mb']:.1f}MB")
-
-        except KeyboardInterrupt:
-            if self.verbose:
-                logger.warning(f"\n\nStudy interrupted after {len(self.all_runs_metrics)} runs")
-
-        finally:
-            # Final cleanup for standard mode
-            if not self.use_process_isolation:
-                final_cleanup = self.memory_manager.cleanup()
-                if self.verbose and final_cleanup.memory_freed_mb:
-                    logger.info(f"\nFinal cleanup freed {final_cleanup.memory_freed_mb:.1f}MB")
-
-            self.tracker.end_run()
-
+        if use_parallel and not self.use_process_isolation:
             # --- Parallel execution path ---
-            if use_parallel and not self.use_process_isolation:
-                try:
-                    from joblib import Parallel, delayed
-                except ImportError:
-                    raise ImportError(
-                        "joblib is required for parallel execution. "
-                        "Install with: pip install joblib"
-                    )
-
-                logger.info(f"Running {num_runs} runs in parallel (n_jobs={n_jobs})...")
-
-                parallel_results = Parallel(n_jobs=n_jobs, backend="loky")(
-                    delayed(self._run_single_fit)(run_id=i + 1, epochs=epochs_per_run)
-                    for i in range(num_runs)
+            try:
+                from joblib import Parallel, delayed
+            except ImportError:
+                raise ImportError(
+                    "joblib is required for parallel execution. " "Install with: pip install joblib"
                 )
 
-                for metrics_df in parallel_results:
-                    if metrics_df is not None:
-                        self.all_runs_metrics.append(metrics_df)
+            logger.info(f"Running {num_runs} runs in parallel (n_jobs={n_jobs})...")
 
-            # Print summary
-            if self.verbose:
-                successful = len(self.all_runs_metrics)
-                logger.info("\nStudy Summary:")
-                logger.info(f"  Successful runs: {successful}/{num_runs}")
-                if self.failed_runs:
-                    logger.warning(f"  Failed runs: {self.failed_runs}")
-                for metric_name, values in self.final_metrics.items():
-                    if values:
-                        mean_val = np.mean(values)
-                        std_val = np.std(values, ddof=1)
-                        logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {std_val:.4f})")
-
-            results = VariabilityStudyResults(
-                all_runs_metrics=self.all_runs_metrics,
-                final_metrics=self.final_metrics,
-                final_test_metrics=self.final_test_metrics,
-                seed=self.seed,
-                run_seeds=list(self._child_seeds),
+            parallel_results = Parallel(n_jobs=n_jobs, backend="loky")(
+                delayed(self._run_single_fit)(run_id=i + 1, epochs=epochs_per_run)
+                for i in range(num_runs)
+                if (i + 1) not in completed_run_ids
             )
 
-            if hasattr(self.tracker, "log_study_summary"):
-                self.tracker.log_study_summary(results)
+            for metrics_df in parallel_results:
+                if metrics_df is not None:
+                    self.all_runs_metrics.append(metrics_df)
+                    self._extract_and_store_final_metrics(metrics_df)  # Fix 3.3
 
-            return results
+        else:
+            # --- Sequential execution path ---
+            try:
+                for i in run_iter:
+                    # Skip runs already completed in a prior checkpoint
+                    if (i + 1) in completed_run_ids:
+                        continue
+
+                    # Check failure rate
+                    if i > 0:
+                        completed = i
+                        failure_rate = len(self.failed_runs) / completed
+                        if failure_rate >= stop_on_failure_rate:
+                            self._run_log(
+                                f"Stopping due to high failure rate: {failure_rate:.1%}",
+                                level="error",
+                            )
+                            break
+
+                    # Run single training
+                    metrics_df = self._run_single_fit(run_id=i + 1, epochs=epochs_per_run)
+                    if metrics_df is not None:
+                        self.all_runs_metrics.append(metrics_df)
+                        if self._progress_bar:
+                            self._update_progress_postfix(run_iter, metrics_df)
+
+                        # Save checkpoint after each successful run
+                        if checkpoint_dir is not None:
+                            import os
+                            import pickle as _pickle
+
+                            os.makedirs(checkpoint_dir, exist_ok=True)
+                            _checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
+                            _checkpoint_data = {
+                                "all_runs_metrics": list(self.all_runs_metrics),
+                                "final_metrics": dict(self.final_metrics),
+                                "final_test_metrics": list(self.final_test_metrics),
+                                "seed": self.seed,
+                            }
+                            with open(_checkpoint_path, "wb") as _f:
+                                _pickle.dump(_checkpoint_data, _f)
+
+                    # Log memory info periodically
+                    if (i + 1) % 10 == 0 and self.verbose and not self._progress_bar:
+                        memory_info = get_memory_info()
+                        if "process_rss_mb" in memory_info:
+                            logger.info(f"  Memory check: {memory_info['process_rss_mb']:.1f}MB")
+
+            except KeyboardInterrupt:
+                if self.verbose:
+                    logger.warning(f"\n\nStudy interrupted after {len(self.all_runs_metrics)} runs")
+
+            # --- Cleanup and return (runs regardless of which path was taken) ---
+        if not self.use_process_isolation:
+            final_cleanup = self.memory_manager.cleanup()
+            if self.verbose and final_cleanup.memory_freed_mb:
+                logger.info(f"\nFinal cleanup freed {final_cleanup.memory_freed_mb:.1f}MB")
+
+        self.tracker.end_run()
+
+        if self.verbose:
+            successful = len(self.all_runs_metrics)
+            logger.info("\nStudy Summary:")
+            logger.info(f"  Successful runs: {successful}/{num_runs}")
+            if self.failed_runs:
+                logger.warning(f"  Failed runs: {self.failed_runs}")
+            for metric_name, values in self.final_metrics.items():
+                if values:
+                    mean_val = np.mean(values)
+                    std_val = np.std(values, ddof=1)
+                    logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {std_val:.4f})")
+
+        results = VariabilityStudyResults(
+            all_runs_metrics=self.all_runs_metrics,
+            final_metrics=self.final_metrics,
+            final_test_metrics=self.final_test_metrics,
+            seed=self.seed,
+            run_seeds=list(self._child_seeds),
+        )
+
+        if hasattr(self.tracker, "log_study_summary"):
+            self.tracker.log_study_summary(results)
+
+        return results
 
     def get_summary_stats(self) -> Dict[str, Any]:
         """Get summary statistics for the completed study.

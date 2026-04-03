@@ -79,9 +79,11 @@ def _regression_metrics(preds: np.ndarray, labels: np.ndarray) -> Dict[str, floa
     labels = np.asarray(labels, dtype=float).ravel()
     ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
     ss_res = float(np.sum((labels - preds) ** 2))
+    mse = float(np.mean((labels - preds) ** 2))
     return {
         "r2": 1.0 - ss_res / ss_tot if ss_tot > 0.0 else float("nan"),
-        "mse": float(np.mean((labels - preds) ** 2)),
+        "mse": mse,
+        "rmse": float(np.sqrt(mse)),
         "mae": float(np.mean(np.abs(labels - preds))),
     }
 
@@ -501,15 +503,12 @@ if TENSORFLOW_AVAILABLE:
             if not is_classification:
                 # Regression: return raw predicted values as floats.
                 self.predictions = raw_predictions.flatten().astype(float)
-                assert self.predictions is not None
                 return self.predictions
             else:
                 if n_outputs == 1:
                     self.predictions = (raw_predictions.flatten() >= 0.5).astype(int)
                 else:
                     self.predictions = np.argmax(raw_predictions, axis=1).astype(int)
-
-                assert self.predictions is not None
                 return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
@@ -961,7 +960,6 @@ if SKLEARN_AVAILABLE:
                     operation="predict",
                 )
             self.predictions = raw
-            assert self.predictions is not None
             return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:
@@ -1367,13 +1365,11 @@ if PYTORCH_AVAILABLE:
             if self.task == "classification":
                 _, predicted = torch.max(outputs, 1)
                 self.predictions = predicted.cpu().numpy()
-                assert self.predictions is not None
                 return self.predictions
             else:
                 if outputs.dim() > 1 and outputs.shape[-1] == 1:
                     outputs = outputs.squeeze(-1)
                 self.predictions = outputs.cpu().numpy()
-                assert self.predictions is not None
                 return self.predictions
 
         def predict_proba(self, data: np.ndarray, **kwargs) -> np.ndarray:

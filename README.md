@@ -25,6 +25,7 @@ Ictonyx trains a model N times under independent random seeds, collects the full
 ## Installation
 ```bash
 pip install ictonyx
+```
 
 ### Optional extras
 
@@ -40,7 +41,9 @@ pip install ictonyx
 | `progress` | tqdm progress bars | `pip install ictonyx[progress]` |
 | `all` | Everything above | `pip install ictonyx[all]` |
 
-Extras can be combined: `pip install "ictonyx[tensorflow,isolation]"`
+Extras can be combined:
+```bash
+pip install "ictonyx[tensorflow,isolation]"
 ```
 
 Requires Python 3.10+. Current release: **0.3.15** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)

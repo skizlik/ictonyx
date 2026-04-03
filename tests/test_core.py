@@ -688,8 +688,9 @@ class TestScikitLearnWrapperExtended:
         assert set(result.keys()) == {
             "r2",
             "mse",
+            "rmse",
             "mae",
-        }, f"Expected {{'r2','mse','mae'}}, got {set(result.keys())}"
+        }, f"Expected {{'r2','mse','rmse','mae'}}, got {set(result.keys())}"
         assert result["r2"] > 0.99, "R² should be near 1.0 on training data"
         assert result["mse"] >= 0.0
         assert result["mae"] >= 0.0

@@ -193,21 +193,44 @@ def compare_models(
     metric: Optional[str] = None,
     seed: Optional[int] = None,
     verbose: bool = True,
-    paired: bool = False,
+    paired: bool = True,
     **kwargs,
 ) -> ModelComparisonResults:
     """Run variability studies on multiple models and compare them statistically.
 
     Each model is trained ``runs`` times on the same data, producing a
     distribution of the chosen metric. The distributions are then compared
-    using non-parametric statistical tests with automatic test selection:
+    using non-parametric statistical tests.
 
-    * **Two models**: Mann-Whitney U (or Wilcoxon signed-rank if paired).
-    * **Three or more**: Kruskal-Wallis with post-hoc pairwise comparisons
-      and multiple-comparison correction.
+    **Seeding and pairing**
 
-    Effect sizes (Cohen's d, rank-biserial) and bootstrap confidence
-    intervals are included automatically.
+    All models receive the same base ``seed``. Internally,
+    ``np.random.SeedSequence(seed).spawn(runs)`` generates per-run child seeds
+    that are identical across models: model A's run *i* and model B's run *i*
+    always share the same child seed. The runs are therefore **genuinely paired
+    at the RNG level**, regardless of framework.
+
+    For this reason ``paired`` defaults to ``True``:
+
+    * **Two models (default, paired):** Paired Wilcoxon signed-rank test on the
+      per-run differences. More powerful than the independent-samples alternative
+      because it removes run-to-run noise that is common to both models.
+    * **Two models (unpaired):** Kruskal-Wallis omnibus + Mann-Whitney U with
+      Holm correction. Valid but does not exploit the RNG pairing.
+    * **Three or more models:** Kruskal-Wallis omnibus + pairwise Mann-Whitney U
+      with Holm correction, regardless of ``paired``. (Paired multi-group
+      analysis requires a different design not yet implemented.)
+
+    **Seeding guarantee by framework**
+
+    * scikit-learn: exact (``random_state`` injected at wrapper construction).
+    * PyTorch: approximately deterministic under ``cudnn.deterministic=True``;
+      rare non-deterministic CUDA ops may introduce small deviations.
+    * TF/Keras + GPU: not fully controllable; pairing is approximate.
+
+    If exact pairing cannot be guaranteed (e.g. Keras with GPU), pass
+    ``paired=False`` to fall back to the independent-samples test, which
+    is always valid regardless of seeding.
 
     Args:
         models: List of models in any form accepted by
@@ -218,14 +241,18 @@ def compare_models(
         epochs: Training epochs per run. Default 10.
         metric: Metric name to compare across models. Must be a key in
             the training history (e.g. ``'val_accuracy'``, ``'val_loss'``,
-            ``'val_f1'``). Default ``'val_accuracy'``.
+            ``'val_f1'``). Default ``None`` (auto-resolved from results).
         seed: Base random seed for reproducibility. All models use the same
             seed so the comparison can be reproduced exactly. If ``None``,
-            a random seed is generated.
+            a random seed is generated and stored in the result.
         verbose: If ``False``, suppress all output. Default ``True``.
-        paired: If ``True``, use Wilcoxon signed-rank for two-model
-            comparison. Correct when both models share the same seeds.
-            Default ``False``.
+        paired: If ``True`` (default), use the paired Wilcoxon signed-rank
+            test for two-model comparisons, exploiting the fact that all
+            models receive identical per-run seeds by construction. Ignored
+            when comparing three or more models (KW + MW is used regardless).
+            Pass ``False`` to use the independent-samples test instead —
+            appropriate when seeds are not shared or when comparing against
+            externally produced results.
         **kwargs: Forwarded to each :func:`variability_study` call.
 
     Returns:
@@ -233,7 +260,7 @@ def compare_models(
         omnibus test, pairwise comparisons, raw metric distributions, and
         summary methods.
 
-    Example::
+    Example (two models, default paired analysis)::
 
         results = ix.compare_models(
             models=[RandomForestClassifier, GradientBoostingClassifier],
@@ -244,6 +271,25 @@ def compare_models(
             seed=42,
         )
         print(results.get_summary())
+
+    Example (three models, or unpaired two-model comparison)::
+
+        results = ix.compare_models(
+            models=[ModelA, ModelB, ModelC],
+            data=df,
+            target_column='target',
+            runs=20,
+            seed=42,
+        )
+        # Unpaired two-model:
+        results = ix.compare_models(
+            models=[ModelA, ModelB],
+            data=df,
+            target_column='target',
+            runs=20,
+            seed=42,
+            paired=False,   # fall back to KW + Mann-Whitney
+        )
     """
     # Apply verbose setting to global logger
     from .settings import set_verbose
@@ -369,6 +415,16 @@ def compare_models(
             correction_method="none",
             n_models=2,
             metric=metric,
+        )
+
+    if paired and len(results_store) > 2:
+        warnings.warn(
+            f"compare_models(): paired=True has no effect when comparing "
+            f"{len(results_store)} models. Paired analysis is only available "
+            "for exactly two models. Using Kruskal-Wallis + Mann-Whitney U "
+            "(independent-samples) for this comparison.",
+            UserWarning,
+            stacklevel=2,
         )
 
     stat_results = _stat_compare(results_store)

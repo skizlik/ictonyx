@@ -2144,7 +2144,7 @@ def required_runs(
         for _ in range(n_sim):
             # Simulate two groups: group A stochastically dominates group B
             # by generating from distributions separated by effect_size
-            shift = stats.norm.ppf(p_superiority)
+            shift = np.sqrt(2) * stats.norm.ppf(p_superiority)
             a = rng.normal(shift / 2, 1.0, n)
             b = rng.normal(-shift / 2, 1.0, n)
             _, p = mannwhitneyu(a, b, alternative=alternative)
@@ -2191,7 +2191,7 @@ def minimum_detectable_effect(
     for effect_size_pct in range(1, 100):
         effect_size = effect_size_pct / 100.0
         p_superiority = (effect_size + 1.0) / 2.0
-        shift = stats.norm.ppf(p_superiority)
+        shift = np.sqrt(2) * stats.norm.ppf(p_superiority)
 
         rejections = 0
         for _ in range(n_sim):

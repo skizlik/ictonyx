@@ -172,7 +172,12 @@ def test_compare_models_flow(
 
     # Act
     result = api.compare_models(
-        models=models, data=sample_df, target_column="target", runs=5, metric="val_accuracy"
+        models=models,
+        data=sample_df,
+        target_column="target",
+        runs=5,
+        metric="val_accuracy",
+        paired=False,
     )
 
     # Assert

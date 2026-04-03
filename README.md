@@ -167,6 +167,7 @@ comparison = ix.compare_models(
     runs=20,
     metric='val_accuracy',
     seed=42,
+    paired=False,
 )
 
 print(comparison.get_summary())
@@ -229,6 +230,8 @@ comparison = ix.compare_models(
     runs=20,
     metric='val_accuracy',
     seed=42,
+    paired=False,
+    
 )
 
 print(comparison.get_summary())

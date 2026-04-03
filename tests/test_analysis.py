@@ -191,7 +191,7 @@ class TestCheckNormality:
 
     def test_too_few_samples(self):
         is_normal, details = check_normality(pd.Series([1, 2]))
-        assert is_normal is False
+        assert is_normal is None
         assert "error" in details
 
     def test_large_sample_uses_dagostino(self):
@@ -1356,11 +1356,21 @@ class TestCheckNormalityRequireAllTests:
         # Strict can only be equal to or more conservative than lenient
         assert not (is_normal_strict and not is_normal_lenient)
 
-    def test_n_less_than_3_returns_false(self):
+    def test_n_less_than_3_returns_none(self):
+        """Insufficient data returns None (untestable), not False (tested and failed)."""
         data = pd.Series([0.5, 0.6])
         is_normal, details = check_normality(data)
-        assert is_normal is False
+        assert is_normal is None
         assert "error" in details
+
+    def test_default_is_conservative(self):
+        """Default require_all_tests=True: calling without the kwarg must
+        behave identically to require_all_tests=True."""
+        rng = np.random.RandomState(42)
+        data = pd.Series(rng.normal(0, 1, 25))
+        default_result, _ = check_normality(data)
+        explicit_result, _ = check_normality(data, require_all_tests=True)
+        assert default_result == explicit_result
 
 
 class TestAnovaTestWarning:

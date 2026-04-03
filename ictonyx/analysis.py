@@ -210,33 +210,38 @@ def validate_sample_sizes(
 def check_normality(
     data: pd.Series,
     alpha: float = 0.05,
-    require_all_tests: bool = False,
-) -> Tuple[bool, Dict[str, Any]]:
+    require_all_tests: bool = True,
+) -> Tuple[Optional[bool], Dict[str, Any]]:
     """Test for normality using Shapiro-Wilk (and D'Agostino-Pearson if n >= 20).
 
     Used internally by assumption-checking logic in statistical tests.
 
+    Returns ``None`` when the sample is too small to test (n < 3), ``True``
+    when the sample does not reject normality, and ``False`` when at least
+    one test rejects normality (or no tests could run). Callers must treat
+    ``None`` as "untestable" and fall back to the non-parametric path —
+    the same convention used by :func:`check_independence`.
+
     Args:
         data: A ``pd.Series`` of metric values.
         alpha: Significance level. Default 0.05.
-        require_all_tests: If ``True``, normality is declared only when
-            *all* available tests pass. Default ``False`` (any single
-            test passing is sufficient). For n < 20, D'Agostino-Pearson
-            does not run, so this reduces to evaluating Shapiro-Wilk alone.
-        deprecated:
-            The default ``require_all_tests=False`` will change to ``True``
-            in v0.5.0. Pass ``require_all_tests=True`` to adopt the stricter
-            behavior now.
+        require_all_tests: If ``True`` (default), normality is declared only
+            when *all* available tests pass — the conservative conjunction.
+            If ``False``, any single passing test declares normality (lenient
+            disjunction). For n < 20, only Shapiro-Wilk runs, so the
+            distinction has no effect below that threshold.
+
     Returns:
         Tuple of ``(is_normal, details_dict)`` where ``is_normal`` is
-        ``True`` if the sample does not reject normality, and
-        ``details_dict`` contains test statistics and p-values.
+        ``True`` if normality is not rejected, ``False`` if it is rejected,
+        or ``None`` if the sample is too small to test (n < 3).
+        ``details_dict`` contains individual test statistics and p-values.
     """
 
     results = {}
 
     if len(data) < 3:
-        return False, {
+        return None, {
             "error": "Insufficient data for normality testing (n < 3)",
             "shapiro": None,
             "dagostino": None,
@@ -265,17 +270,6 @@ def check_normality(
     # evaluated. In that regime the "ALL tests" rule reduces to a single test.
     # Set require_all_tests=True to enforce the strict conjunction regardless.
     passing = [t["p_value"] > alpha for t in results.values() if t is not None]
-
-    if not require_all_tests and len(passing) > 1 and any(passing) and not all(passing):
-        warnings.warn(
-            "check_normality() declared normality because one test passed but "
-            "another did not. In v0.5.0 the default will change to "
-            "require_all_tests=True (conservative conjunction). Pass "
-            "require_all_tests=True to silence this warning and adopt the "
-            "future behaviour now.",
-            FutureWarning,
-            stacklevel=3,
-        )
 
     is_normal = all(passing) if require_all_tests else any(passing)
 
@@ -932,7 +926,7 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
     normality_results = {}
     all_normal = True
     for i, (name, group) in enumerate(zip(group_names, clean_groups)):
-        is_normal, norm_details = check_normality(group)
+        is_normal, norm_details = check_normality(group, require_all_tests=True)
         normality_results[name] = norm_details
         if not is_normal:
             all_normal = False
@@ -1301,8 +1295,8 @@ def compare_two_models(
         # For independent comparisons, use intelligent test selection
 
         # 1. Check assumptions
-        is_normal1, norm_details1 = check_normality(clean1, alpha=alpha)
-        is_normal2, norm_details2 = check_normality(clean2, alpha=alpha)
+        is_normal1, norm_details1 = check_normality(clean1, alpha=alpha, require_all_tests=True)
+        is_normal2, norm_details2 = check_normality(clean2, alpha=alpha, require_all_tests=True)
 
         assumptions_met = {"normality_group1": is_normal1, "normality_group2": is_normal2}
         assumption_details = {"normality_group1": norm_details1, "normality_group2": norm_details2}

@@ -941,6 +941,21 @@ class TestCompareMultipleModels:
         results = compare_multiple_models(three_model_results_different)
         assert results.metric is None
 
+    def test_two_model_uses_mann_whitney_not_kruskal(self):
+        """Two-model compare_multiple_models must use Mann-Whitney directly,
+        not Kruskal-Wallis. KW+MW is redundant for k=2."""
+        results = compare_multiple_models(
+            {
+                "model_A": pd.Series([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89]),
+                "model_B": pd.Series([0.80, 0.81, 0.79, 0.82, 0.78, 0.80, 0.81, 0.79]),
+            }
+        )
+        assert results.n_models == 2
+        assert "Mann-Whitney" in results.overall_test.test_name
+        assert "Kruskal" not in results.overall_test.test_name
+        assert results.correction_method == "none"
+        assert len(results.pairwise_comparisons) == 1
+
 
 # ===================================================================
 #  Convergence & Stability

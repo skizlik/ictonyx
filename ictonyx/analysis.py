@@ -381,6 +381,10 @@ def check_independence(
         }
 
     effective_max_lag = min(max_lag, max(1, n - 2))
+    # Bonferroni correction: testing effective_max_lag lags at alpha=0.05 without
+    # correction gives a familywise false-positive rate of ~22.6% at max_lag=5.
+    corrected_alpha = alpha / effective_max_lag if effective_max_lag > 1 else alpha
+    corrected_critical_value = stats.norm.ppf(1 - corrected_alpha / 2)
     for lag in range(1, effective_max_lag + 1):
         try:
             autocorr = data.autocorr(lag)
@@ -388,7 +392,7 @@ def check_independence(
                 autocorr_results[f"lag_{lag}"] = autocorr
 
                 se = 1.0 / np.sqrt(n - lag)
-                if abs(autocorr) > critical_value * se:
+                if abs(autocorr) > corrected_critical_value * se:
                     significant_lags.append(lag)
         except Exception:
             continue
@@ -399,7 +403,11 @@ def check_independence(
         "autocorrelations": autocorr_results,
         "significant_lags": significant_lags,
         "max_autocorr": (max(abs(v) for v in autocorr_results.values()) if autocorr_results else 0),
-        "threshold": critical_value / np.sqrt(n) if n > 0 else None,
+        "thresholds": {
+            f"lag_{lag}": corrected_critical_value / np.sqrt(n - lag)
+            for lag in range(1, effective_max_lag + 1)
+        },
+        "threshold_lag1": corrected_critical_value / np.sqrt(n - 1) if n > 1 else None,
         "n": n,
     }
 
@@ -467,6 +475,33 @@ def cohens_d(group1: pd.Series, group2: pd.Series, pooled: bool = True) -> Tuple
     interpretation = _interpret_cohens_d(abs(d))
 
     return d, interpretation
+
+
+def _hedges_g(group1: pd.Series, group2: pd.Series) -> Tuple[float, str]:
+    """Hedges' g effect size with small-sample bias correction.
+
+    Preferred over Glass's delta for model comparisons where neither group
+    is a designated control. Order-invariant: g(A,B) = -g(B,A).
+
+    Args:
+        group1: First group's metric values.
+        group2: Second group's metric values.
+
+    Returns:
+        Tuple of (g, interpretation_label).
+    """
+    n1, n2 = len(group1), len(group2)
+    if n1 < 2 or n2 < 2:
+        return float("nan"), "undefined"
+    pooled_var = ((n1 - 1) * group1.var() + (n2 - 1) * group2.var()) / (n1 + n2 - 2)
+    pooled_std = np.sqrt(pooled_var)
+    if pooled_std == 0:
+        return float("nan"), "undefined"
+    d = (group1.mean() - group2.mean()) / pooled_std
+    # Hedges' correction factor J — removes small-sample positive bias in Cohen's d
+    j = 1.0 - (3.0 / (4.0 * (n1 + n2 - 2) - 1.0))
+    g = d * j
+    return float(g), _interpret_variance_explained(abs(g))
 
 
 def _interpret_cohens_d(abs_d: float) -> str:
@@ -557,13 +592,17 @@ def eta_squared(groups: List[pd.Series]) -> Tuple[float, str]:
 
     eta_sq = ss_between / ss_total if ss_total > 0 else 0
 
-    interpretation = _interpret_eta_squared(eta_sq)
+    interpretation = _interpret_variance_explained(eta_sq)
 
     return eta_sq, interpretation
 
 
-def _interpret_eta_squared(eta_sq: float) -> str:
-    """Interpret eta-squared effect size magnitude."""
+def _interpret_variance_explained(eta_sq: float) -> str:
+    """Interpret variance-explained effect size magnitude (eta-squared or omega-squared).
+
+    Thresholds per Cohen (1988): small=0.01, medium=0.06, large=0.14.
+    Identical for eta-squared and omega-squared.
+    """
     if eta_sq < 0.01:
         return "negligible"
     elif eta_sq < 0.06:
@@ -832,19 +871,27 @@ def wilcoxon_signed_rank_test(
             result.statistic = float(wilcoxon_result.statistic)
             result.p_value = float(wilcoxon_result.pvalue)
 
-            # Effect size r = |Z| / sqrt(N).
-            # method='auto' (scipy 1.10+) does not populate zstatistic even
-            # when the approximation is used internally. Derive Z from the
-            # p-value using the inverse normal CDF — standard practice when
-            # the exact Z is not available from the test output.
-            # Clamp r to [0, 1] since very small p-values can produce Z > sqrt(n).
+            # Effect size r computed from the W statistic via the asymptotic
+            # normal approximation of the Wilcoxon distribution. Valid for both
+            # the exact and approximate p-value paths.
             n = len(non_zero_data)
             p_val = float(wilcoxon_result.pvalue)
-            if n > 0 and 0 < p_val < 1:
-                from scipy.stats import norm as _norm
-
-                z_score = abs(_norm.ppf(p_val / 2))
-                r = min(z_score / np.sqrt(n), 1.0)
+            if n > 0 and p_val <= 0:
+                # Perfect separation: all differences same sign. r = 1.0 by convention.
+                result.effect_size = 1.0
+                result.effect_size_name = "r (effect size)"
+                result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
+            elif n > 0:
+                # Derive r from the W statistic directly via the asymptotic formula.
+                # This is valid regardless of whether scipy used the exact or normal
+                # approximation internally. The norm.ppf(p/2) path is only correct
+                # when p came from the normal approximation; method='auto' uses the
+                # exact test for small n (the common case), making that conversion wrong.
+                W = float(wilcoxon_result.statistic)
+                mu_w = n * (n + 1) / 4.0
+                sigma_w = np.sqrt(n * (n + 1) * (2 * n + 1) / 24.0)
+                z_approx = (W - mu_w) / sigma_w if sigma_w > 0 else 0.0
+                r = min(abs(z_approx) / np.sqrt(n), 1.0)
                 result.effect_size = r
                 result.effect_size_name = "r (effect size)"
                 result.effect_size_interpretation = _interpret_wilcoxon_r(r)
@@ -975,7 +1022,7 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
             omega_sq = float("nan")
         result.effect_size = omega_sq
         result.effect_size_name = "omega-squared"
-        result.effect_size_interpretation = _interpret_eta_squared(
+        result.effect_size_interpretation = _interpret_variance_explained(
             abs(omega_sq) if np.isfinite(omega_sq) else 0.0
         )
 
@@ -1263,6 +1310,13 @@ def compare_two_models(
         StatisticalTestResult: A rich object containing the test name,
         statistic, p-value, effect size, and details on which
         assumptions were met.
+    Note:
+        :func:`~ictonyx.api.compare_models` — the primary public entry point —
+        routes all comparisons through :func:`compare_multiple_models`, which
+        applies Kruskal-Wallis + Mann-Whitney unconditionally regardless of
+        data properties. The assumption-driven test selection in this function
+        (normality → variance → Student/Welch/Mann-Whitney) is only exercised
+        when calling it directly from ``ictonyx.analysis``.
     """
 
     # Clean data first
@@ -1315,8 +1369,8 @@ def compare_two_models(
                 # 3b. Normal + Unequal Variance = Welch's t-test
                 test_name = "Independent Comparison (Welch's t-test)"
                 statistic, p_value = ttest_ind(clean1, clean2, equal_var=False)
-                effect_size, es_interp = cohens_d(clean1, clean2, pooled=False)
-                es_name = "Glass's delta"
+                effect_size, es_interp = _hedges_g(clean1, clean2)
+                es_name = "Hedges' g"
 
             result = StatisticalTestResult(
                 test_name=test_name,
@@ -1479,7 +1533,26 @@ def compare_multiple_models(
     if n_models < 2:
         raise ValueError("Need at least 2 models to compare")
 
-    # Omnibus test (Kruskal-Wallis)
+    # Two-model shortcut: skip KW omnibus and go directly to Mann-Whitney.
+    # KW + single pairwise MW is redundant for k=2; both reduce to the same
+    # rank-sum comparison but KW introduces a theoretical path where a
+    # chi-squared approximation gates out a result that MW would find significant.
+    if n_models == 2:
+        names = list(model_results.keys())
+        result = mann_whitney_test(model_results[names[0]], model_results[names[1]], alpha=alpha)
+        return ModelComparisonResults(
+            overall_test=result,
+            raw_data=model_results,
+            pairwise_comparisons={f"{names[0]}_vs_{names[1]}": result},
+            significant_comparisons=(
+                [f"{names[0]}_vs_{names[1]}"] if result.is_significant(alpha) else []
+            ),
+            correction_method="none",
+            n_models=2,
+            metric=metric,
+        )
+
+    # Omnibus test (Kruskal-Wallis) for k >= 3
     overall_result = kruskal_wallis_test(model_results, alpha=alpha)
 
     pairwise_comparisons: Dict[str, StatisticalTestResult] = {}
@@ -2120,6 +2193,12 @@ def required_runs(
     Raises:
         ValueError: If ``effect_size`` is not in (0, 1) or ``power`` is
             not in (0, 1).
+    Note:
+        The simulation draws from unbounded standard normal distributions. For
+        metrics concentrated near 0 or 1 (e.g. accuracy on easy tasks), the
+        normal approximation overestimates spread and ``required_runs()`` will
+        over-estimate the number of runs needed. Results are most reliable for
+        loss-scale metrics and accuracy values in the 0.4–0.8 range.
     """
     if not 0 < effect_size < 1:
         raise ValueError(f"effect_size must be in (0, 1), got {effect_size}.")
@@ -2172,6 +2251,12 @@ def minimum_detectable_effect(
 
     Raises:
         ValueError: If ``n_runs`` < 2 or ``power`` is not in (0, 1).
+    Note:
+        The simulation draws from unbounded standard normal distributions. For
+        metrics concentrated near 0 or 1 (e.g. accuracy on easy tasks), the
+        normal approximation overestimates spread and the detectable effect will
+        be under-estimated. Results are most reliable for loss-scale metrics
+        and accuracy values in the 0.4–0.8 range.
     """
     if n_runs < 2:
         raise ValueError(f"n_runs must be >= 2, got {n_runs}.")

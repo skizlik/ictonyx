@@ -75,12 +75,17 @@ class HyperparameterTuner:
             data_handler: DataHandler for loading data. Data is loaded lazily
                 at tune() time, not during construction.
             model_config: Base ModelConfig updated with trial parameters.
-            metric: Metric to optimise. Default 'val_loss'.
+            metric: Metric to optimize. Default 'val_loss'.
             n_evals_per_trial: Independent training runs per trial. The trial
                 objective is the mean metric across these runs. Default 3.
-                Set to 1 to reproduce single-run (old) behaviour.
-            stability_weight: If > 0, penalise run-to-run variance:
-                objective = mean ± stability_weight * std. Default 0.0.
+                Set to 1 to reproduce single-run (old) behavior.
+            stability_weight: If > 0, penalizes run-to-run variance.
+                Minimisation objectives (e.g. ``'val_loss'``):
+                ``objective = mean + stability_weight * std``.
+                Maximisation objectives (e.g. ``'val_accuracy'``):
+                ``objective = mean - stability_weight * std``.
+                In both cases, higher variance worsens the objective score.
+                Default 0.0 (variance not penalized).
         """
         self.model_builder = model_builder
         self.data_handler = data_handler

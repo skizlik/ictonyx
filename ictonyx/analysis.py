@@ -266,7 +266,8 @@ def check_normality(
 
     # For n < 20, D'Agostino-Pearson does not run — only Shapiro-Wilk is
     # evaluated. In that regime the "ALL tests" rule reduces to a single test.
-    # Set require_all_tests=True to enforce the strict conjunction regardless.
+    # With only one test running, both require_all_tests=True and False
+    # produce the same result.
     passing = [t["p_value"] > alpha for t in results.values() if t is not None]
 
     is_normal = all(passing) if require_all_tests else any(passing)
@@ -337,25 +338,8 @@ def check_independence(
         rate for a spurious autocorrelation warning exceeds 22% even on
         genuinely independent data.
 
+
     Returns:
-        Tuple of ``(is_independent, details_dict)`` where:
-
-        * ``is_independent`` is ``True`` if no lag's autocorrelation
-          exceeds the significance threshold.
-        * ``details_dict`` contains keys:
-
-          - ``'autocorrelations'``: dict mapping ``'lag_N'`` strings to
-            the autocorrelation coefficient at lag N.
-          - ``'significant_lags'``: list of lag integers exceeding the
-            threshold.
-          - ``'max_autocorr'``: the largest absolute autocorrelation
-            observed across all checked lags. ``0`` if no lags were checked.
-          ``'threshold'``: the significance threshold at lag 1, equal to
-            ``norm.ppf(1 - alpha/2) / sqrt(n - 1)``. Thresholds at
-            higher lags are ``norm.ppf(1 - alpha/2) / sqrt(n - lag)``.
-          - ``'n'``: the number of valid (non-NaN) observations.
-
-        Returns:
         Tuple of ``(is_independent, details_dict)`` where:
 
         * ``is_independent`` is ``True`` if no lag exceeds the threshold,

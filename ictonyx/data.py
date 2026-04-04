@@ -30,18 +30,6 @@ except ImportError:
     tf = None
     HAS_TENSORFLOW = False
 
-# Optional TensorFlow preprocessing imports
-try:
-    from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator, pad_sequences
-    from tensorflow.keras.preprocessing.text import Tokenizer
-
-    HAS_TF_PREPROCESSING = True
-except (ImportError, AttributeError):
-    TimeseriesGenerator = None
-    Tokenizer = None
-    pad_sequences = None
-    HAS_TF_PREPROCESSING = False
-
 # Optional matplotlib for data visualization
 try:
     import matplotlib.pyplot as plt

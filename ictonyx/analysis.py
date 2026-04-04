@@ -707,6 +707,7 @@ def mann_whitney_test(
     model2_metrics: pd.Series,
     alternative: str = "two-sided",
     alpha: float = 0.05,
+    random_state: Optional[int] = None,
 ) -> StatisticalTestResult:
     """Mann-Whitney U test for comparing two independent groups.
 
@@ -1221,6 +1222,7 @@ def paired_wilcoxon_test(
     series_a: pd.Series,
     series_b: pd.Series,
     alpha: float = 0.05,
+    random_state: Optional[int] = None,
 ) -> StatisticalTestResult:
     """Paired Wilcoxon signed-rank test for two matched samples.
 
@@ -1264,6 +1266,26 @@ def paired_wilcoxon_test(
         stat, p = wilcoxon(nonzero, method="auto")
         result.statistic = float(stat)
         result.p_value = float(p)
+
+        # Effect size r = |Z| / sqrt(N), derived from the p-value via
+        # the inverse normal CDF — standard practice when the exact Z is
+        # not available from wilcoxon(method='auto') output.
+        n_eff = len(nonzero)
+        p_val = float(p)
+        if n_eff > 0 and 0 < p_val < 1:
+            from scipy.stats import norm as _norm
+
+            z_score = abs(_norm.ppf(p_val / 2))
+            r = min(z_score / np.sqrt(n_eff), 1.0)
+            result.effect_size = r
+            result.effect_size_name = "r (effect size)"
+            result.effect_size_interpretation = _interpret_wilcoxon_r(r)
+        elif n_eff > 0 and p_val <= 0:
+            # Perfect separation or floating-point underflow at large n
+            result.effect_size = 1.0
+            result.effect_size_name = "r (effect size)"
+            result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
+
         direction = "A" if float(differences.median()) > 0 else "B"
         if p < alpha:
             result.conclusion = (
@@ -1282,7 +1304,11 @@ def paired_wilcoxon_test(
 
 
 def compare_two_models(
-    model1_results: pd.Series, model2_results: pd.Series, paired: bool = False, alpha: float = 0.05
+    model1_results: pd.Series,
+    model2_results: pd.Series,
+    paired: bool = False,
+    alpha: float = 0.05,
+    random_state: Optional[int] = None,
 ) -> StatisticalTestResult:
     """
     Compares two models using intelligent, assumption-driven test selection.
@@ -1395,11 +1421,21 @@ def compare_two_models(
         try:
             if paired:
                 ci_result = bootstrap_paired_difference_ci(
-                    clean1, clean2, n_bootstrap=10000, confidence=1 - alpha, method="bca"
+                    clean1,
+                    clean2,
+                    n_bootstrap=10000,
+                    confidence=1 - alpha,
+                    method="bca",
+                    random_state=random_state,
                 )
             else:
                 ci_result = bootstrap_mean_difference_ci(
-                    clean1, clean2, n_bootstrap=10000, confidence=1 - alpha, method="bca"
+                    clean1,
+                    clean2,
+                    n_bootstrap=10000,
+                    confidence=1 - alpha,
+                    method="bca",
+                    random_state=random_state,
                 )
 
             result.confidence_interval = (ci_result.ci_lower, ci_result.ci_upper)
@@ -1415,6 +1451,7 @@ def compare_two_models(
                     confidence=1 - alpha,
                     method="bca",
                     pooled=True,
+                    random_state=random_state,
                 )
                 result.ci_effect_size = (es_ci.ci_lower, es_ci.ci_upper)
 
@@ -1489,6 +1526,7 @@ def compare_multiple_models(
     alpha: float = 0.05,
     correction_method: str = "holm",
     metric: Optional[str] = None,
+    random_state: Optional[int] = None,
 ) -> ModelComparisonResults:
     """
     Compares three or more models using a robust, two-step procedure.
@@ -1567,7 +1605,10 @@ def compare_multiple_models(
                 name1, name2 = model_names[i], model_names[j]
                 comparison_name = f"{name1}_vs_{name2}"
                 pairwise_result = mann_whitney_test(
-                    model_results[name1], model_results[name2], alpha=alpha
+                    model_results[name1],
+                    model_results[name2],
+                    alpha=alpha,
+                    random_state=random_state,
                 )
                 pairwise_tests.append(pairwise_result)
                 pairwise_names.append(comparison_name)
@@ -2225,7 +2266,14 @@ def required_runs(
         if empirical_power >= power:
             return n
 
-    return 200  # cap — warn user if power not achievable within reasonable n
+    warnings.warn(
+        f"required_runs(): target power {power} not achieved at n=200 for "
+        f"effect_size={effect_size:.3f}. The effect may be too small to detect "
+        "at this power level. Returning 200 (search ceiling).",
+        UserWarning,
+        stacklevel=2,
+    )
+    return 200
 
 
 def minimum_detectable_effect(
@@ -2281,4 +2329,10 @@ def minimum_detectable_effect(
         if empirical_power >= power:
             return effect_size
 
-    return 0.99  # cap
+    warnings.warn(
+        f"minimum_detectable_effect(): no detectable effect found at n_runs={n_runs} "
+        f"for power={power}. Returning 0.99 (search ceiling).",
+        UserWarning,
+        stacklevel=2,
+    )
+    return 0.99

@@ -404,7 +404,7 @@ def compare_models(
                 f"'{names[1]}' has {len(series_b)} runs. "
                 "Use paired=False for independent comparison."
             )
-        paired_result = paired_wilcoxon_test(series_a, series_b)
+        paired_result = paired_wilcoxon_test(series_a, series_b, random_state=seed)
         return ModelComparisonResults(
             overall_test=paired_result,
             raw_data=results_store,
@@ -427,7 +427,7 @@ def compare_models(
             stacklevel=2,
         )
 
-    stat_results = _stat_compare(results_store)
+    stat_results = _stat_compare(results_store, random_state=seed)
     stat_results.metric = metric
     stat_results.raw_data = results_store
     return stat_results

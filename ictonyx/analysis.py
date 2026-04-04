@@ -95,7 +95,7 @@ class StatisticalTestResult:
     sample_sizes: Optional[Dict[str, int]] = None
 
     # Assumption checking
-    assumptions_met: Dict[str, bool] = field(default_factory=dict)
+    assumptions_met: Dict[str, Optional[bool]] = field(default_factory=dict)
     assumption_details: Dict[str, Any] = field(default_factory=dict)
 
     # Warnings and recommendations

@@ -670,16 +670,23 @@ class ExperimentRunner:
 
             logger.info(f"Running {num_runs} runs in parallel (n_jobs={n_jobs})...")
 
+            # Build the list of run_ids being dispatched, preserving order.
+            # parallel_results[j] corresponds to dispatched_run_ids[j].
+            dispatched_run_ids = [
+                i + 1 for i in range(num_runs) if (i + 1) not in completed_run_ids
+            ]
+
             parallel_results = Parallel(n_jobs=n_jobs, backend="loky")(
-                delayed(self._run_single_fit)(run_id=i + 1, epochs=epochs_per_run)
-                for i in range(num_runs)
-                if (i + 1) not in completed_run_ids
+                delayed(self._run_single_fit)(run_id=run_id, epochs=epochs_per_run)
+                for run_id in dispatched_run_ids
             )
 
-            for metrics_df in parallel_results:
+            for run_id, metrics_df in zip(dispatched_run_ids, parallel_results):
                 if metrics_df is not None:
                     self.all_runs_metrics.append(metrics_df)
-                    self._extract_and_store_final_metrics(metrics_df)  # Fix 3.3
+                    self._extract_and_store_final_metrics(metrics_df)
+                else:
+                    self.failed_runs.append(run_id)
 
         else:
             # --- Sequential execution path ---

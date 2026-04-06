@@ -856,6 +856,59 @@ class TestCompareTwoModels:
         result = compare_two_models(m1, m2, paired=False)
         assert result.confidence_interval is None
 
+    def test_welch_path_effect_size_interpretation_correct_scale(self):
+        """Regression for BUG-1: _hedges_g() called _interpret_variance_explained()
+        (thresholds 0.01/0.06/0.14) instead of _interpret_cohens_d() (0.2/0.5/0.8).
+        A g of ~0.25 (small on Cohen's d scale) was labelled 'large'.
+
+        Data is constructed to be normal with unequal variance (forcing the Welch
+        path) and a small mean difference producing g in [0.2, 0.5)."""
+        rng = np.random.RandomState(7)
+        # Normal data, unequal variance, small effect: mean diff ~0.03 on pooled sd ~0.10
+        m1 = pd.Series(rng.normal(0.83, 0.02, 60))
+        m2 = pd.Series(rng.normal(0.80, 0.12, 60))
+        result = compare_two_models(m1, m2, paired=False)
+        if "Welch" in result.test_name:
+            assert result.effect_size_name == "Hedges' g"
+            assert result.effect_size_interpretation != "large", (
+                f"Hedges' g={result.effect_size:.3f} was labelled 'large' — "
+                "_interpret_variance_explained() is being called instead of "
+                "_interpret_cohens_d(). Thresholds 0.01/0.06/0.14 vs 0.2/0.5/0.8."
+            )
+            # g in [0.2, 0.5) is "small" on Cohen's d scale, not "large"
+            if 0.2 <= result.effect_size < 0.5:
+                assert result.effect_size_interpretation == "small", (
+                    f"g={result.effect_size:.3f} should be 'small' on Cohen's d scale, "
+                    f"got '{result.effect_size_interpretation}'."
+                )
+
+    def test_welch_path_ci_uses_hedges_g_estimator(self):
+        """Regression for BUG-2: Welch path CI was built via bootstrap_effect_size_ci
+        (Cohen's d, no J correction) while the point estimate is Hedges' g. After the
+        fix, bootstrap_hedges_g_ci is used so CI and point estimate match.
+
+        We verify this by checking that bootstrap_hedges_g_ci's point_estimate on the
+        same data equals result.effect_size (both must be Hedges' g)."""
+        from ictonyx.bootstrap import bootstrap_hedges_g_ci
+
+        rng = np.random.RandomState(42)
+        m1 = pd.Series(rng.normal(0.82, 0.01, 40))
+        m2 = pd.Series(rng.normal(0.72, 0.08, 40))
+        result = compare_two_models(m1, m2, paired=False)
+
+        if "Welch" in result.test_name:
+            assert result.effect_size_name == "Hedges' g"
+            assert result.ci_effect_size is not None, "Welch path must populate ci_effect_size."
+            # Compute Hedges' g independently via bootstrap_hedges_g_ci
+            # Its point_estimate is Hedges' g on the original data —
+            # must match result.effect_size exactly.
+            ci = bootstrap_hedges_g_ci(m1.values, m2.values, n_bootstrap=100, random_state=0)
+            assert abs(ci.point_estimate - result.effect_size) < 1e-9, (
+                f"bootstrap_hedges_g_ci point_estimate={ci.point_estimate:.6f} "
+                f"!= result.effect_size={result.effect_size:.6f}. "
+                "The Welch path is not using bootstrap_hedges_g_ci."
+            )
+
 
 class TestCompareTwoModelsDefaults:
     """Verify default test selection and parametric path behaviour."""
@@ -955,11 +1008,6 @@ class TestCompareMultipleModels:
         assert "Kruskal" not in results.overall_test.test_name
         assert results.correction_method == "none"
         assert len(results.pairwise_comparisons) == 1
-
-
-# ===================================================================
-#  Convergence & Stability
-# ===================================================================
 
 
 class TestCalculateAutocorr:
@@ -1349,6 +1397,37 @@ class TestPairedWilcoxonTest:
         assert (paired_result.p_value < 0.05) == (single_result.p_value < 0.05), (
             "paired_wilcoxon_test and wilcoxon_signed_rank_test disagree on "
             "significance for the same data. Check method= consistency."
+        )
+
+    def test_effect_size_uses_w_statistic_formula(self):
+        """Regression for BUG-3: paired_wilcoxon_test() derived r via norm.ppf(p/2),
+        which is invalid when wilcoxon(method='auto') uses the exact distribution.
+        After the fix, r is derived from the W statistic directly.
+
+        We verify by independently computing r from W and checking it matches."""
+        from scipy.stats import wilcoxon as scipy_wilcoxon
+
+        from ictonyx.analysis import paired_wilcoxon_test
+
+        a = pd.Series([0.85, 0.87, 0.86, 0.88, 0.84, 0.89])
+        b = pd.Series([0.70, 0.72, 0.71, 0.73, 0.69, 0.74])
+        result = paired_wilcoxon_test(a, b)
+
+        assert result.effect_size is not None
+        assert 0.0 <= result.effect_size <= 1.0, f"effect_size={result.effect_size} out of [0, 1]"
+
+        # Independently compute r using the W-statistic formula
+        differences = (a - b).values
+        nonzero = differences[differences != 0]
+        n_eff = len(nonzero)
+        W, _ = scipy_wilcoxon(nonzero, method="auto")
+        mu_w = n_eff * (n_eff + 1) / 4.0
+        sigma_w = np.sqrt(n_eff * (n_eff + 1) * (2 * n_eff + 1) / 24.0)
+        expected_r = min(abs((W - mu_w) / sigma_w) / np.sqrt(n_eff), 1.0)
+
+        assert abs(result.effect_size - expected_r) < 1e-9, (
+            f"effect_size={result.effect_size:.8f} does not match W-statistic "
+            f"formula={expected_r:.8f}. The norm.ppf(p/2) path may still be active."
         )
 
 

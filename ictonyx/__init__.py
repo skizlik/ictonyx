@@ -236,6 +236,7 @@ try:
         BootstrapCIResult,
         bootstrap_ci,
         bootstrap_effect_size_ci,
+        bootstrap_hedges_g_ci,
         bootstrap_mean_difference_ci,
         bootstrap_paired_difference_ci,
     )
@@ -246,6 +247,7 @@ try:
             "bootstrap_ci",
             "bootstrap_mean_difference_ci",
             "bootstrap_effect_size_ci",
+            "bootstrap_hedges_g_ci",
             "bootstrap_paired_difference_ci",
         ]
     )

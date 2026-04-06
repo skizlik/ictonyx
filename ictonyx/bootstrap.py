@@ -400,6 +400,66 @@ def bootstrap_effect_size_ci(
     )
 
 
+def bootstrap_hedges_g_ci(
+    group1: Union[np.ndarray, pd.Series, List[float]],
+    group2: Union[np.ndarray, pd.Series, List[float]],
+    n_bootstrap: int = 10000,
+    confidence: float = 0.95,
+    method: str = "bca",
+    random_state: Optional[int] = None,
+    return_distribution: bool = False,
+) -> BootstrapCIResult:
+    """Bootstrap CI for Hedges' g effect size.
+
+    Applies the Hedges' J correction on every bootstrap resample so that
+    the CI and point estimate are for the same estimator. Use this instead
+    of :func:`bootstrap_effect_size_ci` when the point estimate is Hedges' g
+    (i.e., the Welch's t-test path in :func:`~ictonyx.analysis.compare_two_models`).
+
+    Args:
+        group1: Metric values for model 1.
+        group2: Metric values for model 2.
+        n_bootstrap: Number of bootstrap resamples. Default 10 000.
+        confidence: Confidence level. Default 0.95.
+        method: ``'percentile'`` or ``'bca'``. Default ``'bca'``.
+        random_state: Seed for reproducibility.
+        return_distribution: If True, store the full bootstrap distribution.
+
+    Returns:
+        :class:`BootstrapCIResult`. ``point_estimate`` is Hedges' g computed
+        on the original (non-resampled) data.
+    """
+    g1 = _to_clean_array(group1)
+    g2 = _to_clean_array(group2)
+
+    if len(g1) < 2 or len(g2) < 2:
+        raise ValueError(f"Both groups need at least 2 observations. Got {len(g1)} and {len(g2)}.")
+
+    def _hedges_g_fn(a: np.ndarray, b: np.ndarray) -> float:
+        n1, n2 = len(a), len(b)
+        df = n1 + n2 - 2
+        if df <= 0:
+            return 0.0
+        pooled_var = ((n1 - 1) * np.var(a, ddof=1) + (n2 - 1) * np.var(b, ddof=1)) / df
+        s = np.sqrt(pooled_var)
+        if s == 0:
+            return 0.0
+        d = (np.mean(a) - np.mean(b)) / s
+        j = 1.0 - (3.0 / (4.0 * df - 1.0))
+        return float(d * j)
+
+    return _two_sample_bootstrap(
+        g1,
+        g2,
+        statistic_fn=_hedges_g_fn,
+        n_bootstrap=n_bootstrap,
+        confidence=confidence,
+        method=method,
+        random_state=random_state,
+        return_distribution=return_distribution,
+    )
+
+
 def bootstrap_paired_difference_ci(
     group1: Union[np.ndarray, pd.Series, List[float]],
     group2: Union[np.ndarray, pd.Series, List[float]],

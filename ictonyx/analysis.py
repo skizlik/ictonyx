@@ -10,6 +10,7 @@ try:
     from .bootstrap import (
         BootstrapCIResult,
         bootstrap_effect_size_ci,
+        bootstrap_hedges_g_ci,
         bootstrap_mean_difference_ci,
         bootstrap_paired_difference_ci,
     )
@@ -485,7 +486,7 @@ def _hedges_g(group1: pd.Series, group2: pd.Series) -> Tuple[float, str]:
     # Hedges' correction factor J — removes small-sample positive bias in Cohen's d
     j = 1.0 - (3.0 / (4.0 * (n1 + n2 - 2) - 1.0))
     g = d * j
-    return float(g), _interpret_variance_explained(abs(g))
+    return float(g), _interpret_cohens_d(abs(g))
 
 
 def _interpret_cohens_d(abs_d: float) -> str:
@@ -1251,24 +1252,25 @@ def paired_wilcoxon_test(
         result.statistic = float(stat)
         result.p_value = float(p)
 
-        # Effect size r = |Z| / sqrt(N), derived from the p-value via
-        # the inverse normal CDF — standard practice when the exact Z is
-        # not available from wilcoxon(method='auto') output.
+        # Effect size r = |Z| / sqrt(N), derived from the W statistic via the
+        # asymptotic normal approximation of the Wilcoxon distribution.
+        # Valid regardless of whether scipy used the exact or approximate path.
+        # The prior norm.ppf(p/2) approach is only correct when p came from the
+        # normal approximation; wilcoxon(method='auto') uses the exact distribution
+        # for small n (the common case), making that inversion invalid.
+        # Mirrors the formula used in wilcoxon_signed_rank_test().
         n_eff = len(nonzero)
-        p_val = float(p)
-        if n_eff > 0 and 0 < p_val < 1:
-            from scipy.stats import norm as _norm
-
-            z_score = abs(_norm.ppf(p_val / 2))
-            r = min(z_score / np.sqrt(n_eff), 1.0)
-            result.effect_size = r
-            result.effect_size_name = "r (effect size)"
-            result.effect_size_interpretation = _interpret_wilcoxon_r(r)
-        elif n_eff > 0 and p_val <= 0:
-            # Perfect separation or floating-point underflow at large n
-            result.effect_size = 1.0
-            result.effect_size_name = "r (effect size)"
-            result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
+        W = float(stat)
+        mu_w = n_eff * (n_eff + 1) / 4.0
+        sigma_w = np.sqrt(n_eff * (n_eff + 1) * (2 * n_eff + 1) / 24.0)
+        if sigma_w > 0:
+            z_approx = (W - mu_w) / sigma_w
+            r = min(abs(z_approx) / np.sqrt(n_eff), 1.0)
+        else:
+            r = 0.0
+        result.effect_size = r
+        result.effect_size_name = "r (effect size)"
+        result.effect_size_interpretation = _interpret_wilcoxon_r(r)
 
         direction = "A" if float(differences.median()) > 0 else "B"
         if p < alpha:
@@ -1426,17 +1428,31 @@ def compare_two_models(
             result.ci_confidence_level = ci_result.confidence_level
             result.ci_method = ci_result.method
 
-            # Also compute CI for the effect size (Cohen's d)
+            # Compute CI for the effect size.
+            # Welch path uses Hedges' g as point estimate — use bootstrap_hedges_g_ci
+            # so the CI is for the same estimator as the point estimate.
+            # Student's t path uses Cohen's d — use bootstrap_effect_size_ci.
+            # Mann-Whitney path: no parametric effect-size CI at this time.
             if result.effect_size is not None and "Mann-Whitney" not in result.test_name:
-                es_ci = bootstrap_effect_size_ci(
-                    clean1,
-                    clean2,
-                    n_bootstrap=10000,
-                    confidence=1 - alpha,
-                    method="bca",
-                    pooled=True,
-                    random_state=random_state,
-                )
+                if "Welch" in result.test_name:
+                    es_ci = bootstrap_hedges_g_ci(
+                        clean1,
+                        clean2,
+                        n_bootstrap=10000,
+                        confidence=1 - alpha,
+                        method="bca",
+                        random_state=random_state,
+                    )
+                else:
+                    es_ci = bootstrap_effect_size_ci(
+                        clean1,
+                        clean2,
+                        n_bootstrap=10000,
+                        confidence=1 - alpha,
+                        method="bca",
+                        pooled=True,
+                        random_state=random_state,
+                    )
                 result.ci_effect_size = (es_ci.ci_lower, es_ci.ci_upper)
 
         except Exception:

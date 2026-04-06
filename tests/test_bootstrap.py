@@ -14,6 +14,7 @@ from ictonyx.bootstrap import (
     _to_clean_array,
     bootstrap_ci,
     bootstrap_effect_size_ci,
+    bootstrap_hedges_g_ci,
     bootstrap_mean_difference_ci,
     bootstrap_paired_difference_ci,
 )
@@ -555,3 +556,80 @@ class TestBootstrapModernisation:
         assert abs(r_vec.point_estimate - r_loop.point_estimate) < 1e-10
         assert abs(r_vec.ci_lower - r_loop.ci_lower) < 0.05
         assert abs(r_vec.ci_upper - r_loop.ci_upper) < 0.05
+
+
+class TestBootstrapHedgesGCi:
+    """Tests for bootstrap_hedges_g_ci() — added to fix BUG-2 (Welch CI mismatch)."""
+
+    def test_point_estimate_matches_hedges_g(self):
+        """point_estimate must equal Hedges' g computed on the original data."""
+        from ictonyx.bootstrap import bootstrap_hedges_g_ci
+
+        rng = np.random.default_rng(42)
+        a = rng.normal(0.85, 0.03, 20)
+        b = rng.normal(0.75, 0.03, 20)
+
+        result = bootstrap_hedges_g_ci(a, b, n_bootstrap=500, random_state=42)
+
+        # Compute Hedges' g manually
+        n1, n2 = len(a), len(b)
+        df = n1 + n2 - 2
+        pooled_var = ((n1 - 1) * np.var(a, ddof=1) + (n2 - 1) * np.var(b, ddof=1)) / df
+        d = (np.mean(a) - np.mean(b)) / np.sqrt(pooled_var)
+        j = 1.0 - (3.0 / (4.0 * df - 1.0))
+        expected_g = d * j
+
+        assert (
+            abs(result.point_estimate - expected_g) < 1e-9
+        ), f"point_estimate={result.point_estimate:.8f} != Hedges' g={expected_g:.8f}"
+
+    def test_point_estimate_smaller_than_cohens_d(self):
+        """Hedges' g < Cohen's d in magnitude for finite samples (J < 1 always)."""
+        from ictonyx.bootstrap import bootstrap_effect_size_ci, bootstrap_hedges_g_ci
+
+        rng = np.random.default_rng(7)
+        a = rng.normal(0.85, 0.02, 10)
+        b = rng.normal(0.70, 0.02, 10)
+
+        g_result = bootstrap_hedges_g_ci(a, b, n_bootstrap=500, random_state=7)
+        d_result = bootstrap_effect_size_ci(a, b, n_bootstrap=500, pooled=True, random_state=7)
+
+        assert abs(g_result.point_estimate) <= abs(d_result.point_estimate) + 1e-9, (
+            f"|g|={abs(g_result.point_estimate):.6f} > |d|={abs(d_result.point_estimate):.6f}. "
+            "J correction must reduce magnitude."
+        )
+
+    def test_ci_bounds_ordered_and_finite(self):
+        """CI bounds must be finite and lo < hi."""
+        from ictonyx.bootstrap import bootstrap_hedges_g_ci
+
+        rng = np.random.default_rng(0)
+        a = rng.normal(0.85, 0.03, 20)
+        b = rng.normal(0.75, 0.03, 20)
+        result = bootstrap_hedges_g_ci(a, b, n_bootstrap=500, random_state=0)
+
+        assert np.isfinite(result.ci_lower)
+        assert np.isfinite(result.ci_upper)
+        assert result.ci_lower < result.ci_upper
+
+    def test_reproducible_with_same_random_state(self):
+        """Identical random_state must produce identical results."""
+        from ictonyx.bootstrap import bootstrap_hedges_g_ci
+
+        rng = np.random.default_rng(99)
+        a = rng.normal(0, 1, 20)
+        b = rng.normal(0.5, 1, 20)
+
+        r1 = bootstrap_hedges_g_ci(a, b, n_bootstrap=500, random_state=42)
+        r2 = bootstrap_hedges_g_ci(a, b, n_bootstrap=500, random_state=42)
+
+        assert r1.ci_lower == r2.ci_lower
+        assert r1.ci_upper == r2.ci_upper
+        assert r1.point_estimate == r2.point_estimate
+
+    def test_raises_on_insufficient_data(self):
+        """Must raise ValueError when either group has fewer than 2 observations."""
+        from ictonyx.bootstrap import bootstrap_hedges_g_ci
+
+        with pytest.raises(ValueError, match="at least 2"):
+            bootstrap_hedges_g_ci(np.array([0.8]), np.array([0.7, 0.75]))

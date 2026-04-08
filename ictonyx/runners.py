@@ -1026,8 +1026,6 @@ class VariabilityStudyResults:
         return f"val_{base}"
 
     def summarize(self) -> str:
-        from scipy.stats import t as _t
-
         lines = [
             "Variability Study Results",
             "=" * 30,
@@ -1044,10 +1042,7 @@ class VariabilityStudyResults:
                 f"  Mean:             {mean:.4f}",
                 f"  SD (sample, N-1): {sd:.4f}",
             ]
-            if n > 1:
-                se = sd / np.sqrt(n)
-                margin = _t.ppf(0.975, df=n - 1) * se
-                block.append(f"  95% CI:           [{mean - margin:.4f}, {mean + margin:.4f}]")
+
             block += [
                 f"  Min:              {np.min(values):.4f}",
                 f"  Max:              {np.max(values):.4f}",

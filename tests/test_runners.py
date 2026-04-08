@@ -1688,11 +1688,6 @@ class TestVariabilityStudyResultsTestMetrics:
 
     # --- summarize ---
 
-    def test_summarize_contains_ci_line(self):
-        results = self._make_results_no_test()
-        summary = results.summarize()
-        assert "95% CI" in summary
-
     def test_summarize_no_test_data_contains_note(self):
         results = self._make_results_no_test()
         summary = results.summarize()

@@ -10,7 +10,7 @@ import random
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
 if TYPE_CHECKING:
     from .analysis import StatisticalTestResult
@@ -455,13 +455,7 @@ class ExperimentRunner:
             history_df = self._standardize_history_df(history_df)
 
             # Store final values for ALL tracked metrics
-            for col in history_df.columns:
-                if col not in ("run_num", "epoch"):
-                    final_value = float(history_df[col].iloc[-1])
-                    if col not in self.final_metrics:
-                        self.final_metrics[col] = []
-                    self.final_metrics[col].append(final_value)
-                    self.tracker.log_metric(f"final_{col}", final_value, step=run_id)
+            self._extract_and_store_final_metrics(history_df, run_id=run_id)
 
             # Evaluate on test data
             if self.test_data is not None:
@@ -498,11 +492,34 @@ class ExperimentRunner:
             if cleanup_result.memory_freed_mb and cleanup_result.memory_freed_mb > 10:
                 self._run_log(f"   Freed {cleanup_result.memory_freed_mb:.1f}MB")
 
+    def _extract_and_store_final_metrics(self, history_df: pd.DataFrame, run_id: int = 0) -> None:
+        """Store final-epoch metric values from a completed run's history DataFrame.
+
+        Shared by both the sequential and parallel execution paths. The sequential
+        path (via _run_single_fit_standard) passes run_id for tracker logging.
+        The parallel collection loop passes no run_id, so tracker logging is skipped.
+
+        Args:
+            history_df: Per-epoch metrics DataFrame produced by a completed run.
+            run_id: 1-based run index for tracker logging. 0 means skip logging.
+        """
+        for col in history_df.columns:
+            if col not in ("run_num", "epoch"):
+                final_value = float(history_df[col].iloc[-1])
+                if col not in self.final_metrics:
+                    self.final_metrics[col] = []
+                self.final_metrics[col].append(final_value)
+                if run_id:
+                    self.tracker.log_metric(f"final_{col}", final_value, step=run_id)
+
     def run_study(
         self,
         num_runs: int = 5,
         epochs_per_run: Optional[int] = None,
         stop_on_failure_rate: float = 0.8,
+        checkpoint_dir: Optional[str] = None,
+        use_parallel: bool = False,
+        n_jobs: int = -1,
     ) -> "VariabilityStudyResults":
         """Execute the complete variability study.
 
@@ -521,20 +538,87 @@ class ExperimentRunner:
             stop_on_failure_rate: If the fraction of failed runs exceeds this
                 threshold, the study halts early. Set to ``1.0`` to never
                 stop early. Default ``0.8``.
+            checkpoint_dir: Optional path to a directory for saving progress
+                after each completed run. If the directory contains a
+                ``checkpoint.joblib`` file from a previous interrupted run,
+                execution resumes from where it left off. Default ``None``
+                (no checkpointing).
+            use_parallel: If ``True``, fan training runs across multiple
+                processes using ``joblib.Parallel``. Safe for sklearn
+                models. Not recommended for Keras/TF. Mutually exclusive
+                with ``use_process_isolation``. Default ``False``.
+            n_jobs: Number of parallel workers. ``-1`` uses all available
+                CPUs. Ignored when ``use_parallel=False``. Default ``-1``.
 
         Returns:
             :class:`VariabilityStudyResults` with per-run DataFrames, final
             metric distributions, and optional test-set metrics.
         """
 
-        if num_runs < 1:
-            raise ValueError(f"num_runs must be at least 1, got {num_runs}.")
+        if num_runs < 2:
+            raise ValueError(
+                f"num_runs must be at least 2 to measure variability, got {num_runs}. "
+                "A single run produces no distribution to analyse. "
+                "Call wrapper.fit() and wrapper.evaluate() directly for single-run use."
+            )
 
-        # Reset state from any previous run
+        if use_parallel and self.use_process_isolation:
+            raise ValueError(
+                "use_parallel=True and use_process_isolation=True are mutually exclusive. "
+                "Use one or the other, not both."
+            )
+
+        if use_parallel and HAS_TENSORFLOW:
+            warnings.warn(
+                "use_parallel=True with Keras/TF models may cause GPU memory conflicts "
+                "or session state corruption. Consider use_process_isolation=True instead.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        # Reset state from any previous run — must happen BEFORE checkpoint load
         self.all_runs_metrics.clear()
         self.final_metrics.clear()
         self.final_test_metrics.clear()
         self.failed_runs.clear()
+
+        # Resume from checkpoint if available
+        completed_run_ids: set = set()
+        if checkpoint_dir is not None:
+            import os
+            import pickle as _pickle
+
+            checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
+            if os.path.exists(checkpoint_path):
+                try:
+                    with open(checkpoint_path, "rb") as _f:
+                        _prior_data = _pickle.load(_f)
+                    self.all_runs_metrics = list(_prior_data["all_runs_metrics"])
+                    self.final_metrics = dict(_prior_data["final_metrics"])
+                    self.final_test_metrics = list(_prior_data["final_test_metrics"])
+                    completed_run_ids = {
+                        int(df["run_num"].iloc[0]) for df in self.all_runs_metrics if not df.empty
+                    }
+                    logger.info(
+                        f"Resuming from checkpoint: "
+                        f"{len(completed_run_ids)} of {num_runs} runs already complete."
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Could not load checkpoint from {checkpoint_path}: {e}. "
+                        "Starting from scratch."
+                    )
+
+        if use_parallel and self.test_data is not None:
+            warnings.warn(
+                "use_parallel=True: test set evaluation is not supported in parallel "
+                "mode. Each training run executes in a joblib worker process; test "
+                "metrics cannot be returned to the parent. has_test_data will be "
+                "False and final_test_metrics will be empty. Use "
+                "use_process_isolation=True if you need per-run test evaluation.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # Generate independent child seeds up front.
         # SeedSequence guarantees uncorrelated children regardless of proximity.
@@ -575,46 +659,95 @@ class ExperimentRunner:
         if self._progress_bar:
             run_iter = tqdm(run_iter, desc="Variability Study", unit="run")
 
-        try:
-            for i in run_iter:
-                # Check failure rate
-                if i > 0:
-                    completed = i  # runs 0..i-1 have completed
-                    failure_rate = len(self.failed_runs) / completed
-                    if failure_rate >= stop_on_failure_rate:
-                        self._run_log(
-                            f"Stopping due to high failure rate: {failure_rate:.1%}",
-                            level="error",
-                        )
-                        break
+        if use_parallel and not self.use_process_isolation:
+            # --- Parallel execution path ---
+            try:
+                from joblib import Parallel, delayed
+            except ImportError:
+                raise ImportError(
+                    "joblib is required for parallel execution. " "Install with: pip install joblib"
+                )
 
-                # Run single training
-                metrics_df = self._run_single_fit(run_id=i + 1, epochs=epochs_per_run)
+            logger.info(f"Running {num_runs} runs in parallel (n_jobs={n_jobs})...")
+
+            # Build the list of run_ids being dispatched, preserving order.
+            # parallel_results[j] corresponds to dispatched_run_ids[j].
+            dispatched_run_ids = [
+                i + 1 for i in range(num_runs) if (i + 1) not in completed_run_ids
+            ]
+
+            parallel_results = Parallel(n_jobs=n_jobs, backend="loky")(
+                delayed(self._run_single_fit)(run_id=run_id, epochs=epochs_per_run)
+                for run_id in dispatched_run_ids
+            )
+
+            for run_id, metrics_df in zip(dispatched_run_ids, parallel_results):
                 if metrics_df is not None:
                     self.all_runs_metrics.append(metrics_df)
-                    if self._progress_bar:
-                        self._update_progress_postfix(run_iter, metrics_df)
+                    self._extract_and_store_final_metrics(metrics_df)
+                else:
+                    self.failed_runs.append(run_id)
 
-                # Log memory info periodically (suppressed when progress bar is active)
-                if (i + 1) % 10 == 0 and self.verbose and not self._progress_bar:
-                    memory_info = get_memory_info()
-                    if "process_rss_mb" in memory_info:
-                        logger.info(f"  Memory check: {memory_info['process_rss_mb']:.1f}MB")
+        else:
+            # --- Sequential execution path ---
+            try:
+                for i in run_iter:
+                    # Skip runs already completed in a prior checkpoint
+                    if (i + 1) in completed_run_ids:
+                        continue
 
-        except KeyboardInterrupt:
-            if self.verbose:
-                logger.warning(f"\n\nStudy interrupted after {len(self.all_runs_metrics)} runs")
+                    # Check failure rate
+                    if i > 0:
+                        completed = i
+                        failure_rate = len(self.failed_runs) / completed
+                        if failure_rate >= stop_on_failure_rate:
+                            self._run_log(
+                                f"Stopping due to high failure rate: {failure_rate:.1%}",
+                                level="error",
+                            )
+                            break
 
-        finally:
-            # Final cleanup for standard mode
-            if not self.use_process_isolation:
-                final_cleanup = self.memory_manager.cleanup()
-                if self.verbose and final_cleanup.memory_freed_mb:
-                    logger.info(f"\nFinal cleanup freed {final_cleanup.memory_freed_mb:.1f}MB")
+                    # Run single training
+                    metrics_df = self._run_single_fit(run_id=i + 1, epochs=epochs_per_run)
+                    if metrics_df is not None:
+                        self.all_runs_metrics.append(metrics_df)
+                        if self._progress_bar:
+                            self._update_progress_postfix(run_iter, metrics_df)
 
-            self.tracker.end_run()
+                        # Save checkpoint after each successful run
+                        if checkpoint_dir is not None:
+                            import os
+                            import pickle as _pickle
 
-        # Print summary
+                            os.makedirs(checkpoint_dir, exist_ok=True)
+                            _checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
+                            _checkpoint_data = {
+                                "all_runs_metrics": list(self.all_runs_metrics),
+                                "final_metrics": dict(self.final_metrics),
+                                "final_test_metrics": list(self.final_test_metrics),
+                                "seed": self.seed,
+                            }
+                            with open(_checkpoint_path, "wb") as _f:
+                                _pickle.dump(_checkpoint_data, _f)
+
+                    # Log memory info periodically
+                    if (i + 1) % 10 == 0 and self.verbose and not self._progress_bar:
+                        memory_info = get_memory_info()
+                        if "process_rss_mb" in memory_info:
+                            logger.info(f"  Memory check: {memory_info['process_rss_mb']:.1f}MB")
+
+            except KeyboardInterrupt:
+                if self.verbose:
+                    logger.warning(f"\n\nStudy interrupted after {len(self.all_runs_metrics)} runs")
+
+            # --- Cleanup and return (runs regardless of which path was taken) ---
+        if not self.use_process_isolation:
+            final_cleanup = self.memory_manager.cleanup()
+            if self.verbose and final_cleanup.memory_freed_mb:
+                logger.info(f"\nFinal cleanup freed {final_cleanup.memory_freed_mb:.1f}MB")
+
+        self.tracker.end_run()
+
         if self.verbose:
             successful = len(self.all_runs_metrics)
             logger.info("\nStudy Summary:")
@@ -627,12 +760,18 @@ class ExperimentRunner:
                     std_val = np.std(values, ddof=1)
                     logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {std_val:.4f})")
 
-        return VariabilityStudyResults(
+        results = VariabilityStudyResults(
             all_runs_metrics=self.all_runs_metrics,
             final_metrics=self.final_metrics,
             final_test_metrics=self.final_test_metrics,
             seed=self.seed,
+            run_seeds=list(self._child_seeds),
         )
+
+        if hasattr(self.tracker, "log_study_summary"):
+            self.tracker.log_study_summary(results)
+
+        return results
 
     def get_summary_stats(self) -> Dict[str, Any]:
         """Get summary statistics for the completed study.
@@ -759,17 +898,40 @@ class VariabilityStudyResults:
         final_test_metrics: List of dicts, one per run, containing test-set
             evaluation results (empty if no test set was used).
         seed: The base random seed used for the study, for reproducibility.
+        run_seeds: List of per-run child seeds generated from the base
+            seed via ``SeedSequence.spawn()``. Empty when results are
+            reconstructed from MLflow or loaded from JSON.
     """
 
     all_runs_metrics: List[pd.DataFrame]
     final_metrics: Dict[str, List[float]]
     final_test_metrics: List[Dict[str, Any]]
     seed: Optional[int] = None
+    run_seeds: List[int] = field(default_factory=list)
 
     @property
     def n_runs(self) -> int:
         """Number of successful runs."""
         return len(self.all_runs_metrics)
+
+    def __repr__(self) -> str:
+        metrics = list(self.final_metrics.keys())
+        test_part = ""
+        if self.has_test_data:
+            test_keys = list({k for m in self.final_test_metrics for k in m if k != "run_id"})
+            test_part = f", test_metrics={test_keys}"
+        return (
+            f"VariabilityStudyResults("
+            f"n_runs={self.n_runs}, "
+            f"seed={self.seed}, "
+            f"metrics={metrics}"
+            f"{test_part})"
+        )
+
+    @property
+    def has_test_data(self) -> bool:
+        """True if at least one run produced test-set metrics."""
+        return bool(self.final_test_metrics)
 
     def get_metric_values(self, metric_name: str) -> List[float]:
         """Get collected final values for a specific metric.
@@ -844,8 +1006,26 @@ class VariabilityStudyResults:
 
         return pd.DataFrame(rows)
 
+    def preferred_metric(self, base: str = "accuracy") -> str:
+        """Return the preferred metric name for this study.
+
+        Returns ``f"test_{base}"`` when test data is present and the metric
+        was tracked, ``f"val_{base}"`` otherwise.
+
+        Args:
+            base: Base metric name without prefix. Default ``"accuracy"``.
+
+        Returns:
+            The most appropriate metric key for this study's results.
+        """
+        test_key = f"test_{base}"
+        if self.has_test_data:
+            tracked = {k for m in self.final_test_metrics for k in m if k != "run_id"}
+            if test_key in tracked:
+                return test_key
+        return f"val_{base}"
+
     def summarize(self) -> str:
-        """Generate text summary of results."""
         lines = [
             "Variability Study Results",
             "=" * 30,
@@ -853,17 +1033,40 @@ class VariabilityStudyResults:
             f"Seed: {self.seed}",
         ]
 
+        def _format_metric_block(metric_name: str, values: list) -> list:
+            n = len(values)
+            mean = np.mean(values)
+            sd = np.std(values, ddof=1)
+            block = [
+                f"{metric_name}:",
+                f"  Mean:             {mean:.4f}",
+                f"  SD (sample, N-1): {sd:.4f}",
+            ]
+
+            block += [
+                f"  Min:              {np.min(values):.4f}",
+                f"  Max:              {np.max(values):.4f}",
+            ]
+            return block
+
+        if self.has_test_data:
+            lines += ["", "Test Set Metrics:", "-" * 20]
+            test_keys = sorted({k for m in self.final_test_metrics for k in m if k != "run_id"})
+            for key in test_keys:
+                values = [m[key] for m in self.final_test_metrics if key in m]
+                if values:
+                    lines.extend(_format_metric_block(key, values))
+            lines += ["", "Validation Metrics:", "-" * 20]
+        else:
+            lines += [
+                "",
+                "Note: no held-out test data — validation metrics shown. "
+                "Provide test data via DataHandler for unbiased evaluation.",
+            ]
+
         for metric_name, values in sorted(self.final_metrics.items()):
             if values:
-                lines.extend(
-                    [
-                        f"{metric_name}:",
-                        f"  Mean: {np.mean(values):.4f}",
-                        f"  SD (sample, N-1):  {np.std(values, ddof=1):.4f}",
-                        f"  Min:  {np.min(values):.4f}",
-                        f"  Max:  {np.max(values):.4f}",
-                    ]
-                )
+                lines.extend(_format_metric_block(metric_name, values))
 
         return "\n".join(lines)
 
@@ -957,10 +1160,34 @@ class VariabilityStudyResults:
 
         return pd.DataFrame(rows)
 
+    def get_test_metric_values(self, metric: str) -> List[float]:
+        """Get per-run final values for a test-set metric.
+
+        Args:
+            metric: Metric key, e.g. 'test_accuracy', 'test_loss'.
+
+        Returns:
+            List of values, one per run, in run order.
+
+        Raises:
+            KeyError: If the metric was not tracked, or if no test data
+                was provided (final_test_metrics will be empty).
+        """
+        values = [m[metric] for m in self.final_test_metrics if metric in m]
+        if not values:
+            available = sorted({k for m in self.final_test_metrics for k in m if k != "run_id"})
+            raise KeyError(
+                f"Test metric '{metric}' not found. "
+                f"Available test metrics: {available}. "
+                "If no test data was provided, use get_metric_values() "
+                "to access validation metrics."
+            )
+        return values
+
     def test_against_null(
         self,
         null_value: float = 0.5,
-        metric: str = "val_accuracy",
+        metric: Optional[str] = None,
         alpha: float = 0.05,
     ) -> "StatisticalTestResult":
         """Test whether a metric's distribution differs from a null value.
@@ -985,11 +1212,28 @@ class VariabilityStudyResults:
         """
         from .analysis import wilcoxon_signed_rank_test
 
-        if metric not in self.final_metrics:
-            available = list(self.final_metrics.keys())
-            raise ValueError(f"Metric '{metric}' not found. Available: {available}")
+        if metric is None:
+            metric = self.preferred_metric("accuracy")
 
-        values = pd.Series(self.get_metric_values(metric))
+            # Route to the correct metric store based on prefix
+        if metric.startswith("test_"):
+            try:
+                values = pd.Series(self.get_test_metric_values(metric))
+            except KeyError:
+                available_test = sorted(
+                    {k for m in self.final_test_metrics for k in m if k != "run_id"}
+                )
+                raise ValueError(
+                    f"Metric '{metric}' not found in test metrics. "
+                    f"Available test metrics: {available_test}. "
+                    f"Available val metrics: {list(self.final_metrics.keys())}"
+                )
+        else:
+            if metric not in self.final_metrics:
+                available = list(self.final_metrics.keys())
+                raise ValueError(f"Metric '{metric}' not found. Available: {available}")
+            values = pd.Series(self.get_metric_values(metric))
+
         return wilcoxon_signed_rank_test(values, null_value=null_value, alpha=alpha)
 
     def compare_models_statistically(self, *args, **kwargs):
@@ -1013,6 +1257,149 @@ class VariabilityStudyResults:
             "producing statistically incoherent results.\n\n"
             "For single-model null testing: results.test_against_null(null_value=0.5)\n"
             "For cross-model comparison:    ix.compare_models([model_a, model_b], data=...)"
+        )
+
+    def save(self, path: str) -> None:
+        """Persist results to disk as a plain dict via pickle.
+
+        Preserves all_runs_metrics, final_metrics, final_test_metrics,
+        and seed. Restore with :meth:`load`.
+
+        Args:
+            path: File path. Recommended extension: ``.pkl``.
+        """
+        import pickle
+
+        data = {
+            "all_runs_metrics": self.all_runs_metrics,
+            "final_metrics": self.final_metrics,
+            "final_test_metrics": self.final_test_metrics,
+            "seed": self.seed,
+        }
+        with open(path, "wb") as f:
+            pickle.dump(data, f)
+
+    @classmethod
+    def load(cls, path: str) -> "VariabilityStudyResults":
+        """Restore results previously saved with :meth:`save`.
+
+        Args:
+            path: File path written by :meth:`save`.
+
+        Returns:
+            Reconstructed VariabilityStudyResults.
+        """
+        import pickle
+
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+        return cls(
+            all_runs_metrics=data["all_runs_metrics"],
+            final_metrics=data["final_metrics"],
+            final_test_metrics=data["final_test_metrics"],
+            seed=data.get("seed"),
+        )
+
+    def to_json(self) -> str:
+        """Serialise final metrics to a compact JSON string.
+
+        Does not include ``all_runs_metrics`` (per-epoch DataFrames).
+        Use :meth:`save` / :meth:`load` for full round-trip fidelity.
+
+        Returns:
+            JSON string containing ``final_metrics``, ``final_test_metrics``,
+            ``seed``, and ``n_runs``.
+        """
+        import json
+
+        return json.dumps(
+            {
+                "n_runs": self.n_runs,
+                "seed": self.seed,
+                "final_metrics": self.final_metrics,
+                "final_test_metrics": self.final_test_metrics,
+            },
+            indent=2,
+        )
+
+    @classmethod
+    def from_mlflow_experiment(
+        cls,
+        experiment_name: str,
+        metric: str,
+        run_filter: Optional[str] = None,
+        tracking_uri: Optional[str] = None,
+    ) -> "VariabilityStudyResults":
+        """Reconstruct results from a completed MLflow experiment.
+
+        Allows running ictonyx statistical analysis on existing MLflow
+        experiments without re-running training.
+
+        Args:
+            experiment_name: Name of the MLflow experiment.
+            metric: Metric to extract per run (e.g. 'val_accuracy').
+            run_filter: Optional MLflow filter string
+                (e.g. "params.seed = '42'").
+            tracking_uri: MLflow tracking URI. Uses the environment's
+                MLFLOW_TRACKING_URI if not set.
+
+        Returns:
+            VariabilityStudyResults with final_metrics populated from
+            the experiment's runs. all_runs_metrics is empty —
+            per-epoch history is not reconstructed from MLflow.
+
+        Raises:
+            ImportError: If mlflow is not installed.
+            ValueError: If no matching runs are found, or if the
+                requested metric is not present in the runs.
+        """
+        try:
+            import mlflow
+        except ImportError:
+            raise ImportError(
+                "mlflow is required for from_mlflow_experiment(). "
+                "Install with: pip install ictonyx[mlflow]"
+            )
+
+        if tracking_uri:
+            mlflow.set_tracking_uri(tracking_uri)
+
+        runs_df = cast(
+            pd.DataFrame,
+            mlflow.search_runs(
+                experiment_names=[experiment_name],
+                filter_string=run_filter or "",
+                order_by=["start_time ASC"],
+            ),
+        )
+
+        if runs_df.empty:
+            raise ValueError(
+                f"No runs found in experiment '{experiment_name}' " f"with filter: {run_filter!r}"
+            )
+
+        col = f"metrics.{metric}"
+        if col not in runs_df.columns:
+            available = [
+                c.replace("metrics.", "") for c in runs_df.columns if c.startswith("metrics.")
+            ]
+            raise ValueError(
+                f"Metric '{metric}' not found in experiment '{experiment_name}'. "
+                f"Available metrics: {available}"
+            )
+
+        values = runs_df[col].dropna().tolist()
+        if not values:
+            raise ValueError(
+                f"Metric '{metric}' exists in experiment '{experiment_name}' "
+                "but contains no non-null values."
+            )
+
+        return cls(
+            all_runs_metrics=[],
+            final_metrics={metric: values},
+            final_test_metrics=[],
+            seed=None,
         )
 
 
@@ -1104,8 +1491,8 @@ class GridStudyResults:
                 row = {
                     **param_combo,
                     "mean": float(values.mean()),
-                    "sd": float(values.std()),
-                    "se": float(values.std() / np.sqrt(n)),
+                    "sd": float(values.std(ddof=1)),
+                    "se": float(values.std(ddof=1) / np.sqrt(n)),
                     "min": float(values.min()),
                     "max": float(values.max()),
                     "n": n,
@@ -1158,6 +1545,8 @@ def run_variability_study(
     gpu_memory_limit: Optional[int] = None,
     seed: Optional[int] = None,
     verbose: bool = True,
+    use_parallel: bool = False,
+    n_jobs: int = -1,
 ) -> VariabilityStudyResults:
     """Run a complete variability study (convenience function).
 
@@ -1192,7 +1581,12 @@ def run_variability_study(
         verbose=verbose,
     )
 
-    return runner.run_study(num_runs=num_runs, epochs_per_run=epochs_per_run)
+    return runner.run_study(
+        num_runs=num_runs,
+        epochs_per_run=epochs_per_run,
+        use_parallel=use_parallel,
+        n_jobs=n_jobs,
+    )
 
 
 def run_grid_study(
@@ -1335,8 +1729,8 @@ def run_grid_study(
             values: pd.Series = pd.Series(result.get_metric_values(metric))
             if verbose:
                 logger.info(
-                    f"  Mean: {values.mean():.4f}  SD: {values.std():.4f}  "
-                    f"SE: {values.std() / np.sqrt(len(values)):.4f}"
+                    f"  Mean: {values.mean():.4f}  SD: {values.std(ddof=1):.4f}  "
+                    f"SE: {values.std(ddof=1) / np.sqrt(len(values)):.4f}"
                 )
         except KeyError:
             if verbose:

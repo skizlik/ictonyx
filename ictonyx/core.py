@@ -64,6 +64,30 @@ except ImportError:
     PYTORCH_AVAILABLE = False
 
 
+def _regression_metrics(preds: np.ndarray, labels: np.ndarray) -> Dict[str, float]:
+    """Compute r², MSE, and MAE for regression predictions.
+
+    Args:
+        preds: Predicted values, shape (n,).
+        labels: True values, shape (n,).
+
+    Returns:
+        Dict with keys ``'r2'``, ``'mse'``, ``'mae'``.
+        ``r2`` is ``nan`` when all labels are identical.
+    """
+    preds = np.asarray(preds, dtype=float).ravel()
+    labels = np.asarray(labels, dtype=float).ravel()
+    ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
+    ss_res = float(np.sum((labels - preds) ** 2))
+    mse = float(np.mean((labels - preds) ** 2))
+    return {
+        "r2": 1.0 - ss_res / ss_tot if ss_tot > 0.0 else float("nan"),
+        "mse": mse,
+        "rmse": float(np.sqrt(mse)),
+        "mae": float(np.mean(np.abs(labels - preds))),
+    }
+
+
 @dataclass
 class TrainingResult:
     """Standardized training output from any model wrapper.
@@ -486,7 +510,6 @@ if TENSORFLOW_AVAILABLE:
                     self.predictions = (raw_predictions.flatten() >= 0.5).astype(int)
                 else:
                     self.predictions = np.argmax(raw_predictions, axis=1).astype(int)
-
                 assert self.predictions is not None
                 return self.predictions
 
@@ -731,15 +754,7 @@ if TENSORFLOW_AVAILABLE:
             # Regression: pure NumPy, no additional imports required.
             preds = np.asarray(self.predictions, dtype=float)
             labels = np.asarray(true_labels, dtype=float)
-
-            mse = float(np.mean((preds - labels) ** 2))
-            mae = float(np.mean(np.abs(preds - labels)))
-
-            ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
-            ss_res = float(np.sum((labels - preds) ** 2))
-            r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else float("nan")
-
-            return {"r2": r2, "mse": mse, "mae": mae}
+            return _regression_metrics(preds, labels)
 
         def save_model(self, path: str):
             self.model.save(path)
@@ -1059,15 +1074,7 @@ if SKLEARN_AVAILABLE:
             # Regression: match ScikitLearnModelWrapper metric set exactly.
             preds = np.asarray(self.predictions, dtype=float)
             labels = np.asarray(true_labels, dtype=float)
-
-            mse = float(np.mean((preds - labels) ** 2))
-            mae = float(np.mean(np.abs(preds - labels)))
-
-            ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
-            ss_res = float(np.sum((labels - preds) ** 2))
-            r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else float("nan")
-
-            return {"r2": r2, "mse": mse, "mae": mae}
+            return _regression_metrics(preds, labels)
 
         def save_model(self, path: str):
             """Save the sklearn model using joblib.
@@ -1448,15 +1455,7 @@ if PYTORCH_AVAILABLE:
             else:
                 preds = np.asarray(self.predictions, dtype=float)
                 labels = np.asarray(true_labels, dtype=float)
-
-                mse = float(np.mean((preds - labels) ** 2))
-                mae = float(np.mean(np.abs(preds - labels)))
-
-                ss_tot = float(np.sum((labels - np.mean(labels)) ** 2))
-                ss_res = float(np.sum((labels - preds) ** 2))
-                r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else float("nan")
-
-                return {"r2": r2, "mse": mse, "mae": mae}
+                return _regression_metrics(preds, labels)
 
         def save_model(self, path: str):
             """Save model state dict to disk."""

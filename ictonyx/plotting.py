@@ -442,10 +442,24 @@ def plot_variability_summary(
     # Allow passing a VariabilityStudyResults object directly via results=
     if results is not None:
         all_runs_metrics_list = results.all_runs_metrics
+        # Auto-resolve metric base from preferred_metric when results provided
+        resolved_base = results.preferred_metric(metric).replace("test_", "").replace("val_", "")
         try:
-            final_metrics_series = pd.Series(results.get_metric_values(f"val_{metric}"))
+            final_metrics_series = pd.Series(
+                results.get_metric_values(results.preferred_metric(metric))
+            )
         except (KeyError, ValueError):
-            final_metrics_series = pd.Series(results.get_metric_values(metric))
+            try:
+                final_metrics_series = pd.Series(results.get_metric_values(f"val_{metric}"))
+            except (KeyError, ValueError):
+                final_metrics_series = pd.Series(results.get_metric_values(metric))
+        # Also pull test series if available
+        if results.has_test_data and final_test_series is None:
+            test_key = f"test_{resolved_base}"
+            try:
+                final_test_series = pd.Series(results.get_test_metric_values(test_key))
+            except KeyError:
+                pass
 
     if not all_runs_metrics_list:
         settings.logger.warning("No run metrics provided to plot.")

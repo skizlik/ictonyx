@@ -1,5 +1,5 @@
 # ictonyx/__init__.py
-# v.0.3.15
+# v0.4.0
 
 """
 Ictonyx: A Machine Learning Framework for Variability and Reproducibility Analysis
@@ -8,7 +8,7 @@ Ictonyx provides tools for conducting systematic variability studies, statistica
 of model performance, experiment tracking, and comprehensive ML workflow management.
 """
 
-__version__ = "0.3.15"
+__version__ = "0.4.0"
 
 import os
 
@@ -186,8 +186,10 @@ try:
         get_confusion_matrix_df,
         kruskal_wallis_test,
         mann_whitney_test,
+        minimum_detectable_effect,
         paired_wilcoxon_test,
         rank_biserial_correlation,
+        required_runs,
         shapiro_wilk_test,
         validate_sample_sizes,
         wilcoxon_signed_rank_test,
@@ -220,6 +222,8 @@ try:
             "rank_biserial_correlation",
             "eta_squared",
             "apply_multiple_comparison_correction",
+            "required_runs",
+            "minimum_detectable_effect",
         ]
     )
     _has_statistical_functions = True
@@ -232,6 +236,7 @@ try:
         BootstrapCIResult,
         bootstrap_ci,
         bootstrap_effect_size_ci,
+        bootstrap_hedges_g_ci,
         bootstrap_mean_difference_ci,
         bootstrap_paired_difference_ci,
     )
@@ -242,6 +247,7 @@ try:
             "bootstrap_ci",
             "bootstrap_mean_difference_ci",
             "bootstrap_effect_size_ci",
+            "bootstrap_hedges_g_ci",
             "bootstrap_paired_difference_ci",
         ]
     )
@@ -287,10 +293,8 @@ try:
         ]
     )
     _has_plotting_functions = True
-except ImportError as e:
+except ImportError:
     _has_plotting_functions = False
-    if os.getenv("DEBUG"):
-        logger.debug(f"Plotting functions not available: {e}")
 
 # MLflow logger and utilities
 try:
@@ -334,9 +338,9 @@ except ImportError:
 
 # Ultra-Simple API
 try:
-    from .api import compare_models, variability_study
+    from .api import compare_models, compare_results, variability_study
 
-    __all__.extend(["variability_study", "compare_models"])
+    __all__.extend(["variability_study", "compare_models", "compare_results"])
 except ImportError:
     pass
 

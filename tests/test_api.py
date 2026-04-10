@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from ictonyx import ModelConfig, api
+from ictonyx.analysis import ModelComparisonResults, StatisticalTestResult
 from ictonyx.api import _ensure_wrapper, _get_model_name
 from ictonyx.core import TENSORFLOW_AVAILABLE, BaseModelWrapper
 
@@ -157,13 +158,26 @@ def test_compare_models_flow(
     """Test that compare_models correctly orchestrates multiple studies."""
     # Arrange
     mock_var_study.return_value = mock_runner_results
-    mock_stat_compare.return_value = {"overall_test": "PASSED"}
+    mock_stat_compare.return_value = ModelComparisonResults(
+        overall_test=MagicMock(spec=StatisticalTestResult),
+        raw_data={},
+        pairwise_comparisons={},
+        significant_comparisons=[],
+        correction_method="holm",
+        n_models=2,
+        metric=None,
+    )
 
     models = [dummy_model_func, dummy_model_func_2]
 
     # Act
     result = api.compare_models(
-        models=models, data=sample_df, target_column="target", runs=5, metric="val_accuracy"
+        models=models,
+        data=sample_df,
+        target_column="target",
+        runs=5,
+        metric="val_accuracy",
+        paired=False,
     )
 
     # Assert
@@ -490,3 +504,37 @@ class TestBuilderInstanceClonerSafety:
             "Each builder call must produce a new wrapper instance. "
             "If the same instance is returned, weights would leak between runs."
         )
+
+
+class TestGetFeatureAvailability:
+    def test_returns_dict_with_expected_keys(self):
+        import ictonyx as ix
+
+        result = ix.get_feature_availability()
+        expected_keys = [
+            "tensorflow_support",
+            "sklearn_support",
+            "statistical_functions",
+            "bootstrap_ci",
+            "plotting_functions",
+            "mlflow_logger",
+            "hyperparameter_tuning",
+            "explainability",
+            "data_handlers",
+            "memory_management",
+            "process_isolation",
+        ]
+        for key in expected_keys:
+            assert key in result
+
+    def test_sklearn_support_is_bool(self):
+        import ictonyx as ix
+
+        result = ix.get_feature_availability()
+        assert isinstance(result["sklearn_support"], bool)
+
+    def test_data_handlers_is_list(self):
+        import ictonyx as ix
+
+        result = ix.get_feature_availability()
+        assert isinstance(result["data_handlers"], list)

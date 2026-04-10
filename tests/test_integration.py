@@ -288,3 +288,33 @@ class TestStatisticalIntegration:
         stability = assess_training_stability(results.all_runs_metrics, window_size=2)
         assert "stability_assessment" in stability
         assert stability["n_runs"] == 4
+
+
+class TestTestSetPrimacy:
+    """Verify that compare_models auto-selects test metrics when available."""
+
+    @pytest.mark.skipif(
+        not __import__("ictonyx.core", fromlist=["SKLEARN_AVAILABLE"]).SKLEARN_AVAILABLE,
+        reason="sklearn required",
+    )
+    def test_compare_models_resolves_metric_from_results(self):
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.tree import DecisionTreeClassifier
+
+        import ictonyx as ix
+        from ictonyx.data import ArraysDataHandler
+
+        rng = np.random.default_rng(42)
+        X = rng.standard_normal((120, 4)).astype(np.float32)
+        y = (X[:, 0] + X[:, 1] > 0).astype(int)
+        handler = ArraysDataHandler(X, y, val_split=0.15, test_split=0.15)
+
+        comparison = ix.compare_models(
+            models=[RandomForestClassifier, DecisionTreeClassifier],
+            data=handler,
+            runs=5,
+            seed=42,
+        )
+        assert comparison.overall_test is not None
+        assert comparison.metric in ("test_accuracy", "val_accuracy")
+        assert comparison.n_models == 2

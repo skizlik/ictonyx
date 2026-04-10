@@ -10,6 +10,7 @@ try:
     from .bootstrap import (
         BootstrapCIResult,
         bootstrap_effect_size_ci,
+        bootstrap_hedges_g_ci,
         bootstrap_mean_difference_ci,
         bootstrap_paired_difference_ci,
     )
@@ -95,7 +96,7 @@ class StatisticalTestResult:
     sample_sizes: Optional[Dict[str, int]] = None
 
     # Assumption checking
-    assumptions_met: Dict[str, bool] = field(default_factory=dict)
+    assumptions_met: Dict[str, Optional[bool]] = field(default_factory=dict)
     assumption_details: Dict[str, Any] = field(default_factory=dict)
 
     # Warnings and recommendations
@@ -208,30 +209,38 @@ def validate_sample_sizes(
 def check_normality(
     data: pd.Series,
     alpha: float = 0.05,
-    require_all_tests: bool = False,
-) -> Tuple[bool, Dict[str, Any]]:
+    require_all_tests: bool = True,
+) -> Tuple[Optional[bool], Dict[str, Any]]:
     """Test for normality using Shapiro-Wilk (and D'Agostino-Pearson if n >= 20).
 
     Used internally by assumption-checking logic in statistical tests.
 
+    Returns ``None`` when the sample is too small to test (n < 3), ``True``
+    when the sample does not reject normality, and ``False`` when at least
+    one test rejects normality (or no tests could run). Callers must treat
+    ``None`` as "untestable" and fall back to the non-parametric path —
+    the same convention used by :func:`check_independence`.
+
     Args:
         data: A ``pd.Series`` of metric values.
         alpha: Significance level. Default 0.05.
-        require_all_tests: If ``True``, normality is declared only when
-            *all* available tests pass. Default ``False`` (any single
-            test passing is sufficient). For n < 20, D'Agostino-Pearson
-            does not run, so this reduces to evaluating Shapiro-Wilk alone.
+        require_all_tests: If ``True`` (default), normality is declared only
+            when *all* available tests pass — the conservative conjunction.
+            If ``False``, any single passing test declares normality (lenient
+            disjunction). For n < 20, only Shapiro-Wilk runs, so the
+            distinction has no effect below that threshold.
 
     Returns:
         Tuple of ``(is_normal, details_dict)`` where ``is_normal`` is
-        ``True`` if the sample does not reject normality, and
-        ``details_dict`` contains test statistics and p-values.
+        ``True`` if normality is not rejected, ``False`` if it is rejected,
+        or ``None`` if the sample is too small to test (n < 3).
+        ``details_dict`` contains individual test statistics and p-values.
     """
 
     results = {}
 
     if len(data) < 3:
-        return False, {
+        return None, {
             "error": "Insufficient data for normality testing (n < 3)",
             "shapiro": None,
             "dagostino": None,
@@ -258,8 +267,10 @@ def check_normality(
 
     # For n < 20, D'Agostino-Pearson does not run — only Shapiro-Wilk is
     # evaluated. In that regime the "ALL tests" rule reduces to a single test.
-    # Set require_all_tests=True to enforce the strict conjunction regardless.
+    # With only one test running, both require_all_tests=True and False
+    # produce the same result.
     passing = [t["p_value"] > alpha for t in results.values() if t is not None]
+
     is_normal = all(passing) if require_all_tests else any(passing)
 
     return is_normal, results
@@ -319,25 +330,17 @@ def check_independence(
             A lag is flagged as significant if its autocorrelation exceeds
             ``norm.ppf(1 - alpha/2) / sqrt(n)``.
 
+    Note:
+        At n ≤ 10, this test has very low power to detect autocorrelation.
+        Absence of a warning is not a strong independence guarantee at
+        typical variability study sizes. Additionally, testing up to
+        ``max_lag`` lags without multiple-comparison correction inflates
+        the false-positive rate — at ``max_lag=5``, α=0.05, the familywise
+        rate for a spurious autocorrelation warning exceeds 22% even on
+        genuinely independent data.
+
+
     Returns:
-        Tuple of ``(is_independent, details_dict)`` where:
-
-        * ``is_independent`` is ``True`` if no lag's autocorrelation
-          exceeds the significance threshold.
-        * ``details_dict`` contains keys:
-
-          - ``'autocorrelations'``: dict mapping ``'lag_N'`` strings to
-            the autocorrelation coefficient at lag N.
-          - ``'significant_lags'``: list of lag integers exceeding the
-            threshold.
-          - ``'max_autocorr'``: the largest absolute autocorrelation
-            observed across all checked lags. ``0`` if no lags were checked.
-          ``'threshold'``: the significance threshold at lag 1, equal to
-            ``norm.ppf(1 - alpha/2) / sqrt(n - 1)``. Thresholds at
-            higher lags are ``norm.ppf(1 - alpha/2) / sqrt(n - lag)``.
-          - ``'n'``: the number of valid (non-NaN) observations.
-
-        Returns:
         Tuple of ``(is_independent, details_dict)`` where:
 
         * ``is_independent`` is ``True`` if no lag exceeds the threshold,
@@ -363,6 +366,10 @@ def check_independence(
         }
 
     effective_max_lag = min(max_lag, max(1, n - 2))
+    # Bonferroni correction: testing effective_max_lag lags at alpha=0.05 without
+    # correction gives a familywise false-positive rate of ~22.6% at max_lag=5.
+    corrected_alpha = alpha / effective_max_lag if effective_max_lag > 1 else alpha
+    corrected_critical_value = stats.norm.ppf(1 - corrected_alpha / 2)
     for lag in range(1, effective_max_lag + 1):
         try:
             autocorr = data.autocorr(lag)
@@ -370,7 +377,7 @@ def check_independence(
                 autocorr_results[f"lag_{lag}"] = autocorr
 
                 se = 1.0 / np.sqrt(n - lag)
-                if abs(autocorr) > critical_value * se:
+                if abs(autocorr) > corrected_critical_value * se:
                     significant_lags.append(lag)
         except Exception:
             continue
@@ -381,7 +388,11 @@ def check_independence(
         "autocorrelations": autocorr_results,
         "significant_lags": significant_lags,
         "max_autocorr": (max(abs(v) for v in autocorr_results.values()) if autocorr_results else 0),
-        "threshold": critical_value / np.sqrt(n) if n > 0 else None,
+        "thresholds": {
+            f"lag_{lag}": corrected_critical_value / np.sqrt(n - lag)
+            for lag in range(1, effective_max_lag + 1)
+        },
+        "threshold_lag1": corrected_critical_value / np.sqrt(n - 1) if n > 1 else None,
         "n": n,
     }
 
@@ -400,7 +411,10 @@ def cohens_d(group1: pd.Series, group2: pd.Series, pooled: bool = True) -> Tuple
     Args:
         group1: First group's metric values.
         group2: Second group's metric values.
-        pooled: If ``True`` (default), use pooled standard deviation.
+        pooled: If ``True`` (default), use pooled standard deviation
+            (Cohen's d). If ``False``, divide by ``group2.std()`` only —
+            this is **Glass's delta**, which uses the control group as the
+            sole reference. Default ``True``.
 
     Returns:
         Tuple of ``(d_value, interpretation)`` where ``interpretation``
@@ -448,6 +462,33 @@ def cohens_d(group1: pd.Series, group2: pd.Series, pooled: bool = True) -> Tuple
     return d, interpretation
 
 
+def _hedges_g(group1: pd.Series, group2: pd.Series) -> Tuple[float, str]:
+    """Hedges' g effect size with small-sample bias correction.
+
+    Preferred over Glass's delta for model comparisons where neither group
+    is a designated control. Order-invariant: g(A,B) = -g(B,A).
+
+    Args:
+        group1: First group's metric values.
+        group2: Second group's metric values.
+
+    Returns:
+        Tuple of (g, interpretation_label).
+    """
+    n1, n2 = len(group1), len(group2)
+    if n1 < 2 or n2 < 2:
+        return float("nan"), "undefined"
+    pooled_var = ((n1 - 1) * group1.var() + (n2 - 1) * group2.var()) / (n1 + n2 - 2)
+    pooled_std = np.sqrt(pooled_var)
+    if pooled_std == 0:
+        return float("nan"), "undefined"
+    d = (group1.mean() - group2.mean()) / pooled_std
+    # Hedges' correction factor J — removes small-sample positive bias in Cohen's d
+    j = 1.0 - (3.0 / (4.0 * (n1 + n2 - 2) - 1.0))
+    g = d * j
+    return float(g), _interpret_cohens_d(abs(g))
+
+
 def _interpret_cohens_d(abs_d: float) -> str:
     """Interpret Cohen's d effect size magnitude."""
     if abs_d < 0.2:
@@ -462,6 +503,9 @@ def _interpret_cohens_d(abs_d: float) -> str:
 
 def rank_biserial_correlation(group1: pd.Series, group2: pd.Series) -> Tuple[float, str]:
     """Calculate rank-biserial correlation as the effect size for the Mann-Whitney U test.
+
+    Algebraically equivalent to Cliff's delta (Cliff 1993):
+    r = 2U / (n₁·n₂) − 1 = (concordant pairs − discordant pairs) / (n₁·n₂).
 
     Ranges from -1 to 1, where 0 indicates no effect. Thresholds:
     small (0.1), medium (0.3), large (0.5).
@@ -502,7 +546,12 @@ def _interpret_rank_biserial(abs_r: float) -> str:
 
 
 def eta_squared(groups: List[pd.Series]) -> Tuple[float, str]:
-    """Calculate eta-squared effect size for ANOVA or Kruskal-Wallis.
+    """Calculate eta-squared effect size for ANOVA.
+
+    For Kruskal-Wallis, use the epsilon-squared value embedded in the
+    returned ``StatisticalTestResult`` — do not call this function on
+    KW results. See also ``anova_test()``, which now reports
+    omega-squared (bias-corrected) rather than eta-squared.
 
     Represents the proportion of variance in the dependent variable
     explained by group membership. Thresholds: small (0.01),
@@ -528,13 +577,17 @@ def eta_squared(groups: List[pd.Series]) -> Tuple[float, str]:
 
     eta_sq = ss_between / ss_total if ss_total > 0 else 0
 
-    interpretation = _interpret_eta_squared(eta_sq)
+    interpretation = _interpret_variance_explained(eta_sq)
 
     return eta_sq, interpretation
 
 
-def _interpret_eta_squared(eta_sq: float) -> str:
-    """Interpret eta-squared effect size magnitude."""
+def _interpret_variance_explained(eta_sq: float) -> str:
+    """Interpret variance-explained effect size magnitude (eta-squared or omega-squared).
+
+    Thresholds per Cohen (1988): small=0.01, medium=0.06, large=0.14.
+    Identical for eta-squared and omega-squared.
+    """
     if eta_sq < 0.01:
         return "negligible"
     elif eta_sq < 0.06:
@@ -639,6 +692,7 @@ def mann_whitney_test(
     model2_metrics: pd.Series,
     alternative: str = "two-sided",
     alpha: float = 0.05,
+    random_state: Optional[int] = None,
 ) -> StatisticalTestResult:
     """Mann-Whitney U test for comparing two independent groups.
 
@@ -803,24 +857,35 @@ def wilcoxon_signed_rank_test(
             result.statistic = float(wilcoxon_result.statistic)
             result.p_value = float(wilcoxon_result.pvalue)
 
-            # Effect size r = |Z| / sqrt(N).
-            # method='auto' (scipy 1.10+) does not populate zstatistic even
-            # when the approximation is used internally. Derive Z from the
-            # p-value using the inverse normal CDF — standard practice when
-            # the exact Z is not available from the test output.
-            # Clamp r to [0, 1] since very small p-values can produce Z > sqrt(n).
+            # Effect size r computed from the W statistic via the asymptotic
+            # normal approximation of the Wilcoxon distribution. Valid for both
+            # the exact and approximate p-value paths.
             n = len(non_zero_data)
             p_val = float(wilcoxon_result.pvalue)
-            if n > 0 and 0 < p_val < 1:
-                from scipy.stats import norm as _norm
-
-                z_score = abs(_norm.ppf(p_val / 2))
-                r = min(z_score / np.sqrt(n), 1.0)
+            if n > 0 and p_val <= 0:
+                # Perfect separation: all differences same sign. r = 1.0 by convention.
+                result.effect_size = 1.0
+                result.effect_size_name = "r (effect size)"
+                result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
+            elif n > 0:
+                # Derive r from the W statistic directly via the asymptotic formula.
+                # This is valid regardless of whether scipy used the exact or normal
+                # approximation internally. The norm.ppf(p/2) path is only correct
+                # when p came from the normal approximation; method='auto' uses the
+                # exact test for small n (the common case), making that conversion wrong.
+                W = float(wilcoxon_result.statistic)
+                mu_w = n * (n + 1) / 4.0
+                sigma_w = np.sqrt(n * (n + 1) * (2 * n + 1) / 24.0)
+                z_approx = (W - mu_w) / sigma_w if sigma_w > 0 else 0.0
+                r = min(abs(z_approx) / np.sqrt(n), 1.0)
                 result.effect_size = r
                 result.effect_size_name = "r (effect size)"
                 result.effect_size_interpretation = _interpret_wilcoxon_r(r)
             elif n > 0 and p_val <= 0:
                 # Perfect separation: all differences same sign. r = 1.0 by convention.
+                # (p_val can also be exactly 0.0 due to floating-point underflow at
+                # large n, though this is unlikely at the small sample sizes typical
+                # of variability studies.)
                 result.effect_size = 1.0
                 result.effect_size_name = "r (effect size)"
                 result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
@@ -892,7 +957,7 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
     normality_results = {}
     all_normal = True
     for i, (name, group) in enumerate(zip(group_names, clean_groups)):
-        is_normal, norm_details = check_normality(group)
+        is_normal, norm_details = check_normality(group, require_all_tests=True)
         normality_results[name] = norm_details
         if not is_normal:
             all_normal = False
@@ -927,11 +992,25 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
         result.statistic = float(statistic)
         result.p_value = float(p_value)
 
-        # Effect size (eta-squared)
-        eta_sq, eta_interpretation = eta_squared(clean_groups)
-        result.effect_size = eta_sq
-        result.effect_size_name = "eta-squared"
-        result.effect_size_interpretation = eta_interpretation
+        # Effect size (omega-squared — bias-corrected, preferred for small n)
+        N = sum(len(g) for g in clean_groups)
+        k = len(clean_groups)
+        grand_mean = float(np.mean(np.concatenate([np.array(g) for g in clean_groups])))
+        ss_between = sum(len(g) * (float(np.mean(g)) - grand_mean) ** 2 for g in clean_groups)
+        ss_within = sum(float(np.sum((np.array(g) - np.mean(g)) ** 2)) for g in clean_groups)
+        ms_within = ss_within / (N - k) if N > k else float("nan")
+        ss_total = ss_between + ss_within
+        denom = ss_total + ms_within
+        if np.isfinite(ms_within) and denom > 0:
+            omega_sq = (ss_between - (k - 1) * ms_within) / denom
+            omega_sq = float(max(0.0, omega_sq))
+        else:
+            omega_sq = float("nan")
+        result.effect_size = omega_sq
+        result.effect_size_name = "omega-squared"
+        result.effect_size_interpretation = _interpret_variance_explained(
+            abs(omega_sq) if np.isfinite(omega_sq) else 0.0
+        )
 
     except Exception as e:
         result.warnings.append(f"ANOVA failed: {str(e)}")
@@ -1128,6 +1207,7 @@ def paired_wilcoxon_test(
     series_a: pd.Series,
     series_b: pd.Series,
     alpha: float = 0.05,
+    random_state: Optional[int] = None,
 ) -> StatisticalTestResult:
     """Paired Wilcoxon signed-rank test for two matched samples.
 
@@ -1171,6 +1251,27 @@ def paired_wilcoxon_test(
         stat, p = wilcoxon(nonzero, method="auto")
         result.statistic = float(stat)
         result.p_value = float(p)
+
+        # Effect size r = |Z| / sqrt(N), derived from the W statistic via the
+        # asymptotic normal approximation of the Wilcoxon distribution.
+        # Valid regardless of whether scipy used the exact or approximate path.
+        # The prior norm.ppf(p/2) approach is only correct when p came from the
+        # normal approximation; wilcoxon(method='auto') uses the exact distribution
+        # for small n (the common case), making that inversion invalid.
+        # Mirrors the formula used in wilcoxon_signed_rank_test().
+        n_eff = len(nonzero)
+        W = float(stat)
+        mu_w = n_eff * (n_eff + 1) / 4.0
+        sigma_w = np.sqrt(n_eff * (n_eff + 1) * (2 * n_eff + 1) / 24.0)
+        if sigma_w > 0:
+            z_approx = (W - mu_w) / sigma_w
+            r = min(abs(z_approx) / np.sqrt(n_eff), 1.0)
+        else:
+            r = 0.0
+        result.effect_size = r
+        result.effect_size_name = "r (effect size)"
+        result.effect_size_interpretation = _interpret_wilcoxon_r(r)
+
         direction = "A" if float(differences.median()) > 0 else "B"
         if p < alpha:
             result.conclusion = (
@@ -1189,7 +1290,11 @@ def paired_wilcoxon_test(
 
 
 def compare_two_models(
-    model1_results: pd.Series, model2_results: pd.Series, paired: bool = False, alpha: float = 0.05
+    model1_results: pd.Series,
+    model2_results: pd.Series,
+    paired: bool = False,
+    alpha: float = 0.05,
+    random_state: Optional[int] = None,
 ) -> StatisticalTestResult:
     """
     Compares two models using intelligent, assumption-driven test selection.
@@ -1217,6 +1322,13 @@ def compare_two_models(
         StatisticalTestResult: A rich object containing the test name,
         statistic, p-value, effect size, and details on which
         assumptions were met.
+    Note:
+        :func:`~ictonyx.api.compare_models` — the primary public entry point —
+        routes all comparisons through :func:`compare_multiple_models`, which
+        applies Kruskal-Wallis + Mann-Whitney unconditionally regardless of
+        data properties. The assumption-driven test selection in this function
+        (normality → variance → Student/Welch/Mann-Whitney) is only exercised
+        when calling it directly from ``ictonyx.analysis``.
     """
 
     # Clean data first
@@ -1247,8 +1359,8 @@ def compare_two_models(
         # For independent comparisons, use intelligent test selection
 
         # 1. Check assumptions
-        is_normal1, norm_details1 = check_normality(clean1, alpha=alpha)
-        is_normal2, norm_details2 = check_normality(clean2, alpha=alpha)
+        is_normal1, norm_details1 = check_normality(clean1, alpha=alpha, require_all_tests=True)
+        is_normal2, norm_details2 = check_normality(clean2, alpha=alpha, require_all_tests=True)
 
         assumptions_met = {"normality_group1": is_normal1, "normality_group2": is_normal2}
         assumption_details = {"normality_group1": norm_details1, "normality_group2": norm_details2}
@@ -1269,8 +1381,8 @@ def compare_two_models(
                 # 3b. Normal + Unequal Variance = Welch's t-test
                 test_name = "Independent Comparison (Welch's t-test)"
                 statistic, p_value = ttest_ind(clean1, clean2, equal_var=False)
-                effect_size, es_interp = cohens_d(clean1, clean2, pooled=False)
-                es_name = "Cohen's d (unpooled)"
+                effect_size, es_interp = _hedges_g(clean1, clean2)
+                es_name = "Hedges' g"
 
             result = StatisticalTestResult(
                 test_name=test_name,
@@ -1295,27 +1407,52 @@ def compare_two_models(
         try:
             if paired:
                 ci_result = bootstrap_paired_difference_ci(
-                    clean1, clean2, n_bootstrap=10000, confidence=1 - alpha, method="bca"
+                    clean1,
+                    clean2,
+                    n_bootstrap=10000,
+                    confidence=1 - alpha,
+                    method="bca",
+                    random_state=random_state,
                 )
             else:
                 ci_result = bootstrap_mean_difference_ci(
-                    clean1, clean2, n_bootstrap=10000, confidence=1 - alpha, method="bca"
+                    clean1,
+                    clean2,
+                    n_bootstrap=10000,
+                    confidence=1 - alpha,
+                    method="bca",
+                    random_state=random_state,
                 )
 
             result.confidence_interval = (ci_result.ci_lower, ci_result.ci_upper)
             result.ci_confidence_level = ci_result.confidence_level
             result.ci_method = ci_result.method
 
-            # Also compute CI for the effect size (Cohen's d)
+            # Compute CI for the effect size.
+            # Welch path uses Hedges' g as point estimate — use bootstrap_hedges_g_ci
+            # so the CI is for the same estimator as the point estimate.
+            # Student's t path uses Cohen's d — use bootstrap_effect_size_ci.
+            # Mann-Whitney path: no parametric effect-size CI at this time.
             if result.effect_size is not None and "Mann-Whitney" not in result.test_name:
-                es_ci = bootstrap_effect_size_ci(
-                    clean1,
-                    clean2,
-                    n_bootstrap=10000,
-                    confidence=1 - alpha,
-                    method="bca",
-                    pooled=True,
-                )
+                if "Welch" in result.test_name:
+                    es_ci = bootstrap_hedges_g_ci(
+                        clean1,
+                        clean2,
+                        n_bootstrap=10000,
+                        confidence=1 - alpha,
+                        method="bca",
+                        random_state=random_state,
+                    )
+                else:
+                    es_ci = bootstrap_effect_size_ci(
+                        clean1,
+                        clean2,
+                        n_bootstrap=10000,
+                        confidence=1 - alpha,
+                        method="bca",
+                        pooled=True,
+                        random_state=random_state,
+                    )
                 result.ci_effect_size = (es_ci.ci_lower, es_ci.ci_upper)
 
         except Exception:
@@ -1355,7 +1492,7 @@ class ModelComparisonResults:
     significant_comparisons: List[str] = field(default_factory=list)
     correction_method: str = "holm"
     n_models: int = 0
-    metric: str = "val_accuracy"
+    metric: Optional[str] = None
 
     def is_significant(self, alpha: float = 0.05) -> bool:
         """True if the omnibus test is significant at the given alpha."""
@@ -1364,7 +1501,7 @@ class ModelComparisonResults:
     def get_summary(self) -> str:
         """Concise text summary of the comparison results."""
         lines = [
-            f"Model Comparison Results ({self.metric})",
+            f"Model Comparison Results ({self.metric or 'unknown metric'})",
             "=" * 40,
             f"Models compared: {self.n_models}",
             f"Omnibus test: {self.overall_test.get_summary()}",
@@ -1385,8 +1522,12 @@ class ModelComparisonResults:
 
 
 def compare_multiple_models(
-    model_results: Dict[str, pd.Series], alpha: float = 0.05, correction_method: str = "holm"
-) -> Dict[str, Any]:
+    model_results: Dict[str, pd.Series],
+    alpha: float = 0.05,
+    correction_method: str = "holm",
+    metric: Optional[str] = None,
+    random_state: Optional[int] = None,
+) -> ModelComparisonResults:
     """
     Compares three or more models using a robust, two-step procedure.
 
@@ -1417,17 +1558,8 @@ def compare_multiple_models(
             Options: 'holm', 'bonferroni', 'fdr_bh'. Defaults to 'holm'.
 
     Returns:
-        Dict[str, Any]: A dictionary containing the complete analysis, with
-        keys:
-            - 'overall_test' (StatisticalTestResult): The result of the
-              Kruskal-Wallis omnibus test.
-            - 'pairwise_comparisons' (Dict[str, StatisticalTestResult]):
-              A dictionary of results for each pair, (e.g., "ModelA_vs_ModelB").
-            - 'significant_comparisons' (List[str]): A list of the names
-              of pairs that were significant after correction.
-            - 'correction_method' (str): The correction method used.
-            - 'message' (str): A message if no pairwise tests were
-              performed (because the overall test was not significant).
+        :class:`ModelComparisonResults` containing the omnibus test,
+        pairwise comparisons, and significant comparison names.
 
     Raises:
         ValueError: If fewer than two models are provided in `model_results`.
@@ -1439,19 +1571,32 @@ def compare_multiple_models(
     if n_models < 2:
         raise ValueError("Need at least 2 models to compare")
 
-    # Overall test first (Kruskal-Wallis - more robust than ANOVA)
+    # Two-model shortcut: skip KW omnibus and go directly to Mann-Whitney.
+    # KW + single pairwise MW is redundant for k=2; both reduce to the same
+    # rank-sum comparison but KW introduces a theoretical path where a
+    # chi-squared approximation gates out a result that MW would find significant.
+    if n_models == 2:
+        names = list(model_results.keys())
+        result = mann_whitney_test(model_results[names[0]], model_results[names[1]], alpha=alpha)
+        return ModelComparisonResults(
+            overall_test=result,
+            raw_data=model_results,
+            pairwise_comparisons={f"{names[0]}_vs_{names[1]}": result},
+            significant_comparisons=(
+                [f"{names[0]}_vs_{names[1]}"] if result.is_significant(alpha) else []
+            ),
+            correction_method="none",
+            n_models=2,
+            metric=metric,
+        )
+
+    # Omnibus test (Kruskal-Wallis) for k >= 3
     overall_result = kruskal_wallis_test(model_results, alpha=alpha)
 
-    results: Dict[str, Any] = {
-        "overall_test": overall_result,
-        "pairwise_comparisons": {},
-        "correction_method": correction_method,
-        "family_wise_error_rate": alpha,
-        "n_comparisons": n_models * (n_models - 1) // 2,
-    }
+    pairwise_comparisons: Dict[str, StatisticalTestResult] = {}
+    significant_comparisons: List[str] = []
 
     if overall_result.is_significant(alpha):
-        # Perform pairwise comparisons
         pairwise_tests = []
         pairwise_names = []
 
@@ -1459,38 +1604,38 @@ def compare_multiple_models(
             for j in range(i + 1, n_models):
                 name1, name2 = model_names[i], model_names[j]
                 comparison_name = f"{name1}_vs_{name2}"
-
                 pairwise_result = mann_whitney_test(
-                    model_results[name1], model_results[name2], alpha=alpha
+                    model_results[name1],
+                    model_results[name2],
+                    alpha=alpha,
+                    random_state=random_state,
                 )
-
                 pairwise_tests.append(pairwise_result)
                 pairwise_names.append(comparison_name)
+                pairwise_comparisons[comparison_name] = pairwise_result
 
-                results["pairwise_comparisons"][comparison_name] = pairwise_result
-
-        # Apply multiple comparison correction
+        # Multiple comparison correction
         p_values = [test.p_value for test in pairwise_tests]
-        corrected_p_values, correction_description = apply_multiple_comparison_correction(
+        corrected_p_values, _ = apply_multiple_comparison_correction(
             p_values, method=correction_method
         )
-
-        # Update results with corrected p-values
-        for i, (name, test) in enumerate(zip(pairwise_names, pairwise_tests)):
+        for i, test in enumerate(pairwise_tests):
             test.corrected_p_value = corrected_p_values[i]
             test.correction_method = correction_method
 
-        results["correction_description"] = correction_description
-        results["significant_comparisons"] = [
-            name
-            for name, test in results["pairwise_comparisons"].items()
-            if test.is_significant(alpha)
+        significant_comparisons = [
+            name for name, test in pairwise_comparisons.items() if test.is_significant(alpha)
         ]
-    else:
-        results["message"] = "Overall test not significant - no pairwise comparisons performed"
-        results["significant_comparisons"] = []
 
-    return results
+    return ModelComparisonResults(
+        overall_test=overall_result,
+        raw_data=model_results,
+        pairwise_comparisons=pairwise_comparisons,
+        significant_comparisons=significant_comparisons,
+        correction_method=correction_method,
+        n_models=n_models,
+        metric=metric,
+    )
 
 
 # UTILITY FUNCTIONS FOR INTERPRETATION
@@ -1687,7 +1832,10 @@ def calculate_averaged_autocorr(
 
 
 def check_convergence(
-    data: Union[pd.Series, List[float]], window_size: int = 5, autocorr_threshold: float = 0.1
+    data: Union[pd.Series, List[float]],
+    window_size: int = 5,
+    autocorr_threshold: float = 0.1,
+    variance_ratio_threshold: float = 0.1,
 ) -> bool:
     """Check whether a metric series has converged.
 
@@ -1699,7 +1847,10 @@ def check_convergence(
         window_size: Number of recent values to examine. Default 5.
         autocorr_threshold: Maximum acceptable autocorrelation at lag 1
             for convergence. Default 0.1.
-
+        variance_ratio_threshold: The recent-window variance must be below
+            this fraction of the full-series variance to declare convergence
+            by the variance criterion. Default 0.1. This is an empirically
+            motivated heuristic with no universally optimal value.
     Returns:
         ``True`` if either convergence criterion is met.
     """
@@ -1721,7 +1872,9 @@ def check_convergence(
         recent_variance = recent_data.var()
         overall_variance = data.var()
         low_recent_variance = (
-            recent_variance < 0.1 * overall_variance if overall_variance > 0 else True
+            recent_variance < variance_ratio_threshold * overall_variance
+            if overall_variance > 0
+            else True
         )
     else:
         low_recent_variance = False
@@ -1999,9 +2152,9 @@ def assess_training_stability(
         "final_loss_mean": np.mean(final_losses),
         "final_loss_std": np.std(final_losses, ddof=1),
         "final_loss_cv": (
-            np.std(final_losses, ddof=1) / np.mean(final_losses)
-            if np.mean(final_losses) > 0
-            else float("inf")
+            float("nan")
+            if np.mean(final_losses) <= 0
+            else float(np.std(final_losses, ddof=1) / np.mean(final_losses))
         ),
         "final_window_std_mean": np.mean(
             [np.std(run_window, ddof=1) for run_window in final_window_losses]
@@ -2037,7 +2190,13 @@ def assess_training_stability(
 
     # Stability interpretation
     cv = results["final_loss_cv"]
-    if cv < 0.05:
+    if not np.isfinite(cv):
+        results["stability_assessment"] = "undefined"
+        results["stability_assessment_note"] = (
+            "CV is undefined for non-positive mean loss. "
+            "This metric does not admit coefficient of variation analysis."
+        )
+    elif cv < 0.05:
         results["stability_assessment"] = "high"
     elif cv < 0.15:
         results["stability_assessment"] = "moderate"
@@ -2045,3 +2204,135 @@ def assess_training_stability(
         results["stability_assessment"] = "low"
 
     return results
+
+
+def required_runs(
+    effect_size: float,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    n_sim: int = 1000,
+    alternative: str = "two-sided",
+    random_state: Optional[int] = 42,
+) -> int:
+    """Minimum runs per model to detect a given effect size at stated power.
+
+    Uses simulation-based power calculation for the Mann-Whitney U test,
+    which is the library's default comparison method.
+
+    Args:
+        effect_size: Expected rank-biserial correlation (0–1). Conventions:
+            small=0.1, medium=0.3, large=0.5 (Cohen 1988).
+        alpha: Type I error rate. Default 0.05.
+        power: Desired statistical power (0–1). Default 0.80.
+        n_sim: Number of simulations per candidate n. Default 1000.
+        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            Default ``'two-sided'``.
+
+    Returns:
+        Minimum number of runs per model.
+
+    Raises:
+        ValueError: If ``effect_size`` is not in (0, 1) or ``power`` is
+            not in (0, 1).
+    Note:
+        The simulation draws from unbounded standard normal distributions. For
+        metrics concentrated near 0 or 1 (e.g. accuracy on easy tasks), the
+        normal approximation overestimates spread and ``required_runs()`` will
+        over-estimate the number of runs needed. Results are most reliable for
+        loss-scale metrics and accuracy values in the 0.4–0.8 range.
+    """
+    if not 0 < effect_size < 1:
+        raise ValueError(f"effect_size must be in (0, 1), got {effect_size}.")
+    if not 0 < power < 1:
+        raise ValueError(f"power must be in (0, 1), got {power}.")
+
+    rng = np.random.default_rng(random_state)
+    # Convert rank-biserial r to probability of superiority P(A > B)
+    # r = 2*P - 1  =>  P = (r + 1) / 2
+    p_superiority = (effect_size + 1.0) / 2.0
+
+    for n in range(2, 201):
+        rejections = 0
+        for _ in range(n_sim):
+            # Simulate two groups: group A stochastically dominates group B
+            # by generating from distributions separated by effect_size
+            shift = np.sqrt(2) * stats.norm.ppf(p_superiority)
+            a = rng.normal(shift / 2, 1.0, n)
+            b = rng.normal(-shift / 2, 1.0, n)
+            _, p = mannwhitneyu(a, b, alternative=alternative)
+            if p < alpha:
+                rejections += 1
+        empirical_power = rejections / n_sim
+        if empirical_power >= power:
+            return n
+
+    warnings.warn(
+        f"required_runs(): target power {power} not achieved at n=200 for "
+        f"effect_size={effect_size:.3f}. The effect may be too small to detect "
+        "at this power level. Returning 200 (search ceiling).",
+        UserWarning,
+        stacklevel=2,
+    )
+    return 200
+
+
+def minimum_detectable_effect(
+    n_runs: int,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    n_sim: int = 1000,
+    alternative: str = "two-sided",
+    random_state: Optional[int] = 42,
+) -> float:
+    """Minimum rank-biserial correlation detectable at given n, alpha, and power.
+
+    Args:
+        n_runs: Number of runs per model.
+        alpha: Type I error rate. Default 0.05.
+        power: Desired statistical power (0–1). Default 0.80.
+        n_sim: Number of simulations per candidate effect size. Default 1000.
+        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            Default ``'two-sided'``.
+
+    Returns:
+        Minimum detectable rank-biserial correlation in (0, 1).
+
+    Raises:
+        ValueError: If ``n_runs`` < 2 or ``power`` is not in (0, 1).
+    Note:
+        The simulation draws from unbounded standard normal distributions. For
+        metrics concentrated near 0 or 1 (e.g. accuracy on easy tasks), the
+        normal approximation overestimates spread and the detectable effect will
+        be under-estimated. Results are most reliable for loss-scale metrics
+        and accuracy values in the 0.4–0.8 range.
+    """
+    if n_runs < 2:
+        raise ValueError(f"n_runs must be >= 2, got {n_runs}.")
+    if not 0 < power < 1:
+        raise ValueError(f"power must be in (0, 1), got {power}.")
+
+    rng = np.random.default_rng(random_state)
+
+    for effect_size_pct in range(1, 100):
+        effect_size = effect_size_pct / 100.0
+        p_superiority = (effect_size + 1.0) / 2.0
+        shift = np.sqrt(2) * stats.norm.ppf(p_superiority)
+
+        rejections = 0
+        for _ in range(n_sim):
+            a = rng.normal(shift / 2, 1.0, n_runs)
+            b = rng.normal(-shift / 2, 1.0, n_runs)
+            _, p = mannwhitneyu(a, b, alternative=alternative)
+            if p < alpha:
+                rejections += 1
+        empirical_power = rejections / n_sim
+        if empirical_power >= power:
+            return effect_size
+
+    warnings.warn(
+        f"minimum_detectable_effect(): no detectable effect found at n_runs={n_runs} "
+        f"for power={power}. Returning 0.99 (search ceiling).",
+        UserWarning,
+        stacklevel=2,
+    )
+    return 0.99

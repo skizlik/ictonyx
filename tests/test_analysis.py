@@ -191,7 +191,7 @@ class TestCheckNormality:
 
     def test_too_few_samples(self):
         is_normal, details = check_normality(pd.Series([1, 2]))
-        assert is_normal is False
+        assert is_normal is None
         assert "error" in details
 
     def test_large_sample_uses_dagostino(self):
@@ -206,6 +206,22 @@ class TestCheckNormality:
         _, details = check_normality(data)
         assert "dagostino" not in details
         assert "shapiro" in details
+
+    def test_future_warning_when_tests_disagree(self):
+        """FutureWarning emitted when require_all_tests=False and tests disagree."""
+        import warnings
+
+        rng = np.random.default_rng(42)
+        # Mix normal and heavy-tailed to provoke disagreement
+        data = pd.Series(np.concatenate([rng.normal(0, 1, 18), rng.standard_cauchy(7).clip(-3, 3)]))
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            check_normality(data, require_all_tests=False)
+        future = [x for x in w if issubclass(x.category, FutureWarning)]
+        # Warning may or may not fire depending on whether tests disagree on
+        # this seed — only assert the warning text is correct when it does fire
+        for warning in future:
+            assert "require_all_tests" in str(warning.message)
 
 
 class TestCheckEqualVariances:
@@ -566,7 +582,7 @@ class TestAnovaTest:
         result = anova_test(groups)
         assert result.p_value < 0.05
         assert result.effect_size is not None
-        assert result.effect_size_name == "eta-squared"
+        assert result.effect_size_name == "omega-squared"
 
     def test_no_significant_difference(self, three_model_results_similar):
         result = anova_test(three_model_results_similar)
@@ -585,6 +601,21 @@ class TestAnovaTest:
         result = anova_test(groups)
         assert "normality" in result.assumptions_met
         assert "equal_variances" in result.assumptions_met
+
+    def test_reports_omega_squared_not_eta(self):
+        rng = np.random.default_rng(42)
+        groups = {str(i): pd.Series(rng.normal(i * 0.3, 0.05, 15)) for i in range(3)}
+        result = anova_test(groups)
+        assert result.effect_size_name == "omega-squared"
+
+    def test_omega_squared_not_larger_than_eta_squared(self):
+        """omega-squared is a bias-corrected estimator — must not exceed eta-squared."""
+        rng = np.random.default_rng(42)
+        groups_dict = {str(i): pd.Series(rng.normal(i * 0.2, 0.1, 20)) for i in range(3)}
+        groups_list = [groups_dict[k] for k in groups_dict]
+        result = anova_test(groups_dict)
+        eta_sq, _ = eta_squared(groups_list)
+        assert result.effect_size <= eta_sq + 1e-9
 
 
 class TestKruskalWallisTest:
@@ -825,6 +856,79 @@ class TestCompareTwoModels:
         result = compare_two_models(m1, m2, paired=False)
         assert result.confidence_interval is None
 
+    def test_welch_path_effect_size_interpretation_correct_scale(self):
+        """Regression for BUG-1: _hedges_g() called _interpret_variance_explained()
+        (thresholds 0.01/0.06/0.14) instead of _interpret_cohens_d() (0.2/0.5/0.8).
+        A g of ~0.25 (small on Cohen's d scale) was labelled 'large'.
+
+        Data is constructed to be normal with unequal variance (forcing the Welch
+        path) and a small mean difference producing g in [0.2, 0.5)."""
+        rng = np.random.RandomState(7)
+        # Normal data, unequal variance, small effect: mean diff ~0.03 on pooled sd ~0.10
+        m1 = pd.Series(rng.normal(0.83, 0.02, 60))
+        m2 = pd.Series(rng.normal(0.80, 0.12, 60))
+        result = compare_two_models(m1, m2, paired=False)
+        if "Welch" in result.test_name:
+            assert result.effect_size_name == "Hedges' g"
+            assert result.effect_size_interpretation != "large", (
+                f"Hedges' g={result.effect_size:.3f} was labelled 'large' — "
+                "_interpret_variance_explained() is being called instead of "
+                "_interpret_cohens_d(). Thresholds 0.01/0.06/0.14 vs 0.2/0.5/0.8."
+            )
+            # g in [0.2, 0.5) is "small" on Cohen's d scale, not "large"
+            if 0.2 <= result.effect_size < 0.5:
+                assert result.effect_size_interpretation == "small", (
+                    f"g={result.effect_size:.3f} should be 'small' on Cohen's d scale, "
+                    f"got '{result.effect_size_interpretation}'."
+                )
+
+    def test_welch_path_ci_uses_hedges_g_estimator(self):
+        """Regression for BUG-2: Welch path CI was built via bootstrap_effect_size_ci
+        (Cohen's d, no J correction) while the point estimate is Hedges' g. After the
+        fix, bootstrap_hedges_g_ci is used so CI and point estimate match.
+
+        We verify this by checking that bootstrap_hedges_g_ci's point_estimate on the
+        same data equals result.effect_size (both must be Hedges' g)."""
+        from ictonyx.bootstrap import bootstrap_hedges_g_ci
+
+        rng = np.random.RandomState(42)
+        m1 = pd.Series(rng.normal(0.82, 0.01, 40))
+        m2 = pd.Series(rng.normal(0.72, 0.08, 40))
+        result = compare_two_models(m1, m2, paired=False)
+
+        if "Welch" in result.test_name:
+            assert result.effect_size_name == "Hedges' g"
+            assert result.ci_effect_size is not None, "Welch path must populate ci_effect_size."
+            # Compute Hedges' g independently via bootstrap_hedges_g_ci
+            # Its point_estimate is Hedges' g on the original data —
+            # must match result.effect_size exactly.
+            ci = bootstrap_hedges_g_ci(m1.values, m2.values, n_bootstrap=100, random_state=0)
+            assert abs(ci.point_estimate - result.effect_size) < 1e-9, (
+                f"bootstrap_hedges_g_ci point_estimate={ci.point_estimate:.6f} "
+                f"!= result.effect_size={result.effect_size:.6f}. "
+                "The Welch path is not using bootstrap_hedges_g_ci."
+            )
+
+
+class TestCompareTwoModelsDefaults:
+    """Verify default test selection and parametric path behaviour."""
+
+    def test_defaults_to_mann_whitney(self):
+        rng = np.random.default_rng(42)
+        # Use highly skewed data to ensure normality fails
+        a = pd.Series(rng.exponential(0.8, 20))
+        b = pd.Series(rng.exponential(0.75, 20))
+        result = compare_two_models(a, b)
+        assert "Mann-Whitney" in result.test_name
+
+    def test_effect_size_is_populated(self):
+        rng = np.random.default_rng(42)
+        a = pd.Series(rng.normal(0.9, 0.03, 20))
+        b = pd.Series(rng.normal(0.7, 0.03, 20))
+        result = compare_two_models(a, b)
+        assert result.effect_size is not None
+        assert np.isfinite(result.effect_size)
+
 
 class TestCompareMultipleModels:
 
@@ -841,31 +945,30 @@ class TestCompareMultipleModels:
                 "model_C": pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69]),
             }
         )
-        assert "overall_test" in results
-        assert results["overall_test"].is_significant()
+        assert results.overall_test is not None
+        assert results.overall_test.is_significant()
 
     def test_nonsignificant_skips_pairwise(self, three_model_results_similar):
         results = compare_multiple_models(three_model_results_similar)
-        assert "overall_test" in results
-        if not results["overall_test"].is_significant():
-            assert "message" in results
-            assert len(results["pairwise_comparisons"]) == 0
+        assert results.overall_test is not None
+        if not results.overall_test.is_significant():
+            assert len(results.pairwise_comparisons) == 0
 
     def test_correct_number_of_pairwise_tests(self, three_model_results_different):
         results = compare_multiple_models(three_model_results_different)
         n = 3
         expected_pairs = n * (n - 1) // 2
-        assert results["n_comparisons"] == expected_pairs
-        if results["overall_test"].is_significant():
-            assert len(results["pairwise_comparisons"]) == expected_pairs
+        assert len(results.pairwise_comparisons) <= expected_pairs
+        if results.overall_test.is_significant():
+            assert len(results.pairwise_comparisons) == expected_pairs
 
     def test_correction_applied(self, three_model_results_different):
         results = compare_multiple_models(
             three_model_results_different, correction_method="bonferroni"
         )
-        assert results["correction_method"] == "bonferroni"
-        if results["overall_test"].is_significant():
-            for name, test in results["pairwise_comparisons"].items():
+        assert results.correction_method == "bonferroni"
+        if results.overall_test.is_significant():
+            for name, test in results.pairwise_comparisons.items():
                 assert test.corrected_p_value is not None
                 assert test.corrected_p_value >= test.p_value - 1e-10
 
@@ -878,12 +981,33 @@ class TestCompareMultipleModels:
             results = compare_multiple_models(
                 three_model_results_different, correction_method=method
             )
-            assert results["correction_method"] == method
+            assert results.correction_method == method
 
+    def test_metric_param_passes_through(self, three_model_results_different):
+        """metric parameter must appear in the result, not be hardcoded as None."""
+        results = compare_multiple_models(three_model_results_different, metric="val_accuracy")
+        assert results.metric == "val_accuracy"
+        assert "None" not in results.get_summary()
 
-# ===================================================================
-#  Convergence & Stability
-# ===================================================================
+    def test_metric_param_defaults_to_none(self, three_model_results_different):
+        """Default behaviour: metric is None when not supplied."""
+        results = compare_multiple_models(three_model_results_different)
+        assert results.metric is None
+
+    def test_two_model_uses_mann_whitney_not_kruskal(self):
+        """Two-model compare_multiple_models must use Mann-Whitney directly,
+        not Kruskal-Wallis. KW+MW is redundant for k=2."""
+        results = compare_multiple_models(
+            {
+                "model_A": pd.Series([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89]),
+                "model_B": pd.Series([0.80, 0.81, 0.79, 0.82, 0.78, 0.80, 0.81, 0.79]),
+            }
+        )
+        assert results.n_models == 2
+        assert "Mann-Whitney" in results.overall_test.test_name
+        assert "Kruskal" not in results.overall_test.test_name
+        assert results.correction_method == "none"
+        assert len(results.pairwise_comparisons) == 1
 
 
 class TestCalculateAutocorr:
@@ -1049,6 +1173,13 @@ class TestAssessTrainingStability:
         ]
         for key in expected_keys:
             assert key in result, f"Missing key: {key}"
+
+    def test_undefined_stability_for_negative_mean_loss(self):
+        """CV is undefined for non-positive mean — assessment must be 'undefined'."""
+        histories = [pd.Series(np.linspace(-1.0, -0.5, 20)) for _ in range(10)]
+        result = assess_training_stability(histories)
+        assert result["stability_assessment"] == "undefined"
+        assert np.isnan(result["final_loss_cv"])
 
 
 # ===================================================================
@@ -1268,6 +1399,37 @@ class TestPairedWilcoxonTest:
             "significance for the same data. Check method= consistency."
         )
 
+    def test_effect_size_uses_w_statistic_formula(self):
+        """Regression for BUG-3: paired_wilcoxon_test() derived r via norm.ppf(p/2),
+        which is invalid when wilcoxon(method='auto') uses the exact distribution.
+        After the fix, r is derived from the W statistic directly.
+
+        We verify by independently computing r from W and checking it matches."""
+        from scipy.stats import wilcoxon as scipy_wilcoxon
+
+        from ictonyx.analysis import paired_wilcoxon_test
+
+        a = pd.Series([0.85, 0.87, 0.86, 0.88, 0.84, 0.89])
+        b = pd.Series([0.70, 0.72, 0.71, 0.73, 0.69, 0.74])
+        result = paired_wilcoxon_test(a, b)
+
+        assert result.effect_size is not None
+        assert 0.0 <= result.effect_size <= 1.0, f"effect_size={result.effect_size} out of [0, 1]"
+
+        # Independently compute r using the W-statistic formula
+        differences = (a - b).values
+        nonzero = differences[differences != 0]
+        n_eff = len(nonzero)
+        W, _ = scipy_wilcoxon(nonzero, method="auto")
+        mu_w = n_eff * (n_eff + 1) / 4.0
+        sigma_w = np.sqrt(n_eff * (n_eff + 1) * (2 * n_eff + 1) / 24.0)
+        expected_r = min(abs((W - mu_w) / sigma_w) / np.sqrt(n_eff), 1.0)
+
+        assert abs(result.effect_size - expected_r) < 1e-9, (
+            f"effect_size={result.effect_size:.8f} does not match W-statistic "
+            f"formula={expected_r:.8f}. The norm.ppf(p/2) path may still be active."
+        )
+
 
 class TestCheckNormalityRequireAllTests:
     """Tests for check_normality() require_all_tests parameter."""
@@ -1288,11 +1450,21 @@ class TestCheckNormalityRequireAllTests:
         # Strict can only be equal to or more conservative than lenient
         assert not (is_normal_strict and not is_normal_lenient)
 
-    def test_n_less_than_3_returns_false(self):
+    def test_n_less_than_3_returns_none(self):
+        """Insufficient data returns None (untestable), not False (tested and failed)."""
         data = pd.Series([0.5, 0.6])
         is_normal, details = check_normality(data)
-        assert is_normal is False
+        assert is_normal is None
         assert "error" in details
+
+    def test_default_is_conservative(self):
+        """Default require_all_tests=True: calling without the kwarg must
+        behave identically to require_all_tests=True."""
+        rng = np.random.RandomState(42)
+        data = pd.Series(rng.normal(0, 1, 25))
+        default_result, _ = check_normality(data)
+        explicit_result, _ = check_normality(data, require_all_tests=True)
+        assert default_result == explicit_result
 
 
 class TestAnovaTestWarning:

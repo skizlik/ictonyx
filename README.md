@@ -14,7 +14,7 @@ A Python framework for studying machine learning model variability and performin
 
 ## The problem
 
-Training a neural network involves stochastic factors: random weight initialisation, data shuffling, dropout. Train the same architecture on the same dataset twice and you will get different weights, different predictions, and different evaluation metrics.
+Training a machine learning model involves stochastic factors: random weight initialisation, data shuffling, dropout. Train the same architecture on the same dataset twice and you will get different weights, different predictions, and different evaluation metrics.
 
 This means a model's performance is a random variable, not a constant — and treating it as a constant, as most practitioners do, leads to conclusions that cannot be replicated or trusted. Reporting a single accuracy from a single training run is not a measurement; it is a sample of size one.
 
@@ -24,71 +24,64 @@ Ictonyx trains a model N times under independent random seeds, collects the full
 
 ## Installation
 ```bash
-# scikit-learn (no deep learning)
-pip install ictonyx[sklearn]
+pip install ictonyx
+```
 
-# TensorFlow / Keras
-pip install ictonyx[tensorflow]
+### Optional extras
 
-# PyTorch
-pip install ictonyx[torch]
+| Extra | What it includes | Install |
+|---|---|---|
+| `sklearn` | scikit-learn, joblib | `pip install ictonyx[sklearn]` |
+| `tensorflow` | TensorFlow, Keras | `pip install ictonyx[tensorflow]` |
+| `torch` | PyTorch | `pip install ictonyx[torch]` |
+| `mlflow` | MLflow tracking | `pip install ictonyx[mlflow]` |
+| `explain` | SHAP explainability | `pip install ictonyx[explain]` |
+| `tuning` | Optuna hyperparameter tuning | `pip install ictonyx[tuning]` |
+| `isolation` | Process isolation for GPU runs | `pip install ictonyx[isolation]` |
+| `progress` | tqdm progress bars | `pip install ictonyx[progress]` |
+| `all` | Everything above | `pip install ictonyx[all]` |
 
-# Everything
-pip install ictonyx[all]
-
-# Process isolation for long GPU runs (recommended with tensorflow or torch)
+Extras can be combined:
+```bash
 pip install "ictonyx[tensorflow,isolation]"
 ```
 
-Requires Python 3.10+. Current release: **0.3.15** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
+Requires Python 3.10+. Current release: **0.4.0** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
 ---
 
 ## Quick start
 
-Train a small CNN on CIFAR-10 twenty times and observe the distribution of outcomes. The task is genuinely difficult — 10 classes, colour images, a non-convex loss landscape — so initialisation matters and the spread across runs is real.
+Train a small feed-forward network on the wine data from sklearn twenty times and observe the distribution of outcomes.  Here, we'll use a simple Tensorflow model.
 
 ```python
-import numpy as np
 import tensorflow as tf
+from sklearn.datasets import load_wine
+from sklearn.preprocessing import StandardScaler
 import ictonyx as ix
-from ictonyx import ModelConfig, KerasModelWrapper, ArraysDataHandler, run_variability_study
 
-# Load CIFAR-10 — downloads once to ~/.keras/datasets/, cached permanently after
-(X_train, y_train), _ = tf.keras.datasets.cifar10.load_data()
-X = (X_train[:20000].astype('float32') / 255.0)
-y = y_train[:20000].flatten()
+data = load_wine()
+X = StandardScaler().fit_transform(data.data)
+y = data.target
 
 
-def build_cnn(config: ModelConfig) -> KerasModelWrapper:
+def build_model(config):
     model = tf.keras.Sequential([
-        tf.keras.Input(shape=(32, 32, 3)),
-        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(128, activation='relu'),
-        tf.keras.layers.Dropout(0.4),
-        tf.keras.layers.Dense(10, activation='softmax'),
+        tf.keras.layers.Dense(16, activation='relu'),
+        tf.keras.layers.Dense(16, activation='relu'),
+        tf.keras.layers.Dense(3, activation='softmax')
     ])
-    model.compile(
-        optimizer='adam',
-        loss='sparse_categorical_crossentropy',
-        metrics=['accuracy'],
-    )
-    return KerasModelWrapper(model)
+    model.compile(optimizer='adam',
+                  loss='sparse_categorical_crossentropy',
+                  metrics=['accuracy'])
+    return ix.KerasModelWrapper(model)
 
-
-config = ModelConfig({'epochs': 15, 'batch_size': 64, 'verbose': 0})
-data_handler = ArraysDataHandler(X, y)
-
-results = run_variability_study(
-    model_builder=build_cnn,
-    data_handler=data_handler,
-    model_config=config,
-    num_runs=20,
+results = ix.variability_study(
+    model=build_model,
+    data=(X, y),
+    runs=20,
+    epochs=20,
     seed=42,
+    verbose=False
 )
 
 print(results.summarize())
@@ -99,89 +92,104 @@ Variability Study Results
 ==============================
 Successful runs: 20
 Seed: 42
+
+Test Set Metrics:
+--------------------
+accuracy:
+  Mean:             0.9097
+  SD (sample, N-1): 0.0467
+  Min:              0.8333
+  Max:              0.9722
+loss:
+  Mean:             0.5285
+  SD (sample, N-1): 0.1085
+  Min:              0.3791
+  Max:              0.7748
+
+Validation Metrics:
+--------------------
 train_accuracy:
-  Mean: 0.8198
-  SD (sample, N-1):  0.0182
-  Min:  0.7869
-  Max:  0.8491
+  Mean:             0.8851
+  SD (sample, N-1): 0.0436
+  Min:              0.8065
+  Max:              0.9355
 train_loss:
-  Mean: 0.4975
-  SD (sample, N-1):  0.0489
-  Min:  0.4177
-  Max:  0.5945
+  Mean:             0.5507
+  SD (sample, N-1): 0.0987
+  Min:              0.4288
+  Max:              0.7760
 val_accuracy:
-  Mean: 0.6448
-  SD (sample, N-1):  0.0101
-  Min:  0.6260
-  Max:  0.6615
+  Mean:             0.9194
+  SD (sample, N-1): 0.0709
+  Min:              0.7222
+  Max:              1.0000
 val_loss:
-  Mean: 1.1925
-  SD (sample, N-1):  0.0523
-  Min:  1.1163
-  Max:  1.2751
+  Mean:             0.4981
+  SD (sample, N-1): 0.1105
+  Min:              0.3793
+  Max:              0.7476
 ```
 
-Here we have a 3.7 percent range for validation accuracy across twenty runs of the same architecture on the same data.  This represents a source of variability that shouldn't be neglected.
+On a 178-sample dataset, the same architecture achieves anywhere from 72% to 100% validation accuracy depending solely on the random seed — a 28-point range that a single-run evaluation would never reveal.  Ictonyx also allows plotting of training histories:
 
 ```python
-ix.plot_variability_summary(
-    all_runs_metrics_list=results.all_runs_metrics,
-    final_metrics_series=results.final_metrics['val_accuracy'],
-    metric='accuracy',
-)
+ix.plot_variability_summary(results=results, metric='accuracy')
 ```
-![Variability summary for CIFAR-10 CNN across 10 runs](images/cifar10_variability.png)
 
+![Variability summary for keras CNN across 20 runs](images/variability_study.png)
 
 ---
 
-## Comparing two architectures
+## Comparing two models
 
-A common question in deep learning: does adding depth or regularisation actually help, or does it just happen to get a better seed? Ictonyx answers this by running a full variability study for each architecture and applying a statistical test to the resulting distributions.
+A routine question in applied ML: does one model actually outperform another,
+or did it just draw a better random seed? A single run of each tells you nothing
+— the difference could be real, or it could be noise. Ictonyx answers this by
+running both models the same number of times and applying a statistical test to
+the resulting distributions.
+
+Ictonyx works equally well with sklearn estimators — pass a class or configured instance directly, no wrapper required.
 
 ```python
-def build_dense(config: ModelConfig) -> KerasModelWrapper:
-    """A simpler dense baseline — no convolutions."""
-    model = tf.keras.Sequential([
-        tf.keras.Input(shape=(32, 32, 3)),
-        tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(256, activation='relu'),
-        tf.keras.layers.Dropout(0.4),
-        tf.keras.layers.Dense(128, activation='relu'),
-        tf.keras.layers.Dense(10, activation='softmax'),
-    ])
-    model.compile(
-        optimizer='adam',
-        loss='sparse_categorical_crossentropy',
-        metrics=['accuracy'],
-    )
-    return KerasModelWrapper(model)
-
+from sklearn.neural_network import MLPClassifier
+from sklearn.ensemble import RandomForestClassifier
 
 comparison = ix.compare_models(
-    models=[build_cnn, build_dense],
-    data=data_handler,
+    models=[
+        MLPClassifier(hidden_layer_sizes=(64,), max_iter=200),
+        RandomForestClassifier(n_estimators=40),
+    ],
+    data=(X, y),
     runs=20,
     metric='val_accuracy',
     seed=42,
+    verbose=False,
 )
 
 print(comparison.get_summary())
+
+ix.plot_comparison_boxplots(comparison)
 ```
 
 ```
 Model Comparison Results (val_accuracy)
 ========================================
 Models compared: 2
-Omnibus test: Kruskal-Wallis H-Test: 29.279, p=0.0000 ***, epsilon-squared=0.744
+Omnibus test: Paired Wilcoxon Signed-Rank Test: 5.500, p=0.0005 ***, r (effect size)=0.815
 
-Pairwise comparisons (holm correction):
-  build_cnn_vs_build_dense: Mann-Whitney U Test: 400.000, p_corr=0.0000 ***, rank-biserial correlation=1.000 *
+Pairwise comparisons (none correction):
+  MLPClassifier_vs_RandomForestClassifier: Paired Wilcoxon Signed-Rank Test: 5.500, p=0.0005 ***, r (effect size)=0.815 *
 
-Significant pairs: build_cnn_vs_build_dense
+Significant pairs: MLPClassifier_vs_RandomForestClassifier
 ```
+![Comparison boxplots for model comparison](images/comparison_boxplots.png)
 
-A rank-biserial correlation of 1.0 means the CNN outperformed the dense network in every single one of the ten paired runs. The p-value establishes that this is not attributable to chance; the effect size establishes that it is absolute.
+
+Both models received identical per-run seeds, so each MLP run is directly paired with the corresponding Random Forest run. The Wilcoxon signed-rank test exploits this pairing to remove noise common to both models.
+
+The MLP outperformed the Random Forest with an effect size of r=0.815 (p=0.0005). That is not a marginal result that might reverse on a different seed.
+
+The 'none correction' label indicates that with only two models there is a single pair to test, so no multiple-comparison correction is applied
 
 ---
 
@@ -190,11 +198,11 @@ A rank-biserial correlation of 1.0 means the CNN outperformed the dense network 
 Keras models accumulate GPU memory across training runs in a loop. For studies with many runs or large models, run each training session in a subprocess:
 
 ```python
-results = run_variability_study(
-    model_builder=build_cnn,
-    data_handler=data_handler,
-    model_config=config,
-    num_runs=20,
+results = ix.variability_study(
+    model=build_model,
+    data=(X, y),
+    runs=20,
+    epochs=20,
     use_process_isolation=True,
     gpu_memory_limit=4096,
     seed=42,
@@ -205,51 +213,13 @@ Each run executes in a child process and exits cleanly, releasing all GPU memory
 
 ---
 
-## scikit-learn
-
-Ictonyx works equally well with sklearn estimators. Pass a class and Ictonyx constructs a fresh instance for each run; pass a configured instance and Ictonyx clones it per run via `sklearn.base.clone()`.
-
-```python
-import ictonyx as ix
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.datasets import load_breast_cancer
-import pandas as pd
-
-data = load_breast_cancer()
-df = pd.DataFrame(data.data, columns=data.feature_names)
-df['target'] = data.target
-
-comparison = ix.compare_models(
-    models=[RandomForestClassifier, GradientBoostingClassifier],
-    data=df,
-    target_column='target',
-    runs=20,
-    metric='val_accuracy',
-    seed=42,
-)
-
-print(comparison.get_summary())
-```
-
-```
-Model Comparison Results (val_accuracy)
-========================================
-Models compared: 2
-Omnibus test: Kruskal-Wallis H-Test: 2.053, p=0.1519 ns, epsilon-squared=0.028
-
-No pairwise comparisons performed (omnibus test not significant).
-```
-
-
----
-
 ## PyTorch
 
 ```python
 import torch
 import torch.nn as nn
 import ictonyx as ix
-from ictonyx import ModelConfig, PyTorchModelWrapper, ArraysDataHandler, run_variability_study
+from ictonyx import PyTorchModelWrapper, ArraysDataHandler
 
 def build_net(config: ModelConfig) -> PyTorchModelWrapper:
     model = nn.Sequential(
@@ -272,19 +242,16 @@ data = load_breast_cancer()
 X = data.data.astype(np.float32)
 y = data.target.astype(np.int64)
 
-results = run_variability_study(
-    model_builder=build_net,
-    data_handler=ArraysDataHandler(X, y, val_split=0.2, test_split=0.1),
-    model_config=ModelConfig({'epochs': 30, 'batch_size': 32, 'learning_rate': 0.001}),
-    num_runs=20,
+results = ix.variability_study(
+    model=build_net,
+    data=ArraysDataHandler(X, y, val_split=0.2, test_split=0.1),
+    runs=20,
     seed=42,
 )
 
-ix.plot_variability_summary(
-    all_runs_metrics_list=results.all_runs_metrics,
-    final_metrics_series=results.final_metrics['val_accuracy'],
-    metric='accuracy',
-)
+ix.plot_variability_summary(results=results, metric='accuracy')
+
+
 ```
 ![Variability summary for PyTorch classifier across 20 runs](images/pytorch_variability.png)
 
@@ -313,13 +280,13 @@ results.seed
 
 The `examples/` directory contains Jupyter notebooks:
 
-- `quickstart.ipynb` — CIFAR-10 variability study and two-architecture comparison
-- `01_cifar10_variability_study.ipynb` — deep dive into CNN variability with full visualisation
-- `02_cifar10_model_comparison.ipynb` — comparing architectures statistically
-- `03_learning_rate_variability.ipynb` — grid study across learning rates and batch sizes
-- `04_pytorch_classification.ipynb` — PyTorch classification workflow
-- `05_pytorch_regression.ipynb` — PyTorch regression workflow
-- `06_sklearn_models.ipynb` — comparing multiple sklearn classifiers
+- `quickstart.ipynb` — wine dataset variability study and three-model comparison using Keras and sklearn. No GPU required for the comparison sections.
+- `01_mnist_variability_study.ipynb` — deep dive into Keras CNN variability on MNIST with full visualisation
+- `02_mnist_model_comparison.ipynb` — comparing two CNN architectures statistically
+- `03_learning_rate_variability.ipynb` — hyperparameter sweep across learning rates and batch sizes using `run_grid_study()`
+- `04_pytorch_classification.ipynb` — PyTorch classification variability study with epoch-level diagnostics
+- `05_pytorch_regression.ipynb` — PyTorch regression variability study with known ground truth
+- `06_sklearn_models.ipynb` — sklearn classification and regression: single-model variability and multi-model comparison
 
 ---
 
@@ -339,7 +306,7 @@ on the GitHub repository page.
 @software{kizlik_ictonyx,
   author  = {Kizlik, Stephen},
   title   = {Ictonyx: A Framework for Variability Analysis in Machine Learning Training},
-  version = {0.3.15},
+  version = {0.4.0},
   url     = {https://github.com/skizlik/ictonyx},
   license = {MIT},
 }

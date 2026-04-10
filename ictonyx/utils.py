@@ -2,7 +2,7 @@
 
 import os
 import pickle
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -96,7 +96,10 @@ def train_val_test_split(
 
 
 def setup_mlflow(
-    experiment_name: str = "ictonyx_experiment", tracking_uri: Optional[str] = None
+    experiment_name: str = "ictonyx_experiment",
+    tracking_uri: Optional[str] = None,
+    autolog: bool = False,
+    tags: Optional[Dict[str, str]] = None,
 ) -> str:
     """
     Sets up MLflow tracking with sensible defaults.
@@ -127,5 +130,22 @@ def setup_mlflow(
             )
         experiment_id = _exp.experiment_id
         logger.info(f"Using existing MLflow experiment: {experiment_name}")
+
+    if autolog:
+        try:
+            import mlflow.sklearn
+
+            mlflow.sklearn.autolog()
+        except Exception:
+            pass
+        try:
+            import mlflow.tensorflow
+
+            mlflow.tensorflow.autolog()
+        except Exception:
+            pass
+
+    if tags:
+        mlflow.set_tags({k: str(v) for k, v in tags.items()})
 
     return experiment_id

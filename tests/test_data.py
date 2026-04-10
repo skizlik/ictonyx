@@ -278,32 +278,34 @@ class TestArraysDataHandlerEdgeCases:
         assert len(X_test_out) > 0
 
     def test_arrays_handler_importable_without_tf_preprocessing(self):
-        """ArraysDataHandler must import cleanly even if TF preprocessing is unavailable.
+        """ArraysDataHandler must import cleanly with no TF preprocessing dependency.
 
-        This test simulates the AttributeError that Keras 3 raises by temporarily
-        removing the TF preprocessing modules from sys.modules and verifying that
-        the data module still loads.
+        The TF preprocessing import block was removed in v0.4.0. This test
+        verifies that ictonyx.data loads without error and exposes
+        ArraysDataHandler with no TF dependency of any kind.
         """
         import importlib
         import sys
 
-        # Remove ictonyx.data from the module cache so the import guard re-runs
+        # Remove ictonyx.data from the module cache so the import re-runs
+        # from scratch in this process state.
         modules_to_remove = [k for k in sys.modules if "ictonyx.data" in k]
         saved = {k: sys.modules.pop(k) for k in modules_to_remove}
 
-        # Simulate the AttributeError path by blocking the specific sub-import
-        import unittest.mock as mock
-
-        original_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else None
-
-        # The simplest reliable test: just verify HAS_TF_PREPROCESSING is a bool
-        # (the module loaded without propagating an exception)
         try:
             from ictonyx import data as ictonyx_data
 
-            assert isinstance(ictonyx_data.HAS_TF_PREPROCESSING, bool)
+            # The dead TF preprocessing block is gone — the flag must not exist.
+            assert not hasattr(
+                ictonyx_data, "HAS_TF_PREPROCESSING"
+            ), "HAS_TF_PREPROCESSING was removed in v0.4.0 and must not be present"
+
+            # ArraysDataHandler must be directly accessible.
+            assert hasattr(
+                ictonyx_data, "ArraysDataHandler"
+            ), "ArraysDataHandler must be importable from ictonyx.data"
+
         finally:
-            # Restore original module cache
             sys.modules.update(saved)
 
 
@@ -842,9 +844,9 @@ class TestArraysDataHandlerSplitDefaults:
 class TestTextDataHandlerKeras3:
     """TextDataHandler must fail cleanly on Keras 3 (R5-2)."""
 
-    def test_raises_import_error_with_guidance_when_preprocessing_absent(self):
-        with patch("ictonyx.data.HAS_TF_PREPROCESSING", False):
-            with pytest.raises(ImportError, match="Keras 3"):
+    def test_raises_import_error_when_sklearn_absent(self):
+        with patch("ictonyx.data.HAS_SKLEARN", False):
+            with pytest.raises(ImportError, match="scikit-learn"):
                 TextDataHandler(data_path="/tmp/fake.csv")
 
 
@@ -1251,28 +1253,201 @@ class TestTabularDataHandlerCoverage2:
 
 class TestDeprecatedHandlerWarningVisibility:
 
-    def test_text_data_handler_emits_user_warning(self):
-        """TextDataHandler must emit UserWarning (not DeprecationWarning) so it
-        is visible without custom warning filters."""
-        from unittest.mock import patch
+    def test_text_data_handler_no_longer_emits_deprecation_warning(self):
+        """TextDataHandler is now framework-agnostic and does not emit
+        a deprecation warning. Verify construction succeeds without warnings."""
+        import warnings
 
-        with patch("ictonyx.data.HAS_TF_PREPROCESSING", True):
-            import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            try:
+                TextDataHandler(data_path="/nonexistent/fake.csv")
+            except (ImportError, ValueError, FileNotFoundError):
+                pass
+        deprecation_warnings = [x for x in w if "deprecated" in str(x.message).lower()]
+        assert (
+            len(deprecation_warnings) == 0
+        ), "New TextDataHandler should not emit deprecation warnings."
 
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                try:
-                    from ictonyx.data import TextDataHandler
 
-                    TextDataHandler(data_path="/nonexistent/fake.csv")
-                except Exception:
-                    pass
-            user_warnings = [
-                x
-                for x in w
-                if issubclass(x.category, UserWarning) and "deprecated" in str(x.message).lower()
-            ]
-            assert len(user_warnings) > 0, (
-                "TextDataHandler must emit UserWarning. "
-                "DeprecationWarning is silenced by default."
-            )
+class TestTextDataHandlerFrameworkAgnostic:
+    """TextDataHandler (v0.4.0 rewrite) — TfidfVectorizer, no TF required."""
+
+    def _make_csv(self, tmp_path, n: int = 30) -> str:
+        path = str(tmp_path / "text.csv")
+        rng = np.random.default_rng(42)
+        texts = [f"sample text document number {i} with some words" for i in range(n)]
+        labels = (rng.random(n) > 0.5).astype(int)
+        pd.DataFrame({"text": texts, "label": labels}).to_csv(path, index=False)
+        return path
+
+    @pytest.mark.skipif(
+        not __import__("ictonyx.data", fromlist=["HAS_SKLEARN"]).HAS_SKLEARN,
+        reason="sklearn required",
+    )
+    def test_load_returns_three_splits(self, tmp_path):
+        from ictonyx.data import TextDataHandler
+
+        path = self._make_csv(tmp_path)
+        handler = TextDataHandler(path)
+        result = handler.load()
+        assert "train_data" in result
+        assert "val_data" in result
+        assert "test_data" in result
+
+    @pytest.mark.skipif(
+        not __import__("ictonyx.data", fromlist=["HAS_SKLEARN"]).HAS_SKLEARN,
+        reason="sklearn required",
+    )
+    def test_train_X_is_2d_numpy(self, tmp_path):
+        from ictonyx.data import TextDataHandler
+
+        path = self._make_csv(tmp_path)
+        handler = TextDataHandler(path, max_features=50)
+        result = handler.load()
+        X_train, _ = result["train_data"]
+        assert isinstance(X_train, np.ndarray)
+        assert X_train.ndim == 2
+        assert X_train.shape[1] <= 50
+
+    @pytest.mark.skipif(
+        not __import__("ictonyx.data", fromlist=["HAS_SKLEARN"]).HAS_SKLEARN,
+        reason="sklearn required",
+    )
+    def test_vectorizer_fit_on_train_only(self, tmp_path):
+        """Vectorizer must be fit on training split only."""
+        from ictonyx.data import TextDataHandler
+
+        path = self._make_csv(tmp_path)
+        handler = TextDataHandler(path)
+        handler.load()
+        assert handler.vectorizer is not None
+
+    @pytest.mark.skipif(
+        not __import__("ictonyx.data", fromlist=["HAS_SKLEARN"]).HAS_SKLEARN,
+        reason="sklearn required",
+    )
+    def test_missing_text_column_raises(self, tmp_path):
+        from ictonyx.data import TextDataHandler
+
+        path = str(tmp_path / "bad.csv")
+        pd.DataFrame({"body": ["hello"], "label": [0]}).to_csv(path, index=False)
+        handler = TextDataHandler(path, text_column="text")
+        with pytest.raises(ValueError, match="text"):
+            handler.load()
+
+    @pytest.mark.skipif(
+        not __import__("ictonyx.data", fromlist=["HAS_SKLEARN"]).HAS_SKLEARN,
+        reason="sklearn required",
+    )
+    def test_no_test_split(self, tmp_path):
+        from ictonyx.data import TextDataHandler
+
+        path = self._make_csv(tmp_path)
+        handler = TextDataHandler(path)
+        result = handler.load(test_split=0.0, val_split=0.1)
+        assert result["test_data"] is None
+
+    @pytest.mark.skipif(
+        not __import__("ictonyx.data", fromlist=["HAS_SKLEARN"]).HAS_SKLEARN,
+        reason="sklearn required",
+    )
+    def test_get_data_info_returns_expected_keys(self, tmp_path):
+        from ictonyx.data import TextDataHandler
+
+        path = self._make_csv(tmp_path)
+        handler = TextDataHandler(path)
+        info = handler.get_data_info()
+        assert "text_column" in info
+        assert "label_column" in info
+        assert "max_features" in info
+
+
+class TestTimeSeriesDataHandlerFrameworkAgnostic:
+    """TimeSeriesDataHandler (v0.4.0 rewrite) — pure NumPy, no TF required."""
+
+    def _make_csv(self, tmp_path, n: int = 100) -> str:
+        path = str(tmp_path / "ts.csv")
+        rng = np.random.default_rng(42)
+        values = np.cumsum(rng.normal(0, 1, n))
+        pd.DataFrame({"value": values}).to_csv(path, index=False)
+        return path
+
+    def test_load_returns_three_splits(self, tmp_path):
+        from ictonyx.data import TimeSeriesDataHandler
+
+        path = self._make_csv(tmp_path)
+        handler = TimeSeriesDataHandler(path, lookback=5)
+        result = handler.load()
+        assert "train_data" in result
+        assert "val_data" in result
+        assert "test_data" in result
+
+    def test_train_X_shape_is_correct(self, tmp_path):
+        from ictonyx.data import TimeSeriesDataHandler
+
+        path = self._make_csv(tmp_path)
+        handler = TimeSeriesDataHandler(path, lookback=10)
+        result = handler.load()
+        X_train, y_train = result["train_data"]
+        assert X_train.ndim == 3
+        assert X_train.shape[1] == 10  # lookback
+        assert X_train.shape[2] == 1  # univariate
+        assert len(X_train) == len(y_train)
+
+    def test_sequence_length_alias(self, tmp_path):
+        """sequence_length kwarg must be accepted as alias for lookback."""
+        from ictonyx.data import TimeSeriesDataHandler
+
+        path = self._make_csv(tmp_path)
+        handler = TimeSeriesDataHandler(path, sequence_length=7)
+        result = handler.load()
+        X_train, _ = result["train_data"]
+        assert X_train.shape[1] == 7
+
+    def test_make_windows_shape(self):
+        """_make_windows static method produces correct (n_windows, lb, n_feat) shape."""
+        from ictonyx.data import TimeSeriesDataHandler
+
+        data = np.arange(50, dtype=np.float32)
+        targets = np.arange(50, dtype=np.float32)
+        X, y = TimeSeriesDataHandler._make_windows(data, targets, lookback=5, stride=1)
+        assert X.shape == (45, 5, 1)
+        assert y.shape == (45,)
+
+    def test_make_windows_stride(self):
+        from ictonyx.data import TimeSeriesDataHandler
+
+        data = np.arange(50, dtype=np.float32)
+        targets = np.arange(50, dtype=np.float32)
+        X, y = TimeSeriesDataHandler._make_windows(data, targets, lookback=5, stride=2)
+        # With stride=2, fewer windows
+        X_stride1, _ = TimeSeriesDataHandler._make_windows(data, targets, lookback=5, stride=1)
+        assert len(X) < len(X_stride1)
+
+    def test_too_short_raises(self, tmp_path):
+        from ictonyx.data import TimeSeriesDataHandler
+
+        path = str(tmp_path / "short.csv")
+        pd.DataFrame({"value": [1.0, 2.0, 3.0]}).to_csv(path, index=False)
+        handler = TimeSeriesDataHandler(path, lookback=10)
+        with pytest.raises(ValueError, match="short"):
+            handler.load()
+
+    def test_no_test_split(self, tmp_path):
+        from ictonyx.data import TimeSeriesDataHandler
+
+        path = self._make_csv(tmp_path)
+        handler = TimeSeriesDataHandler(path, lookback=5)
+        result = handler.load(test_split=0.0, val_split=0.1)
+        assert result["test_data"] is None
+
+    def test_get_data_info_returns_expected_keys(self, tmp_path):
+        from ictonyx.data import TimeSeriesDataHandler
+
+        path = self._make_csv(tmp_path)
+        handler = TimeSeriesDataHandler(path, lookback=5)
+        info = handler.get_data_info()
+        assert "lookback" in info
+        assert "value_column" in info
+        assert "stride" in info

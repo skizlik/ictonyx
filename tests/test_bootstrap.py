@@ -3,23 +3,26 @@
 Tests cover: input validation, mathematical properties, both CI methods,
 all convenience functions, edge cases, and reproducibility.
 """
-import pytest
+
 import numpy as np
 import pandas as pd
+import pytest
+
 from ictonyx.bootstrap import (
     BootstrapCIResult,
-    bootstrap_ci,
-    bootstrap_mean_difference_ci,
-    bootstrap_effect_size_ci,
-    bootstrap_paired_difference_ci,
-    _to_clean_array,
     _percentile_ci,
+    _to_clean_array,
+    bootstrap_ci,
+    bootstrap_effect_size_ci,
+    bootstrap_hedges_g_ci,
+    bootstrap_mean_difference_ci,
+    bootstrap_paired_difference_ci,
 )
-
 
 # ---------------------------------------------------------------------------
 #  Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def clear_difference():
@@ -51,6 +54,7 @@ def paired_data():
 # ===================================================================
 #  _to_clean_array
 # ===================================================================
+
 
 class TestToCleanArray:
 
@@ -86,82 +90,60 @@ class TestToCleanArray:
 #  Input Validation
 # ===================================================================
 
+
 class TestBootstrapInputValidation:
 
     def test_too_few_observations(self):
         with pytest.raises(ValueError, match="at least 2"):
-            bootstrap_ci(
-                np.array([1.0]), statistic_fn=np.mean, n_bootstrap=100
-            )
+            bootstrap_ci(np.array([1.0]), statistic_fn=np.mean, n_bootstrap=100)
 
     def test_invalid_confidence_low(self):
         with pytest.raises(ValueError, match="between 0 and 1"):
-            bootstrap_ci(
-                np.array([1, 2, 3]), statistic_fn=np.mean,
-                confidence=0.0, n_bootstrap=100
-            )
+            bootstrap_ci(np.array([1, 2, 3]), statistic_fn=np.mean, confidence=0.0, n_bootstrap=100)
 
     def test_invalid_confidence_high(self):
         with pytest.raises(ValueError, match="between 0 and 1"):
-            bootstrap_ci(
-                np.array([1, 2, 3]), statistic_fn=np.mean,
-                confidence=1.0, n_bootstrap=100
-            )
+            bootstrap_ci(np.array([1, 2, 3]), statistic_fn=np.mean, confidence=1.0, n_bootstrap=100)
 
     def test_too_few_bootstrap_samples(self):
         with pytest.raises(ValueError, match="n_bootstrap must be >= 100"):
-            bootstrap_ci(
-                np.array([1, 2, 3]), statistic_fn=np.mean,
-                n_bootstrap=10
-            )
+            bootstrap_ci(np.array([1, 2, 3]), statistic_fn=np.mean, n_bootstrap=10)
 
     def test_unknown_method(self):
         with pytest.raises(ValueError, match="Unknown method"):
-            bootstrap_ci(
-                np.array([1, 2, 3]), statistic_fn=np.mean,
-                method='fake', n_bootstrap=100
-            )
+            bootstrap_ci(np.array([1, 2, 3]), statistic_fn=np.mean, method="fake", n_bootstrap=100)
 
 
 class TestTwoSampleInputValidation:
 
     def test_mean_diff_too_few_group1(self):
         with pytest.raises(ValueError, match="at least 2"):
-            bootstrap_mean_difference_ci(
-                np.array([1.0]), np.array([1, 2, 3]), n_bootstrap=100
-            )
+            bootstrap_mean_difference_ci(np.array([1.0]), np.array([1, 2, 3]), n_bootstrap=100)
 
     def test_effect_size_too_few_group2(self):
         with pytest.raises(ValueError, match="at least 2"):
-            bootstrap_effect_size_ci(
-                np.array([1, 2, 3]), np.array([1.0]), n_bootstrap=100
-            )
+            bootstrap_effect_size_ci(np.array([1, 2, 3]), np.array([1.0]), n_bootstrap=100)
 
     def test_paired_unequal_lengths(self):
         with pytest.raises(ValueError, match="equal-length"):
-            bootstrap_paired_difference_ci(
-                np.array([1, 2, 3]), np.array([1, 2]), n_bootstrap=100
-            )
+            bootstrap_paired_difference_ci(np.array([1, 2, 3]), np.array([1, 2]), n_bootstrap=100)
 
     def test_paired_too_few(self):
         with pytest.raises(ValueError, match="at least 2"):
-            bootstrap_paired_difference_ci(
-                np.array([1.0]), np.array([2.0]), n_bootstrap=100
-            )
+            bootstrap_paired_difference_ci(np.array([1.0]), np.array([2.0]), n_bootstrap=100)
 
 
 # ===================================================================
 #  Core Properties (mathematical invariants)
 # ===================================================================
 
+
 class TestBootstrapCoreProperties:
 
     def test_ci_contains_point_estimate(self, clear_difference):
         """The point estimate should (almost always) be inside the CI."""
         g1, g2 = clear_difference
-        result = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=5000, random_state=42
-        )
+        result = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=5000, random_state=42)
         assert result.ci_lower <= result.point_estimate <= result.ci_upper
 
     def test_wider_ci_at_lower_confidence(self, clear_difference):
@@ -179,7 +161,7 @@ class TestBootstrapCoreProperties:
 
     def test_ci_lower_less_than_upper(self, clear_difference):
         g1, g2 = clear_difference
-        for method in ['percentile', 'bca']:
+        for method in ["percentile", "bca"]:
             result = bootstrap_mean_difference_ci(
                 g1, g2, method=method, n_bootstrap=5000, random_state=42
             )
@@ -187,32 +169,22 @@ class TestBootstrapCoreProperties:
 
     def test_positive_se(self, clear_difference):
         g1, g2 = clear_difference
-        result = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=5000, random_state=42
-        )
+        result = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=5000, random_state=42)
         assert result.se_bootstrap > 0
 
     def test_reproducibility(self, clear_difference):
         """Same random_state must produce identical results."""
         g1, g2 = clear_difference
-        r1 = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=2000, random_state=123
-        )
-        r2 = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=2000, random_state=123
-        )
+        r1 = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=2000, random_state=123)
+        r2 = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=2000, random_state=123)
         assert r1.ci_lower == r2.ci_lower
         assert r1.ci_upper == r2.ci_upper
         assert r1.point_estimate == r2.point_estimate
 
     def test_different_seeds_differ(self, clear_difference):
         g1, g2 = clear_difference
-        r1 = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=2000, random_state=1
-        )
-        r2 = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=2000, random_state=999
-        )
+        r1 = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=2000, random_state=1)
+        r2 = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=2000, random_state=999)
         # Extremely unlikely to be identical with different seeds
         assert r1.ci_lower != r2.ci_lower
 
@@ -221,15 +193,19 @@ class TestBootstrapCoreProperties:
 #  bootstrap_ci (single-sample engine)
 # ===================================================================
 
+
 class TestBootstrapCiEngine:
 
     def test_mean_of_known_distribution(self):
         """CI of the mean of [1..100] should bracket 50.5."""
         data = np.arange(1, 101, dtype=float)
         result = bootstrap_ci(
-            data, statistic_fn=np.mean,
-            n_bootstrap=5000, confidence=0.95, method='percentile',
-            random_state=42
+            data,
+            statistic_fn=np.mean,
+            n_bootstrap=5000,
+            confidence=0.95,
+            method="percentile",
+            random_state=42,
         )
         assert result.ci_lower < 50.5 < result.ci_upper
 
@@ -237,17 +213,19 @@ class TestBootstrapCiEngine:
         rng = np.random.RandomState(42)
         data = rng.normal(10, 2, 50)
         result = bootstrap_ci(
-            data, statistic_fn=np.median,
-            n_bootstrap=5000, method='bca', random_state=42
+            data, statistic_fn=np.median, n_bootstrap=5000, method="bca", random_state=42
         )
         assert result.ci_lower < np.median(data) < result.ci_upper
 
     def test_return_distribution(self):
         data = np.arange(1, 21, dtype=float)
         result = bootstrap_ci(
-            data, statistic_fn=np.mean,
-            n_bootstrap=500, method='percentile',
-            random_state=42, return_distribution=True
+            data,
+            statistic_fn=np.mean,
+            n_bootstrap=500,
+            method="percentile",
+            random_state=42,
+            return_distribution=True,
         )
         assert result.bootstrap_distribution is not None
         assert len(result.bootstrap_distribution) >= 100
@@ -255,24 +233,21 @@ class TestBootstrapCiEngine:
     def test_no_distribution_by_default(self):
         data = np.arange(1, 21, dtype=float)
         result = bootstrap_ci(
-            data, statistic_fn=np.mean,
-            n_bootstrap=500, method='percentile', random_state=42
+            data, statistic_fn=np.mean, n_bootstrap=500, method="percentile", random_state=42
         )
         assert result.bootstrap_distribution is None
 
     def test_accepts_pandas_series(self):
         data = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         result = bootstrap_ci(
-            data, statistic_fn=np.mean,
-            n_bootstrap=500, method='percentile', random_state=42
+            data, statistic_fn=np.mean, n_bootstrap=500, method="percentile", random_state=42
         )
         assert result.ci_lower < result.ci_upper
 
     def test_accepts_list(self):
         data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         result = bootstrap_ci(
-            data, statistic_fn=np.mean,
-            n_bootstrap=500, method='percentile', random_state=42
+            data, statistic_fn=np.mean, n_bootstrap=500, method="percentile", random_state=42
         )
         assert result.ci_lower < result.ci_upper
 
@@ -280,34 +255,31 @@ class TestBootstrapCiEngine:
         rng = np.random.RandomState(42)
         data = rng.normal(0, 1, 30)
         result = bootstrap_ci(
-            data, statistic_fn=np.mean,
-            n_bootstrap=5000, method='bca', random_state=42
+            data, statistic_fn=np.mean, n_bootstrap=5000, method="bca", random_state=42
         )
-        assert result.method == 'bca'
+        assert result.method == "bca"
         assert result.ci_lower < result.ci_upper
 
     def test_percentile_method(self):
         rng = np.random.RandomState(42)
         data = rng.normal(0, 1, 30)
         result = bootstrap_ci(
-            data, statistic_fn=np.mean,
-            n_bootstrap=5000, method='percentile', random_state=42
+            data, statistic_fn=np.mean, n_bootstrap=5000, method="percentile", random_state=42
         )
-        assert result.method == 'percentile'
+        assert result.method == "percentile"
 
 
 # ===================================================================
 #  bootstrap_mean_difference_ci
 # ===================================================================
 
+
 class TestBootstrapMeanDifferenceCi:
 
     def test_clear_difference_excludes_zero(self, clear_difference):
         """CI should not contain zero when groups are clearly different."""
         g1, g2 = clear_difference
-        result = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=5000, random_state=42
-        )
+        result = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=5000, random_state=42)
         # g1 > g2 by about 0.20, so entire CI should be positive
         assert result.ci_lower > 0
 
@@ -322,44 +294,36 @@ class TestBootstrapMeanDifferenceCi:
     def test_sign_matches_direction(self, clear_difference):
         """If g1 > g2, point estimate should be positive."""
         g1, g2 = clear_difference
-        result = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=2000, random_state=42
-        )
+        result = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=2000, random_state=42)
         assert result.point_estimate > 0
 
     def test_reversed_groups_flip_sign(self, clear_difference):
         """Swapping groups should negate the point estimate."""
         g1, g2 = clear_difference
-        r1 = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=2000, random_state=42
-        )
-        r2 = bootstrap_mean_difference_ci(
-            g2, g1, n_bootstrap=2000, random_state=42
-        )
+        r1 = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=2000, random_state=42)
+        r2 = bootstrap_mean_difference_ci(g2, g1, n_bootstrap=2000, random_state=42)
         assert abs(r1.point_estimate + r2.point_estimate) < 1e-10
 
     def test_percentile_method(self, clear_difference):
         g1, g2 = clear_difference
         result = bootstrap_mean_difference_ci(
-            g1, g2, method='percentile', n_bootstrap=2000, random_state=42
+            g1, g2, method="percentile", n_bootstrap=2000, random_state=42
         )
-        assert result.method == 'percentile'
+        assert result.method == "percentile"
         assert result.ci_lower > 0  # still clearly different
 
     def test_bca_method(self, clear_difference):
         g1, g2 = clear_difference
         result = bootstrap_mean_difference_ci(
-            g1, g2, method='bca', n_bootstrap=2000, random_state=42
+            g1, g2, method="bca", n_bootstrap=2000, random_state=42
         )
-        assert result.method == 'bca'
+        assert result.method == "bca"
         assert result.ci_lower > 0
 
     def test_handles_nan_in_input(self):
         g1 = pd.Series([0.90, 0.91, np.nan, 0.92, 0.88, 0.90])
         g2 = pd.Series([0.70, np.nan, 0.69, 0.72, 0.68, 0.70])
-        result = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=2000, random_state=42
-        )
+        result = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=2000, random_state=42)
         assert np.isfinite(result.ci_lower)
         assert np.isfinite(result.ci_upper)
 
@@ -367,9 +331,7 @@ class TestBootstrapMeanDifferenceCi:
         rng = np.random.RandomState(42)
         g1 = rng.normal(0.9, 0.02, 15)
         g2 = rng.normal(0.7, 0.02, 8)
-        result = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=2000, random_state=42
-        )
+        result = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=2000, random_state=42)
         assert result.ci_lower > 0
 
 
@@ -377,13 +339,12 @@ class TestBootstrapMeanDifferenceCi:
 #  bootstrap_effect_size_ci
 # ===================================================================
 
+
 class TestBootstrapEffectSizeCi:
 
     def test_large_effect_excludes_zero(self, clear_difference):
         g1, g2 = clear_difference
-        result = bootstrap_effect_size_ci(
-            g1, g2, n_bootstrap=5000, random_state=42
-        )
+        result = bootstrap_effect_size_ci(g1, g2, n_bootstrap=5000, random_state=42)
         # Cohen's d should be very large and positive
         assert result.ci_lower > 0
         assert result.point_estimate > 1.0  # huge effect
@@ -398,19 +359,13 @@ class TestBootstrapEffectSizeCi:
     def test_antisymmetry(self, clear_difference):
         """Cohen's d(g1, g2) should negate Cohen's d(g2, g1)."""
         g1, g2 = clear_difference
-        r1 = bootstrap_effect_size_ci(
-            g1, g2, n_bootstrap=2000, random_state=42
-        )
-        r2 = bootstrap_effect_size_ci(
-            g2, g1, n_bootstrap=2000, random_state=42
-        )
+        r1 = bootstrap_effect_size_ci(g1, g2, n_bootstrap=2000, random_state=42)
+        r2 = bootstrap_effect_size_ci(g2, g1, n_bootstrap=2000, random_state=42)
         assert abs(r1.point_estimate + r2.point_estimate) < 1e-10
 
     def test_unpooled_variant(self, clear_difference):
         g1, g2 = clear_difference
-        r_pooled = bootstrap_effect_size_ci(
-            g1, g2, pooled=True, n_bootstrap=2000, random_state=42
-        )
+        r_pooled = bootstrap_effect_size_ci(g1, g2, pooled=True, n_bootstrap=2000, random_state=42)
         r_unpooled = bootstrap_effect_size_ci(
             g1, g2, pooled=False, n_bootstrap=2000, random_state=42
         )
@@ -423,13 +378,12 @@ class TestBootstrapEffectSizeCi:
 #  bootstrap_paired_difference_ci
 # ===================================================================
 
+
 class TestBootstrapPairedDifferenceCi:
 
     def test_consistent_improvement_excludes_zero(self, paired_data):
         g1, g2 = paired_data
-        result = bootstrap_paired_difference_ci(
-            g1, g2, n_bootstrap=5000, random_state=42
-        )
+        result = bootstrap_paired_difference_ci(g1, g2, n_bootstrap=5000, random_state=42)
         # g1 is consistently ~0.03 above g2
         assert result.ci_lower > 0
         assert result.point_estimate == pytest.approx(0.03, abs=0.005)
@@ -447,12 +401,8 @@ class TestBootstrapPairedDifferenceCi:
     def test_paired_narrower_than_independent(self, paired_data):
         """Paired CI should be narrower than independent CI on same data."""
         g1, g2 = paired_data
-        paired_r = bootstrap_paired_difference_ci(
-            g1, g2, n_bootstrap=5000, random_state=42
-        )
-        indep_r = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=5000, random_state=42
-        )
+        paired_r = bootstrap_paired_difference_ci(g1, g2, n_bootstrap=5000, random_state=42)
+        indep_r = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=5000, random_state=42)
         paired_width = paired_r.ci_upper - paired_r.ci_lower
         indep_width = indep_r.ci_upper - indep_r.ci_lower
         # Paired should be narrower because it removes between-fold variance
@@ -463,13 +413,18 @@ class TestBootstrapPairedDifferenceCi:
 #  BootstrapCIResult
 # ===================================================================
 
+
 class TestBootstrapCIResult:
 
     def test_str_representation(self):
         r = BootstrapCIResult(
-            ci_lower=0.10, ci_upper=0.25, point_estimate=0.18,
-            confidence_level=0.95, method='bca',
-            n_bootstrap=10000, se_bootstrap=0.04
+            ci_lower=0.10,
+            ci_upper=0.25,
+            point_estimate=0.18,
+            confidence_level=0.95,
+            method="bca",
+            n_bootstrap=10000,
+            se_bootstrap=0.04,
         )
         s = str(r)
         assert "95%" in s
@@ -479,9 +434,13 @@ class TestBootstrapCIResult:
 
     def test_distribution_optional(self):
         r = BootstrapCIResult(
-            ci_lower=0.1, ci_upper=0.2, point_estimate=0.15,
-            confidence_level=0.95, method='percentile',
-            n_bootstrap=1000, se_bootstrap=0.03
+            ci_lower=0.1,
+            ci_upper=0.2,
+            point_estimate=0.15,
+            confidence_level=0.95,
+            method="percentile",
+            n_bootstrap=1000,
+            se_bootstrap=0.03,
         )
         assert r.bootstrap_distribution is None
 
@@ -490,14 +449,14 @@ class TestBootstrapCIResult:
 #  Edge Cases
 # ===================================================================
 
+
 class TestEdgeCases:
 
     def test_constant_data(self):
         """All identical values: CI should collapse to a point."""
         data = np.array([5.0] * 20)
         result = bootstrap_ci(
-            data, statistic_fn=np.mean,
-            n_bootstrap=1000, method='percentile', random_state=42
+            data, statistic_fn=np.mean, n_bootstrap=1000, method="percentile", random_state=42
         )
         assert result.ci_lower == pytest.approx(5.0)
         assert result.ci_upper == pytest.approx(5.0)
@@ -506,7 +465,7 @@ class TestEdgeCases:
         g1 = np.array([0.9] * 10)
         g2 = np.array([0.8] * 10)
         result = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=1000, method='percentile', random_state=42
+            g1, g2, n_bootstrap=1000, method="percentile", random_state=42
         )
         assert result.point_estimate == pytest.approx(0.1)
         assert result.ci_lower == pytest.approx(0.1)
@@ -517,7 +476,7 @@ class TestEdgeCases:
         g1 = np.array([0.9, 0.91])
         g2 = np.array([0.7, 0.71])
         result = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=1000, method='percentile', random_state=42
+            g1, g2, n_bootstrap=1000, method="percentile", random_state=42
         )
         assert np.isfinite(result.ci_lower)
         assert np.isfinite(result.ci_upper)
@@ -527,8 +486,7 @@ class TestEdgeCases:
         rng = np.random.RandomState(42)
         data = rng.exponential(1.0, 30)
         result = bootstrap_ci(
-            data, statistic_fn=np.mean,
-            n_bootstrap=5000, method='bca', random_state=42
+            data, statistic_fn=np.mean, n_bootstrap=5000, method="bca", random_state=42
         )
         assert result.ci_lower < result.ci_upper
         assert result.ci_lower < np.mean(data) < result.ci_upper
@@ -541,8 +499,7 @@ class TestEdgeCases:
             return float(np.percentile(x, 75) - np.percentile(x, 25))
 
         result = bootstrap_ci(
-            data, statistic_fn=iqr,
-            n_bootstrap=2000, method='percentile', random_state=42
+            data, statistic_fn=iqr, n_bootstrap=2000, method="percentile", random_state=42
         )
         assert result.ci_lower <= iqr(data) <= result.ci_upper
 
@@ -551,8 +508,128 @@ class TestEdgeCases:
         rng = np.random.RandomState(42)
         g1 = rng.normal(0.800, 0.02, 20)
         g2 = rng.normal(0.801, 0.02, 20)
-        result = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=5000, random_state=42
-        )
+        result = bootstrap_mean_difference_ci(g1, g2, n_bootstrap=5000, random_state=42)
         # Difference is essentially zero
         assert abs(result.point_estimate) < 0.02
+
+
+class TestBootstrapModernisation:
+    """Verify Priority 4 changes: default_rng, BCa warning, vectorised mean."""
+
+    def test_uses_default_rng_not_random_state(self):
+        """bootstrap_ci source must not reference the legacy RandomState."""
+        import inspect
+
+        from ictonyx import bootstrap as bs_module
+
+        source = inspect.getsource(bs_module.bootstrap_ci)
+        assert "RandomState" not in source
+
+    def test_bca_warns_at_small_n(self):
+        """BCa method must warn when n < 15."""
+        rng = np.random.default_rng(42)
+        data = rng.standard_normal(10)
+        with pytest.warns(UserWarning, match="n=10"):
+            bootstrap_ci(data, np.mean, method="bca", n_bootstrap=500)
+
+    def test_two_sample_bca_warns_at_small_n(self):
+        """Two-sample BCa must warn when min(n1, n2) < 15."""
+        rng = np.random.default_rng(42)
+        g1 = rng.standard_normal(10)
+        g2 = rng.standard_normal(12)
+        with pytest.warns(UserWarning, match="min"):
+            bootstrap_mean_difference_ci(g1, g2, method="bca", n_bootstrap=500)
+
+    def test_vectorised_mean_matches_loop_result(self):
+        """Vectorised fast path must produce results consistent with loop path."""
+        rng = np.random.default_rng(42)
+        data = rng.standard_normal(30)
+        r_vec = bootstrap_ci(data, np.mean, method="percentile", n_bootstrap=2000, random_state=42)
+        r_loop = bootstrap_ci(
+            data,
+            lambda x: float(np.mean(x)),
+            method="percentile",
+            n_bootstrap=2000,
+            random_state=42,
+        )
+        # CIs should be close but not identical (different RNG paths)
+        assert abs(r_vec.point_estimate - r_loop.point_estimate) < 1e-10
+        assert abs(r_vec.ci_lower - r_loop.ci_lower) < 0.05
+        assert abs(r_vec.ci_upper - r_loop.ci_upper) < 0.05
+
+
+class TestBootstrapHedgesGCi:
+    """Tests for bootstrap_hedges_g_ci() — added to fix BUG-2 (Welch CI mismatch)."""
+
+    def test_point_estimate_matches_hedges_g(self):
+        """point_estimate must equal Hedges' g computed on the original data."""
+        from ictonyx.bootstrap import bootstrap_hedges_g_ci
+
+        rng = np.random.default_rng(42)
+        a = rng.normal(0.85, 0.03, 20)
+        b = rng.normal(0.75, 0.03, 20)
+
+        result = bootstrap_hedges_g_ci(a, b, n_bootstrap=500, random_state=42)
+
+        # Compute Hedges' g manually
+        n1, n2 = len(a), len(b)
+        df = n1 + n2 - 2
+        pooled_var = ((n1 - 1) * np.var(a, ddof=1) + (n2 - 1) * np.var(b, ddof=1)) / df
+        d = (np.mean(a) - np.mean(b)) / np.sqrt(pooled_var)
+        j = 1.0 - (3.0 / (4.0 * df - 1.0))
+        expected_g = d * j
+
+        assert (
+            abs(result.point_estimate - expected_g) < 1e-9
+        ), f"point_estimate={result.point_estimate:.8f} != Hedges' g={expected_g:.8f}"
+
+    def test_point_estimate_smaller_than_cohens_d(self):
+        """Hedges' g < Cohen's d in magnitude for finite samples (J < 1 always)."""
+        from ictonyx.bootstrap import bootstrap_effect_size_ci, bootstrap_hedges_g_ci
+
+        rng = np.random.default_rng(7)
+        a = rng.normal(0.85, 0.02, 10)
+        b = rng.normal(0.70, 0.02, 10)
+
+        g_result = bootstrap_hedges_g_ci(a, b, n_bootstrap=500, random_state=7)
+        d_result = bootstrap_effect_size_ci(a, b, n_bootstrap=500, pooled=True, random_state=7)
+
+        assert abs(g_result.point_estimate) <= abs(d_result.point_estimate) + 1e-9, (
+            f"|g|={abs(g_result.point_estimate):.6f} > |d|={abs(d_result.point_estimate):.6f}. "
+            "J correction must reduce magnitude."
+        )
+
+    def test_ci_bounds_ordered_and_finite(self):
+        """CI bounds must be finite and lo < hi."""
+        from ictonyx.bootstrap import bootstrap_hedges_g_ci
+
+        rng = np.random.default_rng(0)
+        a = rng.normal(0.85, 0.03, 20)
+        b = rng.normal(0.75, 0.03, 20)
+        result = bootstrap_hedges_g_ci(a, b, n_bootstrap=500, random_state=0)
+
+        assert np.isfinite(result.ci_lower)
+        assert np.isfinite(result.ci_upper)
+        assert result.ci_lower < result.ci_upper
+
+    def test_reproducible_with_same_random_state(self):
+        """Identical random_state must produce identical results."""
+        from ictonyx.bootstrap import bootstrap_hedges_g_ci
+
+        rng = np.random.default_rng(99)
+        a = rng.normal(0, 1, 20)
+        b = rng.normal(0.5, 1, 20)
+
+        r1 = bootstrap_hedges_g_ci(a, b, n_bootstrap=500, random_state=42)
+        r2 = bootstrap_hedges_g_ci(a, b, n_bootstrap=500, random_state=42)
+
+        assert r1.ci_lower == r2.ci_lower
+        assert r1.ci_upper == r2.ci_upper
+        assert r1.point_estimate == r2.point_estimate
+
+    def test_raises_on_insufficient_data(self):
+        """Must raise ValueError when either group has fewer than 2 observations."""
+        from ictonyx.bootstrap import bootstrap_hedges_g_ci
+
+        with pytest.raises(ValueError, match="at least 2"):
+            bootstrap_hedges_g_ci(np.array([0.8]), np.array([0.7, 0.75]))

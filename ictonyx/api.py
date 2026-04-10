@@ -42,6 +42,8 @@ def variability_study(
     use_process_isolation: bool = False,
     seed: Optional[int] = None,
     verbose: bool = True,
+    use_parallel: bool = False,
+    n_jobs: int = -1,
     **kwargs,
 ) -> VariabilityStudyResults:
     """Run a variability study: train a model N times and collect distributions.
@@ -90,6 +92,12 @@ def variability_study(
             statistically uncorrelated RNG streams. If ``None``, a random
             seed is generated and stored in the results.
         verbose: If ``False``, suppress all training output. Default ``True``.
+        use_parallel: If ``True``, fan training runs across multiple
+            processes using ``joblib``. Safe for sklearn models. Not
+            recommended for Keras/TF models. Mutually exclusive with
+            ``use_process_isolation``. Default ``False``.
+        n_jobs: Number of parallel workers. ``-1`` uses all CPUs.
+            Ignored when ``use_parallel=False``. Default ``-1``.
         **kwargs: Additional arguments forwarded to both the
             :class:`~ictonyx.config.ModelConfig` and the data handler
             (e.g. ``image_size``, ``test_split``, ``val_split``).
@@ -171,6 +179,8 @@ def variability_study(
         gpu_memory_limit=kwargs.get("gpu_memory_limit"),
         seed=seed,
         verbose=verbose,
+        use_parallel=use_parallel,
+        n_jobs=n_jobs,
     )
 
 
@@ -180,24 +190,47 @@ def compare_models(
     target_column: Optional[str] = None,
     runs: int = 20,
     epochs: int = 10,
-    metric: str = "val_accuracy",
+    metric: Optional[str] = None,
     seed: Optional[int] = None,
     verbose: bool = True,
-    paired: bool = False,
+    paired: bool = True,
     **kwargs,
 ) -> ModelComparisonResults:
     """Run variability studies on multiple models and compare them statistically.
 
     Each model is trained ``runs`` times on the same data, producing a
     distribution of the chosen metric. The distributions are then compared
-    using non-parametric statistical tests with automatic test selection:
+    using non-parametric statistical tests.
 
-    * **Two models**: Mann-Whitney U (or Wilcoxon signed-rank if paired).
-    * **Three or more**: Kruskal-Wallis with post-hoc pairwise comparisons
-      and multiple-comparison correction.
+    **Seeding and pairing**
 
-    Effect sizes (Cohen's d, rank-biserial) and bootstrap confidence
-    intervals are included automatically.
+    All models receive the same base ``seed``. Internally,
+    ``np.random.SeedSequence(seed).spawn(runs)`` generates per-run child seeds
+    that are identical across models: model A's run *i* and model B's run *i*
+    always share the same child seed. The runs are therefore **genuinely paired
+    at the RNG level**, regardless of framework.
+
+    For this reason ``paired`` defaults to ``True``:
+
+    * **Two models (default, paired):** Paired Wilcoxon signed-rank test on the
+      per-run differences. More powerful than the independent-samples alternative
+      because it removes run-to-run noise that is common to both models.
+    * **Two models (unpaired):** Kruskal-Wallis omnibus + Mann-Whitney U with
+      Holm correction. Valid but does not exploit the RNG pairing.
+    * **Three or more models:** Kruskal-Wallis omnibus + pairwise Mann-Whitney U
+      with Holm correction, regardless of ``paired``. (Paired multi-group
+      analysis requires a different design not yet implemented.)
+
+    **Seeding guarantee by framework**
+
+    * scikit-learn: exact (``random_state`` injected at wrapper construction).
+    * PyTorch: approximately deterministic under ``cudnn.deterministic=True``;
+      rare non-deterministic CUDA ops may introduce small deviations.
+    * TF/Keras + GPU: not fully controllable; pairing is approximate.
+
+    If exact pairing cannot be guaranteed (e.g. Keras with GPU), pass
+    ``paired=False`` to fall back to the independent-samples test, which
+    is always valid regardless of seeding.
 
     Args:
         models: List of models in any form accepted by
@@ -208,14 +241,18 @@ def compare_models(
         epochs: Training epochs per run. Default 10.
         metric: Metric name to compare across models. Must be a key in
             the training history (e.g. ``'val_accuracy'``, ``'val_loss'``,
-            ``'val_f1'``). Default ``'val_accuracy'``.
+            ``'val_f1'``). Default ``None`` (auto-resolved from results).
         seed: Base random seed for reproducibility. All models use the same
             seed so the comparison can be reproduced exactly. If ``None``,
-            a random seed is generated.
+            a random seed is generated and stored in the result.
         verbose: If ``False``, suppress all output. Default ``True``.
-        paired: If ``True``, use Wilcoxon signed-rank for two-model
-            comparison. Correct when both models share the same seeds.
-            Default ``False``.
+        paired: If ``True`` (default), use the paired Wilcoxon signed-rank
+            test for two-model comparisons, exploiting the fact that all
+            models receive identical per-run seeds by construction. Ignored
+            when comparing three or more models (KW + MW is used regardless).
+            Pass ``False`` to use the independent-samples test instead —
+            appropriate when seeds are not shared or when comparing against
+            externally produced results.
         **kwargs: Forwarded to each :func:`variability_study` call.
 
     Returns:
@@ -223,7 +260,7 @@ def compare_models(
         omnibus test, pairwise comparisons, raw metric distributions, and
         summary methods.
 
-    Example::
+    Example (two models, default paired analysis)::
 
         results = ix.compare_models(
             models=[RandomForestClassifier, GradientBoostingClassifier],
@@ -234,6 +271,25 @@ def compare_models(
             seed=42,
         )
         print(results.get_summary())
+
+    Example (three models, or unpaired two-model comparison)::
+
+        results = ix.compare_models(
+            models=[ModelA, ModelB, ModelC],
+            data=df,
+            target_column='target',
+            runs=20,
+            seed=42,
+        )
+        # Unpaired two-model:
+        results = ix.compare_models(
+            models=[ModelA, ModelB],
+            data=df,
+            target_column='target',
+            runs=20,
+            seed=42,
+            paired=False,   # fall back to KW + Mann-Whitney
+        )
     """
     # Apply verbose setting to global logger
     from .settings import set_verbose
@@ -254,20 +310,22 @@ def compare_models(
         seed = int(np.random.default_rng().integers(0, 2**31))
 
     handler = auto_resolve_handler(data, target_column=target_column, **kwargs)
-    results_store = {}
 
     settings.logger.info(f"--- Starting Comparison of {len(models)} Models (seed={seed}) ---")
+
+    # --- Loop 1: run all studies, store full VariabilityStudyResults objects ---
+    studies: Dict[str, VariabilityStudyResults] = {}
 
     for model_input in models:
         base_name = _get_model_name(model_input)
         name = base_name
         counter = 1
-        while name in results_store:
+        while name in studies:
             name = f"{base_name}_{counter}"
             counter += 1
         settings.logger.info(f"Evaluating: {name}")
 
-        study_results = variability_study(
+        study_result = variability_study(
             model=model_input,
             data=handler,
             runs=runs,
@@ -276,11 +334,32 @@ def compare_models(
             verbose=verbose,
             **kwargs,
         )
+        studies[name] = study_result
 
+    # --- Resolve metric now that all studies are complete ---
+    if metric is None:
+        if all(r.has_test_data for r in studies.values()):
+            metric = list(studies.values())[0].preferred_metric("accuracy")
+            settings.logger.info(f"Test data present for all models — comparing on '{metric}'.")
+        else:
+            if any(r.has_test_data for r in studies.values()):
+                warnings.warn(
+                    "Some models have test data and some do not. "
+                    "Falling back to 'val_accuracy'. Provide test data for all "
+                    "models to enable test-set comparison.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            metric = "val_accuracy"
+
+    # --- Loop 2: extract metric values now that metric is a concrete string ---
+    results_store = {}
+
+    for name, study_result in studies.items():
         try:
-            metric_values = study_results.get_metric_values(metric)
+            metric_values = study_result.get_metric_values(metric)
         except KeyError:
-            available = study_results.get_available_metrics()
+            available = study_result.get_available_metrics()
             hint = ""
             if metric == "val_accuracy" and "accuracy" in available:
                 hint = (
@@ -325,7 +404,7 @@ def compare_models(
                 f"'{names[1]}' has {len(series_b)} runs. "
                 "Use paired=False for independent comparison."
             )
-        paired_result = paired_wilcoxon_test(series_a, series_b)
+        paired_result = paired_wilcoxon_test(series_a, series_b, random_state=seed)
         return ModelComparisonResults(
             overall_test=paired_result,
             raw_data=results_store,
@@ -338,17 +417,20 @@ def compare_models(
             metric=metric,
         )
 
-    stat_results = _stat_compare(results_store)
+    if paired and len(results_store) > 2:
+        warnings.warn(
+            f"compare_models(): paired=True has no effect when comparing "
+            f"{len(results_store)} models. Paired analysis is only available "
+            "for exactly two models. Using Kruskal-Wallis + Mann-Whitney U "
+            "(independent-samples) for this comparison.",
+            UserWarning,
+            stacklevel=2,
+        )
 
-    return ModelComparisonResults(
-        overall_test=stat_results["overall_test"],
-        raw_data=results_store,
-        pairwise_comparisons=stat_results.get("pairwise_comparisons", {}),
-        significant_comparisons=stat_results.get("significant_comparisons", []),
-        correction_method=stat_results.get("correction_method", "holm"),
-        n_models=len(results_store),
-        metric=metric,
-    )
+    stat_results = _stat_compare(results_store, random_state=seed)
+    stat_results.metric = metric
+    stat_results.raw_data = results_store
+    return stat_results
 
 
 # --- Clean Helpers ---
@@ -386,8 +468,20 @@ def _get_model_builder(model: Any) -> Callable:
             if "random_state" in inspect.signature(_model_class).parameters:
                 try:
                     return _ensure_wrapper(_model_class(random_state=conf.get("run_seed")))
-                except TypeError:
-                    return _ensure_wrapper(_model_class())
+                except TypeError as e:
+                    if "random_state" in str(e) or "unexpected keyword" in str(e):
+                        warnings.warn(
+                            f"Could not pass random_state to {_model_class.__name__}. "
+                            f"Reproducibility not guaranteed. Original error: {e}",
+                            UserWarning,
+                            stacklevel=3,
+                        )
+                        return _ensure_wrapper(_model_class())
+                    raise ValueError(
+                        f"Failed to construct {_model_class.__name__}: {e}. "
+                        "Check that the class accepts the arguments in your ModelConfig."
+                    ) from e
+
             return _ensure_wrapper(_model_class())
 
         return _build_from_class
@@ -487,26 +581,21 @@ def _ensure_wrapper(obj: Any) -> BaseModelWrapper:
     if isinstance(obj, BaseModelWrapper):
         return obj
 
-        # Framework-specific checks MUST come before the generic duck-typing check.
-        # Keras models expose .fit() and .predict(), so they would be mis-wrapped as
-        # ScikitLearnModelWrapper if the duck-typing branch ran first.
-        # Keras / TensorFlow detection via string inspection — avoids a hard TF import.
-    if "keras" in str(type(obj)).lower() or "tensorflow" in str(type(obj)).lower():
-        if not TENSORFLOW_AVAILABLE:
-            raise ImportError(
-                "TensorFlow is required to auto-wrap Keras models. "
-                "Install with: pip install tensorflow"
-            )
-        from .core import KerasModelWrapper
+    # Framework-specific checks MUST come before generic duck-typing.
+    # Keras models expose .fit() and .predict() and would be mis-wrapped
+    # as ScikitLearnModelWrapper if the duck-typing branch ran first.
+    if TENSORFLOW_AVAILABLE:
+        import tensorflow as tf
 
-        return KerasModelWrapper(obj)
+        if isinstance(obj, tf.keras.Model):
+            from .core import KerasModelWrapper
 
-        # PyTorch nn.Module detection via isinstance — reliable, no string heuristics.
+            return KerasModelWrapper(obj)
+
     if PYTORCH_AVAILABLE and isinstance(obj, _torch_nn.Module):
         from .core import PyTorchModelWrapper
 
         return PyTorchModelWrapper(obj)
-    # Generic duck-typing — only reached if the object is not Keras or PyTorch.
 
     if hasattr(obj, "fit") and hasattr(obj, "predict"):
         if not SKLEARN_AVAILABLE:
@@ -538,3 +627,52 @@ def _get_model_name(obj: Any) -> str:
     if hasattr(obj, "__class__"):
         return obj.__class__.__name__
     return str(obj)
+
+
+def compare_results(
+    results_a: "VariabilityStudyResults",
+    results_b: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+) -> "ModelComparisonResults":
+    """Compare two pre-computed VariabilityStudyResults without re-running training.
+
+    Extracts metric values from each results object and runs a Mann-Whitney
+    U test directly. Use this when you already have results from
+    :func:`variability_study` and want to compare them statistically.
+
+    Args:
+        results_a: First model's results.
+        results_b: Second model's results.
+        metric: Metric to compare. If ``None``, resolves via
+            ``results_a.preferred_metric()``. Both results objects must
+            contain this metric.
+
+    Returns:
+        :class:`~ictonyx.analysis.ModelComparisonResults` with the
+        Mann-Whitney U test result.
+
+    Raises:
+        KeyError: If the resolved metric is not present in both results.
+    """
+    from .analysis import mann_whitney_test
+
+    resolved = metric if metric is not None else results_a.preferred_metric("accuracy")
+
+    if resolved.startswith("test_"):
+        values_a = pd.Series(results_a.get_test_metric_values(resolved))
+        values_b = pd.Series(results_b.get_test_metric_values(resolved))
+    else:
+        values_a = pd.Series(results_a.get_metric_values(resolved))
+        values_b = pd.Series(results_b.get_metric_values(resolved))
+
+    mw_result = mann_whitney_test(values_a, values_b)
+
+    return ModelComparisonResults(
+        overall_test=mw_result,
+        raw_data={"results_a": values_a, "results_b": values_b},
+        pairwise_comparisons={"results_a_vs_results_b": mw_result},
+        significant_comparisons=(["results_a_vs_results_b"] if mw_result.is_significant() else []),
+        correction_method="none",
+        n_models=2,
+        metric=resolved,
+    )

@@ -136,7 +136,7 @@ On a 178-sample dataset, the same architecture achieves anywhere from 72% to 100
 ix.plot_variability_summary(results=results, metric='accuracy')
 ```
 
-![Variability summary for keras CNN across 20 runs](images/variability_study.png)
+![Variability summary for keras CNN across 20 runs](images/variability_summary.png)
 
 ---
 

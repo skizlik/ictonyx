@@ -9,10 +9,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 - Sphinx documentation hosted on ReadTheDocs
-- Parallel execution for non-GPU models via `joblib`
 - `VariabilityStudyResults.bootstrap_ci()` convenience method
 - `VariabilityStudyResults.report()` for self-contained summaries
 - Paired/blocked experimental designs for model comparison
+
+---
+
+## [0.4.0] — 2026-04-10
+
+### Fixed — Statistical correctness
+
+- `_hedges_g()`: called `_interpret_variance_explained()` instead of
+  `_interpret_cohens_d()` when labelling the effect size magnitude.
+  g = 0.20 was labelled "large" (eta-squared scale) instead of "small"
+  (Cohen's d scale). Numeric value was correct; verbal interpretation
+  was wrong for every call site.
+
+- `compare_two_models()` Welch path: the bootstrap confidence interval
+  was computed via `bootstrap_effect_size_ci()`, which uses the Cohen's d
+  (unpooled variance) formula internally. The point estimate used Hedges'
+  g (bias-corrected, pooled). CI and point estimate were for different
+  estimators of the same quantity. Fixed by adding `bootstrap_hedges_g_ci()`
+  to `bootstrap.py`, which applies the Hedges' J correction factor
+  `1 - 3/(4·df - 1)` inside each bootstrap resample. The Welch branch
+  in `compare_two_models()` now calls this function.
+
+- `paired_wilcoxon_test()`: effect size r was computed as
+  `norm.ppf(p/2) / sqrt(n)` — deriving Z from the p-value via the
+  normal quantile. This is invalid when scipy uses exact distribution
+  tables at small n, which is the common case. Replaced with the
+  W-statistic asymptotic formula (`z = (W - E[W]) / sqrt(Var[W])`,
+  `r = |z| / sqrt(n)`), consistent with `wilcoxon_signed_rank_test()`.
+
+### Fixed — API
+
+- `VariabilityStudyResults.summarize()`: removed a spurious t-interval
+  95% CI on the mean that appeared below each metric's SD. The interval
+  was computed under an unvalidated normality assumption. Removing it
+  avoids misleading users who would reasonably interpret it as a
+  distribution interval rather than a CI on the population mean estimate.
+  SD, Min, and Max remain.
+
+- `compare_models()`: now defaults to `paired=True` for two-model
+  comparisons. Both models receive identical per-run seeds by construction
+  via `SeedSequence.spawn()`, making runs genuinely paired at the RNG
+  level. The prior `paired=False` default discarded this pairing
+  information and used a less powerful unpaired test. **Behavioural
+  change:** two-model comparisons that previously used Mann-Whitney U
+  will now use paired Wilcoxon signed-rank. Pass `paired=False`
+  explicitly to restore prior behaviour.
+
+### Fixed — Packaging
+
+- `optuna` added to `[tool.poetry.dependencies]` as an optional
+  dependency under the `tuning` extra. Previously declared in
+  `[tool.poetry.extras]` only, causing `pip install ictonyx[tuning]`
+  to install without optuna and fail at import time.
+
+### Internal
+
+- Regression tests added for all three statistical fixes in
+  `test_analysis.py` and `test_bootstrap.py`. The BUG-2 test verifies
+  that the Welch-path CI and point estimate are for the same estimator.
+  The BUG-3 test verifies that effect size r is consistent between
+  `paired_wilcoxon_test()` and `wilcoxon_signed_rank_test()` on the
+  same paired data.
 
 ---
 

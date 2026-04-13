@@ -517,7 +517,7 @@ class ExperimentRunner:
 
     def run_study(
         self,
-        num_runs: int = 5,
+        num_runs: int = 20,
         epochs_per_run: Optional[int] = None,
         stop_on_failure_rate: float = 0.8,
         checkpoint_dir: Optional[str] = None,
@@ -535,7 +535,7 @@ class ExperimentRunner:
         metric from the latest completed run.
 
         Args:
-            num_runs: Number of independent training runs. Default 5.
+            num_runs: Number of independent training runs. Default 20.
             epochs_per_run: Epochs per run. If ``None``, uses the ``epochs``
                 value from :attr:`model_config`. Default ``None``.
             stop_on_failure_rate: If the fraction of failed runs exceeds this
@@ -1567,7 +1567,7 @@ def run_variability_study(
     model_builder: Callable[[ModelConfig], BaseModelWrapper],
     data_handler: DataHandler,
     model_config: ModelConfig,
-    num_runs: int = 5,
+    num_runs: int = 20,
     epochs_per_run: Optional[int] = None,
     tracker: Optional[BaseLogger] = None,
     use_process_isolation: bool = False,
@@ -1587,7 +1587,7 @@ def run_variability_study(
         model_builder: Callable ``f(ModelConfig) -> BaseModelWrapper``.
         data_handler: A :class:`~ictonyx.data.DataHandler` instance.
         model_config: A :class:`~ictonyx.config.ModelConfig` instance.
-        num_runs: Number of training runs. Default 5.
+        num_runs: Number of training runs. Default 20.
         epochs_per_run: Epochs per run. Default ``None`` (uses config).
         tracker: Optional experiment logger. Default ``None``.
         use_process_isolation: Run each iteration in a subprocess.
@@ -1623,7 +1623,7 @@ def run_grid_study(
     data_handler: "DataHandler",
     base_config: "ModelConfig",
     param_grid: Dict[str, List[Any]],
-    num_runs: int = 10,
+    num_runs: int = 20,
     metric: str = "val_accuracy",
     use_process_isolation: bool = True,
     dry_run: bool = False,
@@ -1653,7 +1653,7 @@ def run_grid_study(
 
                                Generates the full Cartesian product:
                                4 configurations × num_runs each.
-        num_runs:              Number of training runs per configuration.
+        num_runs:              Number of training runs per configuration. Default 20.
         metric:                Primary metric for summary statistics.
         use_process_isolation: If True, each run executes in a subprocess.
                                Strongly recommended to prevent GPU memory
@@ -1681,7 +1681,7 @@ def run_grid_study(
             data_handler=data_handler,
             base_config=config,
             param_grid={'learning_rate': [0.001, 0.0001, 0.00001]},
-            num_runs=12,
+            num_runs=20,
             use_process_isolation=True
         )
         print(results.summarize())
@@ -1696,6 +1696,15 @@ def run_grid_study(
                 f"param_grid['{param_name}'] is empty. "
                 f"Each parameter must have at least one value."
             )
+
+    if num_runs < 20:
+        warnings.warn(
+            f"run_grid_study(): num_runs={num_runs} may be insufficient for "
+            "reliable statistical inference across configurations. "
+            "Consider num_runs >= 20 for publication-quality results.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Build Cartesian product of all parameter combinations
     param_names = list(param_grid.keys())

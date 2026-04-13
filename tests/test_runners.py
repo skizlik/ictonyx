@@ -1055,6 +1055,48 @@ class TestGridStudyResults:
         assert "Grid Study Results" in s
         assert "3" in s  # n_configurations
 
+    def test_run_grid_study_warns_below_20_runs(self):
+        from sklearn.linear_model import LogisticRegression
+
+        from ictonyx.config import ModelConfig
+        from ictonyx.core import ScikitLearnModelWrapper
+        from ictonyx.data import ArraysDataHandler
+
+        X = np.random.rand(60, 4).astype(np.float32)
+        y = np.random.randint(0, 2, 60)
+        with pytest.warns(UserWarning, match="num_runs=5"):
+            run_grid_study(
+                model_builder=lambda cfg: ScikitLearnModelWrapper(LogisticRegression()),
+                data_handler=ArraysDataHandler(X, y),
+                base_config=ModelConfig({}),
+                param_grid={"C": [1.0]},
+                num_runs=5,
+                verbose=False,
+            )
+
+    def test_run_grid_study_no_warn_at_20_runs(self):
+        import warnings
+
+        from sklearn.linear_model import LogisticRegression
+
+        from ictonyx.config import ModelConfig
+        from ictonyx.core import ScikitLearnModelWrapper
+        from ictonyx.data import ArraysDataHandler
+
+        X = np.random.rand(60, 4).astype(np.float32)
+        y = np.random.randint(0, 2, 60)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            run_grid_study(
+                model_builder=lambda cfg: ScikitLearnModelWrapper(LogisticRegression()),
+                data_handler=ArraysDataHandler(X, y),
+                base_config=ModelConfig({}),
+                param_grid={"C": [1.0]},
+                num_runs=20,
+                dry_run=True,
+                verbose=False,
+            )
+
 
 class TestRunGridStudy:
     """Tests for run_grid_study function."""

@@ -6,6 +6,7 @@ This module provides a interface for running variability studies
 and model comparisons. It abstracts away the complexity of DataHandlers,
 ModelConfigs, and ExperimentRunners into single function calls.
 """
+import dataclasses
 import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -408,7 +409,7 @@ def compare_models(
         return ModelComparisonResults(
             overall_test=paired_result,
             raw_data=results_store,
-            pairwise_comparisons={f"{names[0]}_vs_{names[1]}": paired_result},
+            pairwise_comparisons={f"{names[0]}_vs_{names[1]}": dataclasses.replace(paired_result)},
             significant_comparisons=(
                 [f"{names[0]}_vs_{names[1]}"] if paired_result.is_significant() else []
             ),

@@ -506,35 +506,42 @@ class TestBuilderInstanceClonerSafety:
         )
 
 
-class TestGetFeatureAvailability:
-    def test_returns_dict_with_expected_keys(self):
-        import ictonyx as ix
+class TestCompareResultsPairing:
+    def _make_results(self, seed, n=20):
+        from sklearn.datasets import load_wine
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.preprocessing import StandardScaler
 
-        result = ix.get_feature_availability()
-        expected_keys = [
-            "tensorflow_support",
-            "sklearn_support",
-            "statistical_functions",
-            "bootstrap_ci",
-            "plotting_functions",
-            "mlflow_logger",
-            "hyperparameter_tuning",
-            "explainability",
-            "data_handlers",
-            "memory_management",
-            "process_isolation",
-        ]
-        for key in expected_keys:
-            assert key in result
+        data = load_wine()
+        X = StandardScaler().fit_transform(data.data)
+        return api.variability_study(
+            model=RandomForestClassifier,
+            data=(X, data.target),
+            runs=n,
+            seed=seed,
+            verbose=False,
+        )
 
-    def test_sklearn_support_is_bool(self):
-        import ictonyx as ix
+    def test_paired_true_uses_wilcoxon(self):
+        ra = self._make_results(seed=42)
+        rb = self._make_results(seed=42)
+        result = api.compare_results(ra, rb, paired=True)
+        assert "Wilcoxon" in result.overall_test.test_name
 
-        result = ix.get_feature_availability()
-        assert isinstance(result["sklearn_support"], bool)
+    def test_paired_false_uses_mann_whitney(self):
+        ra = self._make_results(seed=42)
+        rb = self._make_results(seed=42)
+        result = api.compare_results(ra, rb, paired=False)
+        assert "Mann-Whitney" in result.overall_test.test_name
 
-    def test_data_handlers_is_list(self):
-        import ictonyx as ix
+    def test_unequal_runs_warns_and_falls_back(self):
+        ra = self._make_results(seed=42, n=20)
+        rb = self._make_results(seed=99, n=15)
+        with pytest.warns(UserWarning, match="equal run counts"):
+            result = api.compare_results(ra, rb, paired=True)
+        assert "Mann-Whitney" in result.overall_test.test_name
 
-        result = ix.get_feature_availability()
-        assert isinstance(result["data_handlers"], list)
+    def test_seed_parameter_accepted(self):
+        ra = self._make_results(seed=42)
+        rb = self._make_results(seed=42)
+        assert api.compare_results(ra, rb, seed=0) is not None

@@ -629,32 +629,43 @@ def _get_model_name(obj: Any) -> str:
     return str(obj)
 
 
+# AFTER (complete replacement)
 def compare_results(
     results_a: "VariabilityStudyResults",
     results_b: "VariabilityStudyResults",
     metric: Optional[str] = None,
+    paired: bool = True,
+    seed: Optional[int] = None,
 ) -> "ModelComparisonResults":
     """Compare two pre-computed VariabilityStudyResults without re-running training.
 
-    Extracts metric values from each results object and runs a Mann-Whitney
-    U test directly. Use this when you already have results from
-    :func:`variability_study` and want to compare them statistically.
+    Extracts metric values from each results object and compares them
+    statistically. Use this when you already have results from
+    :func:`variability_study` and want to compare them without retraining.
+
+    **Pairing:** If both results were produced with the same ``seed``, the runs
+    are paired by construction. Pass ``paired=True`` (default) to exploit this
+    with the more powerful paired Wilcoxon signed-rank test. Pass ``paired=False``
+    to use the independent-samples Mann-Whitney U test instead.
 
     Args:
         results_a: First model's results.
         results_b: Second model's results.
         metric: Metric to compare. If ``None``, resolves via
-            ``results_a.preferred_metric()``. Both results objects must
-            contain this metric.
+            ``results_a.preferred_metric()``.
+        paired: If ``True`` (default) and run counts are equal, use the
+            paired Wilcoxon signed-rank test. Falls back to Mann-Whitney U
+            with a ``UserWarning`` when run counts differ.
+        seed: Random state for bootstrap CI computation. Defaults to ``None``
+            (non-deterministic CIs).
 
     Returns:
-        :class:`~ictonyx.analysis.ModelComparisonResults` with the
-        Mann-Whitney U test result.
+        :class:`~ictonyx.analysis.ModelComparisonResults`.
 
     Raises:
         KeyError: If the resolved metric is not present in both results.
     """
-    from .analysis import mann_whitney_test
+    from .analysis import mann_whitney_test, paired_wilcoxon_test
 
     resolved = metric if metric is not None else results_a.preferred_metric("accuracy")
 
@@ -665,13 +676,29 @@ def compare_results(
         values_a = pd.Series(results_a.get_metric_values(resolved))
         values_b = pd.Series(results_b.get_metric_values(resolved))
 
-    mw_result = mann_whitney_test(values_a, values_b)
+    pair_key = "results_a_vs_results_b"
+
+    if paired:
+        if len(values_a) == len(values_b):
+            test_result = paired_wilcoxon_test(values_a, values_b, random_state=seed)
+        else:
+            warnings.warn(
+                f"compare_results(paired=True) requires equal run counts. "
+                f"results_a has {len(values_a)} runs, results_b has {len(values_b)}. "
+                "Falling back to unpaired Mann-Whitney U test. "
+                "Pass paired=False to suppress this warning.",
+                UserWarning,
+                stacklevel=2,
+            )
+            test_result = mann_whitney_test(values_a, values_b, random_state=seed)
+    else:
+        test_result = mann_whitney_test(values_a, values_b, random_state=seed)
 
     return ModelComparisonResults(
-        overall_test=mw_result,
+        overall_test=test_result,
         raw_data={"results_a": values_a, "results_b": values_b},
-        pairwise_comparisons={"results_a_vs_results_b": mw_result},
-        significant_comparisons=(["results_a_vs_results_b"] if mw_result.is_significant() else []),
+        pairwise_comparisons={pair_key: test_result},
+        significant_comparisons=([pair_key] if test_result.is_significant() else []),
         correction_method="none",
         n_models=2,
         metric=resolved,

@@ -545,3 +545,22 @@ class TestCompareResultsPairing:
         ra = self._make_results(seed=42)
         rb = self._make_results(seed=42)
         assert api.compare_results(ra, rb, seed=0) is not None
+
+
+def test_compare_models_model_kwargs_do_not_reach_data_handler():
+    """Model hyperparameters must not be forwarded to the DataHandler."""
+    from sklearn.datasets import load_wine
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.preprocessing import StandardScaler
+
+    data = load_wine()
+    X = StandardScaler().fit_transform(data.data)
+    # Before the fix this raised TypeError because 'C' reached ArraysDataHandler.
+    result = api.compare_models(
+        models=[LogisticRegression(C=1.0), LogisticRegression(C=10.0)],
+        data=(X, data.target),
+        runs=5,
+        seed=42,
+        verbose=False,
+    )
+    assert result is not None

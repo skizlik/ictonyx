@@ -310,7 +310,12 @@ def compare_models(
     if seed is None:
         seed = int(np.random.default_rng().integers(0, 2**31))
 
-    handler = auto_resolve_handler(data, target_column=target_column, **kwargs)
+    # Apply the same infra/model kwargs separation used in variability_study().
+    # Without this split, model hyperparameters like learning_rate reach
+    # auto_resolve_handler() and raise TypeError.
+    _INFRA_KWARGS = {"image_size", "test_split", "val_split", "gpu_memory_limit", "color_mode"}
+    infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
+    handler = auto_resolve_handler(data, target_column=target_column, **infra_kwargs)
 
     settings.logger.info(f"--- Starting Comparison of {len(models)} Models (seed={seed}) ---")
 

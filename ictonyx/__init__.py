@@ -8,9 +8,9 @@ Ictonyx provides tools for conducting systematic variability studies, statistica
 of model performance, experiment tracking, and comprehensive ML workflow management.
 """
 
-__version__ = "0.4.0"
-
 import os
+
+from ._version import __version__
 
 # Core imports (always available)
 from .config import ModelConfig

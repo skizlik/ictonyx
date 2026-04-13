@@ -2083,6 +2083,40 @@ class TestCheckpointResume:
         results = runner.run_study(num_runs=3, checkpoint_dir=str(tmp_path))
         assert results.n_runs == 3
 
+    def test_checkpoint_is_atomic(self, tmp_path):
+        """No .tmp sentinel file should remain after a clean write."""
+        runner = self._make_runner()
+        runner.run_study(num_runs=2, checkpoint_dir=str(tmp_path))
+        assert (tmp_path / "checkpoint.pkl").exists()
+        assert not (tmp_path / "checkpoint.pkl.tmp").exists()
+
+    def test_checkpoint_schema_version_present(self, tmp_path):
+        import pickle
+
+        from ictonyx import __version__
+
+        runner = self._make_runner()
+        runner.run_study(num_runs=2, checkpoint_dir=str(tmp_path))
+        with open(tmp_path / "checkpoint.pkl", "rb") as f:
+            data = pickle.load(f)
+        assert data.get("_schema_version") == __version__
+
+    def test_checkpoint_schema_mismatch_warns(self, tmp_path):
+        import pickle
+
+        bad_data = {
+            "_schema_version": "0.0.0",  # deliberately wrong, not a real version
+            "all_runs_metrics": [],
+            "final_metrics": {},
+            "final_test_metrics": [],
+            "seed": 42,
+        }
+        with open(tmp_path / "checkpoint.pkl", "wb") as f:
+            pickle.dump(bad_data, f)
+        runner = self._make_runner()
+        with pytest.warns(UserWarning, match="schema version"):
+            runner.run_study(num_runs=2, checkpoint_dir=str(tmp_path))
+
 
 class TestParallelExecution:
     """Verify that use_parallel=True produces exactly num_runs results

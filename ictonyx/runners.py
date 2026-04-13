@@ -46,6 +46,9 @@ except ImportError:
     tqdm = None
     HAS_TQDM = False
 
+# version for _schema validation
+from ._version import __version__ as _ICTONYX_VERSION
+
 
 class ExperimentRunner:
     """Core engine for running variability studies with memory management.
@@ -593,6 +596,16 @@ class ExperimentRunner:
                 try:
                     with open(checkpoint_path, "rb") as _f:
                         _prior_data = _pickle.load(_f)
+                    _schema = _prior_data.get("_schema_version")
+                    if _schema != _ICTONYX_VERSION:
+                        warnings.warn(
+                            f"Checkpoint schema version '{_schema}' does not match "
+                            f"current '{_ICTONYX_VERSION}'. The checkpoint was written by a "
+                            "different version of Ictonyx and may be incompatible. "
+                            "Delete the checkpoint directory to start fresh.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
                     self.all_runs_metrics = list(_prior_data["all_runs_metrics"])
                     self.final_metrics = dict(_prior_data["final_metrics"])
                     self.final_test_metrics = list(_prior_data["final_test_metrics"])
@@ -722,13 +735,16 @@ class ExperimentRunner:
                             os.makedirs(checkpoint_dir, exist_ok=True)
                             _checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
                             _checkpoint_data = {
+                                "_schema_version": _ICTONYX_VERSION,
                                 "all_runs_metrics": list(self.all_runs_metrics),
                                 "final_metrics": dict(self.final_metrics),
                                 "final_test_metrics": list(self.final_test_metrics),
                                 "seed": self.seed,
                             }
-                            with open(_checkpoint_path, "wb") as _f:
+                            _tmp_path = _checkpoint_path + ".tmp"
+                            with open(_tmp_path, "wb") as _f:
                                 _pickle.dump(_checkpoint_data, _f)
+                            os.replace(_tmp_path, _checkpoint_path)
 
                     # Log memory info periodically
                     if (i + 1) % 10 == 0 and self.verbose and not self._progress_bar:

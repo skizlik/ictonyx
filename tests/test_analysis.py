@@ -1048,85 +1048,29 @@ class TestCalculateAveragedAutocorr:
 
 
 class TestCheckConvergence:
+    def test_flat_series_converges(self):
+        assert check_convergence(pd.Series([0.5] * 25)) is True
 
-    def test_converged_series(self):
-        # Constant tail = converged
-        data = list(range(100)) + [100.0] * 20
-        assert check_convergence(pd.Series(data), window_size=10)
-
-    def test_diverging_series(self):
-        # Monotonically increasing = likely not converged (or barely)
-        data = pd.Series(range(20))
-        result = check_convergence(data, window_size=5)
-        # Just verify it runs and returns a bool-like value
-        assert result in (True, False)
-
-    def test_too_short(self):
-        assert not check_convergence(pd.Series([1, 2]), window_size=5)
-
-    def test_convergence_plateau_with_high_autocorr_returns_true(self):
-        """A series that starts high and plateaus has tiny recent variance
-        relative to overall variance. The variance criterion must fire even
-        when the plateau values are locally autocorrelated (autocorr ≈ -1).
-        OR semantics: variance criterion alone is sufficient for True."""
-        # Starts at 3.0, descends to a plateau at ~1.0 — high overall variance,
-        # tiny recent variance. The alternating plateau gives autocorr ≈ -1,
-        # so low_autocorr is False. OR means low_recent_variance saves it.
-        descending_to_plateau = pd.Series(
-            [3.0, 2.5, 2.0, 1.5, 1.0, 1.001, 0.999, 1.001, 0.999, 1.001]
+    def test_converging_series_converges(self):
+        rng = np.random.default_rng(0)
+        data = pd.Series(
+            [1.0 - 0.9 * (1 - np.exp(-i / 5)) + rng.normal(0, 0.001) for i in range(40)]
         )
-        result = check_convergence(descending_to_plateau, window_size=5, autocorr_threshold=0.1)
-        assert result, (
-            "A series that descends to a flat plateau must be detected as converged "
-            "via the variance criterion. This fails if AND semantics were restored "
-            "or if the variance threshold is miscalculated."
-        )
+        assert check_convergence(data) is True
 
-    def test_convergence_oscillating_series_returns_false(self):
-        """An oscillating series satisfies neither criterion."""
-        oscillating = pd.Series([1.0, 2.0, 1.0, 2.0, 1.0, 2.0, 1.0, 2.0])
-        result = check_convergence(oscillating, window_size=5)
-        assert result is False
+    def test_still_decreasing_does_not_converge(self):
+        data = pd.Series([1.0 - i * 0.05 for i in range(30)])
+        assert check_convergence(data) is False
 
-    def test_convergence_low_autocorr_high_variance_returns_true(self):
-        """Low autocorr (criterion met) with high variance (criterion not met).
-        OR semantics: True. AND semantics: False."""
-        rng = np.random.default_rng(42)
-        # Random noise: low autocorr, but not a plateau
-        noisy = pd.Series(rng.normal(0, 1, 10))
-        result = check_convergence(noisy, window_size=5, autocorr_threshold=0.9)
-        # With very permissive autocorr threshold, low_autocorr=True
-        # Result depends on random data, so just verify it doesn't crash
-        assert result, (
-            "With autocorr_threshold=0.9, low_autocorr should be True for random noise, "
-            "so OR semantics must return a truthy value."
-        )
+    def test_too_short_returns_false(self):
+        assert check_convergence(pd.Series([0.5] * 15), window_size=10) is False
 
-    def test_convergence_both_criteria_met(self):
-        """Both criteria met: AND and OR give same result (True)."""
-        # A series that has clearly converged to a stable low value
-        converged = pd.Series([0.5, 0.3, 0.2, 0.15, 0.12, 0.10, 0.09, 0.10, 0.10])
-        result = check_convergence(converged, window_size=4)
-        assert result is True
+    def test_too_short_by_one_returns_false(self):
+        """One value fewer than window_size * 2 must return False."""
+        assert not check_convergence(pd.Series([0.5] * 19), window_size=10)
 
-    def test_convergence_too_short_returns_false(self):
-        """Series shorter than window_size + 1 returns False."""
-        short = pd.Series([0.1, 0.2, 0.1])
-        result = check_convergence(short, window_size=5)
-        assert result is False
-
-    def test_assess_training_stability_convergence_rate_improved(self):
-        """assess_training_stability convergence_rate must reflect plateau runs.
-        Before fix: plateau runs reported as not converged. After: correctly True."""
-        # Create 3 perfectly converged (plateau) histories
-        plateau_hist = pd.Series([1.0, 0.8, 0.5, 0.3, 0.2, 0.15, 0.12, 0.10, 0.10, 0.10])
-        histories = [plateau_hist.copy() for _ in range(3)]
-        result = assess_training_stability(histories, window_size=5)
-        assert result["convergence_rate"] > 0, (
-            f"Expected convergence_rate > 0 for plateau runs, "
-            f"got {result['convergence_rate']}. "
-            "AND semantics may have been restored in check_convergence."
-        )
+    def test_constant_series_converges(self):
+        assert check_convergence(pd.Series([0.3] * 30)) is True
 
 
 class TestAssessTrainingStability:

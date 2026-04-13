@@ -27,6 +27,7 @@ from scipy.stats import (
     jarque_bera,
     kruskal,
     levene,
+    linregress,
     mannwhitneyu,
     normaltest,
     shapiro,
@@ -1831,61 +1832,50 @@ def calculate_averaged_autocorr(
     return lags, mean_autocorr.tolist(), std_autocorr.tolist()
 
 
+# AFTER (complete replacement)
 def check_convergence(
     data: Union[pd.Series, List[float]],
-    window_size: int = 5,
-    autocorr_threshold: float = 0.1,
-    variance_ratio_threshold: float = 0.1,
+    window_size: int = 10,
+    slope_threshold: float = 1e-4,
 ) -> bool:
-    """Check whether a metric series has converged.
+    """Check whether a metric series has converged using a linear slope test.
 
-    Uses two criteria (either sufficient): low autocorrelation in a
-    recent window, or low recent variance relative to overall variance.
+    Fits a linear regression to the most recent ``window_size`` values.
+    Convergence is declared when the absolute slope is below
+    ``slope_threshold`` (flat by magnitude) OR when the slope is not
+    statistically significant at p > 0.10 (flat by evidence) — meaning
+    the recent trend is indistinguishable from noise.
+
+    This replaces the previous OR-of-autocorrelation-and-variance-ratio
+    heuristic, which fired on virtually every monotonically decreasing
+    loss curve regardless of whether training had truly plateaued.
 
     Args:
-        data: A ``pd.Series`` or list of metric values.
-        window_size: Number of recent values to examine. Default 5.
-        autocorr_threshold: Maximum acceptable autocorrelation at lag 1
-            for convergence. Default 0.1.
-        variance_ratio_threshold: The recent-window variance must be below
-            this fraction of the full-series variance to declare convergence
-            by the variance criterion. Default 0.1. This is an empirically
-            motivated heuristic with no universally optimal value.
-    Returns:
-        ``True`` if either convergence criterion is met.
-    """
+        data: A ``pd.Series`` or list of metric values ordered by epoch.
+        window_size: Number of recent values to examine. Default 10.
+        slope_threshold: Maximum absolute slope to declare convergence
+            by the magnitude criterion. Default ``1e-4``.
 
+    Returns:
+        ``True`` if the series appears converged by either criterion.
+        ``False`` if the series is too short (``len(data) < window_size * 2``)
+        or if regression fails.
+    """
     if not isinstance(data, pd.Series):
         data = pd.Series(data)
 
-    if len(data) < window_size + 1:
+    if len(data) < window_size * 2:
         return False
 
-    # Get recent window
-    recent_data = data.iloc[-window_size:]
+    recent = data.iloc[-window_size:]
+    x = np.arange(len(recent), dtype=float)
 
-    # Primary criterion: low autocorrelation in recent window
-    autocorr = calculate_autocorr(recent_data, lag=1)
+    try:
+        slope, _, _, p_value, _ = linregress(x, recent.values.astype(float))
+    except Exception:
+        return False
 
-    # Secondary criterion: low recent variance relative to overall
-    if len(data) > window_size:
-        recent_variance = recent_data.var()
-        overall_variance = data.var()
-        low_recent_variance = (
-            recent_variance < variance_ratio_threshold * overall_variance
-            if overall_variance > 0
-            else True
-        )
-    else:
-        low_recent_variance = False
-
-    # If autocorrelation cannot be computed (e.g. constant series),
-    # fall back to variance criterion alone
-    if autocorr is None or np.isnan(autocorr):
-        return bool(low_recent_variance)
-
-    low_autocorr = abs(autocorr) < autocorr_threshold
-    return bool(low_autocorr or low_recent_variance)
+    return bool(abs(slope) < slope_threshold or p_value > 0.10)
 
 
 # CONFUSION MATRIX FUNCTION (enhanced)

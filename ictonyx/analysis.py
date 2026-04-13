@@ -502,7 +502,11 @@ def _interpret_cohens_d(abs_d: float) -> str:
         return "large"
 
 
-def rank_biserial_correlation(group1: pd.Series, group2: pd.Series) -> Tuple[float, str]:
+def rank_biserial_correlation(
+    group1: pd.Series,
+    group2: pd.Series,
+    U: Optional[float] = None,
+) -> Tuple[float, str]:
     """Calculate rank-biserial correlation as the effect size for the Mann-Whitney U test.
 
     Algebraically equivalent to Cliff's delta (Cliff 1993):
@@ -523,8 +527,9 @@ def rank_biserial_correlation(group1: pd.Series, group2: pd.Series) -> Tuple[flo
     n1, n2 = len(group1), len(group2)
 
     try:
-        U, _ = mannwhitneyu(group1, group2, alternative="two-sided")
-        r = (2 * U) / (n1 * n2) - 1
+        if U is None:
+            U, _ = mannwhitneyu(group1, group2, alternative="two-sided")
+        r = (2 * float(U)) / (n1 * n2) - 1
     except Exception:
         warnings.warn(
             "rank_biserial_correlation: could not compute effect size "
@@ -769,7 +774,7 @@ def mann_whitney_test(
         result.p_value = float(p_value)
 
         # Effect size
-        r, r_interpretation = rank_biserial_correlation(clean1, clean2)
+        r, r_interpretation = rank_biserial_correlation(clean1, clean2, U=statistic)
         result.effect_size = r
         result.effect_size_name = "rank-biserial correlation"
         result.effect_size_interpretation = r_interpretation
@@ -1114,6 +1119,8 @@ def kruskal_wallis_test(
         k = len(clean_groups)
 
         if N > k:
+            # Epsilon-squared: analogous to eta-squared for Kruskal-Wallis.
+            # Ranges from 0 to 1; interpreted on the same scale as eta-squared.
             epsilon_sq = (statistic - k + 1) / (N - k)
             epsilon_sq = max(0.0, min(1.0, epsilon_sq))  # Ensure non-negative
         else:
@@ -1794,12 +1801,12 @@ def calculate_autocorr(data: Union[pd.Series, List[float]], lag: int = 1) -> Opt
 
 
 def calculate_averaged_autocorr(
-    histories: List[pd.Series], max_lag: int = 20
+    series_list: List[pd.Series], max_lag: int = 20
 ) -> Tuple[List[int], List[float], List[float]]:
     """Compute mean and std of autocorrelation across multiple run histories.
 
     Args:
-        histories: List of ``pd.Series``, each representing a training
+        series_list: List of ``pd.Series``, each representing a training
             history (e.g. per-epoch loss values from one run).
         max_lag: Maximum lag to compute. Default 20.
 
@@ -1808,14 +1815,14 @@ def calculate_averaged_autocorr(
         of equal length.
 
     Raises:
-        ValueError: If ``histories`` is empty or none are long enough for
+        ValueError: If ``series_list`` is empty or none are long enough for
             the requested ``max_lag``.
     """
-    if not histories:
+    if not series_list:
         raise ValueError("The list of histories cannot be empty.")
 
     # Filter out histories that are too short
-    valid_histories = [h for h in histories if len(h) > max_lag]
+    valid_histories = [h for h in series_list if len(h) > max_lag]
 
     if not valid_histories:
         raise ValueError(f"No histories long enough for max_lag={max_lag}")
@@ -1837,7 +1844,6 @@ def calculate_averaged_autocorr(
     return lags, mean_autocorr.tolist(), std_autocorr.tolist()
 
 
-# AFTER (complete replacement)
 def check_convergence(
     data: Union[pd.Series, List[float]],
     window_size: int = 10,

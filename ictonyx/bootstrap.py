@@ -554,6 +554,18 @@ def _two_sample_bootstrap(
             stacklevel=2,
         )
 
+    if method == "bca" and n1 > 0 and n2 > 0:
+        _ratio = max(n1, n2) / min(n1, n2)
+        if _ratio > 3.0:
+            warnings.warn(
+                f"BCa bootstrap CI with group size ratio {_ratio:.1f}:1 > 3:1: "
+                "unequal group sizes inflate the jackknife leverage estimate for "
+                "the smaller group, potentially producing unstable acceleration. "
+                "Consider method='percentile' for highly unequal group sizes.",
+                UserWarning,
+                stacklevel=2,
+            )
+
     # Point estimate on original data
     point_estimate = float(statistic_fn(group1, group2))
 

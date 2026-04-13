@@ -1139,6 +1139,17 @@ class VariabilityStudyResults:
                 f"Metric '{metric}' not found in any run. " f"Available metrics: {all_cols}"
             )
 
+        _min_len = min(len(df) for df in available_runs)
+        _max_len = max(len(df) for df in available_runs)
+        if _min_len != _max_len:
+            warnings.warn(
+                f"get_epoch_statistics('{metric}'): runs have unequal epoch counts "
+                f"(min {_min_len}, max {_max_len}). Late-epoch statistics are "
+                "computed from fewer runs. The 'n_runs' column reflects this.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         max_epochs = max(len(df) for df in available_runs)
         alpha = 1 - confidence
         rows = []

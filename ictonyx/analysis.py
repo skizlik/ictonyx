@@ -524,13 +524,17 @@ def rank_biserial_correlation(group1: pd.Series, group2: pd.Series) -> Tuple[flo
 
     try:
         U, _ = mannwhitneyu(group1, group2, alternative="two-sided")
-        # Convert to rank-biserial correlation
         r = (2 * U) / (n1 * n2) - 1
     except Exception:
-        r = 0.0
+        warnings.warn(
+            "rank_biserial_correlation: could not compute effect size "
+            f"(n1={n1}, n2={n2}). Returning NaN.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return float("nan"), "undefined"
 
     interpretation = _interpret_rank_biserial(abs(r))
-
     return r, interpretation
 
 
@@ -1399,9 +1403,10 @@ def compare_two_models(
             result = mann_whitney_test(clean1, clean2, alpha=alpha)
             result.test_name = "Independent Comparison (Mann-Whitney U)"
 
-        # Add assumption info to the final result
-        result.assumptions_met.update(assumptions_met)
-        result.assumption_details.update(assumption_details)
+            # Add assumption info without overwriting keys already set by the chosen test.
+            for _k, _v in assumptions_met.items():
+                result.assumptions_met.setdefault(_k, _v)
+            result.assumption_details.update(assumption_details)
 
     # --- Bootstrap confidence intervals ---
     if HAS_BOOTSTRAP and not np.isnan(result.p_value):
@@ -2040,7 +2045,14 @@ def create_results_dataframe(results: List[StatisticalTestResult]) -> pd.DataFra
             "effect_size_interpretation": result.effect_size_interpretation,
             "n_warnings": len(result.warnings),
             "assumptions_met": (
-                all(result.assumptions_met.values()) if result.assumptions_met else None
+                all(v for v in result.assumptions_met.values() if v is not None)
+                if result.assumptions_met
+                else None
+            ),
+            "assumptions_untestable": (
+                sum(1 for v in result.assumptions_met.values() if v is None)
+                if result.assumptions_met
+                else 0
             ),
         }
 

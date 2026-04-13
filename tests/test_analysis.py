@@ -1437,3 +1437,50 @@ class TestAnovaTestWarning:
             if issubclass(x.category, UserWarning) and "fewer than 30" in str(x.message)
         ]
         assert len(user_warnings) == 0
+
+
+class TestRankBiserialNaN:
+    def test_returns_nan_not_zero_on_exception(self):
+        """When mannwhitneyu raises, must return (nan, 'undefined'), not (0.0, ...)."""
+        from unittest.mock import patch
+
+        g1 = pd.Series([1.0, 2.0, 3.0])
+        g2 = pd.Series([4.0, 5.0, 6.0])
+        with patch("ictonyx.analysis.mannwhitneyu", side_effect=ValueError("forced")):
+            with pytest.warns(RuntimeWarning, match="could not compute effect size"):
+                r, interp = rank_biserial_correlation(g1, g2)
+        assert np.isnan(r)
+        assert interp == "undefined"
+
+    def test_valid_inputs_produce_no_warning(self):
+        g1 = pd.Series([1.0, 2.0, 3.0, 4.0])
+        g2 = pd.Series([2.0, 3.0, 4.0, 5.0])
+        import warnings as _w
+
+        with _w.catch_warnings():
+            _w.simplefilter("error")
+            r, _ = rank_biserial_correlation(g1, g2)
+        assert not np.isnan(r)
+
+
+class TestAssumptionsMetNone:
+    def test_none_not_counted_as_failed(self):
+        result = StatisticalTestResult(
+            test_name="test",
+            statistic=1.0,
+            p_value=0.1,
+            assumptions_met={"normality": None, "adequate_sample_size": True},
+        )
+        df = create_results_dataframe([result])
+        assert df["assumptions_met"].iloc[0]  # truthy, not `is True`
+        assert df["assumptions_untestable"].iloc[0] == 1
+
+    def test_all_none_assumptions_still_passes(self):
+        result = StatisticalTestResult(
+            test_name="test",
+            statistic=1.0,
+            p_value=0.1,
+            assumptions_met={"normality": None},
+        )
+        df = create_results_dataframe([result])
+        assert df["assumptions_untestable"].iloc[0] == 1

@@ -543,7 +543,7 @@ class ExperimentRunner:
                 stop early. Default ``0.8``.
             checkpoint_dir: Optional path to a directory for saving progress
                 after each completed run. If the directory contains a
-                ``checkpoint.joblib`` file from a previous interrupted run,
+                ``checkpoint.pkl`` file from a previous interrupted run,
                 execution resumes from where it left off. Default ``None``
                 (no checkpointing).
             use_parallel: If ``True``, fan training runs across multiple

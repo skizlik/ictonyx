@@ -1099,7 +1099,9 @@ class VariabilityStudyResults:
         Args:
             metric: Column name in per-run DataFrames, e.g.
                 ``'val_accuracy'``, ``'train_loss'``.
-            confidence: Confidence level for the percentile CI band.
+            confidence: Confidence level for the t-based confidence interval
+                on the per-epoch mean across runs. The interval uses a
+                Student t-distribution with ``n_runs - 1`` degrees of freedom.
                 Default 0.95.
 
         Returns:

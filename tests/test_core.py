@@ -1693,3 +1693,25 @@ class TestPredictReturnValues:
         wrapper.fit((X, y))
         result = wrapper.predict(X)
         assert len(result) == len(X)
+
+
+class TestRegressionMetricsConsistency:
+    def test_sklearn_evaluate_includes_rmse(self):
+        from sklearn.linear_model import LinearRegression
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        X = np.random.rand(50, 3).astype(np.float32)
+        y = X[:, 0] * 2 + 0.1
+        wrapper = ScikitLearnModelWrapper(LinearRegression())
+        wrapper.fit((X, y))
+        metrics = wrapper.evaluate((X, y))
+        assert "rmse" in metrics
+        assert np.isfinite(metrics["rmse"]) and metrics["rmse"] >= 0
+        assert abs(metrics["rmse"] - np.sqrt(metrics["mse"])) < 1e-9
+
+    def test_regression_metrics_helper_returns_four_keys(self):
+        from ictonyx.core import _regression_metrics
+
+        result = _regression_metrics(np.array([1.0, 2.0, 3.0]), np.array([1.1, 1.9, 3.1]))
+        assert set(result.keys()) == {"r2", "mse", "rmse", "mae"}

@@ -72,7 +72,7 @@ def _regression_metrics(preds: np.ndarray, labels: np.ndarray) -> Dict[str, floa
         labels: True values, shape (n,).
 
     Returns:
-        Dict with keys ``'r2'``, ``'mse'``, ``'mae'``.
+        Dict with keys ``'r2'``, ``'mse'``, ``'rmse'``, ``'mae'``.
         ``r2`` is ``nan`` when all labels are identical.
     """
     preds = np.asarray(preds, dtype=float).ravel()
@@ -728,7 +728,7 @@ if TENSORFLOW_AVAILABLE:
             """Assess stored predictions against true labels.
 
             For classification models: returns ``{'accuracy': float}``.
-            For regression models: returns ``{'r2': float, 'mse': float, 'mae': float}``.
+            For regression models: returns ``{'r2': float, 'mse': float, 'rmse': float, 'mae': float}``.
 
             Task type is determined via :meth:`_is_classification_model`, which
             respects the explicit ``task`` parameter if set at construction.
@@ -980,7 +980,7 @@ if SKLEARN_AVAILABLE:
 
             For classifiers (models with ``predict_proba`` or ``classes_``):
             returns accuracy, precision, recall, and F1. For regressors:
-            returns R², MSE, and MAE.
+            returns R², MSE, RMSE, and MAE.
 
             Multiclass classification uses weighted averaging for precision,
             recall, and F1. Binary classification uses binary averaging.
@@ -992,7 +992,7 @@ if SKLEARN_AVAILABLE:
             Returns:
                 Dict mapping metric names to float values. Keys depend on
                 model type — classifiers get ``'accuracy'``, ``'precision'``,
-                ``'recall'``, ``'f1'``; regressors get ``'r2'``, ``'mse'``,
+                ``'recall'``, ``'f1'``; regressors get ``'r2'``, ``'mse'``, ``'rmse'``,
                 ``'mae'``.
             """
             X_test, y_test = data
@@ -1026,15 +1026,16 @@ if SKLEARN_AVAILABLE:
                 except Exception as exc:
                     logger.warning(f"Could not compute precision/recall/f1: {exc}")
 
-            try:
-                from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-
-                if not is_classifier:
-                    metrics["r2"] = r2_score(y_test, y_pred)
-                    metrics["mse"] = mean_squared_error(y_test, y_pred)
-                    metrics["mae"] = mean_absolute_error(y_test, y_pred)
-            except Exception as exc:
-                logger.warning(f"Could not compute regression metrics: {exc}")
+            if not is_classifier:
+                try:
+                    metrics.update(
+                        _regression_metrics(
+                            np.asarray(y_pred, dtype=float),
+                            np.asarray(y_test, dtype=float),
+                        )
+                    )
+                except Exception as exc:
+                    logger.warning(f"Could not compute regression metrics: {exc}")
 
             return metrics
 
@@ -1042,7 +1043,7 @@ if SKLEARN_AVAILABLE:
             """Assess stored predictions against true labels.
 
             For classification: returns ``{'accuracy': float}``.
-            For regression: returns ``{'r2': float, 'mse': float, 'mae': float}``,
+            For regression models: returns ``{'r2': float, 'mse': float, 'rmse': float, 'mae': float}``,
             consistent with :class:`ScikitLearnModelWrapper` and
             :class:`KerasModelWrapper`.
 
@@ -1444,18 +1445,54 @@ if PYTORCH_AVAILABLE:
             return metrics
 
         def assess(self, true_labels: np.ndarray) -> Dict[str, float]:
-            """Quick assessment using stored predictions."""
+            """Assess stored predictions against ground-truth labels.
+
+            Computes metrics from ``self.predictions``, which must have been
+            populated by a prior call to :meth:`predict`. Does not run the
+            model or require input data.
+
+            For classification: returns ``{'accuracy': float}``.
+            For regression: returns ``{'r2': float, 'mse': float, 'rmse': float, 'mae': float}``.
+
+            Args:
+                true_labels: 1-D array of ground-truth class indices (classification)
+                    or target values (regression), aligned with the data passed to
+                    the preceding :meth:`predict` call.
+
+            Returns:
+                Dict of metric name → float. Keys depend on task type — see above.
+
+            Raises:
+                ValueError: If :meth:`predict` has not been called yet
+                    (``self.predictions`` is ``None``).
+                ValueError: If ``self.predictions`` contains NaN values.
+                ValueError: If ``self.task`` is ``None`` and task type cannot be
+                    determined. Set ``task='classification'`` or ``task='regression'``
+                    at construction to avoid ambiguity.
+            """
             if self.predictions is None:
                 raise ValueError("Model has not generated predictions yet. Call predict() first.")
 
-            if self.task == "classification":
-                accuracy = float(np.mean(self.predictions == true_labels))
-                return {"accuracy": accuracy}
+            if np.any(np.isnan(self.predictions)):
+                raise ValueError(
+                    "Stored predictions contain NaN. Check the preceding predict() "
+                    "call for model instability or bad input data."
+                )
 
-            else:
-                preds = np.asarray(self.predictions, dtype=float)
-                labels = np.asarray(true_labels, dtype=float)
-                return _regression_metrics(preds, labels)
+            if self.task is None:
+                raise ValueError(
+                    "Cannot determine task type: self.task is None. "
+                    "Pass task='classification' or task='regression' at construction."
+                )
+
+            if self.task == "classification":
+                from sklearn.metrics import accuracy_score
+
+                return {"accuracy": float(accuracy_score(true_labels, self.predictions))}
+
+            preds = np.asarray(self.predictions, dtype=float)
+            labels = np.asarray(true_labels, dtype=float)
+            return _regression_metrics(preds, labels)
 
         def save_model(self, path: str):
             """Save model state dict to disk."""

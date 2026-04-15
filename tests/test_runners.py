@@ -1071,6 +1071,7 @@ class TestGridStudyResults:
                 base_config=ModelConfig({}),
                 param_grid={"C": [1.0]},
                 num_runs=5,
+                use_process_isolation=False,
                 verbose=False,
             )
 
@@ -1093,6 +1094,7 @@ class TestGridStudyResults:
                 base_config=ModelConfig({}),
                 param_grid={"C": [1.0]},
                 num_runs=20,
+                use_process_isolation=False,
                 dry_run=True,
                 verbose=False,
             )

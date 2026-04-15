@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.2] — 2026-04-15
+
+### Fixed
+
+- `pyproject.toml`: relaxed numpy pin from `^1.24.0` (`>=1.24.0, <2.0.0`)
+  to `>=1.24.0`, restoring compatibility with numpy 2.x. The prior cap
+  caused `pip install ictonyx` to silently downgrade numpy, breaking shap
+  0.46+, rasterio, and any other package requiring numpy 2. Also relaxed
+  pandas, scipy, matplotlib, and seaborn to floor-only pins for the same
+  reason. The shap optional dependency was similarly relaxed from `^0.43.0`
+  to `>=0.43.0` (Poetry's caret notation caps at `<0.44.0` when the major
+  version is 0).
+
+---
+
 ## [0.4.1] — 2026-04-15
 
 ### Fixed — Statistical correctness

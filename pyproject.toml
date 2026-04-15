@@ -54,10 +54,10 @@ tuning     = ["optuna"]
 tuning_legacy = ["hyperopt"]
 isolation  = ["cloudpickle", "psutil"]
 progress   = ["tqdm"]
-ml         = ["tensorflow", "keras", "torch", "mlflow", "shap", "hyperopt", "optuna"]
+ml         = ["tensorflow", "keras", "torch", "mlflow", "shap", "optuna"]
 all        = ["scikit-learn", "cloudpickle", "psutil", "tqdm",
               "tensorflow", "keras", "torch", "mlflow",
-              "shap", "hyperopt", "optuna", "joblib"]
+              "shap", "optuna", "joblib"]
 
 [tool.poetry.group.ml.dependencies]
 tensorflow = "^2.16.0"

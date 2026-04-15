@@ -1236,8 +1236,9 @@ class VariabilityStudyResults:
 
         Note:
             The Wilcoxon signed-rank test requires at least 6 non-zero
-            differences for reliable results. Use ``num_runs >= 10`` for
-            reliable inference.
+            differences for reliable results. Use ``num_runs >= 20`` for
+            reliable inference — consistent with the library-wide minimum
+            for Mann-Whitney U tests.
         """
         from .analysis import wilcoxon_signed_rank_test
 
@@ -1739,7 +1740,9 @@ def run_grid_study(
     # seed+i, which can produce correlated RNG states for nearby seeds.
     if seed is not None:
         _ss = np.random.SeedSequence(seed)
-        config_seeds: list[int | None] = [int(s.generate_state(1)[0]) for s in _ss.spawn(n_configs)]
+        config_seeds: List[Optional[int]] = [
+            int(s.generate_state(1)[0]) for s in _ss.spawn(n_configs)
+        ]
     else:
         config_seeds = [None] * n_configs
 

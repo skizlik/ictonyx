@@ -240,7 +240,7 @@ class TestModelConfigDeprecations:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = cfg.merge({"b": 2})
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any(issubclass(x.category, UserWarning) for x in w)
         assert result["b"] == 2  # still works
 
     def test_has_emits_deprecation_warning(self):
@@ -250,7 +250,7 @@ class TestModelConfigDeprecations:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = cfg.has("a")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any(issubclass(x.category, UserWarning) for x in w)
         assert result is True  # still works
 
 

@@ -827,6 +827,26 @@ if SKLEARN_AVAILABLE:
             print(wrapper.assess(y_test))
         """
 
+        _SKLEARN_FIT_KWARGS: frozenset = frozenset(
+            {
+                "sample_weight",
+                "eval_set",  # XGBoost/LightGBM (ahead of v0.5.0 wrappers)
+                "cat_features",  # CatBoost
+            }
+        )
+
+        _KNOWN_IGNORED_KWARGS: frozenset = frozenset(
+            {
+                "epochs",
+                "batch_size",
+                "verbose",
+                "validation_split",
+                "callbacks",
+                "shuffle",
+                "steps_per_epoch",
+            }
+        )
+
         def __init__(self, model: BaseEstimator, model_id: str = "", task: Optional[str] = None):
             super().__init__(model, model_id)
             self.task: Optional[str] = task
@@ -879,31 +899,31 @@ if SKLEARN_AVAILABLE:
             if isinstance(train_data, tuple) and len(train_data) == 2:
                 X_train, y_train = train_data
 
-                # kwargs that sklearn's fit() legitimately accepts
-                _SKLEARN_FIT_KWARGS = {"sample_weight"}
-
-                # Runner-injected kwargs that are intentionally ignored for
-                # cross-framework compatibility
-                _KNOWN_IGNORED_KWARGS = {
-                    "epochs",
-                    "batch_size",
-                    "verbose",
-                    "validation_split",
-                    "callbacks",
-                    "shuffle",
-                    "steps_per_epoch",
-                }
+                # Warn on deprecated explicit kwargs
+                for _dep_kwarg, _dep_val in [
+                    ("epochs", epochs),
+                    ("batch_size", batch_size),
+                    ("verbose", verbose),
+                ]:
+                    if _dep_val is not None:
+                        warnings.warn(
+                            f"Passing '{_dep_kwarg}' to ScikitLearnModelWrapper.fit() "
+                            "is deprecated and will raise TypeError in v0.5.0. "
+                            "sklearn models ignore this parameter; remove it from your call.",
+                            DeprecationWarning,
+                            stacklevel=2,
+                        )
 
                 sklearn_kwargs = {}
                 for key, value in kwargs.items():
-                    if key in _SKLEARN_FIT_KWARGS:
+                    if key in self._SKLEARN_FIT_KWARGS:
                         sklearn_kwargs[key] = value
-                    elif key not in _KNOWN_IGNORED_KWARGS:
+                    elif key not in self._KNOWN_IGNORED_KWARGS:
                         warnings.warn(
                             f"ScikitLearnModelWrapper.fit() received unrecognized "
                             f"keyword argument '{key}={value!r}'. This argument has "
                             f"been ignored. If it is a valid sklearn fit() parameter, "
-                            f"add it to _SKLEARN_FIT_KWARGS in core.py.",
+                            f"add it to _SKLEARN_FIT_KWARGS in ScikitLearnModelWrapper.",
                             UserWarning,
                             stacklevel=2,
                         )
@@ -1068,8 +1088,6 @@ if SKLEARN_AVAILABLE:
                 )
 
             if is_classifier:
-                from sklearn.metrics import accuracy_score
-
                 return {"accuracy": float(accuracy_score(true_labels, self.predictions))}
 
             # Regression: match ScikitLearnModelWrapper metric set exactly.
@@ -1120,6 +1138,12 @@ if SKLEARN_AVAILABLE:
 
                 with open(path, "rb") as f:
                     loaded_model = pickle.load(f)
+                logger.warning(
+                    "joblib not available — model loaded with pickle. "
+                    "Only load files from trusted sources; pickle files "
+                    "can execute arbitrary code on deserialization. "
+                    "Install joblib for safer serialization: pip install joblib"
+                )
             return cls(loaded_model)
 
 else:

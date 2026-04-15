@@ -126,7 +126,7 @@ class ModelConfig:
         warnings.warn(
             "ModelConfig.merge() is deprecated and will be removed in "
             "v0.5.0. Use ModelConfig.update() instead.",
-            DeprecationWarning,
+            UserWarning,
             stacklevel=2,
         )
         return self.update(other_params)
@@ -143,7 +143,7 @@ class ModelConfig:
         warnings.warn(
             "ModelConfig.has() is deprecated and will be removed in "
             "v0.5.0. Use the 'in' operator instead: 'key' in config.",
-            DeprecationWarning,
+            UserWarning,
             stacklevel=2,
         )
         return key in self.params

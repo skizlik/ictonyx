@@ -158,7 +158,13 @@ class HyperparameterTuner:
             Dict of best hyperparameters found.
         """
         if not HAS_OPTUNA:
-            # Fall back to deprecated hyperopt backend
+            warnings.warn(
+                "The Hyperopt tuning backend is deprecated and will be removed "
+                "in v0.5.0. Install Optuna to use the supported backend: "
+                "pip install ictonyx[tuning]",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self._tune_hyperopt(param_space, max_evals)
 
         if not isinstance(param_space, dict) or not param_space:

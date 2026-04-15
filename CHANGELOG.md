@@ -15,6 +15,138 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.1] — 2026-04-15
+
+### Fixed — Statistical correctness
+
+- `check_convergence()`: replaced OR-of-heuristics with slope-based linear
+  regression test. Prior implementation declared convergence on virtually
+  every decreasing loss curve; new test requires the recent window to be
+  statistically flat by magnitude or by evidence.
+- `rank_biserial_correlation()`: returns `(nan, "undefined")` with
+  `RuntimeWarning` on exception instead of silently returning
+  `(0.0, "negligible")`.
+- `compare_results()`: now uses paired Wilcoxon signed-rank test by default
+  (`paired=True`) when both inputs have equal run counts, consistent with
+  `compare_models()`. Falls back to Mann-Whitney U with `UserWarning` when
+  run counts differ. Pass `paired=False` to use Mann-Whitney U explicitly.
+- `assumptions_met.update()` in `compare_two_models()`: replaced with
+  `setdefault` so keys already set by the chosen test are not overwritten.
+- `None` assumption values in `create_results_dataframe()`: no longer
+  collapsed to `False`. A new `assumptions_untestable` column counts
+  untestable assumptions.
+- `ScikitLearnModelWrapper.evaluate()`: now returns `rmse` alongside `r2`,
+  `mse`, and `mae` for regression tasks, consistent with `_regression_metrics()`.
+- `PyTorchModelWrapper.assess()`: rewritten. Raises `ValueError` on NaN
+  predictions and on `task=None` instead of silently falling through to the
+  regression branch. Classification path now uses `accuracy_score` for
+  consistency with Keras and sklearn wrappers. Full docstring added.
+
+### Fixed — Checkpoint reliability
+
+- Checkpoint writes are now atomic: data is written to a `.tmp` file and
+  renamed into place with `os.replace()`, preventing corruption on interrupted
+  runs.
+- Checkpoints now include a `_schema_version` field sourced from
+  `ictonyx/_version.py`. Loading a checkpoint from a different version emits
+  `UserWarning` with guidance to delete and restart.
+
+### Fixed — API consistency
+
+- `run_grid_study()`, `ExperimentRunner.run_study()`,
+  `run_variability_study()`: default `num_runs` raised to 20, consistent
+  with `variability_study()` and `compare_models()`. `run_grid_study()` now
+  emits `UserWarning` when `num_runs < 20`.
+- `for_variability_study()` in `ModelConfig`: default `num_runs` raised
+  from 10 to 20.
+- `compare_results()`: new `seed` parameter threads random state to bootstrap
+  CI computation for reproducible results.
+- `compare_models()`: now applies `_INFRA_KWARGS` separation before calling
+  `auto_resolve_handler()`, preventing model hyperparameters from reaching
+  the DataHandler and raising `TypeError`.
+- `compare_models()` two-model shortcut: aliased `StatisticalTestResult`
+  replaced with `dataclasses.replace()`, preventing mutation of `overall_test`
+  from affecting the `pairwise_comparisons` entry.
+- `ModelConfig.merge()` and `.has()`: changed from `DeprecationWarning` to
+  `UserWarning` so the notice is visible in Jupyter notebooks. Python silences
+  `DeprecationWarning` by default in all non-`__main__` contexts; the identical
+  fix was applied to `get_final_metrics()` in v0.3.15 but not here.
+- `test_against_null()` docstring: corrected `num_runs >= 10` recommendation
+  to `num_runs >= 20`.
+- `ScikitLearnModelWrapper.load_model()`: now emits `logger.warning()` on
+  pickle fallback, matching the security notice already present in `save_model()`.
+
+### Fixed — Core wrappers
+
+- `PyTorchModelWrapper.predict()`: raises `ValueError` on NaN outputs, checked
+  on the raw tensor before `torch.max` discards NaN values into integer indices.
+- `PyTorchModelWrapper.predict_proba()`: emits `UserWarning` when the model's
+  final layer is `nn.Softmax` or `nn.LogSoftmax`.
+- `ImageDataHandler`: per-class file listing now uses `sorted()` for consistent
+  cross-platform ordering.
+- `ImageDataHandler.load()`: emits `UserWarning` about fixed training shuffle
+  across runs. Full per-run shuffle fix deferred to v0.5.0.
+- All three `assess()` docstrings and `_regression_metrics()` docstring: `rmse`
+  added to documented regression return keys.
+- `get_epoch_statistics()` docstring: corrected "percentile CI band" to
+  "t-based confidence interval on the per-epoch mean across runs".
+
+### Fixed — MLflow and SHAP
+
+- `MLflowLogger.log_model()`: replaced fragile `hasattr` duck-typing with
+  `isinstance` checks for Keras, PyTorch, and sklearn model flavour selection.
+- `MLflowLogger.get_run_url()` `file://` branch: now respects the
+  `MLFLOW_UI_URL` environment variable instead of always returning
+  `http://localhost:5000`.
+- SHAP background dataset: now sampled randomly via `np.random.default_rng(42)`
+  instead of always selecting the first N rows.
+- `shap.DeepExplainer`: emits `DeprecationWarning` when SHAP >= 0.45.
+
+### Deprecated
+
+- `HyperparameterTuner.tune()` Hyperopt fallback: now emits
+  `DeprecationWarning` when Optuna is not installed. Hyperopt backend will be
+  removed in v0.5.0. Install Optuna: `pip install ictonyx[tuning]`.
+- `ScikitLearnModelWrapper.fit()` `epochs`, `batch_size`, `verbose` kwargs:
+  now emit `DeprecationWarning`. These parameters will raise `TypeError` in
+  v0.5.0. sklearn models have always silently ignored them.
+
+### Changed
+
+- `ictonyx/_version.py` added as the single source of truth for the package
+  version. `__init__.py` and `runners.py` both import from it directly,
+  replacing the prior inline `__version__` string and avoiding stale metadata
+  from `importlib.metadata` during development.
+- `compare_multiple_models()` removed from `ictonyx.*` public namespace.
+  Still callable as `ictonyx.analysis.compare_multiple_models`. Use
+  `ix.compare_models()` instead.
+- `hyperopt` removed from `all` and `ml` extras in `pyproject.toml`.
+- `_SKLEARN_FIT_KWARGS` and `_KNOWN_IGNORED_KWARGS` promoted to class-level
+  `frozenset` constants in `ScikitLearnModelWrapper`. Added `eval_set` and
+  `cat_features` ahead of v0.5.0 XGBoost/LightGBM wrappers.
+
+### Internal
+
+- Redundant `mannwhitneyu` call eliminated in `mann_whitney_test()` by passing
+  the already-computed U statistic to `rank_biserial_correlation()`.
+- BCa two-sample bootstrap: added `UserWarning` when group size ratio exceeds
+  3:1, complementing the existing `min(n1, n2) < 15` warning.
+- `calculate_averaged_autocorr()`: parameter renamed `histories` → `series_list`.
+- `kruskal_wallis_test()`: epsilon-squared formula clarified in a comment.
+- `get_epoch_statistics()`: emits `UserWarning` when run counts vary across
+  epoch positions.
+- Redundant local `accuracy_score` import removed from
+  `PyTorchModelWrapper.assess()`.
+- `run_grid_study()` PEP 604 annotation: `list[int | None]` replaced with
+  `List[Optional[int]]` for Python 3.10 runtime compatibility.
+- Checkpoint docstring corrected: `checkpoint.joblib` → `checkpoint.pkl`.
+- Test coverage for `explainers.py` expanded: SHAP availability guards,
+  KernelExplainer path for non-tree models, `DeepExplainer` deprecation
+  warning, and out-of-bounds sample index handling.
+
+
+---
+
 ## [0.4.0] — 2026-04-10
 
 ### Fixed — Statistical correctness

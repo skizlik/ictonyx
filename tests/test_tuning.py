@@ -7,6 +7,8 @@ from ictonyx.config import ModelConfig
 from ictonyx.core import BaseModelWrapper, TrainingResult
 
 try:
+    import hyperopt
+
     from ictonyx.tuning import HyperparameterTuner, create_search_space
 
     HAS_HYPEROPT = True
@@ -191,22 +193,22 @@ class TestTuningImportErrors:
     def test_hyperparameter_tuner_raises_without_hyperopt(self):
         from unittest.mock import MagicMock, patch
 
-        import numpy as np
-
         from ictonyx.config import ModelConfig
         from ictonyx.data import ArraysDataHandler
+        from ictonyx.tuning import HyperparameterTuner
 
-        with patch("ictonyx.tuning.HAS_HYPEROPT", False):
-            from ictonyx.tuning import HyperparameterTuner
+        X = np.zeros((20, 2))
+        y = np.zeros(20)
 
-            X = np.zeros((20, 2))
-            y = np.zeros(20)
-            with pytest.raises(ImportError, match="Hyperopt"):
-                HyperparameterTuner(
-                    model_builder=MagicMock(),
-                    data_handler=ArraysDataHandler(X, y),
-                    model_config=ModelConfig({}),
-                )
+        with patch("ictonyx.tuning.HAS_OPTUNA", False), patch("ictonyx.tuning.HAS_HYPEROPT", False):
+            tuner = HyperparameterTuner(
+                model_builder=MagicMock(),
+                data_handler=ArraysDataHandler(X, y),
+                model_config=ModelConfig({}),
+            )
+            with pytest.warns(DeprecationWarning):
+                with pytest.raises(ImportError, match="Hyperopt"):
+                    tuner.tune({"x": 1}, max_evals=1)
 
     def test_create_search_space_raises_without_hyperopt(self):
         from unittest.mock import patch

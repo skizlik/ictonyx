@@ -374,3 +374,53 @@ class TestBaseLoggerChildRunNoOps:
         """BaseLogger does not have log_study_summary — callers use hasattr."""
         logger = BaseLogger(verbose=False)
         assert not hasattr(logger, "log_study_summary")
+
+
+class TestGetRunUrl:
+    def _make_logger_stub(self, exp_id, run_id):
+        """Construct a minimal MLflowLogger-shaped object without starting a run."""
+        import unittest.mock as mock
+
+        from ictonyx.loggers import MLflowLogger
+
+        obj = object.__new__(MLflowLogger)
+        obj._run = mock.MagicMock()
+        obj._run.info.experiment_id = exp_id
+        obj._run_id = run_id
+        return obj
+
+    def test_file_uri_uses_localhost_default(self, monkeypatch):
+        pytest.importorskip("mlflow")
+        monkeypatch.delenv("MLFLOW_UI_URL", raising=False)
+        import unittest.mock as mock
+
+        stub = self._make_logger_stub("0", "abc123")
+        mock_mlflow = mock.MagicMock()
+        mock_mlflow.get_tracking_uri.return_value = "file:///tmp/mlruns"
+        with mock.patch("ictonyx.loggers.mlflow", mock_mlflow):
+            url = stub.get_run_url()
+        assert url.startswith("http://localhost:5000")
+        assert "abc123" in url
+
+    def test_file_uri_respects_env_override(self, monkeypatch):
+        pytest.importorskip("mlflow")
+        monkeypatch.setenv("MLFLOW_UI_URL", "http://mlflow.internal:8080")
+        import unittest.mock as mock
+
+        stub = self._make_logger_stub("1", "xyz")
+        mock_mlflow = mock.MagicMock()
+        mock_mlflow.get_tracking_uri.return_value = "file:///tmp/mlruns"
+        with mock.patch("ictonyx.loggers.mlflow", mock_mlflow):
+            url = stub.get_run_url()
+        assert url.startswith("http://mlflow.internal:8080")
+
+    def test_remote_uri_used_directly(self, monkeypatch):
+        pytest.importorskip("mlflow")
+        import unittest.mock as mock
+
+        stub = self._make_logger_stub("2", "run99")
+        mock_mlflow = mock.MagicMock()
+        mock_mlflow.get_tracking_uri.return_value = "http://remote-server:5000"
+        with mock.patch("ictonyx.loggers.mlflow", mock_mlflow):
+            url = stub.get_run_url()
+        assert url.startswith("http://remote-server:5000")

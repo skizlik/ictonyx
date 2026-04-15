@@ -272,43 +272,49 @@ class MLflowLogger(BaseLogger):
             mlflow.log_artifact(artifact_path)
 
     def log_model(self, model, artifact_path: str = "model", **kwargs):
-        """
-        Logs a model to MLflow using the appropriate flavor.
-
-        Args:
-            model: The model object to log
-            artifact_path: Path within the run's artifact directory
-            **kwargs: Additional arguments passed to the specific model logging function
-        """
+        """Log a model to MLflow using the framework-appropriate flavor."""
         super().log_model(model, artifact_path)
-
         try:
-            if hasattr(model, "save") and "keras" in str(type(model)).lower():
-                # TensorFlow/Keras model
-                mlflow.tensorflow.log_model(model, artifact_path, **kwargs)
-            elif hasattr(model, "fit") and hasattr(model, "predict"):
-                # Scikit-learn model
-                mlflow.sklearn.log_model(model, artifact_path, **kwargs)
-            else:
-                # Generic Python model
+            _logged = False
+
+            if not _logged:
+                try:
+                    import tensorflow as tf
+
+                    if isinstance(model, tf.keras.Model):
+                        mlflow.tensorflow.log_model(model, artifact_path, **kwargs)
+                        _logged = True
+                except (ImportError, AttributeError):
+                    pass
+
+            if not _logged:
+                try:
+                    import torch
+
+                    if isinstance(model, torch.nn.Module):
+                        mlflow.pytorch.log_model(model, artifact_path, **kwargs)
+                        _logged = True
+                except (ImportError, AttributeError):
+                    pass
+
+            if not _logged:
+                try:
+                    from sklearn.base import BaseEstimator
+
+                    if isinstance(model, BaseEstimator):
+                        mlflow.sklearn.log_model(model, artifact_path, **kwargs)
+                        _logged = True
+                except (ImportError, AttributeError):
+                    pass
+
+            if not _logged:
                 mlflow.pyfunc.log_model(artifact_path, python_model=model, **kwargs)
 
             if self.verbose:
                 logger.info(f"Logged model of type {type(model).__name__} to {artifact_path}")
-
         except Exception as e:
             if self.verbose:
-                logger.warning(f"Failed to log model: {e}")
-                logger.info("Attempting to save as pickle...")
-
-            # Fallback: save as pickle artifact
-            with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp_file:
-                import pickle
-
-                pickle.dump(model, tmp_file)
-                tmp_file.flush()
-                self.log_artifact(tmp_file.name, f"{artifact_path}/model.pkl")
-                os.unlink(tmp_file.name)
+                logger.warning(f"Could not log model to MLflow: {e}")
 
     def log_figure(self, figure, artifact_name: str):
         """Logs a matplotlib figure as an artifact."""
@@ -457,11 +463,22 @@ class MLflowLogger(BaseLogger):
                     self.log_metric(f"{key}_sd", float(np.std(vals, ddof=1)))
 
     def get_run_url(self) -> str:
-        """Gets the URL to view this run in MLflow UI."""
+        """Return the MLflow UI URL for this run.
+
+        For remote tracking servers, uses the configured tracking URI directly.
+        For local file-based tracking (``file://``), defaults to
+        ``http://localhost:5000`` — the standard ``mlflow ui`` address.
+        Override with the ``MLFLOW_UI_URL`` environment variable when serving
+        the UI on a non-default host or port.
+        """
+        import os
+
         tracking_uri = mlflow.get_tracking_uri()
+        exp_id = self._run.info.experiment_id
+        run_id = self._run_id
+
         if tracking_uri.startswith("file://"):
-            return f"http://localhost:5000/#/experiments/{self._run.info.experiment_id}/runs/{self._run_id}"
-        else:
-            return (
-                f"{tracking_uri}/#/experiments/{self._run.info.experiment_id}/runs/{self._run_id}"
-            )
+            ui_base = os.environ.get("MLFLOW_UI_URL", "http://localhost:5000").rstrip("/")
+            return f"{ui_base}/#/experiments/{exp_id}/runs/{run_id}"
+
+        return f"{tracking_uri.rstrip('/')}/#/experiments/{exp_id}/runs/{run_id}"

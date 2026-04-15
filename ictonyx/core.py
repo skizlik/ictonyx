@@ -1390,6 +1390,13 @@ if PYTORCH_AVAILABLE:
             with torch.no_grad():
                 outputs = self.model(X_t)
 
+            if torch.any(torch.isnan(outputs)):
+                raise ValueError(
+                    "PyTorchModelWrapper.predict() returned NaN outputs. "
+                    "Check model inputs for NaN/Inf values, or inspect the "
+                    "training run for gradient explosion."
+                )
+
             if self.task == "classification":
                 _, predicted = torch.max(outputs, 1)
                 self.predictions = predicted.cpu().numpy()
@@ -1420,6 +1427,18 @@ if PYTORCH_AVAILABLE:
             """
             if self.task != "classification":
                 raise ValueError("predict_proba() is only available for classification models.")
+
+            _modules = list(self.model.modules())
+            if _modules and isinstance(_modules[-1], (torch.nn.Softmax, torch.nn.LogSoftmax)):
+                warnings.warn(
+                    f"PyTorchModelWrapper.predict_proba(): the model's final "
+                    f"layer is {type(_modules[-1]).__name__}, but predict_proba() "
+                    "also applies softmax. This double-application produces "
+                    "incorrectly squashed probabilities. Remove the final "
+                    "softmax layer and return raw logits instead.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
             self.model.eval()
             X_t = self._to_tensor(data, dtype=torch.float32)

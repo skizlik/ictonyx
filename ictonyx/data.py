@@ -225,7 +225,7 @@ class ImageDataHandler(FileDataHandler):
             class_path = os.path.join(self.data_path, class_name)
 
             try:
-                files = os.listdir(class_path)
+                files = sorted(os.listdir(class_path))
             except PermissionError:
                 raise PermissionError(f"Cannot read class directory: {class_path}")
 
@@ -324,6 +324,17 @@ class ImageDataHandler(FileDataHandler):
         Returns:
             Dict with 'train_data', 'val_data', 'test_data' as tf.data.Dataset objects
         """
+
+        warnings.warn(
+            "ImageDataHandler: the training shuffle uses a fixed seed across "
+            "all variability study runs in this version. Each run receives "
+            "the same within-epoch data ordering, which may underestimate "
+            "training variability. A full per-run shuffle fix is planned for "
+            "v0.5.0.",
+            UserWarning,
+            stacklevel=2,
+        )
+
         if not HAS_SKLEARN:
             raise ImportError(
                 "scikit-learn is required for data splitting. "

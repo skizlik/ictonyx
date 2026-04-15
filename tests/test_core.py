@@ -1715,3 +1715,46 @@ class TestRegressionMetricsConsistency:
 
         result = _regression_metrics(np.array([1.0, 2.0, 3.0]), np.array([1.1, 1.9, 3.1]))
         assert set(result.keys()) == {"r2", "mse", "rmse", "mae"}
+
+
+class TestPyTorchNaNGuard:
+    def test_predict_raises_on_nan_output(self):
+        pytest.importorskip("torch")
+        import torch
+        import torch.nn as nn
+
+        from ictonyx.core import PyTorchModelWrapper
+
+        class NaNModel(nn.Module):
+            def forward(self, x):
+                return torch.full((x.shape[0], 2), float("nan"))
+
+        wrapper = PyTorchModelWrapper(
+            NaNModel(),
+            criterion=nn.CrossEntropyLoss(),
+            optimizer_class=torch.optim.SGD,
+            optimizer_params={"lr": 0.01},
+            task="classification",
+        )
+        with pytest.raises(ValueError, match="NaN"):
+            wrapper.predict(np.zeros((4, 2), dtype=np.float32))
+
+
+class TestPyTorchDoubleSoftmax:
+    def test_warns_on_softmax_final_layer(self):
+        pytest.importorskip("torch")
+        import torch
+        import torch.nn as nn
+
+        from ictonyx.core import PyTorchModelWrapper
+
+        model = nn.Sequential(nn.Linear(4, 3), nn.Softmax(dim=1))
+        wrapper = PyTorchModelWrapper(
+            model,
+            criterion=nn.CrossEntropyLoss(),
+            optimizer_class=torch.optim.SGD,
+            optimizer_params={"lr": 0.01},
+            task="classification",
+        )
+        with pytest.warns(UserWarning, match="double"):
+            wrapper.predict_proba(np.random.rand(5, 4).astype(np.float32))

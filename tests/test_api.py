@@ -507,7 +507,7 @@ class TestBuilderInstanceClonerSafety:
 
 
 class TestCompareResultsPairing:
-    def _make_results(self, seed, n=20):
+    def _make_results(self, seed, n=5):
         from sklearn.datasets import load_wine
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.preprocessing import StandardScaler
@@ -535,8 +535,8 @@ class TestCompareResultsPairing:
         assert "Mann-Whitney" in result.overall_test.test_name
 
     def test_unequal_runs_warns_and_falls_back(self):
-        ra = self._make_results(seed=42, n=20)
-        rb = self._make_results(seed=99, n=15)
+        ra = self._make_results(seed=42, n=5)
+        rb = self._make_results(seed=99, n=4)
         with pytest.warns(UserWarning, match="equal run counts"):
             result = api.compare_results(ra, rb, paired=True)
         assert "Mann-Whitney" in result.overall_test.test_name

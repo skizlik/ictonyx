@@ -1,3 +1,4 @@
+import warnings
 from typing import TYPE_CHECKING, Any, List, Optional, Tuple
 
 import numpy as np
@@ -151,7 +152,11 @@ def plot_shap_summary(
             background_size = min(50, len(X_data))
             _bg_rng = np.random.default_rng(42)
             _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
-            explainer = shap.KernelExplainer(..., X_data[_bg_idx])
+            if hasattr(model_wrapper.model, "predict_proba"):
+                predict_fn = model_wrapper.predict_proba
+            else:
+                predict_fn = model_wrapper.predict
+            explainer = shap.KernelExplainer(predict_fn, X_data[_bg_idx])
             shap_values = explainer.shap_values(X_data)
 
     else:
@@ -170,7 +175,11 @@ def plot_shap_summary(
         background_size = min(50, len(X_data))
         _bg_rng = np.random.default_rng(42)
         _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
-        explainer = shap.KernelExplainer(..., X_data[_bg_idx])
+        if hasattr(model_wrapper.model, "predict_proba"):
+            predict_fn = model_wrapper.predict_proba
+        else:
+            predict_fn = model_wrapper.predict
+        explainer = shap.KernelExplainer(predict_fn, X_data[_bg_idx])
         shap_values = explainer.shap_values(X_data)
 
     # Handle the different formats SHAP might return
@@ -223,11 +232,15 @@ def plot_shap_waterfall(
         _warn_if_deep_explainer_deprecated()
         explainer = shap.DeepExplainer(model_wrapper.model, background)
     else:
+        if hasattr(model_wrapper.model, "predict_proba"):
+            predict_fn = model_wrapper.predict_proba
+        else:
+            predict_fn = model_wrapper.predict
         predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
         background_size = min(50, len(X_data))
         _bg_rng = np.random.default_rng(42)
         _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
-        explainer = shap.KernelExplainer(..., X_data[_bg_idx])
+        explainer = shap.KernelExplainer(predict_fn, X_data[_bg_idx])
 
     # Get SHAP values for the specific sample
     sample_data = X_data[sample_index : sample_index + 1]
@@ -323,17 +336,25 @@ def plot_shap_dependence(
                 _warn_if_deep_explainer_deprecated()
                 explainer = shap.DeepExplainer(model_wrapper.model, background)
             except Exception:
+                if hasattr(model_wrapper.model, "predict_proba"):
+                    predict_fn = model_wrapper.predict_proba
+                else:
+                    predict_fn = model_wrapper.predict
                 predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
                 background_size = min(50, len(X_data))
                 _bg_rng = np.random.default_rng(42)
                 _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
-                explainer = shap.KernelExplainer(..., X_data[_bg_idx])
+                explainer = shap.KernelExplainer(predict_fn, X_data[_bg_idx])
         else:
+            if hasattr(model_wrapper.model, "predict_proba"):
+                predict_fn = model_wrapper.predict_proba
+            else:
+                predict_fn = model_wrapper.predict
             predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
             background_size = min(50, len(X_data))
             _bg_rng = np.random.default_rng(42)
             _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
-            explainer = shap.KernelExplainer(..., X_data[_bg_idx])
+            explainer = shap.KernelExplainer(predict_fn, X_data[_bg_idx])
 
         # Get SHAP values
         shap_values = explainer.shap_values(X_data)
@@ -393,11 +414,14 @@ def get_shap_feature_importance(
         _warn_if_deep_explainer_deprecated()
         explainer = shap.DeepExplainer(model_wrapper.model, background)
     else:
-        predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
+        if hasattr(model_wrapper.model, "predict_proba"):
+            predict_fn = model_wrapper.predict_proba
+        else:
+            predict_fn = model_wrapper.predict
         background_size = min(50, len(X_data))
         _bg_rng = np.random.default_rng(42)
         _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
-        explainer = shap.KernelExplainer(..., X_data[_bg_idx])
+        explainer = shap.KernelExplainer(predict_fn, X_data[_bg_idx])
 
     # Get SHAP values
     shap_values = explainer.shap_values(X_data)

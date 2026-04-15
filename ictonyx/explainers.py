@@ -36,6 +36,22 @@ def _check_shap():
         )
 
 
+def _warn_if_deep_explainer_deprecated() -> None:
+    """Emit DeprecationWarning if shap >= 0.45 where DeepExplainer is deprecated."""
+    try:
+        _parts = shap.__version__.split(".")
+        if (int(_parts[0]), int(_parts[1])) >= (0, 45):
+            warnings.warn(
+                f"shap.DeepExplainer is deprecated in SHAP >= 0.45 "
+                f"(detected {shap.__version__}). It may be removed in a future "
+                "release. Consider shap.GradientExplainer as an alternative.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+    except (AttributeError, ValueError, IndexError):
+        pass
+
+
 def _check_matplotlib():
     """Check matplotlib availability."""
     if not HAS_MATPLOTLIB:
@@ -122,7 +138,10 @@ def plot_shap_summary(
         try:
             # Use a subset of the data as background for efficiency
             background_size = min(100, len(X_data))
-            background = X_data[:background_size]
+            _bg_rng = np.random.default_rng(42)
+            _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
+            background = X_data[_bg_idx]
+            _warn_if_deep_explainer_deprecated()
             explainer = shap.DeepExplainer(model_wrapper.model, background)
             shap_values = explainer.shap_values(X_data)
         except Exception as e:
@@ -130,7 +149,9 @@ def plot_shap_summary(
             logger.warning("Falling back to KernelExplainer (this will be slower)...")
             # Fallback to KernelExplainer
             background_size = min(50, len(X_data))
-            explainer = shap.KernelExplainer(model_wrapper.model.predict, X_data[:background_size])
+            _bg_rng = np.random.default_rng(42)
+            _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
+            explainer = shap.KernelExplainer(..., X_data[_bg_idx])
             shap_values = explainer.shap_values(X_data)
 
     else:
@@ -147,7 +168,9 @@ def plot_shap_summary(
 
         # Use a smaller background dataset for efficiency
         background_size = min(50, len(X_data))
-        explainer = shap.KernelExplainer(predict_fn, X_data[:background_size])
+        _bg_rng = np.random.default_rng(42)
+        _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
+        explainer = shap.KernelExplainer(..., X_data[_bg_idx])
         shap_values = explainer.shap_values(X_data)
 
     # Handle the different formats SHAP might return
@@ -194,12 +217,17 @@ def plot_shap_waterfall(
         explainer = shap.TreeExplainer(model_wrapper.model)
     elif hasattr(model_wrapper.model, "layers"):
         background_size = min(100, len(X_data))
-        background = X_data[:background_size]
+        _bg_rng = np.random.default_rng(42)
+        _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
+        background = X_data[_bg_idx]
+        _warn_if_deep_explainer_deprecated()
         explainer = shap.DeepExplainer(model_wrapper.model, background)
     else:
         predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
         background_size = min(50, len(X_data))
-        explainer = shap.KernelExplainer(predict_fn, X_data[:background_size])
+        _bg_rng = np.random.default_rng(42)
+        _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
+        explainer = shap.KernelExplainer(..., X_data[_bg_idx])
 
     # Get SHAP values for the specific sample
     sample_data = X_data[sample_index : sample_index + 1]
@@ -289,16 +317,23 @@ def plot_shap_dependence(
         elif hasattr(model_wrapper.model, "layers"):
             try:
                 background_size = min(100, len(X_data))
-                background = X_data[:background_size]
+                _bg_rng = np.random.default_rng(42)
+                _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
+                background = X_data[_bg_idx]
+                _warn_if_deep_explainer_deprecated()
                 explainer = shap.DeepExplainer(model_wrapper.model, background)
             except Exception:
                 predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
                 background_size = min(50, len(X_data))
-                explainer = shap.KernelExplainer(predict_fn, X_data[:background_size])
+                _bg_rng = np.random.default_rng(42)
+                _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
+                explainer = shap.KernelExplainer(..., X_data[_bg_idx])
         else:
             predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
             background_size = min(50, len(X_data))
-            explainer = shap.KernelExplainer(predict_fn, X_data[:background_size])
+            _bg_rng = np.random.default_rng(42)
+            _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
+            explainer = shap.KernelExplainer(..., X_data[_bg_idx])
 
         # Get SHAP values
         shap_values = explainer.shap_values(X_data)
@@ -352,12 +387,17 @@ def get_shap_feature_importance(
         explainer = shap.TreeExplainer(model_wrapper.model)
     elif hasattr(model_wrapper.model, "layers"):
         background_size = min(100, len(X_data))
-        background = X_data[:background_size]
+        _bg_rng = np.random.default_rng(42)
+        _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
+        background = X_data[_bg_idx]
+        _warn_if_deep_explainer_deprecated()
         explainer = shap.DeepExplainer(model_wrapper.model, background)
     else:
         predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
         background_size = min(50, len(X_data))
-        explainer = shap.KernelExplainer(predict_fn, X_data[:background_size])
+        _bg_rng = np.random.default_rng(42)
+        _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
+        explainer = shap.KernelExplainer(..., X_data[_bg_idx])
 
     # Get SHAP values
     shap_values = explainer.shap_values(X_data)

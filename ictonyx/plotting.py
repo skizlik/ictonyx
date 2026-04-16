@@ -1261,8 +1261,15 @@ def plot_pacf_vs_lag(
 
     fig = plt.figure(figsize=(10, 6))
     plt.stem(lags, pacf_values, label="PACF")
+    # conf_int from statsmodels is already in absolute PACF value units.
+    # Do NOT subtract pacf_values — that recenters the band at zero.
     plt.fill_between(
-        lags, conf_int[:, 0] - pacf_values, conf_int[:, 1] - pacf_values, alpha=0.2, color="gray"
+        lags,
+        conf_int[:, 0],
+        conf_int[:, 1],
+        alpha=0.2,
+        color="gray",
+        label=f"{int((1 - alpha) * 100)}% CI",
     )
     plt.title(title)
     plt.grid(True)
@@ -1274,6 +1281,7 @@ def plot_averaged_pacf(
     lags: List[float],
     mean_pacf: List[float],
     std_pacf: List[float],
+    n_series: int = 0,
     title: str = "Averaged Partial Autocorrelation of Loss",
     conf_level: float = 0.95,
     show: Optional[bool] = None,
@@ -1292,7 +1300,19 @@ def plot_averaged_pacf(
 
     Returns:
         The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
+
+    deprecated::
+        ``plot_averaged_pacf`` is deprecated and will be removed in v0.5.0.
+        Use ``plot_run_independence_diagnostics()`` (v0.4.4) instead.
     """
+
+    warnings.warn(
+        "plot_averaged_pacf() is deprecated and will be removed in v0.5.0. "
+        "Use plot_run_independence_diagnostics() (available in v0.4.4) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     _check_plotting()
     fig = plt.figure(figsize=(10, 6))
     plt.plot(lags, mean_pacf, "b-", label="Mean PACF", linewidth=2)
@@ -1305,10 +1325,17 @@ def plot_averaged_pacf(
         label="±1 Standard Deviation",
     )
 
-    n_points = len(lags) * 10
-    conf_bound = 1.96 / np.sqrt(n_points)
-    plt.axhline(y=conf_bound, color="gray", linestyle=":", alpha=0.7)
-    plt.axhline(y=-conf_bound, color="gray", linestyle=":", alpha=0.7)
+    if n_series > 0:
+        z = _scipy_stats.norm.ppf((1 + conf_level) / 2)
+        conf_bound = z / np.sqrt(n_series)
+        plt.axhline(
+            y=conf_bound,
+            color="gray",
+            linestyle=":",
+            alpha=0.7,
+            label=f"{int(conf_level * 100)}% CI",
+        )
+        plt.axhline(y=-conf_bound, color="gray", linestyle=":", alpha=0.7)
 
     plt.title(title)
     plt.legend()

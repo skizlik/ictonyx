@@ -670,9 +670,10 @@ def plot_comparison_boxplots(
 
 
 def plot_comparison_forest(
-    comparison_results: Dict[str, Any],
+    comparison_results: Any,
     baseline_model: str,
     metric: str = "Accuracy",
+    ax: Optional["Axes"] = None,
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
     """Forest plot of effect sizes relative to a baseline model.
@@ -722,14 +723,32 @@ def plot_comparison_forest(
         scores = np.array(scores)
         diff = scores.mean() - baseline_mean
 
-        # Welch's t-interval approximation
-        se_diff = np.sqrt(
-            np.var(scores, ddof=1) / len(scores)
-            + np.var(baseline_scores, ddof=1) / len(baseline_scores)
-        )
-        df_welch = len(scores) + len(baseline_scores) - 2
-        t_crit = _scipy_stats.t.ppf(0.975, df=df_welch)
-        ci = t_crit * se_diff
+        # Extract pre-computed pairwise CI if available (paired, correct).
+        pairwise_comps: Dict = {}
+        if hasattr(comparison_results, "pairwise_comparisons"):
+            pairwise_comps = comparison_results.pairwise_comparisons or {}
+        elif isinstance(comparison_results, dict):
+            pairwise_comps = comparison_results.get("pairwise_comparisons", {})
+
+        ci_half = None
+        for key in (f"{name}_vs_{baseline_model}", f"{baseline_model}_vs_{name}"):
+            result = pairwise_comps.get(key)
+            if result is not None and getattr(result, "confidence_interval", None):
+                lo, hi = result.confidence_interval
+                ci_half = (hi - lo) / 2.0
+                break
+
+        if ci_half is None:
+            # Fallback: Welch unpaired. ~2.36x too wide for paired data (r≈0.85).
+            se_diff = np.sqrt(
+                np.var(scores, ddof=1) / len(scores)
+                + np.var(baseline_scores, ddof=1) / len(baseline_scores)
+            )
+            df_welch = len(scores) + len(baseline_scores) - 2
+            t_crit = _scipy_stats.t.ppf(0.975, df=df_welch)
+            ci_half = t_crit * se_diff
+
+        ci = ci_half
 
         models.append(name)
         diff_means.append(diff)
@@ -742,7 +761,10 @@ def plot_comparison_forest(
         else:
             colors.append("gray")  # Neutral
 
-    fig, ax = plt.subplots(figsize=(8, len(models) * 0.8 + 2))
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, len(models) * 0.8 + 2))
+    else:
+        fig = ax.figure
 
     y_pos = np.arange(len(models))
     for i, (dm, yp, ci, col) in enumerate(zip(diff_means, y_pos, cis, colors)):

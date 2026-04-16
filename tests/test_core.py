@@ -1812,3 +1812,71 @@ class TestPyTorchAssessNoInlineImport:
         result = wrapper.assess(np.array([0, 1, 1, 1]))
         assert "accuracy" in result
         assert 0.0 <= result["accuracy"] <= 1.0
+
+
+class TestPyTorchDoubleSoftmaxDetection:
+    def _nested_model(self):
+        """A model with Softmax buried inside a sub-module — NOT the output layer."""
+        pytest.importorskip("torch")
+        import torch
+        import torch.nn as nn
+
+        class SubBlock(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = nn.Linear(4, 3)
+                self.softmax = nn.Softmax(dim=1)  # buried — not output
+
+            def forward(self, x):
+                return self.softmax(self.linear(x))
+
+        class Model(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.block = SubBlock()
+                self.out = nn.Linear(3, 2)  # actual output — no softmax
+
+            def forward(self, x):
+                return self.out(self.block(x))
+
+        return Model()
+
+    def test_nested_softmax_no_false_positive(self):
+        """Softmax inside a sub-block must NOT trigger the double-softmax warning."""
+        pytest.importorskip("torch")
+        import warnings
+
+        import torch
+        import torch.nn as nn
+
+        from ictonyx.core import PyTorchModelWrapper
+
+        wrapper = PyTorchModelWrapper(
+            self._nested_model(),
+            criterion=nn.CrossEntropyLoss(),
+            optimizer_class=torch.optim.SGD,
+            optimizer_params={"lr": 0.01},
+            task="classification",
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            wrapper.predict_proba(np.random.rand(5, 4).astype(np.float32))
+
+    def test_sequential_softmax_output_warns(self):
+        """Sequential ending in Softmax must still warn."""
+        pytest.importorskip("torch")
+        import torch
+        import torch.nn as nn
+
+        from ictonyx.core import PyTorchModelWrapper
+
+        model = nn.Sequential(nn.Linear(4, 3), nn.Softmax(dim=1))
+        wrapper = PyTorchModelWrapper(
+            model,
+            criterion=nn.CrossEntropyLoss(),
+            optimizer_class=torch.optim.SGD,
+            optimizer_params={"lr": 0.01},
+            task="classification",
+        )
+        with pytest.warns(UserWarning, match="double"):
+            wrapper.predict_proba(np.random.rand(5, 4).astype(np.float32))

@@ -1431,11 +1431,14 @@ if PYTORCH_AVAILABLE:
             if self.task != "classification":
                 raise ValueError("predict_proba() is only available for classification models.")
 
-            _modules = list(self.model.modules())
-            if _modules and isinstance(_modules[-1], (torch.nn.Softmax, torch.nn.LogSoftmax)):
+            # Use direct children (not recursive modules()) — reliable for common architectures.
+            # modules()[-1] returns the deepest leaf of the last sub-branch for ResNets and
+            # other nested designs, which is not the output layer.
+            _children = list(self.model.children())
+            if _children and isinstance(_children[-1], (torch.nn.Softmax, torch.nn.LogSoftmax)):
                 warnings.warn(
                     f"PyTorchModelWrapper.predict_proba(): the model's final "
-                    f"layer is {type(_modules[-1]).__name__}, but predict_proba() "
+                    f"layer is {type(_children[-1]).__name__}, but predict_proba() "
                     "also applies softmax. This double-application produces "
                     "incorrectly squashed probabilities. Remove the final "
                     "softmax layer and return raw logits instead.",

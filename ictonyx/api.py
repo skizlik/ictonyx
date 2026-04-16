@@ -344,26 +344,17 @@ def compare_models(
 
     # --- Resolve metric now that all studies are complete ---
     if metric is None:
-        if all(r.has_test_data for r in studies.values()):
-            metric = list(studies.values())[0].preferred_metric("accuracy")
-            settings.logger.info(f"Test data present for all models — comparing on '{metric}'.")
-        else:
-            if any(r.has_test_data for r in studies.values()):
-                warnings.warn(
-                    "Some models have test data and some do not. "
-                    "Falling back to 'val_accuracy'. Provide test data for all "
-                    "models to enable test-set comparison.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-            metric = "val_accuracy"
+        metric = "val_accuracy"
 
     # --- Loop 2: extract metric values now that metric is a concrete string ---
     results_store = {}
 
     for name, study_result in studies.items():
         try:
-            metric_values = study_result.get_metric_values(metric)
+            if metric.startswith("test_"):
+                metric_values = study_result.get_test_metric_values(metric)
+            else:
+                metric_values = study_result.get_metric_values(metric)
         except KeyError:
             available = study_result.get_available_metrics()
             hint = ""

@@ -198,6 +198,7 @@ def test_compare_models_insufficient_data(mock_var_study, sample_df):
     """Test error when models fail to return metrics."""
     # Arrange: Study returns empty metrics
     empty_results = MagicMock()
+    empty_results.has_test_data = False
     empty_results.get_final_metrics.return_value = {}
     empty_results.get_metric_values.return_value = []
     mock_var_study.return_value = empty_results

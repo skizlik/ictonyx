@@ -713,3 +713,43 @@ class TestPlotTrainingStabilityPaths:
         }
         fig = plot_training_stability(results)
         assert fig is not None
+
+
+class TestPairwiseMatrixDataclass:
+    def test_accepts_model_comparison_results(self):
+        matplotlib.use("Agg")
+        from ictonyx.analysis import ModelComparisonResults, StatisticalTestResult
+
+        result = StatisticalTestResult(test_name="Mann-Whitney U", statistic=12.0, p_value=0.04)
+        comparison = ModelComparisonResults(
+            overall_test=result,
+            raw_data={"A": [0.9, 0.88], "B": [0.85, 0.87]},
+            pairwise_comparisons={"A_vs_B": result},
+            significant_comparisons=["A_vs_B"],
+            correction_method="none",
+            n_models=2,
+            metric="val_accuracy",
+        )
+        fig = plot_pairwise_comparison_matrix(comparison)
+        assert fig is not None
+
+
+class TestROCNoBluegateError:
+    def test_roc_works_without_tensorflow(self):
+        pytest.importorskip("sklearn")
+        matplotlib.use("Agg")
+        from unittest.mock import patch
+
+        from sklearn.ensemble import RandomForestClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        X = np.random.rand(60, 4)
+        y = np.random.randint(0, 2, 60)
+        wrapper = ScikitLearnModelWrapper(RandomForestClassifier(n_estimators=5))
+        wrapper.fit((X, y))
+        wrapper.predict(X)
+
+        with patch("ictonyx.plotting.HAS_TENSORFLOW_UTILS", False):
+            fig = plot_roc_curve(wrapper, X, y)
+        assert fig is not None

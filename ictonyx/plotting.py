@@ -274,7 +274,6 @@ def plot_roc_curve(
     """
     _check_plotting()
     _check_sklearn_metrics()
-    _check_tensorflow_utils()
 
     if not hasattr(model_wrapper, "predict_proba"):
         settings.logger.warning(
@@ -337,7 +336,6 @@ def plot_precision_recall_curve(
     """
     _check_plotting()
     _check_sklearn_metrics()
-    _check_tensorflow_utils()
 
     if not hasattr(model_wrapper, "predict_proba"):
         settings.logger.warning(
@@ -793,17 +791,23 @@ def plot_pairwise_comparison_matrix(
 
     if not comparison_results:
         warnings.warn(
-            "plot_pairwise_comparison_matrix: pairwise_comparisons is empty.",
+            "plot_pairwise_comparison_matrix: comparison_results is empty.",
             UserWarning,
             stacklevel=2,
         )
         return None
 
-    if "pairwise_comparisons" not in comparison_results:
+    if hasattr(comparison_results, "pairwise_comparisons"):
+        pairwise = comparison_results.pairwise_comparisons
+    elif isinstance(comparison_results, dict):
+        pairwise = comparison_results.get("pairwise_comparisons")
+    else:
+        pairwise = None
+
+    if not pairwise:
         settings.logger.warning("No pairwise comparisons to plot.")
         return None
 
-    pairwise = comparison_results["pairwise_comparisons"]
     _name_set: set = set()
     for comp_name in pairwise.keys():
         names = comp_name.split("_vs_", maxsplit=1)

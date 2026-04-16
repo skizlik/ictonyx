@@ -722,6 +722,9 @@ if TENSORFLOW_AVAILABLE:
                     "Evaluation data must be a tuple of (X, y), a tf.data.Dataset, or a Sequence."
                 )
             metric_names = self.model.metrics_names
+            # TF 2.x returns a plain float for loss-only models (no additional metrics).
+            if not hasattr(results, "__iter__"):
+                results = [results]
             return dict(zip(metric_names, results))
 
         def assess(self, true_labels: np.ndarray) -> Dict[str, float]:
@@ -1529,8 +1532,7 @@ if PYTORCH_AVAILABLE:
                 )
 
             if self.task == "classification":
-                from sklearn.metrics import accuracy_score
-
+                # accuracy_score at module top-level has a numpy fallback for sklearn-free environments.
                 return {"accuracy": float(accuracy_score(true_labels, self.predictions))}
 
             preds = np.asarray(self.predictions, dtype=float)

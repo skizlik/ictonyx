@@ -1758,3 +1758,57 @@ class TestPyTorchDoubleSoftmax:
         )
         with pytest.warns(UserWarning, match="double"):
             wrapper.predict_proba(np.random.rand(5, 4).astype(np.float32))
+
+
+class TestKerasEvaluateScalarReturn:
+    def test_evaluate_handles_scalar_loss_only(self):
+        """TF 2.x returns a float for loss-only models — must not crash."""
+        pytest.importorskip("tensorflow")
+        from unittest.mock import MagicMock
+
+        from ictonyx.core import KerasModelWrapper
+
+        model = MagicMock()
+        model.metrics_names = ["loss"]
+        model.evaluate.return_value = 0.543  # scalar float
+
+        wrapper = KerasModelWrapper(model, task="regression")
+        result = wrapper.evaluate((np.zeros((4, 2)), np.zeros(4)))
+        assert result == {"loss": 0.543}
+
+    def test_evaluate_handles_list_return(self):
+        pytest.importorskip("tensorflow")
+        from unittest.mock import MagicMock
+
+        from ictonyx.core import KerasModelWrapper
+
+        model = MagicMock()
+        model.metrics_names = ["loss", "accuracy"]
+        model.evaluate.return_value = [0.543, 0.91]
+
+        wrapper = KerasModelWrapper(model, task="classification")
+        result = wrapper.evaluate((np.zeros((4, 2)), np.zeros(4)))
+        assert result == {"loss": 0.543, "accuracy": 0.91}
+
+
+class TestPyTorchAssessNoInlineImport:
+    def test_assess_uses_module_level_accuracy_score(self):
+        """Removing inline import means the module-level fallback is used."""
+        pytest.importorskip("torch")
+        import torch
+        import torch.nn as nn
+
+        from ictonyx.core import PyTorchModelWrapper
+
+        model = nn.Sequential(nn.Linear(4, 2))
+        wrapper = PyTorchModelWrapper(
+            model,
+            criterion=nn.CrossEntropyLoss(),
+            optimizer_class=torch.optim.SGD,
+            optimizer_params={"lr": 0.01},
+            task="classification",
+        )
+        wrapper.predictions = np.array([0, 1, 0, 1])
+        result = wrapper.assess(np.array([0, 1, 1, 1]))
+        assert "accuracy" in result
+        assert 0.0 <= result["accuracy"] <= 1.0

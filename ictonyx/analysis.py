@@ -332,13 +332,16 @@ def check_independence(
             ``norm.ppf(1 - alpha/2) / sqrt(n)``.
 
     Note:
-        At n ≤ 10, this test has very low power to detect autocorrelation.
+        Note:
+        At n ≤ 10 this test has very low power to detect autocorrelation.
         Absence of a warning is not a strong independence guarantee at
-        typical variability study sizes. Additionally, testing up to
-        ``max_lag`` lags without multiple-comparison correction inflates
-        the false-positive rate — at ``max_lag=5``, α=0.05, the familywise
-        rate for a spurious autocorrelation warning exceeds 22% even on
-        genuinely independent data.
+        typical variability study sizes (n = 20 runs).
+
+        A Bonferroni correction is applied across ``effective_max_lag``
+        lags, controlling the familywise false-positive rate at ``alpha``.
+        Without correction, testing 5 lags at α=0.05 would produce a
+        22.6% familywise rate for a spurious warning on independent data;
+        the correction reduces this to the nominal α.
 
 
     Returns:

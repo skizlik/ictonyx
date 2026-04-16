@@ -1655,7 +1655,7 @@ class TestVariabilityStudyResultsTestMetrics:
             all_runs_metrics=[],
             final_metrics={"val_accuracy": val_values},
             final_test_metrics=[
-                {"run_id": i + 1, "test_accuracy": v} for i, v in enumerate(test_values)
+                {"run_id": i + 1, "accuracy": v} for i, v in enumerate(test_values)
             ],
             seed=42,
         )
@@ -1808,8 +1808,8 @@ class TestVariabilityStudyResultsPersistence:
             ],
             final_metrics={"val_accuracy": [0.80, 0.82]},
             final_test_metrics=[
-                {"run_id": 1, "test_accuracy": 0.78},
-                {"run_id": 2, "test_accuracy": 0.80},
+                {"run_id": 1, "accuracy": 0.78},
+                {"run_id": 2, "accuracy": 0.80},
             ],
             seed=99,
         )
@@ -1939,7 +1939,7 @@ class TestVariabilityStudyResultsRepr:
     def _make_results(self, with_test_data: bool = False) -> "VariabilityStudyResults":
         df = pd.DataFrame({"val_accuracy": [0.80, 0.82], "val_loss": [0.4, 0.38]})
         test_metrics = (
-            [{"run_id": 1, "test_accuracy": 0.79}, {"run_id": 2, "test_accuracy": 0.81}]
+            [{"run_id": 1, "accuracy": 0.79}, {"run_id": 2, "accuracy": 0.81}]
             if with_test_data
             else []
         )
@@ -1976,7 +1976,7 @@ class TestVariabilityStudyResultsRepr:
         results = self._make_results(with_test_data=True)
         r = repr(results)
         assert "test_metrics" in r
-        assert "test_accuracy" in r
+        assert "accuracy" in r
 
     def test_repr_excludes_test_part_when_no_test_data(self):
         results = self._make_results(with_test_data=False)
@@ -2215,6 +2215,48 @@ class TestParallelExecution:
         assert len(results_seq.final_metrics["val_accuracy"]) == len(
             results_par.final_metrics["val_accuracy"]
         )
+
+
+class TestPreferredMetricKeyResolution:
+    """Verify preferred_metric() uses bare keys to match final_test_metrics."""
+
+    def _make_results_with_test_data(self):
+        return VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": [0.9, 0.88, 0.91]},
+            final_test_metrics=[
+                {"run_id": 1, "accuracy": 0.87},
+                {"run_id": 2, "accuracy": 0.85},
+                {"run_id": 3, "accuracy": 0.89},
+            ],
+            seed=42,
+        )
+
+    def test_returns_test_prefix_when_test_data_present(self):
+        results = self._make_results_with_test_data()
+        assert results.preferred_metric("accuracy") == "test_accuracy"
+
+    def test_returns_val_when_no_test_data(self):
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": [0.9]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        assert results.preferred_metric("accuracy") == "val_accuracy"
+
+    def test_get_test_metric_accepts_bare_key(self):
+        results = self._make_results_with_test_data()
+        assert results.get_test_metric_values("accuracy") == [0.87, 0.85, 0.89]
+
+    def test_get_test_metric_accepts_prefixed_key(self):
+        results = self._make_results_with_test_data()
+        assert results.get_test_metric_values("test_accuracy") == [0.87, 0.85, 0.89]
+
+    def test_get_test_metric_raises_with_helpful_message(self):
+        results = self._make_results_with_test_data()
+        with pytest.raises(KeyError, match="without 'test_' prefix"):
+            results.get_test_metric_values("f1")
 
 
 class TestSetupMlflow:

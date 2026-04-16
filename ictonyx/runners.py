@@ -1025,8 +1025,13 @@ class VariabilityStudyResults:
     def preferred_metric(self, base: str = "accuracy") -> str:
         """Return the preferred metric name for this study.
 
-        Returns ``f"test_{base}"`` when test data is present and the metric
-        was tracked, ``f"val_{base}"`` otherwise.
+        Returns ``f"test_{base}"`` when test data is present and the base
+        metric was tracked, ``f"val_{base}"`` otherwise.
+
+        Note:
+            ``final_test_metrics`` stores metrics under bare keys (e.g.
+            ``"accuracy"``, not ``"test_accuracy"``). This method compares
+            against the bare key and returns the prefixed form.
 
         Args:
             base: Base metric name without prefix. Default ``"accuracy"``.
@@ -1034,11 +1039,10 @@ class VariabilityStudyResults:
         Returns:
             The most appropriate metric key for this study's results.
         """
-        test_key = f"test_{base}"
         if self.has_test_data:
             tracked = {k for m in self.final_test_metrics for k in m if k != "run_id"}
-            if test_key in tracked:
-                return test_key
+            if base in tracked:  # "accuracy" in {"accuracy"} → correct
+                return f"test_{base}"
         return f"val_{base}"
 
     def summarize(self) -> str:
@@ -1192,24 +1196,27 @@ class VariabilityStudyResults:
     def get_test_metric_values(self, metric: str) -> List[float]:
         """Get per-run final values for a test-set metric.
 
+        Accepts either bare key (``'accuracy'``) or prefixed form
+        (``'test_accuracy'``) — both are resolved against the bare key,
+        which is how ``final_test_metrics`` actually stores values.
+
         Args:
-            metric: Metric key, e.g. 'test_accuracy', 'test_loss'.
+            metric: Metric key, e.g. ``'accuracy'`` or ``'test_accuracy'``.
 
         Returns:
             List of values, one per run, in run order.
 
         Raises:
-            KeyError: If the metric was not tracked, or if no test data
-                was provided (final_test_metrics will be empty).
+            KeyError: If the metric was not tracked or no test data was provided.
         """
-        values = [m[metric] for m in self.final_test_metrics if metric in m]
+        bare = metric[len("test_") :] if metric.startswith("test_") else metric
+        values = [m[bare] for m in self.final_test_metrics if bare in m]
         if not values:
             available = sorted({k for m in self.final_test_metrics for k in m if k != "run_id"})
             raise KeyError(
                 f"Test metric '{metric}' not found. "
-                f"Available test metrics: {available}. "
-                "If no test data was provided, use get_metric_values() "
-                "to access validation metrics."
+                f"Available (stored without 'test_' prefix): {available}. "
+                "If no test data was provided, use get_metric_values() instead."
             )
         return values
 

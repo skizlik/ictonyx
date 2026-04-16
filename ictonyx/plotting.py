@@ -66,16 +66,16 @@ def _check_tensorflow_utils():
 
 
 def _finalize_plot(fig: "Figure", show_arg: Optional[bool]) -> Optional["Figure"]:
-    """
-    Centralized logic for showing/returning plots.
-    Always returns the Figure object. Calls plt.show() when appropriate
-    but does not suppress the return value.
+    """Centralized logic for showing or returning a plot.
+
+    When display is active, calls ``plt.show()`` and returns ``None`` so
+    Jupyter does not render the figure a second time as the cell's return value.
+    When display is suppressed, returns the figure for programmatic use.
     """
     should_show = show_arg if show_arg is not None else settings.should_display()
-
     if should_show:
         plt.show()
-
+        return None  # Prevent Jupyter double-render
     return fig
 
 

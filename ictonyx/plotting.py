@@ -21,6 +21,11 @@ except ImportError:
     sn = None
     HAS_PLOTTING = False
 
+try:
+    from matplotlib.axes import Axes
+except ImportError:
+    Axes = None  # type: ignore[assignment,misc]
+
 # Optional sklearn for metrics
 try:
     from sklearn.metrics import auc, precision_recall_curve, roc_curve
@@ -733,8 +738,9 @@ def plot_comparison_forest(
         ci_half = None
         for key in (f"{name}_vs_{baseline_model}", f"{baseline_model}_vs_{name}"):
             result = pairwise_comps.get(key)
-            if result is not None and getattr(result, "confidence_interval", None):
-                lo, hi = result.confidence_interval
+            ci = getattr(result, "confidence_interval", None)
+            if ci is not None and isinstance(ci, (list, tuple)) and len(ci) == 2:
+                lo, hi = ci
                 ci_half = (hi - lo) / 2.0
                 break
 

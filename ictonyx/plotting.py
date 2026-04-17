@@ -332,8 +332,8 @@ def plot_roc_curve(
         ax.plot(fpr, tpr, label=f"ROC curve of class {i} (area = {roc_auc:.2f})")
 
     ax.plot([0, 1], [0, 1], "--", color=settings.THEME["baseline"], label="Chance")
-    ax.set_xlim([0.0, 1.0])
-    ax.set_ylim([0.0, 1.05])
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.05)
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
     ax.set_title(title if title else "Receiver Operating Characteristic")
@@ -396,8 +396,8 @@ def plot_precision_recall_curve(
             recall, precision, label=f"Precision-recall curve of class {i} (area = {pr_auc:.2f})"
         )
 
-    ax.set_xlim([0.0, 1.0])
-    ax.set_ylim([0.0, 1.05])
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.05)
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
     ax.set_title(title if title else "Precision-Recall Curve")
@@ -672,7 +672,7 @@ def plot_variability_summary(
 
 def plot_run_trajectories(
     results: "VariabilityStudyResults",
-    metric: str = "val_accuracy",
+    metric: Optional[str] = "val_accuracy",
     ax: Optional["Axes"] = None,
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
@@ -697,7 +697,7 @@ def plot_run_trajectories(
     if ax is None:
         fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
 
     run_dfs = results.all_runs_metrics
     if not run_dfs:
@@ -773,7 +773,7 @@ def plot_run_distribution(
     if ax is None:
         fig, ax = plt.subplots(figsize=settings.get_figsize((5, 6)), dpi=150)
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
 
     resolved = metric or results.preferred_metric()
     try:
@@ -833,7 +833,7 @@ def plot_run_strip(
     if ax is None:
         fig, ax = plt.subplots(figsize=settings.get_figsize((4, 6)), dpi=150)
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
 
     resolved = metric or results.preferred_metric()
     try:
@@ -918,7 +918,7 @@ def plot_comparison_boxplots(
     if ax is None:
         fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
 
     # Use themed palette if possible, else default
     sns.boxplot(data=df, x="Model", y=metric, hue="Model", palette="Blues", legend=False, ax=ax)
@@ -1071,7 +1071,7 @@ def plot_comparison_forest(
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, len(models) * 0.8 + 2))
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
 
     y_pos = np.arange(len(models))
     for i, (dm, yp, ci, col) in enumerate(zip(diff_means, y_pos, cis, colors)):
@@ -1485,7 +1485,7 @@ def plot_autocorr_vs_lag(
     if ax is None:
         fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
     ax.stem(lags, autocorr_values)
     ax.set_title(title)
     ax.set_xlabel("Lag")
@@ -1522,7 +1522,7 @@ def plot_averaged_autocorr(
     if ax is None:
         fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
     ax.plot(lags, mean_autocorr, color=settings.THEME["val"], label="Mean Autocorrelation")
     ax.fill_between(
         lags,
@@ -1586,7 +1586,7 @@ def plot_pacf_vs_lag(
     if ax is None:
         fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
     ax.stem(lags, pacf_values, label="PACF")
     # conf_int from statsmodels is already in absolute PACF value units.
     # Do NOT subtract pacf_values — that recenters the band at zero.

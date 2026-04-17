@@ -8,10 +8,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Sphinx documentation hosted on ReadTheDocs
+- `HuggingFaceModelWrapper` — text classification via `transformers.Trainer`;
+  seed-controlled fine-tuning for variability studies. `pip install ictonyx[huggingface]`
+- Sphinx documentation site hosted on ReadTheDocs
+- `plot_rank_correlation_over_epoch` — Spearman correlation between epoch-k
+  rankings and final rankings; identifies the training step at which seed
+  order stabilises
+- `VariabilityStudyResults.report()` for self-contained HTML/markdown summaries
 - `VariabilityStudyResults.bootstrap_ci()` convenience method
-- `VariabilityStudyResults.report()` for self-contained summaries
+- Infrastructure sweep
 - Paired/blocked experimental designs for model comparison
+- `PyTorchDataHandler`
+---
+
+## [0.4.3] — 2026-04-17
+
+### Fixed — Critical correctness
+
+- `VariabilityStudyResults.preferred_metric()`: key-prefix mismatch caused
+  the method to always return `"val_accuracy"` even when a held-out test set
+  was provided. `final_test_metrics` stores bare keys (`"accuracy"`) but the
+  method was checking for `"test_accuracy"`, silently routing
+  `test_against_null()` and `compare_results()` to validation metrics for
+  every user who provides a test set. `get_test_metric_values()` now accepts
+  both bare (`"accuracy"`) and prefixed (`"test_accuracy"`) forms
+  transparently.
+- `KerasModelWrapper.evaluate()`: no longer crashes with `TypeError` on
+  loss-only Keras models. TF 2.x returns a plain `float` when no additional
+  metrics are compiled; `dict(zip(metric_names, float))` raised because a
+  float is not iterable. A scalar guard wraps the result before zipping.
+- `PyTorchModelWrapper.assess()`: inline `from sklearn.metrics import
+  accuracy_score` removed. The module-level symbol (which has a numpy
+  fallback for sklearn-free environments) is used instead.
+- `PyTorchModelWrapper.predict_proba()`: last-layer softmax detection changed
+  from `list(self.model.modules())[-1]` to `list(self.model.children())[-1]`.
+  The prior implementation performed a depth-first traversal returning the
+  deepest leaf of the last sub-branch for non-Sequential architectures
+  (ResNets, attention blocks), not the output layer.
+- `compare_models()`: metric routing reverted to always default to
+  `"val_accuracy"` when `metric=None`. The BUG-39 fix caused auto-routing to
+  test metrics whenever `has_test_data` was true, including cases where the
+  DataHandler created an internal test split not intended for cross-model
+  comparison. Users who want test-set comparison pass `metric="test_accuracy"`
+  explicitly.
+- `check_independence()` docstring: `Note:` corrected — the function applies
+  Bonferroni correction; the stale text claiming it did not was removed.
+
+### Fixed — Plotting correctness
+
+- `plot_pairwise_comparison_matrix()`: no longer crashes on
+  `ModelComparisonResults` dataclass; `hasattr`/`isinstance` guards replace
+  dict key access.
+- `plot_roc_curve()` and `plot_precision_recall_curve()`:
+  `_check_tensorflow_utils()` removed; sklearn users no longer blocked by a
+  TF import check when a numpy fallback was already present.
+- `plot_comparison_forest()`: CI now uses the pre-computed
+  `confidence_interval` from `StatisticalTestResult` when available (paired,
+  correct). Falls back to Welch unpaired approximation. Guard added to
+  prevent unpacking non-sequence `confidence_interval` values (e.g. mocks).
+  `ax=` parameter added.
+- `plot_pacf_vs_lag()`: CI band no longer subtracted from PACF values; prior
+  implementation centred the band at zero instead of at the PACF values.
+- `plot_averaged_pacf()`: fabricated CI formula `1.96/sqrt(len(lags)*10)`
+  replaced with correct `1.96/sqrt(n_series)`. New `n_series` parameter
+  required for CI reference lines. Deprecated; will be removed in v0.5.0.
+- `_finalize_plot()`: now returns `None` when showing, preventing Jupyter
+  double-render where the returned figure object caused a second inline
+  display.
+
+### Changed — Style and infrastructure
+
+- Added 8 new keys to `settings.THEME` and all three theme variants
+  (`default`, `dark`, `publication`): `neutral`, `better`, `worse`, `point`,
+  `positive`, `negative`, `sequential`, `diverging`.
+- `set_figsize_scale(factor)` and `get_figsize(base)` added to `settings.py`
+  for global figure size scaling.
+- `_apply_style(ax)` helper added to `plotting.py` — single source of truth
+  for grid, spines, and tick parameters across all plot functions.
+- `import seaborn as sn` corrected to `import seaborn as sns` throughout
+  `plotting.py` (10 call sites).
+- Seven functions converted from `plt.figure()` + state-machine `plt.*`
+  calls to `fig, ax = plt.subplots()` + `ax.*` methods:
+  `plot_confusion_matrix`, `plot_roc_curve`, `plot_precision_recall_curve`,
+  `plot_autocorr_vs_lag`, `plot_averaged_autocorr`, `plot_pacf_vs_lag`,
+  `plot_averaged_pacf`. All now use `settings.get_figsize()` and `dpi=150`.
+- Hardcoded colour strings in `plot_training_stability` replaced with
+  `settings.THEME` references.
+- `ax: Optional[Axes] = None` added to `plot_comparison_boxplots`,
+  `plot_autocorr_vs_lag`, `plot_averaged_autocorr`, `plot_pacf_vs_lag`,
+  and all three new variability functions.
+
+### Added
+
+- `plot_run_trajectories(results, metric, ax, show)` — overlaid per-run
+  epoch trajectories with mean curve.
+- `plot_run_distribution(results, metric, ax, show)` — violin plot of final
+  metric values with individual run dots overlaid.
+- `plot_run_strip(results, metric, ax, show)` — strip plot with mean and
+  ±1 SD markers. Best for small n where a violin oversmooths.
+- `plot_variability_summary()`: new `kind=` parameter dispatches to the three
+  new functions when used with `results=`. Old positional-argument form
+  deprecated and will be removed in v0.5.0.
+- `plot_comparison_boxplots()`: significance bracket annotations (`*`) drawn
+  above boxes for pairs in `significant_comparisons`.
 
 ---
 

@@ -22,6 +22,7 @@ from ictonyx.plotting import (
     plot_pacf_vs_lag,
     plot_pairwise_comparison_matrix,
     plot_precision_recall_curve,
+    plot_rank_correlation_over_epoch,
     plot_roc_curve,
     plot_run_distribution,
     plot_run_strip,
@@ -128,6 +129,31 @@ def small_results():
     return VariabilityStudyResults(
         all_runs_metrics=run_dfs,
         final_metrics={"val_accuracy": [0.80, 0.78, 0.83, 0.79, 0.82]},
+        final_test_metrics=[],
+        seed=42,
+    )
+
+
+@pytest.fixture
+def large_results():
+    """20-run VariabilityStudyResults — minimum for rank correlation."""
+    from ictonyx.runners import VariabilityStudyResults
+
+    rng = np.random.default_rng(42)
+    run_dfs = [
+        pd.DataFrame(
+            {
+                "epoch": [1, 2, 3, 4, 5],
+                "val_accuracy": np.cumsum(rng.uniform(0.05, 0.15, 5)).tolist(),
+                "run_num": [i] * 5,
+            }
+        )
+        for i in range(1, 21)
+    ]
+    final_vals = [df["val_accuracy"].iloc[-1] for df in run_dfs]
+    return VariabilityStudyResults(
+        all_runs_metrics=run_dfs,
+        final_metrics={"val_accuracy": final_vals},
         final_test_metrics=[],
         seed=42,
     )
@@ -864,3 +890,33 @@ class TestNewVariabilityFunctions:
                 all_runs_metrics_list=small_results.all_runs_metrics,
                 show=False,
             )
+
+
+class TestRankCorrelationPlot:
+    def test_returns_figure_with_sufficient_runs(self, large_results):
+        matplotlib.use("Agg")
+        fig = plot_rank_correlation_over_epoch(large_results, show=False)
+        assert fig is not None
+
+    def test_raises_with_fewer_than_15_runs(self, small_results):
+        """small_results has 5 runs — must raise ValueError."""
+        matplotlib.use("Agg")
+        with pytest.raises(ValueError, match="n_runs >= 15"):
+            plot_rank_correlation_over_epoch(small_results, show=False)
+
+    def test_accepts_explicit_metric(self, large_results):
+        matplotlib.use("Agg")
+        fig = plot_rank_correlation_over_epoch(large_results, metric="val_accuracy", show=False)
+        assert fig is not None
+
+    def test_accepts_ax_parameter(self, large_results):
+        matplotlib.use("Agg")
+        fig_outer, ax_outer = plt.subplots()
+        result = plot_rank_correlation_over_epoch(large_results, ax=ax_outer, show=False)
+        assert result is fig_outer
+        plt.close("all")
+
+    def test_custom_threshold(self, large_results):
+        matplotlib.use("Agg")
+        fig = plot_rank_correlation_over_epoch(large_results, threshold=0.5, show=False)
+        assert fig is not None

@@ -874,6 +874,166 @@ def plot_run_strip(
     return _finalize_plot(fig, show)
 
 
+def plot_rank_correlation_over_epoch(
+    results: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    threshold: float = 0.8,
+    window: int = 5,
+    ax: Optional["Axes"] = None,
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Spearman rank correlation between epoch-k and final-epoch rankings.
+
+    For each epoch k, computes the Spearman correlation between the
+    per-run metric ranking at epoch k and the per-run ranking at the
+    final epoch. Plotted over epochs with a rolling mean smoother.
+
+    The first epoch where the smoothed correlation reaches ``threshold``
+    is annotated. This answers: at what point in training can you predict
+    which seed will produce the best final model?
+
+    Args:
+        results: A completed :class:`~ictonyx.runners.VariabilityStudyResults`
+            with per-epoch data in ``all_runs_metrics``.
+        metric: Metric column to rank runs by. If ``None``, resolved via
+            ``preferred_metric()``. Should be a validation metric.
+        threshold: Smoothed correlation value at which to draw the
+            annotation line. Default 0.8.
+        window: Rolling mean window size for smoothing. Default 5.
+        ax: Optional existing Axes.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The figure, or ``None`` on error or when display is active.
+
+    Raises:
+        ValueError: If ``n_runs < 15`` — rank correlation is unreliable
+            with fewer runs.
+    """
+    _check_plotting()
+
+    n_runs = results.n_runs
+    if n_runs < 15:
+        raise ValueError(
+            f"plot_rank_correlation_over_epoch() requires n_runs >= 15 for "
+            f"reliable rank correlation. Got n_runs={n_runs}. Run at least "
+            f"15 seeds to use this plot."
+        )
+
+    resolved = metric or results.preferred_metric()
+    run_dfs = results.all_runs_metrics
+    if not run_dfs:
+        settings.logger.warning("plot_rank_correlation_over_epoch: no run data available.")
+        return None
+
+    train_col, val_col = _find_metric_columns(run_dfs[0], resolved)
+    col = val_col or train_col
+    if col is None:
+        settings.logger.warning(
+            f"plot_rank_correlation_over_epoch: metric '{resolved}' " "not found in run data."
+        )
+        return None
+
+    # Build aligned matrix: shape (n_runs, n_epochs)
+    # Use minimum epoch count across all runs to align
+    series = [df[col].values for df in run_dfs if col in df.columns]
+    if len(series) < 15:
+        raise ValueError(
+            f"plot_rank_correlation_over_epoch() requires at least 15 runs "
+            f"with valid data for '{col}'. Found {len(series)}."
+        )
+    min_epochs = min(len(s) for s in series)
+    if min_epochs < 2:
+        settings.logger.warning("plot_rank_correlation_over_epoch: fewer than 2 epochs available.")
+        return None
+
+    matrix = np.array([s[:min_epochs] for s in series])  # (n_runs, n_epochs)
+
+    # Final-epoch rankings (higher metric = better rank = lower rank number)
+    from scipy.stats import rankdata, spearmanr
+
+    final_ranks = rankdata(-matrix[:, -1])
+
+    correlations = []
+    for epoch_idx in range(min_epochs):
+        epoch_ranks = rankdata(-matrix[:, epoch_idx])
+        rho, _ = spearmanr(epoch_ranks, final_ranks)
+        correlations.append(float(rho))
+
+    epochs = np.arange(1, min_epochs + 1)
+    corr_series = pd.Series(correlations, index=epochs)
+    smoothed = corr_series.rolling(window, center=True, min_periods=1).mean()
+
+    # Find first epoch where smoothed correlation >= threshold
+    threshold_epoch = None
+    for ep, val in zip(epochs, smoothed.values):
+        if val >= threshold:
+            threshold_epoch = ep
+            break
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    else:
+        fig = ax.figure  # type: ignore[assignment]
+
+    # Raw correlation as faint line
+    ax.plot(
+        epochs,
+        correlations,
+        color=settings.THEME["val"],
+        alpha=0.35,
+        linewidth=1,
+        label="Raw Spearman ρ",
+    )
+    # Smoothed correlation as main line
+    ax.plot(
+        epochs,
+        smoothed.values,
+        color=settings.THEME["val"],
+        linewidth=2.5,
+        label=f"Smoothed (window={window})",
+    )
+
+    # Threshold reference line
+    ax.axhline(
+        threshold,
+        color=settings.THEME["neutral"],
+        linestyle="--",
+        linewidth=1.2,
+        label=f"Threshold ρ = {threshold}",
+    )
+
+    # Annotation: first epoch at threshold
+    if threshold_epoch is not None:
+        ax.axvline(
+            threshold_epoch, color=settings.THEME["significant"], linestyle=":", linewidth=1.5
+        )
+        ax.annotate(
+            f"ρ ≥ {threshold}\nat epoch {threshold_epoch}",
+            xy=(threshold_epoch, threshold),
+            xytext=(threshold_epoch + max(1, min_epochs * 0.05), threshold - 0.08),
+            fontsize=9,
+            color=settings.THEME["significant"],
+            arrowprops=dict(
+                arrowstyle="->",
+                color=settings.THEME["significant"],
+                lw=1.2,
+            ),
+        )
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Spearman ρ (epoch-k vs final ranking)")
+    ax.set_title(
+        f"Rank Correlation Over Training — {resolved}\n"
+        f"(n={len(series)} runs; higher = final ranking predictable earlier)"
+    )
+    ax.set_ylim(-0.1, 1.05)
+    ax.legend(loc="lower right")
+    _apply_style(ax)
+
+    return _finalize_plot(fig, show)
+
+
 def plot_comparison_boxplots(
     comparison_results: Dict[str, Any],
     metric: str = "Accuracy",

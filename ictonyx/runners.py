@@ -256,6 +256,10 @@ class ExperimentRunner:
         rename_map = {
             "accuracy": "train_accuracy",
             "loss": "train_loss",
+            "r2": "train_r2",
+            "mse": "train_mse",
+            "rmse": "train_rmse",
+            "mae": "train_mae",
         }
         existing = {k: v for k, v in rename_map.items() if k in df.columns}
         return df.rename(columns=existing, inplace=False)

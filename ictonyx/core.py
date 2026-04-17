@@ -1352,11 +1352,48 @@ if PYTORCH_AVAILABLE:
                     history["val_loss"].append(val_loss)
                     if self.task == "classification":
                         history["val_accuracy"].append(val_metric)
+                    else:
+                        reg_metrics = self._compute_epoch_regression_metrics(val_loader)
+                        for k, v in reg_metrics.items():
+                            history.setdefault(k, []).append(v)
 
             self.training_result = TrainingResult(
                 history=history,
                 params={"epochs": epochs, "batch_size": batch_size, "device": str(self.device)},
             )
+
+        def _compute_epoch_regression_metrics(self, loader: "DataLoader") -> Dict[str, float]:
+            """Compute full regression metrics over a DataLoader (val use only).
+
+            Returns dict with ``'val_mse'``, ``'val_rmse'``, ``'val_mae'``,
+            ``'val_r2'``, and ``'val_loss'``.
+            """
+            self.model.eval()
+            all_preds: list = []
+            all_labels: list = []
+            running_loss = 0.0
+            total = 0
+
+            with torch.no_grad():
+                for X_batch, y_batch in loader:
+                    outputs = self.model(X_batch)
+                    if outputs.dim() > 1 and outputs.shape[-1] == 1:
+                        outputs = outputs.squeeze(-1)
+                    loss = self.criterion(outputs, y_batch)
+                    running_loss += loss.item() * X_batch.size(0)
+                    total += X_batch.size(0)
+                    all_preds.extend(outputs.cpu().numpy().tolist())
+                    all_labels.extend(y_batch.cpu().numpy().tolist())
+
+            metrics = _regression_metrics(np.array(all_preds), np.array(all_labels))
+            avg_loss = running_loss / total
+            return {
+                "val_loss": avg_loss,
+                "val_mse": metrics["mse"],
+                "val_rmse": metrics["rmse"],
+                "val_mae": metrics["mae"],
+                "val_r2": metrics["r2"],
+            }
 
         def _evaluate_loader(self, loader: "DataLoader") -> Tuple[float, float]:
             """Evaluate model on a DataLoader. Returns (loss, metric).

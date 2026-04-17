@@ -1740,6 +1740,66 @@ class TestPyTorchNaNGuard:
             wrapper.predict(np.zeros((4, 2), dtype=np.float32))
 
 
+class TestPyTorchRegressionHistory:
+
+    def _make_regression_wrapper(self):
+        pytest.importorskip("torch")
+        import torch
+        import torch.nn as nn
+
+        from ictonyx.core import PyTorchModelWrapper
+
+        model = nn.Sequential(nn.Linear(4, 1))
+        return PyTorchModelWrapper(
+            model,
+            criterion=nn.MSELoss(),
+            optimizer_class=torch.optim.SGD,
+            optimizer_params={"lr": 0.01},
+            task="regression",
+        )
+
+    def test_val_mse_in_history(self):
+        pytest.importorskip("torch")
+        wrapper = self._make_regression_wrapper()
+        X = np.random.rand(40, 4).astype(np.float32)
+        y = np.random.rand(40).astype(np.float32)
+        wrapper.fit((X, y), validation_data=(X[:10], y[:10]), epochs=2, batch_size=8)
+        assert "val_mse" in wrapper.training_result.history
+        assert len(wrapper.training_result.history["val_mse"]) == 2
+
+    def test_val_r2_mae_rmse_in_history(self):
+        pytest.importorskip("torch")
+        wrapper = self._make_regression_wrapper()
+        X = np.random.rand(40, 4).astype(np.float32)
+        y = np.random.rand(40).astype(np.float32)
+        wrapper.fit((X, y), validation_data=(X[:10], y[:10]), epochs=1, batch_size=8)
+        hist = wrapper.training_result.history
+        for key in ("val_r2", "val_mae", "val_rmse"):
+            assert key in hist, f"Missing key: {key}"
+
+    def test_standardize_history_renames_regression_keys(self):
+        import pandas as pd
+
+        from ictonyx.runners import ExperimentRunner
+
+        df = pd.DataFrame(
+            {
+                "r2": [0.9],
+                "mse": [0.01],
+                "mae": [0.05],
+                "rmse": [0.1],
+                "accuracy": [0.95],
+                "loss": [0.2],
+            }
+        )
+        result = ExperimentRunner._standardize_history_df(df)
+        assert "train_r2" in result.columns
+        assert "train_mse" in result.columns
+        assert "train_rmse" in result.columns
+        assert "train_mae" in result.columns
+        assert "r2" not in result.columns
+
+
 class TestPyTorchDoubleSoftmax:
     def test_warns_on_softmax_final_layer(self):
         pytest.importorskip("torch")

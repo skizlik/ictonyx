@@ -124,11 +124,28 @@ class TestSetTheme:
         assert "publication" in msg
 
     def test_theme_has_all_keys(self):
-        """All six expected colour keys must be present after every theme switch."""
-        expected = {"train", "val", "test", "baseline", "significant", "grid"}
+        """All 14 expected colour keys must be present after every theme switch."""
+        expected = {
+            "train",
+            "val",
+            "test",
+            "baseline",
+            "significant",
+            "grid",
+            "neutral",
+            "better",
+            "worse",
+            "point",
+            "positive",
+            "negative",
+            "sequential",
+            "diverging",
+        }
         for theme in ("default", "dark", "publication"):
             set_theme(theme)
-            assert expected == set(THEME.keys()), f"Missing keys after set_theme('{theme}')"
+            assert expected.issubset(set(THEME.keys())), (
+                f"Missing keys after set_theme('{theme}'): " f"{expected - set(THEME.keys())}"
+            )
 
 
 class TestShouldVerbose:

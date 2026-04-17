@@ -102,6 +102,32 @@ def _find_metric_columns(df: pd.DataFrame, metric: str) -> Tuple[Optional[str], 
     return train_col, val_col
 
 
+def _apply_style(
+    ax: "Axes",
+    grid: bool = True,
+    fontsize: int = 11,
+    despine: bool = True,
+) -> None:
+    """Apply standard Ictonyx axis styling.
+
+    Centralises grid, spine, and font-size settings so all plot functions
+    produce consistent visuals and changes propagate from a single place.
+
+    Args:
+        ax: The matplotlib Axes to style.
+        grid: Draw a subtle dotted grid. Default ``True``.
+        fontsize: Tick label font size. Default 11.
+        despine: Remove the top and right spines. Default ``True``.
+    """
+    if grid:
+        ax.grid(True, linestyle=":", alpha=0.5, color=settings.THEME["grid"])
+        ax.set_axisbelow(True)
+    if despine:
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+    ax.tick_params(labelsize=fontsize)
+
+
 # --- Standard Plots ---
 
 

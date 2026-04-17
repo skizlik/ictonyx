@@ -1,7 +1,7 @@
 # ictonyx/settings.py
 import logging
 import sys
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
 # Global Configuration
 _DISPLAY_PLOTS: bool = True
@@ -9,12 +9,20 @@ _VERBOSE: bool = True
 
 # THEME CONFIGURATION
 THEME: Dict[str, str] = {
-    "train": "#1f77b4",  # Standard Blue
-    "val": "#ff7f0e",  # Standard Orange
-    "test": "#2ca02c",  # Standard Green
-    "baseline": "gray",  # For forest plots
-    "significant": "crimson",  # For highlighting significance
-    "grid": "#e6e6e6",  # Light gray for grids
+    "train": "#1f77b4",  # Blue — training metrics
+    "val": "#ff7f0e",  # Orange — validation metrics
+    "test": "#2ca02c",  # Green — test-set metrics
+    "baseline": "gray",  # Forest plot zero-reference line
+    "significant": "crimson",  # Significant result highlight
+    "grid": "#e6e6e6",  # Light gray gridlines
+    "neutral": "#888888",  # Neutral / indeterminate
+    "better": "#2ca02c",  # Positive direction (same as test)
+    "worse": "crimson",  # Negative direction
+    "point": "#333333",  # Scatter / strip plot individual points
+    "positive": "#2ca02c",  # Alias for better
+    "negative": "crimson",  # Alias for worse
+    "sequential": "Blues",  # Seaborn colormap for heatmaps
+    "diverging": "RdBu_r",  # Seaborn diverging colormap
 }
 
 # Setup Library Logger
@@ -62,8 +70,15 @@ _DEFAULT_THEME: Dict[str, str] = {
     "baseline": "gray",
     "significant": "crimson",
     "grid": "#e6e6e6",
+    "neutral": "#888888",
+    "better": "#2ca02c",
+    "worse": "crimson",
+    "point": "#333333",
+    "positive": "#2ca02c",
+    "negative": "crimson",
+    "sequential": "Blues",
+    "diverging": "RdBu_r",
 }
-
 _VALID_THEMES = ("default", "dark", "publication")
 
 
@@ -87,6 +102,14 @@ def set_theme(theme_name: str):
                 "baseline": "#888888",
                 "significant": "#ff4d4d",
                 "grid": "#444444",
+                "neutral": "#888888",
+                "better": "#66ff66",
+                "worse": "#ff4d4d",
+                "point": "#dddddd",
+                "positive": "#66ff66",
+                "negative": "#ff4d4d",
+                "sequential": "Blues",
+                "diverging": "RdBu_r",
             }
         )
     elif theme_name == "publication":
@@ -99,6 +122,14 @@ def set_theme(theme_name: str):
                 "baseline": "black",
                 "significant": "black",
                 "grid": "#eeeeee",
+                "neutral": "#888888",
+                "better": "black",
+                "worse": "black",
+                "point": "black",
+                "positive": "black",
+                "negative": "black",
+                "sequential": "Greys",
+                "diverging": "RdGy",
             }
         )
     else:
@@ -106,6 +137,40 @@ def set_theme(theme_name: str):
             f"Unknown theme '{theme_name}'. "
             f"Valid options are: {', '.join(repr(t) for t in _VALID_THEMES)}"
         )
+
+
+# Figure size scaling — insert before should_display()
+_FIGSIZE_SCALE: float = 1.0
+
+
+def set_figsize_scale(factor: float) -> None:
+    """Scale all figure sizes by a multiplier.
+
+    Useful for high-DPI displays or publication figures requiring a
+    specific physical size. Default scale is 1.0 (no scaling).
+
+    Args:
+        factor: Positive multiplier applied to all base figure sizes.
+
+    Raises:
+        ValueError: If *factor* is not positive.
+    """
+    global _FIGSIZE_SCALE
+    if factor <= 0:
+        raise ValueError(f"factor must be positive, got {factor}")
+    _FIGSIZE_SCALE = float(factor)
+
+
+def get_figsize(base: Tuple[float, float] = (10.0, 6.0)) -> Tuple[float, float]:
+    """Return a base figure size scaled by the current global scale factor.
+
+    Args:
+        base: ``(width, height)`` in inches before scaling. Default ``(10, 6)``.
+
+    Returns:
+        Scaled ``(width, height)`` tuple.
+    """
+    return (base[0] * _FIGSIZE_SCALE, base[1] * _FIGSIZE_SCALE)
 
 
 def should_display() -> bool:

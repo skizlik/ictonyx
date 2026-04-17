@@ -23,6 +23,9 @@ from ictonyx.plotting import (
     plot_pairwise_comparison_matrix,
     plot_precision_recall_curve,
     plot_roc_curve,
+    plot_run_distribution,
+    plot_run_strip,
+    plot_run_trajectories,
     plot_training_history,
     plot_training_stability,
     plot_variability_summary,
@@ -104,6 +107,30 @@ def sample_comparison():
         "ModelA": [0.85, 0.86, 0.84, 0.85, 0.87],
         "ModelB": [0.75, 0.74, 0.76, 0.75, 0.73],
     }
+
+
+@pytest.fixture
+def small_results():
+    """Minimal VariabilityStudyResults for new plotting function tests."""
+    from ictonyx.runners import VariabilityStudyResults
+
+    run_dfs = [
+        pd.DataFrame(
+            {
+                "epoch": [1, 2, 3],
+                "train_accuracy": [0.5, 0.7, 0.85],
+                "val_accuracy": [0.48, 0.65, 0.80],
+                "run_num": [i] * 3,
+            }
+        )
+        for i in range(1, 6)
+    ]
+    return VariabilityStudyResults(
+        all_runs_metrics=run_dfs,
+        final_metrics={"val_accuracy": [0.80, 0.78, 0.83, 0.79, 0.82]},
+        final_test_metrics=[],
+        seed=42,
+    )
 
 
 # --- Tests ---
@@ -753,3 +780,87 @@ class TestROCNoBluegateError:
         with patch("ictonyx.plotting.HAS_TENSORFLOW_UTILS", False):
             fig = plot_roc_curve(wrapper, X, y)
         assert fig is not None
+
+
+class TestNewVariabilityFunctions:
+    """Tests for plot_run_trajectories, plot_run_distribution, plot_run_strip."""
+
+    def test_trajectories_returns_figure(self, small_results):
+        matplotlib.use("Agg")
+        assert plot_run_trajectories(small_results, show=False) is not None
+
+    def test_trajectories_bad_metric_returns_none(self, small_results):
+        matplotlib.use("Agg")
+        assert plot_run_trajectories(small_results, metric="nonexistent", show=False) is None
+
+    def test_trajectories_empty_runs_returns_none(self):
+        matplotlib.use("Agg")
+        from ictonyx.runners import VariabilityStudyResults
+
+        empty = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": [0.8]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        assert plot_run_trajectories(empty, show=False) is None
+
+    def test_distribution_returns_figure(self, small_results):
+        matplotlib.use("Agg")
+        assert plot_run_distribution(small_results, show=False) is not None
+
+    def test_distribution_bad_metric_returns_none(self, small_results):
+        matplotlib.use("Agg")
+        assert plot_run_distribution(small_results, metric="nonexistent", show=False) is None
+
+    def test_strip_returns_figure(self, small_results):
+        matplotlib.use("Agg")
+        assert plot_run_strip(small_results, show=False) is not None
+
+    def test_strip_bad_metric_returns_none(self, small_results):
+        matplotlib.use("Agg")
+        assert plot_run_strip(small_results, metric="nonexistent", show=False) is None
+
+    def test_trajectories_accepts_ax_parameter(self, small_results):
+        matplotlib.use("Agg")
+        fig_outer, ax_outer = plt.subplots()
+        result = plot_run_trajectories(small_results, ax=ax_outer, show=False)
+        assert result is fig_outer
+        plt.close("all")
+
+    def test_dispatcher_trajectories(self, small_results):
+        matplotlib.use("Agg")
+        from ictonyx.plotting import plot_variability_summary
+
+        fig = plot_variability_summary(results=small_results, kind="trajectories", show=False)
+        assert fig is not None
+
+    def test_dispatcher_distribution(self, small_results):
+        matplotlib.use("Agg")
+        from ictonyx.plotting import plot_variability_summary
+
+        fig = plot_variability_summary(results=small_results, kind="distribution", show=False)
+        assert fig is not None
+
+    def test_dispatcher_strip(self, small_results):
+        matplotlib.use("Agg")
+        from ictonyx.plotting import plot_variability_summary
+
+        fig = plot_variability_summary(results=small_results, kind="strip", show=False)
+        assert fig is not None
+
+    def test_dispatcher_unknown_kind_raises(self, small_results):
+        from ictonyx.plotting import plot_variability_summary
+
+        with pytest.raises(ValueError, match="Unknown kind"):
+            plot_variability_summary(results=small_results, kind="banana", show=False)
+
+    def test_dispatcher_legacy_form_warns(self, small_results):
+        matplotlib.use("Agg")
+        from ictonyx.plotting import plot_variability_summary
+
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            plot_variability_summary(
+                all_runs_metrics_list=small_results.all_runs_metrics,
+                show=False,
+            )

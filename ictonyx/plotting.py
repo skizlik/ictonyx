@@ -484,7 +484,7 @@ def plot_variability_summary(
             raise ValueError(
                 f"Unknown kind='{kind}'. " f"Valid options: {sorted(_dispatch.keys())}."
             )
-        return fn(results, metric=metric, show=show)
+        return fn(results, metric=None, show=show)
 
     # ── Legacy positional-argument form deprecation ───────────────────────
     if all_runs_metrics_list is not None or final_metrics_series is not None:
@@ -692,6 +692,8 @@ def plot_run_trajectories(
         The figure, or ``None`` if the metric is not found or display is active.
     """
     _check_plotting()
+    if metric is None:
+        metric = results.preferred_metric()
     if ax is None:
         fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
     else:

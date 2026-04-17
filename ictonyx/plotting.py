@@ -641,6 +641,208 @@ def plot_variability_summary(
     return _finalize_plot(fig, show)
 
 
+def plot_run_trajectories(
+    results: "VariabilityStudyResults",
+    metric: str = "val_accuracy",
+    ax: Optional["Axes"] = None,
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Plot per-run epoch trajectories overlaid with the mean curve.
+
+    Each run is drawn as a thin semi-transparent line; the mean trajectory
+    is drawn as a solid thicker line. High spread at convergence signals
+    seed-dependent behaviour.
+
+    Args:
+        results: A completed :class:`~ictonyx.runners.VariabilityStudyResults`.
+        metric: Metric name to plot. Default ``'val_accuracy'``.
+        ax: Optional existing Axes. Creates a new figure if ``None``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The figure, or ``None`` if the metric is not found or display is active.
+    """
+    _check_plotting()
+    if ax is None:
+        fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    else:
+        fig = ax.figure
+
+    run_dfs = results.all_runs_metrics
+    if not run_dfs:
+        settings.logger.warning("plot_run_trajectories: no run data available.")
+        return None
+
+    train_col, val_col = _find_metric_columns(run_dfs[0], metric)
+    col = val_col or train_col
+    if col is None:
+        settings.logger.warning(f"plot_run_trajectories: metric '{metric}' not found in run data.")
+        return None
+
+    color = settings.THEME["val"] if val_col else settings.THEME["train"]
+    all_values = []
+
+    for i, run_df in enumerate(run_dfs):
+        if col not in run_df.columns:
+            continue
+        epochs = (
+            run_df["epoch"].values if "epoch" in run_df.columns else np.arange(1, len(run_df) + 1)
+        )
+        values = run_df[col].values
+        ax.plot(
+            epochs,
+            values,
+            alpha=0.25,
+            color=color,
+            linewidth=1,
+            label="Individual runs" if i == 0 else "_nolegend_",
+        )
+        all_values.append(values)
+
+    if all_values:
+        min_len = min(len(v) for v in all_values)
+        mean_vals = np.mean([v[:min_len] for v in all_values], axis=0)
+        ax.plot(
+            np.arange(1, min_len + 1),
+            mean_vals,
+            color=color,
+            linewidth=2.5,
+            label="Mean",
+        )
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel(metric)
+    ax.set_title(f"Run Trajectories — {metric} (n={len(all_values)})")
+    ax.legend()
+    _apply_style(ax)
+    return _finalize_plot(fig, show)
+
+
+def plot_run_distribution(
+    results: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    ax: Optional["Axes"] = None,
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Violin plot of final metric values with individual run points overlaid.
+
+    Combines a KDE violin with individual run dots. Useful for understanding
+    the shape of the performance distribution.
+
+    Args:
+        results: A completed :class:`~ictonyx.runners.VariabilityStudyResults`.
+        metric: Metric key. Resolved via ``preferred_metric()`` if ``None``.
+        ax: Optional existing Axes.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The figure, or ``None`` on error or when display is active.
+    """
+    _check_plotting()
+    if ax is None:
+        fig, ax = plt.subplots(figsize=settings.get_figsize((5, 6)), dpi=150)
+    else:
+        fig = ax.figure
+
+    resolved = metric or results.preferred_metric()
+    try:
+        values = pd.Series(results.get_metric_values(resolved), name="value")
+    except KeyError as e:
+        settings.logger.warning(f"plot_run_distribution: {e}")
+        return None
+
+    df_plot = values.to_frame()
+    df_plot["metric"] = resolved
+    sns.violinplot(
+        data=df_plot,
+        y="value",
+        ax=ax,
+        color=settings.THEME["val"],
+        inner=None,
+        cut=0,
+    )
+    rng = np.random.default_rng(42)
+    x_jitter = rng.uniform(-0.08, 0.08, size=len(values))
+    ax.scatter(
+        x_jitter,
+        values,
+        color=settings.THEME["point"],
+        alpha=0.7,
+        zorder=5,
+        s=25,
+    )
+    ax.set_ylabel(resolved)
+    ax.set_title(f"Distribution — {resolved} (n={len(values)})")
+    ax.set_xticks([])
+    _apply_style(ax, grid=False)
+    return _finalize_plot(fig, show)
+
+
+def plot_run_strip(
+    results: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    ax: Optional["Axes"] = None,
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Strip plot of final metric values with mean and SD markers.
+
+    Best for small n (< 20) where a violin would be oversmoothed.
+    Each run is one dot; the mean and ±1 SD are marked with lines.
+
+    Args:
+        results: A completed :class:`~ictonyx.runners.VariabilityStudyResults`.
+        metric: Metric key. Resolved via ``preferred_metric()`` if ``None``.
+        ax: Optional existing Axes.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The figure, or ``None`` on error or when display is active.
+    """
+    _check_plotting()
+    if ax is None:
+        fig, ax = plt.subplots(figsize=settings.get_figsize((4, 6)), dpi=150)
+    else:
+        fig = ax.figure
+
+    resolved = metric or results.preferred_metric()
+    try:
+        values = np.array(results.get_metric_values(resolved))
+    except KeyError as e:
+        settings.logger.warning(f"plot_run_strip: {e}")
+        return None
+
+    mean = np.mean(values)
+    sd = np.std(values, ddof=1)
+    rng = np.random.default_rng(42)
+    x_jitter = rng.uniform(-0.18, 0.18, size=len(values))
+
+    ax.scatter(x_jitter, values, color=settings.THEME["val"], alpha=0.8, s=35, zorder=5)
+    ax.hlines(
+        mean,
+        -0.35,
+        0.35,
+        colors=settings.THEME["significant"],
+        linewidth=2.5,
+        label=f"Mean: {mean:.4f}",
+    )
+    ax.hlines(
+        [mean - sd, mean + sd],
+        -0.28,
+        0.28,
+        colors=settings.THEME["baseline"],
+        linewidth=1.5,
+        linestyle="--",
+        label=f"±1 SD: {sd:.4f}",
+    )
+    ax.set_ylabel(resolved)
+    ax.set_title(f"Run Results — {resolved} (n={len(values)})")
+    ax.set_xlim(-0.5, 0.5)
+    ax.set_xticks([])
+    ax.legend(loc="best", fontsize=9)
+    _apply_style(ax)
+    return _finalize_plot(fig, show)
+
+
 def plot_comparison_boxplots(
     comparison_results: Dict[str, Any], metric: str = "Accuracy", show: Optional[bool] = None
 ) -> Optional["Figure"]:

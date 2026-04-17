@@ -255,7 +255,7 @@ except ImportError:
 
 # Plotting functions
 try:
-    from .plotting import (  # NEW Plots
+    from .plotting import (
         plot_autocorr_vs_lag,
         plot_averaged_autocorr,
         plot_averaged_pacf,
@@ -267,6 +267,9 @@ try:
         plot_pairwise_comparison_matrix,
         plot_precision_recall_curve,
         plot_roc_curve,
+        plot_run_distribution,
+        plot_run_strip,
+        plot_run_trajectories,
         plot_training_history,
         plot_training_stability,
         plot_variability_summary,
@@ -279,6 +282,9 @@ try:
             "plot_roc_curve",
             "plot_precision_recall_curve",
             "plot_variability_summary",
+            "plot_run_trajectories",
+            "plot_run_distribution",
+            "plot_run_strip",
             "plot_autocorr_vs_lag",
             "plot_averaged_autocorr",
             "plot_pacf_vs_lag",

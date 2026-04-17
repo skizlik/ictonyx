@@ -613,6 +613,9 @@ class ExperimentRunner:
                     self.all_runs_metrics = list(_prior_data["all_runs_metrics"])
                     self.final_metrics = dict(_prior_data["final_metrics"])
                     self.final_test_metrics = list(_prior_data["final_test_metrics"])
+                    self.failed_runs = list(
+                        _prior_data.get("failed_runs", [])
+                    )  # added v0.4.4; absent in older checkpoints
                     completed_run_ids = {
                         int(df["run_num"].iloc[0]) for df in self.all_runs_metrics if not df.empty
                     }
@@ -716,7 +719,9 @@ class ExperimentRunner:
                     # Check failure rate
                     if i > 0:
                         completed = i
-                        failure_rate = len(self.failed_runs) / completed
+                        failure_rate = len(self.failed_runs) / max(
+                            1, completed + len(self.failed_runs)
+                        )
                         if failure_rate >= stop_on_failure_rate:
                             self._run_log(
                                 f"Stopping due to high failure rate: {failure_rate:.1%}",
@@ -744,6 +749,7 @@ class ExperimentRunner:
                                 "final_metrics": dict(self.final_metrics),
                                 "final_test_metrics": list(self.final_test_metrics),
                                 "seed": self.seed,
+                                "failed_runs": list(self.failed_runs),
                             }
                             _tmp_path = _checkpoint_path + ".tmp"
                             with open(_tmp_path, "wb") as _f:

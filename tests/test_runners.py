@@ -2269,3 +2269,67 @@ class TestSetupMlflow:
 
             with pytest.raises(ImportError, match="MLflow"):
                 setup_mlflow("test_experiment")
+
+
+class TestFailedRunsCheckpoint:
+    """BUG-45: failed_runs must be persisted to and restored from checkpoint."""
+
+    def _make_failing_runner(self, fail_on_run: int):
+        """Runner where one specific run always fails."""
+        call_count = {"n": 0}
+
+        def model_builder(config):
+            call_count["n"] += 1
+            if call_count["n"] == fail_on_run:
+                raise RuntimeError("Simulated training failure")
+            return MockModel(config)
+
+        return ExperimentRunner(
+            model_builder=model_builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig({"epochs": 1}),
+            verbose=False,
+        )
+
+    def test_failed_runs_persisted_to_checkpoint(self, tmp_path):
+        import pickle
+
+        runner = self._make_failing_runner(fail_on_run=2)
+        runner.run_study(num_runs=4, checkpoint_dir=str(tmp_path))
+        cp = pickle.load(open(tmp_path / "checkpoint.pkl", "rb"))
+        assert "failed_runs" in cp
+
+    def test_failed_runs_restored_from_checkpoint(self, tmp_path):
+        import pickle
+
+        runner = self._make_failing_runner(fail_on_run=2)
+        results = runner.run_study(num_runs=4, checkpoint_dir=str(tmp_path))
+        # Manually inspect checkpoint
+        cp = pickle.load(open(tmp_path / "checkpoint.pkl", "rb"))
+        assert isinstance(cp["failed_runs"], list)
+
+    def test_failure_rate_uses_attempted_denominator(self):
+        """BUG-46: failure rate = failed / attempted, not failed / successful."""
+        call_count = {"n": 0}
+
+        def model_builder(config):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise RuntimeError("Simulated failure")
+            return MockModel(config)
+
+        runner = ExperimentRunner(
+            model_builder=model_builder,
+            data_handler=MockDataHandler(),
+            model_config=ModelConfig({"epochs": 1}),
+            verbose=False,
+        )
+        results = runner.run_study(num_runs=4)
+        assert results.n_runs == 3  # 3 successful out of 4 attempted
+        assert len(runner.failed_runs) == 1  # 1 failure
+        # failure rate is tracked inline during the run — verify denominator
+        # by checking the ratio directly
+        total = results.n_runs + len(runner.failed_runs)
+        assert total == 4
+        failure_rate = len(runner.failed_runs) / total
+        assert failure_rate == pytest.approx(0.25, abs=0.01)

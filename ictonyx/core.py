@@ -1747,7 +1747,7 @@ if HUGGINGFACE_AVAILABLE:
             self.tokenizer_name_or_path = tokenizer_name_or_path or model_name_or_path
             self.max_length = max_length
             self._model_kwargs = model_kwargs
-            self.tokenizer = None
+            self.tokenizer: Optional[Any] = None
             self._tmp_dir: Optional[str] = None
 
             if device == "auto":
@@ -1763,6 +1763,8 @@ if HUGGINGFACE_AVAILABLE:
                 self._device_str = device
 
         def _tokenize(self, texts: list, labels=None):
+            if self.tokenizer is None:
+                raise RuntimeError("Tokenizer not initialized. Call fit() first.")
             from datasets import Dataset as _HFDataset
 
             encoding = self.tokenizer(
@@ -1962,7 +1964,7 @@ if HUGGINGFACE_AVAILABLE:
             with _torch.no_grad():
                 outputs = self.model(**encoding)
             self.predictions = np.argmax(outputs.logits.cpu().numpy(), axis=-1).astype(int)
-            return self.predictions
+            return self.predictions  # type: ignore[return-value]
 
         def predict_proba(self, data, **kwargs) -> np.ndarray:
             """Generate class probabilities via softmax."""
@@ -1974,6 +1976,9 @@ if HUGGINGFACE_AVAILABLE:
                 texts = data
             else:
                 texts = list(data)
+
+            if self.tokenizer is None:
+                raise RuntimeError("Tokenizer not initialized. Call fit() first.")
 
             encoding = self.tokenizer(
                 texts,

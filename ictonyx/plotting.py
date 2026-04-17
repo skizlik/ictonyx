@@ -151,11 +151,11 @@ def plot_confusion_matrix(
     """
     _check_plotting()
 
-    fig = plt.figure(figsize=(10, 8))
-    sns.heatmap(cm_df, annot=True, fmt="d", cmap="Blues")
-    plt.title(title if title else "Confusion Matrix")
-    plt.xlabel("Predicted Label")
-    plt.ylabel("True Label")
+    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 8)), dpi=150)
+    sns.heatmap(cm_df, annot=True, fmt="d", cmap=settings.THEME["sequential"], ax=ax)
+    ax.set_title(title if title else "Confusion Matrix")
+    ax.set_xlabel("Predicted Label")
+    ax.set_ylabel("True Label")
 
     return _finalize_plot(fig, show)
 
@@ -323,20 +323,21 @@ def plot_roc_curve(
     else:
         y_test_binarized = np.eye(num_classes)[y_test.astype(int)]
 
-    fig = plt.figure(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 8)), dpi=150)
 
     for i in range(num_classes):
         fpr, tpr, _ = roc_curve(y_test_binarized[:, i], y_score[:, i])
         roc_auc = auc(fpr, tpr)
-        plt.plot(fpr, tpr, label=f"ROC curve of class {i} (area = {roc_auc:.2f})")
+        ax.plot(fpr, tpr, label=f"ROC curve of class {i} (area = {roc_auc:.2f})")
 
-    plt.plot([0, 1], [0, 1], "k--", label="Chance")
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title(title if title else "Receiver Operating Characteristic")
-    plt.legend(loc="lower right")
+    ax.plot([0, 1], [0, 1], "--", color=settings.THEME["baseline"], label="Chance")
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_title(title if title else "Receiver Operating Characteristic")
+    ax.legend(loc="lower right")
+    _apply_style(ax)
 
     return _finalize_plot(fig, show)
 
@@ -385,21 +386,22 @@ def plot_precision_recall_curve(
     else:
         y_test_binarized = np.eye(num_classes)[y_test.astype(int)]
 
-    fig = plt.figure(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 8)), dpi=150)
 
     for i in range(num_classes):
         precision, recall, _ = precision_recall_curve(y_test_binarized[:, i], y_score[:, i])
         pr_auc = auc(recall, precision)
-        plt.plot(
+        ax.plot(
             recall, precision, label=f"Precision-recall curve of class {i} (area = {pr_auc:.2f})"
         )
 
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title(title if title else "Precision-Recall Curve")
-    plt.legend(loc="lower left")
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_title(title if title else "Precision-Recall Curve")
+    ax.legend(loc="lower left")
+    _apply_style(ax)
 
     return _finalize_plot(fig, show)
 
@@ -1096,9 +1098,14 @@ def plot_training_stability(
             color="lightblue",
             edgecolor="black",
         )
-        ax1.axvline(mean_loss, color="red", linestyle="--", label=f"Mean: {mean_loss:.4f}")
-        ax1.axvline(mean_loss - std_loss, color="orange", linestyle=":", alpha=0.7)
-        ax1.axvline(mean_loss + std_loss, color="orange", linestyle=":", alpha=0.7)
+        ax1.axvline(
+            mean_loss,
+            color=settings.THEME["significant"],
+            linestyle="--",
+            label=f"Mean: {mean_loss:.4f}",
+        )
+        ax1.axvline(mean_loss - std_loss, color=settings.THEME["val"], linestyle=":", alpha=0.7)
+        ax1.axvline(mean_loss + std_loss, color=settings.THEME["val"], linestyle=":", alpha=0.7)
         ax1.legend()
     ax1.set_xlabel("Final Loss")
     ax1.set_ylabel("Frequency")
@@ -1138,7 +1145,7 @@ def plot_training_stability(
     ax3.pie(
         [converged, not_converged],
         labels=["Converged", "Not Converged"],
-        colors=["green", "red"],
+        colors=[settings.THEME["better"], settings.THEME["worse"]],
         autopct="%1.1f%%",
         startangle=90,
     )
@@ -1148,7 +1155,10 @@ def plot_training_stability(
     ax4 = axes[1, 1]
     stability_levels = ["High", "Moderate", "Low"]
     current_stability = stability_results["stability_assessment"].title()
-    colors = ["green" if level == current_stability else "lightgray" for level in stability_levels]
+    colors = [
+        settings.THEME["better"] if level == current_stability else settings.THEME["neutral"]
+        for level in stability_levels
+    ]
     bars = ax4.bar(stability_levels, [1, 1, 1], color=colors, alpha=0.7)
     if current_stability in stability_levels:
         bars[stability_levels.index(current_stability)].set_height(1.2)
@@ -1198,13 +1208,13 @@ def plot_autocorr_vs_lag(
     autocorr_values = [data.autocorr(lag) for lag in range(1, max_lag + 1)]
     lags = range(1, max_lag + 1)
 
-    fig = plt.figure(figsize=(10, 6))
-    plt.stem(lags, autocorr_values)
-    plt.title(title)
-    plt.xlabel("Lag")
-    plt.ylabel("Autocorrelation")
-    plt.axhline(y=0, color="r", linestyle="--")
-    plt.grid(True)
+    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    ax.stem(lags, autocorr_values)
+    ax.set_title(title)
+    ax.set_xlabel("Lag")
+    ax.set_ylabel("Autocorrelation")
+    ax.axhline(y=0, color=settings.THEME["significant"], linestyle="--")
+    _apply_style(ax)
 
     return _finalize_plot(fig, show)
 
@@ -1231,22 +1241,22 @@ def plot_averaged_autocorr(
         The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
     """
     _check_plotting()
-    fig = plt.figure(figsize=(10, 6))
-    plt.plot(lags, mean_autocorr, "b-", label="Mean Autocorrelation")
-    plt.fill_between(
+    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    ax.plot(lags, mean_autocorr, color=settings.THEME["val"], label="Mean Autocorrelation")
+    ax.fill_between(
         lags,
         np.array(mean_autocorr) - np.array(std_autocorr),
         np.array(mean_autocorr) + np.array(std_autocorr),
-        color="b",
+        color=settings.THEME["val"],
         alpha=0.2,
         label="Standard Deviation",
     )
-    plt.title(title)
-    plt.xlabel("Lag")
-    plt.ylabel("Autocorrelation")
-    plt.axhline(y=0, color="r", linestyle="--")
-    plt.legend()
-    plt.grid(True)
+    ax.set_title(title)
+    ax.set_xlabel("Lag")
+    ax.set_ylabel("Autocorrelation")
+    ax.axhline(y=0, color=settings.THEME["significant"], linestyle="--")
+    ax.legend()
+    _apply_style(ax)
 
     return _finalize_plot(fig, show)
 
@@ -1291,20 +1301,21 @@ def plot_pacf_vs_lag(
     conf_int = conf_int[1:]
     lags = range(1, max_lag + 1)
 
-    fig = plt.figure(figsize=(10, 6))
-    plt.stem(lags, pacf_values, label="PACF")
+    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    ax.stem(lags, pacf_values, label="PACF")
     # conf_int from statsmodels is already in absolute PACF value units.
     # Do NOT subtract pacf_values — that recenters the band at zero.
-    plt.fill_between(
+    ax.fill_between(
         lags,
         conf_int[:, 0],
         conf_int[:, 1],
         alpha=0.2,
-        color="gray",
+        color=settings.THEME["neutral"],
         label=f"{int((1 - alpha) * 100)}% CI",
     )
-    plt.title(title)
-    plt.grid(True)
+    ax.set_title(title)
+    ax.legend()
+    _apply_style(ax)
 
     return _finalize_plot(fig, show)
 
@@ -1346,13 +1357,13 @@ def plot_averaged_pacf(
     )
 
     _check_plotting()
-    fig = plt.figure(figsize=(10, 6))
-    plt.plot(lags, mean_pacf, "b-", label="Mean PACF", linewidth=2)
-    plt.fill_between(
+    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    ax.plot(lags, mean_pacf, color=settings.THEME["val"], label="Mean PACF", linewidth=2)
+    ax.fill_between(
         lags,
         np.array(mean_pacf) - np.array(std_pacf),
         np.array(mean_pacf) + np.array(std_pacf),
-        color="b",
+        color=settings.THEME["val"],
         alpha=0.2,
         label="±1 Standard Deviation",
     )
@@ -1360,17 +1371,17 @@ def plot_averaged_pacf(
     if n_series > 0:
         z = _scipy_stats.norm.ppf((1 + conf_level) / 2)
         conf_bound = z / np.sqrt(n_series)
-        plt.axhline(
+        ax.axhline(
             y=conf_bound,
-            color="gray",
+            color=settings.THEME["neutral"],
             linestyle=":",
             alpha=0.7,
             label=f"{int(conf_level * 100)}% CI",
         )
-        plt.axhline(y=-conf_bound, color="gray", linestyle=":", alpha=0.7)
+        ax.axhline(y=-conf_bound, color=settings.THEME["neutral"], linestyle=":", alpha=0.7)
 
-    plt.title(title)
-    plt.legend()
-    plt.grid(True)
+    ax.set_title(title)
+    ax.legend()
+    _apply_style(ax)
 
     return _finalize_plot(fig, show)

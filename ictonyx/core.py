@@ -63,6 +63,22 @@ except ImportError:
     TensorDataset = None  # type: ignore[assignment,misc]
     PYTORCH_AVAILABLE = False
 
+# HuggingFace Transformers imports
+try:
+    from transformers import (
+        AutoModelForSequenceClassification,
+        AutoTokenizer,
+        DataCollatorWithPadding,
+        Trainer,
+        TrainerCallback,
+        TrainingArguments,
+    )
+    from transformers import set_seed as _hf_set_seed
+
+    HUGGINGFACE_AVAILABLE = True
+except ImportError:
+    HUGGINGFACE_AVAILABLE = False
+
 
 def _regression_metrics(preds: np.ndarray, labels: np.ndarray) -> Dict[str, float]:
     """Compute r², MSE, and MAE for regression predictions.
@@ -1610,3 +1626,395 @@ if PYTORCH_AVAILABLE:
 
 else:
     PyTorchModelWrapper = None  # type: ignore[assignment,misc]
+
+
+if HUGGINGFACE_AVAILABLE:
+
+    class _IctonxMetricsCallback(TrainerCallback):
+        """Captures per-epoch eval metrics into a buffer dict."""
+
+        def __init__(self, buffer: dict):
+            self._buf = buffer
+
+        def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+            if metrics:
+                for k, v in metrics.items():
+                    clean = k.replace("eval_", "val_").replace("train_", "")
+                    if isinstance(v, float):
+                        self._buf.setdefault(clean, []).append(v)
+
+    class HuggingFaceModelWrapper(BaseModelWrapper):
+        """Wrapper for HuggingFace text-classification models.
+
+        Fine-tunes any ``AutoModelForSequenceClassification`` using the
+        ``transformers.Trainer`` API. Captures per-epoch validation metrics
+        into :class:`~ictonyx.runners.TrainingResult` in the format expected
+        by :class:`~ictonyx.runners.ExperimentRunner`.
+
+        Seeding is controlled via ``transformers.set_seed()`` at the start of
+        ``fit()`` and via ``TrainingArguments(seed=..., data_seed=...)`` so
+        that weight initialisation, batch ordering, and dropout are all
+        deterministic per run.
+
+        .. note::
+            ``load_best_model_at_end`` is always ``False``. Setting it to
+            ``True`` causes Trainer to silently replace the final model weights
+            with an earlier checkpoint, invalidating run-to-run comparison.
+
+        Args:
+            model_name_or_path: HuggingFace Hub model identifier or local path.
+                The model is **not** downloaded until ``fit()`` is called.
+            task: Task type. Currently only ``'text-classification'`` is
+                supported.
+            num_labels: Number of output classes. Inferred from dataset
+                labels during ``fit()`` when ``None``.
+            tokenizer_name_or_path: Tokenizer identifier. Defaults to the
+                same value as ``model_name_or_path``.
+            max_length: Maximum token sequence length. Default 128.
+            device: ``'auto'``, ``'cpu'``, ``'cuda'``, or ``'cuda:0'``.
+                ``'auto'`` selects CUDA > MPS > CPU.
+            model_id: Optional label for logging.
+            **model_kwargs: Forwarded to ``from_pretrained()``.
+
+        Example::
+
+            results = ix.variability_study(
+                model=ix.HuggingFaceModelWrapper,
+                model_kwargs={
+                    "model_name_or_path": "distilbert-base-uncased",
+                    "num_labels": 4,
+                },
+                data=(texts_train, labels_train),
+                validation_data=(texts_val, labels_val),
+                runs=20,
+                seed=42,
+            )
+        """
+
+        def __init__(
+            self,
+            model_name_or_path: str,
+            task: str = "text-classification",
+            num_labels: Optional[int] = None,
+            tokenizer_name_or_path: Optional[str] = None,
+            max_length: int = 128,
+            device: str = "auto",
+            model_id: str = "",
+            **model_kwargs,
+        ):
+            super().__init__(model=None, model_id=model_id)
+            self.model_name_or_path = model_name_or_path
+            self.task = task
+            self.num_labels = num_labels
+            self.tokenizer_name_or_path = tokenizer_name_or_path or model_name_or_path
+            self.max_length = max_length
+            self._model_kwargs = model_kwargs
+            self.tokenizer = None
+            self._tmp_dir: Optional[str] = None
+
+            if device == "auto":
+                import torch as _torch
+
+                if _torch.cuda.is_available():
+                    self._device_str = "cuda"
+                elif hasattr(_torch.backends, "mps") and _torch.backends.mps.is_available():
+                    self._device_str = "mps"
+                else:
+                    self._device_str = "cpu"
+            else:
+                self._device_str = device
+
+        def _tokenize(self, texts: list, labels=None):
+            from datasets import Dataset as _HFDataset
+
+            encoding = self.tokenizer(
+                texts,
+                truncation=True,
+                padding=True,
+                max_length=self.max_length,
+                return_tensors=None,
+            )
+            data = dict(encoding)
+            if labels is not None:
+                data["labels"] = list(labels)
+            return _HFDataset.from_dict(data)
+
+        def _resolve_data(self, data):
+            try:
+                from datasets import Dataset as _HFDataset
+
+                if isinstance(data, _HFDataset):
+                    return data
+            except ImportError:
+                pass
+            if isinstance(data, tuple) and len(data) == 2:
+                texts, labels = data
+                return self._tokenize(list(texts), list(labels))
+            raise TypeError(
+                "HuggingFaceModelWrapper expects data as "
+                "(List[str], List[int]) or a datasets.Dataset."
+            )
+
+        def _compute_metrics(self, eval_pred):
+            logits, labels = eval_pred
+            preds = np.argmax(logits, axis=-1)
+            return {"accuracy": float(np.mean(preds == labels))}
+
+        def fit(
+            self,
+            train_data,
+            validation_data=None,
+            epochs: int = 3,
+            batch_size: int = 16,
+            learning_rate: float = 2e-5,
+            weight_decay: float = 0.01,
+            warmup_ratio: float = 0.1,
+            gradient_accumulation_steps: int = 1,
+            fp16: bool = False,
+            logging_steps: int = 50,
+            **kwargs,
+        ) -> None:
+            """Fine-tune the model for text classification.
+
+            Args:
+                train_data: ``(List[str], List[int])`` or
+                    ``datasets.Dataset`` with a ``labels`` column.
+                validation_data: Same format. Required for val metrics.
+                epochs: Training epochs. Default 3.
+                batch_size: Per-device batch size. Default 16.
+                learning_rate: AdamW learning rate. Default 2e-5.
+                weight_decay: AdamW weight decay. Default 0.01.
+                warmup_ratio: Fraction of total steps for LR warmup.
+                    Default 0.1.
+                gradient_accumulation_steps: Default 1.
+                fp16: Mixed-precision training (requires GPU). Default
+                    ``False``.
+                logging_steps: Trainer log frequency. Default 50.
+            """
+            import gc
+            import os
+            import tempfile
+
+            # ── Seed control ─────────────────────────────────────────────
+            run_seed = None
+            if hasattr(self, "model_config") and self.model_config is not None:
+                run_seed = self.model_config.get("run_seed")
+            if run_seed is None:
+                run_seed = 42
+            _hf_set_seed(run_seed)
+
+            # ── Tokenizer + data ─────────────────────────────────────────
+            self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name_or_path)
+            train_dataset = self._resolve_data(train_data)
+            eval_dataset = (
+                self._resolve_data(validation_data) if validation_data is not None else None
+            )
+
+            # ── Infer num_labels ─────────────────────────────────────────
+            num_labels = self.num_labels
+            if num_labels is None:
+                if "labels" in train_dataset.features:
+                    num_labels = int(np.max(train_dataset["labels"])) + 1
+                else:
+                    raise ValueError(
+                        "num_labels must be specified or inferable from a "
+                        "'labels' column in the dataset."
+                    )
+
+            # ── Load model ───────────────────────────────────────────────
+            self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.model_name_or_path,
+                num_labels=num_labels,
+                **self._model_kwargs,
+            )
+
+            # ── Temp dir ─────────────────────────────────────────────────
+            # Deleted in _cleanup_implementation().
+            # bert-base-uncased is ~440 MB; 20 runs without cleanup = 8.8 GB.
+            self._tmp_dir = tempfile.mkdtemp(prefix="ictonyx_hf_")
+
+            # ── TrainingArguments ─────────────────────────────────────────
+            training_args = TrainingArguments(
+                output_dir=self._tmp_dir,
+                num_train_epochs=epochs,
+                per_device_train_batch_size=batch_size,
+                per_device_eval_batch_size=batch_size,
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                warmup_ratio=warmup_ratio,
+                gradient_accumulation_steps=gradient_accumulation_steps,
+                fp16=fp16,
+                logging_steps=logging_steps,
+                eval_strategy="epoch" if eval_dataset is not None else "no",
+                save_strategy="no",
+                load_best_model_at_end=False,  # MUST be False — see class docstring
+                seed=run_seed,
+                data_seed=run_seed,
+                report_to="none",
+                no_cuda=(self._device_str == "cpu"),
+            )
+
+            # ── Callback + Trainer ────────────────────────────────────────
+            history_buffer: dict = {}
+            data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
+            trainer = Trainer(
+                model=self.model,
+                args=training_args,
+                train_dataset=train_dataset,
+                eval_dataset=eval_dataset,
+                tokenizer=self.tokenizer,
+                data_collator=data_collator,
+                compute_metrics=self._compute_metrics if eval_dataset else None,
+                callbacks=[_IctonxMetricsCallback(history_buffer)],
+            )
+            trainer.train()
+
+            # Capture final train loss from Trainer log history
+            for entry in reversed(trainer.state.log_history):
+                if "loss" in entry and "eval_loss" not in entry:
+                    history_buffer.setdefault("loss", []).append(entry["loss"])
+                    break
+
+            self.training_result = TrainingResult(
+                history=history_buffer,
+                params={
+                    "epochs": epochs,
+                    "batch_size": batch_size,
+                    "learning_rate": learning_rate,
+                    "seed": run_seed,
+                    "model": self.model_name_or_path,
+                },
+            )
+
+        def predict(self, data, **kwargs) -> np.ndarray:
+            """Generate class predictions.
+
+            Args:
+                data: ``(texts, labels)`` tuple, ``List[str]``, or
+                    ``datasets.Dataset``. Labels are ignored.
+
+            Returns:
+                Integer class indices, shape ``(n_samples,)``.
+
+            Raises:
+                RuntimeError: If called before ``fit()``.
+            """
+            import torch as _torch
+
+            if self.model is None or self.tokenizer is None:
+                raise RuntimeError("HuggingFaceModelWrapper.predict() called before fit().")
+            if isinstance(data, tuple):
+                texts = list(data[0])
+            elif isinstance(data, list):
+                texts = data
+            else:
+                texts = list(data)
+
+            encoding = self.tokenizer(
+                texts,
+                truncation=True,
+                padding=True,
+                max_length=self.max_length,
+                return_tensors="pt",
+            )
+            encoding = {k: v.to(self._device_str) for k, v in encoding.items()}
+            self.model.to(self._device_str)
+            self.model.eval()
+            with _torch.no_grad():
+                outputs = self.model(**encoding)
+            self.predictions = np.argmax(outputs.logits.cpu().numpy(), axis=-1).astype(int)
+            return self.predictions
+
+        def predict_proba(self, data, **kwargs) -> np.ndarray:
+            """Generate class probabilities via softmax."""
+            import torch as _torch
+
+            if isinstance(data, tuple):
+                texts = list(data[0])
+            elif isinstance(data, list):
+                texts = data
+            else:
+                texts = list(data)
+
+            encoding = self.tokenizer(
+                texts,
+                truncation=True,
+                padding=True,
+                max_length=self.max_length,
+                return_tensors="pt",
+            )
+            encoding = {k: v.to(self._device_str) for k, v in encoding.items()}
+            self.model.to(self._device_str)
+            self.model.eval()
+            with _torch.no_grad():
+                outputs = self.model(**encoding)
+            return _torch.softmax(outputs.logits, dim=-1).cpu().numpy()
+
+        def evaluate(self, data, **kwargs) -> dict:
+            """Evaluate on labeled data.
+
+            Args:
+                data: ``(texts, labels)`` tuple.
+
+            Returns:
+                Dict with ``'accuracy'`` key.
+            """
+            if not (isinstance(data, tuple) and len(data) == 2):
+                raise TypeError("HuggingFaceModelWrapper.evaluate() expects (texts, labels).")
+            texts, labels = data
+            preds = self.predict(list(texts))
+            return {"accuracy": float(accuracy_score(np.array(list(labels)), preds))}
+
+        def assess(self, true_labels: np.ndarray) -> dict:
+            """Assess stored predictions against ground-truth labels."""
+            if self.predictions is None:
+                raise ValueError("Call predict() before assess().")
+            return {"accuracy": float(accuracy_score(true_labels, self.predictions))}
+
+        def save_model(self, path: str) -> None:
+            """Save fine-tuned model and tokenizer in HuggingFace format."""
+            import os
+
+            os.makedirs(path, exist_ok=True)
+            self.model.save_pretrained(path)
+            if self.tokenizer is not None:
+                self.tokenizer.save_pretrained(path)
+            logger.info(f"HuggingFace model saved to {path}")
+
+        @classmethod
+        def load_model(
+            cls,
+            path: str,
+            task: str = "text-classification",
+            **kwargs,
+        ) -> "HuggingFaceModelWrapper":
+            """Load a saved fine-tuned model."""
+            wrapper = cls(model_name_or_path=path, task=task, **kwargs)
+            wrapper.tokenizer = AutoTokenizer.from_pretrained(path)
+            wrapper.model = AutoModelForSequenceClassification.from_pretrained(path)
+            return wrapper
+
+        def _cleanup_implementation(self) -> None:
+            """Release GPU memory and delete temporary checkpoint directory."""
+            import gc
+            import shutil
+
+            import torch as _torch
+
+            if self._tmp_dir and os.path.exists(self._tmp_dir):
+                shutil.rmtree(self._tmp_dir, ignore_errors=True)
+                self._tmp_dir = None
+            if self.model is not None:
+                try:
+                    self.model.cpu()
+                    del self.model
+                    self.model = None
+                except Exception:
+                    pass
+            if _torch.cuda.is_available():
+                _torch.cuda.empty_cache()
+            gc.collect()
+
+else:
+    HuggingFaceModelWrapper = None  # type: ignore[assignment,misc]
+    HUGGINGFACE_AVAILABLE = False

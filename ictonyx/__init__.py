@@ -15,6 +15,7 @@ from ._version import __version__
 # Core imports (always available)
 from .config import ModelConfig
 from .core import (
+    HUGGINGFACE_AVAILABLE,
     PYTORCH_AVAILABLE,
     SKLEARN_AVAILABLE,
     TENSORFLOW_AVAILABLE,
@@ -100,6 +101,7 @@ __all__ = [
     "TENSORFLOW_AVAILABLE",
     "SKLEARN_AVAILABLE",
     "PYTORCH_AVAILABLE",
+    "HUGGINGFACE_AVAILABLE",
     "__version__",
 ]
 
@@ -118,6 +120,11 @@ if PYTORCH_AVAILABLE:
     from .core import PyTorchModelWrapper
 
     __all__.append("PyTorchModelWrapper")
+
+if HUGGINGFACE_AVAILABLE:
+    from .core import HuggingFaceModelWrapper
+
+    __all__.append("HuggingFaceModelWrapper")
 
 # Data handlers with their dependencies
 _data_handlers_loaded = []
@@ -362,6 +369,8 @@ def get_feature_availability() -> dict:
     return {
         "tensorflow_support": TENSORFLOW_AVAILABLE,
         "sklearn_support": SKLEARN_AVAILABLE,
+        "pytorch_support": PYTORCH_AVAILABLE,
+        "huggingface_support": HUGGINGFACE_AVAILABLE,
         "statistical_functions": _has_statistical_functions,
         "bootstrap_ci": _has_bootstrap,
         "plotting_functions": _has_plotting_functions,

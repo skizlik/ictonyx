@@ -2073,3 +2073,27 @@ class TestHuggingFaceModelWrapper:
             )
         assert results.n_runs == 3
         assert len(results.get_metric_values("val_accuracy")) == 3
+
+
+class TestNoAssertGuards:
+    """public paths must not use assert for runtime guards."""
+
+    def test_no_bare_assert_in_public_paths(self):
+        """Verify no 'assert' statements exist in core public methods.
+
+        This is a static check — reads the source and scans for assert
+        outside of test code and comments.
+        """
+        import ast
+        import inspect
+
+        import ictonyx.core as core_mod
+
+        source = inspect.getsource(core_mod)
+        tree = ast.parse(source)
+
+        assert_nodes = [node for node in ast.walk(tree) if isinstance(node, ast.Assert)]
+        assert len(assert_nodes) == 0, (
+            f"Found {len(assert_nodes)} assert statement(s) in ictonyx/core.py. "
+            "Replace with explicit RuntimeError or ValueError."
+        )

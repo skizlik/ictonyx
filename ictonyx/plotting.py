@@ -11,14 +11,14 @@ from . import settings
 # Optional plotting dependencies
 try:
     import matplotlib.pyplot as plt
-    import seaborn as sn
+    import seaborn as sns
     from matplotlib.figure import Figure
 
     HAS_PLOTTING = True
 except ImportError:
     plt = None  # type: ignore[assignment]
     Figure = None  # type: ignore[assignment,misc]
-    sn = None
+    sns = None
     HAS_PLOTTING = False
 
 try:
@@ -152,7 +152,7 @@ def plot_confusion_matrix(
     _check_plotting()
 
     fig = plt.figure(figsize=(10, 8))
-    sn.heatmap(cm_df, annot=True, fmt="d", cmap="Blues")
+    sns.heatmap(cm_df, annot=True, fmt="d", cmap="Blues")
     plt.title(title if title else "Confusion Matrix")
     plt.xlabel("Predicted Label")
     plt.ylabel("True Label")
@@ -593,21 +593,21 @@ def plot_variability_summary(
     if show_histogram and len(final_metrics_series) > 0:
         ax = axes[plot_idx]
         if histogram_orientation == "horizontal":
-            sn.histplot(
+            sns.histplot(
                 y=final_metrics_series, kde=True, ax=ax, color=colors["val"], label="Validation"
             )
             if final_test_series is not None:
-                sn.histplot(
+                sns.histplot(
                     y=final_test_series, kde=True, ax=ax, color=colors["test"], label="Test"
                 )
             ax.set_xlabel("Frequency")
             ax.set_ylabel(f"Final {metric_display}")
         else:
-            sn.histplot(
+            sns.histplot(
                 final_metrics_series, kde=True, ax=ax, color=colors["val"], label="Validation"
             )
             if final_test_series is not None:
-                sn.histplot(final_test_series, kde=True, ax=ax, color=colors["test"], label="Test")
+                sns.histplot(final_test_series, kde=True, ax=ax, color=colors["test"], label="Test")
             ax.set_xlabel(f"Final {metric_display}")
             ax.set_ylabel("Frequency")
         ax.set_title(f"Final {metric_display} Distribution")
@@ -624,7 +624,7 @@ def plot_variability_summary(
             palette_map = {"Val": colors["val"]}
             if final_test_series is not None:
                 palette_map["Test"] = colors["test"]
-            sn.boxplot(
+            sns.boxplot(
                 data=box_df,
                 x="Split",
                 y=metric_display,
@@ -680,8 +680,8 @@ def plot_comparison_boxplots(
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Use themed palette if possible, else default
-    sn.boxplot(data=df, x="Model", y=metric, hue="Model", palette="Blues", legend=False, ax=ax)
-    sn.stripplot(data=df, x="Model", y=metric, color="black", alpha=0.3, ax=ax)
+    sns.boxplot(data=df, x="Model", y=metric, hue="Model", palette="Blues", legend=False, ax=ax)
+    sns.stripplot(data=df, x="Model", y=metric, color="black", alpha=0.3, ax=ax)
 
     # Statistical Annotations Title
     if hasattr(comparison_results, "pairwise_comparisons"):
@@ -916,7 +916,7 @@ def plot_pairwise_comparison_matrix(
     )
     mask = np.eye(n_models, dtype=bool)
 
-    sn.heatmap(
+    sns.heatmap(
         p_value_matrix,
         xticklabels=model_names,
         yticklabels=model_names,
@@ -939,7 +939,7 @@ def plot_pairwise_comparison_matrix(
             for i in range(n_models)
         ]
     )
-    sn.heatmap(
+    sns.heatmap(
         significance_matrix,
         xticklabels=model_names,
         yticklabels=model_names,
@@ -963,7 +963,7 @@ def plot_pairwise_comparison_matrix(
                 for i in range(n_models)
             ]
         )
-        sn.heatmap(
+        sns.heatmap(
             np.abs(effect_size_matrix),
             xticklabels=model_names,
             yticklabels=model_names,

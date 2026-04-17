@@ -1851,7 +1851,7 @@ if HUGGINGFACE_AVAILABLE:
                 seed=run_seed,
                 data_seed=run_seed,
                 report_to="none",
-                no_cuda=(self._device_str == "cpu"),
+                use_cpu=(self._device_str == "cpu"),
             )
 
             # ── Callback + Trainer ────────────────────────────────────────
@@ -1862,7 +1862,6 @@ if HUGGINGFACE_AVAILABLE:
                 args=training_args,
                 train_dataset=train_dataset,
                 eval_dataset=eval_dataset,
-                tokenizer=self.tokenizer,
                 data_collator=data_collator,
                 compute_metrics=self._compute_metrics if eval_dataset else None,
                 callbacks=[_IctonxMetricsCallback(history_buffer)],
@@ -1871,7 +1870,10 @@ if HUGGINGFACE_AVAILABLE:
 
             # Capture final train loss from Trainer log history
             for entry in reversed(trainer.state.log_history):
-                if "loss" in entry and "eval_loss" not in entry:
+                if "train_loss" in entry:
+                    history_buffer.setdefault("loss", []).append(entry["train_loss"])
+                    break
+                elif "loss" in entry and "eval_loss" not in entry:
                     history_buffer.setdefault("loss", []).append(entry["loss"])
                     break
 
@@ -1997,6 +1999,7 @@ if HUGGINGFACE_AVAILABLE:
         def _cleanup_implementation(self) -> None:
             """Release GPU memory and delete temporary checkpoint directory."""
             import gc
+            import os
             import shutil
 
             import torch as _torch

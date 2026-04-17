@@ -38,6 +38,9 @@ psutil = {version = "^5.9.0", optional = true}
 tensorflow = {version = "^2.16.0", optional = true}
 keras      = {version = "^3.0.0",  optional = true}
 torch      = {version = "^2.0.0",  optional = true}
+transformers = {version = ">=4.35.0", optional = true}
+datasets     = {version = ">=2.14.0", optional = true}
+accelerate   = {version = ">=0.24.0", optional = true}
 mlflow     = {version = "^2.0.0",  optional = true}
 shap       = {version = ">=0.43.0", optional = true}
 hyperopt   = {version = "^0.2.7",  optional = true}
@@ -49,6 +52,7 @@ tensorflow = ["tensorflow", "keras"]
 torch      = ["torch"]
 mlflow     = ["mlflow"]
 sklearn    = ["scikit-learn", "joblib"]
+huggingface = ["transformers", "datasets", "accelerate", "torch"]
 explain    = ["shap"]
 tuning     = ["optuna"]
 tuning_legacy = ["hyperopt"]
@@ -56,13 +60,16 @@ isolation  = ["cloudpickle", "psutil"]
 progress   = ["tqdm"]
 ml         = ["tensorflow", "keras", "torch", "mlflow", "shap", "optuna"]
 all        = ["scikit-learn", "cloudpickle", "psutil", "tqdm",
-              "tensorflow", "keras", "torch", "mlflow",
-              "shap", "optuna", "joblib"]
+              "tensorflow", "keras", "torch", "transformers", "datasets",
+              "accelerate", "mlflow", "shap", "optuna", "joblib"]
 
 [tool.poetry.group.ml.dependencies]
 tensorflow = "^2.16.0"
 keras = "^3.0.0"
 torch = "^2.0.0"
+transformers = ">=4.35.0"
+datasets = ">=2.14.0"
+accelerate = ">=0.24.0"
 mlflow = "^2.0.0"
 shap = ">=0.43.0"
 
@@ -93,4 +100,5 @@ line_length = 100
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
+markers = ["slow: marks tests as slow (skip with '-m not slow')"]
 addopts = "--cov=ictonyx --cov-report=html --cov-report=term --cov-fail-under=60"

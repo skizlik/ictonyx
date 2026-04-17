@@ -1880,3 +1880,136 @@ class TestPyTorchDoubleSoftmaxDetection:
         )
         with pytest.warns(UserWarning, match="double"):
             wrapper.predict_proba(np.random.rand(5, 4).astype(np.float32))
+
+
+class TestHuggingFaceModelWrapper:
+    """Tests using prajjwal1/bert-tiny (4.4 MB, CPU-safe, < 60s)."""
+
+    @pytest.fixture
+    def tiny_data(self):
+        texts = ["This is great.", "Wonderful.", "Excellent!", "Perfect."] * 5 + [
+            "This is terrible.",
+            "Awful.",
+            "Dreadful!",
+            "Horrible.",
+        ] * 5
+        labels = [1] * 20 + [0] * 20
+        return texts, labels
+
+    def test_init_does_not_download_model(self):
+        pytest.importorskip("transformers")
+        from ictonyx.core import HuggingFaceModelWrapper
+
+        wrapper = HuggingFaceModelWrapper("google/bert_uncased_L-2_H-128_A-2")
+        assert wrapper.model is None
+        assert wrapper.model_name_or_path == "google/bert_uncased_L-2_H-128_A-2"
+
+    def test_fit_produces_training_result(self, tiny_data):
+        pytest.importorskip("transformers")
+        pytest.importorskip("datasets")
+        from ictonyx.core import HuggingFaceModelWrapper
+
+        texts, labels = tiny_data
+        wrapper = HuggingFaceModelWrapper("google/bert_uncased_L-2_H-128_A-2")
+        wrapper.fit(
+            (texts[:32], labels[:32]),
+            validation_data=(texts[32:], labels[32:]),
+            epochs=1,
+            batch_size=8,
+        )
+        assert wrapper.training_result is not None
+        assert "val_accuracy" in wrapper.training_result.history
+        assert len(wrapper.training_result.history["val_accuracy"]) == 1
+
+    def test_predict_returns_integer_array(self, tiny_data):
+        pytest.importorskip("transformers")
+        pytest.importorskip("datasets")
+        from ictonyx.core import HuggingFaceModelWrapper
+
+        texts, labels = tiny_data
+        wrapper = HuggingFaceModelWrapper("google/bert_uncased_L-2_H-128_A-2")
+        wrapper.fit((texts, labels), epochs=1, batch_size=8)
+        preds = wrapper.predict(texts[:5])
+        assert preds.dtype in (np.int32, np.int64)
+        assert preds.shape == (5,)
+        assert all(p in (0, 1) for p in preds)
+
+    def test_predict_before_fit_raises(self):
+        pytest.importorskip("transformers")
+        from ictonyx.core import HuggingFaceModelWrapper
+
+        wrapper = HuggingFaceModelWrapper("google/bert_uncased_L-2_H-128_A-2")
+        with pytest.raises(RuntimeError, match="before fit"):
+            wrapper.predict(["some text"])
+
+    def test_cleanup_removes_tmp_dir(self, tiny_data):
+        pytest.importorskip("transformers")
+        pytest.importorskip("datasets")
+        import os
+
+        from ictonyx.core import HuggingFaceModelWrapper
+
+        texts, labels = tiny_data
+        wrapper = HuggingFaceModelWrapper("google/bert_uncased_L-2_H-128_A-2")
+        wrapper.fit((texts, labels), epochs=1, batch_size=8)
+        tmp_dir = wrapper._tmp_dir
+        assert os.path.exists(tmp_dir)
+        wrapper.cleanup()
+        assert not os.path.exists(tmp_dir)
+
+    def test_same_seed_identical_loss(self, tiny_data):
+        pytest.importorskip("transformers")
+        pytest.importorskip("datasets")
+        from ictonyx.config import ModelConfig
+        from ictonyx.core import HuggingFaceModelWrapper
+
+        texts, labels = tiny_data
+        losses = []
+        for _ in range(2):
+            wrapper = HuggingFaceModelWrapper("google/bert_uncased_L-2_H-128_A-2")
+            wrapper.model_config = ModelConfig({"run_seed": 42})
+            wrapper.fit((texts, labels), epochs=1, batch_size=8)
+            losses.append(wrapper.training_result.history["loss"][-1])
+        assert abs(losses[0] - losses[1]) < 1e-6
+
+    def test_different_seeds_produce_valid_losses(self, tiny_data):
+        pytest.importorskip("transformers")
+        pytest.importorskip("datasets")
+        from ictonyx.config import ModelConfig
+        from ictonyx.core import HuggingFaceModelWrapper
+
+        texts, labels = tiny_data
+        wrapper_a = HuggingFaceModelWrapper("google/bert_uncased_L-2_H-128_A-2")
+        wrapper_a.model_config = ModelConfig({"run_seed": 0})
+        wrapper_a.fit((texts, labels), epochs=1, batch_size=8)
+        wrapper_b = HuggingFaceModelWrapper("google/bert_uncased_L-2_H-128_A-2")
+        wrapper_b.model_config = ModelConfig({"run_seed": 99})
+        wrapper_b.fit((texts, labels), epochs=1, batch_size=8)
+        loss_a = wrapper_a.training_result.history["loss"][-1]
+        loss_b = wrapper_b.training_result.history["loss"][-1]
+        assert isinstance(loss_a, float)
+        assert isinstance(loss_b, float)
+        assert loss_a > 0
+        assert loss_b > 0
+
+    @pytest.mark.slow
+    def test_variability_study_integration(self, tiny_data):
+        pytest.importorskip("transformers")
+        pytest.importorskip("datasets")
+        import warnings
+
+        import ictonyx as ix
+
+        texts, labels = tiny_data
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            results = ix.variability_study(
+                model=ix.HuggingFaceModelWrapper,
+                model_kwargs={"model_name_or_path": "google/bert_uncased_L-2_H-128_A-2"},
+                data=(texts, labels),
+                runs=3,
+                seed=42,
+                verbose=False,
+            )
+        assert results.n_runs == 3
+        assert len(results.get_metric_values("val_accuracy")) == 3

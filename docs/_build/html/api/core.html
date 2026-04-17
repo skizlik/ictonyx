@@ -1,0 +1,952 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.core &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ictonyx.data" href="data.html" />
+    <link rel="prev" title="ictonyx.config" href="config.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="analysis.html">ictonyx.analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">ictonyx.api</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runners.html">ictonyx.runners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bootstrap.html">ictonyx.bootstrap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html">ictonyx.config</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ictonyx.core</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.core.TrainingResult"><code class="docutils literal notranslate"><span class="pre">TrainingResult</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.TrainingResult.history"><code class="docutils literal notranslate"><span class="pre">TrainingResult.history</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.TrainingResult.params"><code class="docutils literal notranslate"><span class="pre">TrainingResult.params</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id0"><code class="docutils literal notranslate"><span class="pre">TrainingResult.history</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id1"><code class="docutils literal notranslate"><span class="pre">TrainingResult.params</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper.cleanup"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper.cleanup()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper.fit"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper.predict"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper.predict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper.predict_proba"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper.predict_proba()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper.evaluate"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper.evaluate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper.assess"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper.assess()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper.save_model"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper.save_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper.load_model"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper.load_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper.get_memory_report"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper.get_memory_report()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.BaseModelWrapper.check_memory_and_cleanup_if_needed"><code class="docutils literal notranslate"><span class="pre">BaseModelWrapper.check_memory_and_cleanup_if_needed()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper"><code class="docutils literal notranslate"><span class="pre">ScikitLearnModelWrapper</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper.fit"><code class="docutils literal notranslate"><span class="pre">ScikitLearnModelWrapper.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper.predict"><code class="docutils literal notranslate"><span class="pre">ScikitLearnModelWrapper.predict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper.predict_proba"><code class="docutils literal notranslate"><span class="pre">ScikitLearnModelWrapper.predict_proba()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper.evaluate"><code class="docutils literal notranslate"><span class="pre">ScikitLearnModelWrapper.evaluate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper.assess"><code class="docutils literal notranslate"><span class="pre">ScikitLearnModelWrapper.assess()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper.save_model"><code class="docutils literal notranslate"><span class="pre">ScikitLearnModelWrapper.save_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper.load_model"><code class="docutils literal notranslate"><span class="pre">ScikitLearnModelWrapper.load_model()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper"><code class="docutils literal notranslate"><span class="pre">PyTorchModelWrapper</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.fit"><code class="docutils literal notranslate"><span class="pre">PyTorchModelWrapper.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.predict"><code class="docutils literal notranslate"><span class="pre">PyTorchModelWrapper.predict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.predict_proba"><code class="docutils literal notranslate"><span class="pre">PyTorchModelWrapper.predict_proba()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.evaluate"><code class="docutils literal notranslate"><span class="pre">PyTorchModelWrapper.evaluate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.assess"><code class="docutils literal notranslate"><span class="pre">PyTorchModelWrapper.assess()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.save_model"><code class="docutils literal notranslate"><span class="pre">PyTorchModelWrapper.save_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.load_model"><code class="docutils literal notranslate"><span class="pre">PyTorchModelWrapper.load_model()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">ictonyx.data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plotting.html">ictonyx.plotting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="explainers.html">ictonyx.explainers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loggers.html">ictonyx.loggers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tuning.html">ictonyx.tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="memory.html">ictonyx.memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="exceptions.html">ictonyx.exceptions</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">ictonyx.core</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/core.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ictonyx-core">
+<h1>ictonyx.core<a class="headerlink" href="#ictonyx-core" title="Link to this heading"></a></h1>
+<p>Model wrappers: <code class="docutils literal notranslate"><span class="pre">KerasModelWrapper</span></code>, <code class="docutils literal notranslate"><span class="pre">ScikitLearnModelWrapper</span></code>,
+<code class="docutils literal notranslate"><span class="pre">PyTorchModelWrapper</span></code>, <code class="docutils literal notranslate"><span class="pre">HuggingFaceModelWrapper</span></code>.</p>
+<dl class="py class" id="module-ictonyx.core">
+<dt class="sig sig-object py" id="ictonyx.core.TrainingResult">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.core.</span></span><span class="sig-name descname"><span class="pre">TrainingResult</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">history</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params=&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#TrainingResult"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.TrainingResult" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Standardized training output from any model wrapper.</p>
+<p>Every wrapper’s fit() method must produce one of these.
+Replaces the Keras-specific .history.history probing pattern.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>history</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>]</em>)</p></li>
+<li><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.core.TrainingResult.history">
+<span class="sig-name descname"><span class="pre">history</span></span><a class="headerlink" href="#ictonyx.core.TrainingResult.history" title="Link to this definition"></a></dt>
+<dd><p>Dict mapping metric names to lists of per-epoch values.
+Keys follow the convention: ‘loss’, ‘accuracy’, ‘val_loss’,
+‘val_accuracy’, or any custom metric name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.core.TrainingResult.params">
+<span class="sig-name descname"><span class="pre">params</span></span><a class="headerlink" href="#ictonyx.core.TrainingResult.params" title="Link to this definition"></a></dt>
+<dd><p>Training parameters (epochs, batch_size, etc.)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, Any]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">history</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id1">
+<span class="sig-name descname"><span class="pre">params</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#id1" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.core.</span></span><span class="sig-name descname"><span class="pre">BaseModelWrapper</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/abc.html#abc.ABC" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
+<p>Abstract base class for wrapping ML models with a common interface.</p>
+<p>All model wrappers (Keras, scikit-learn, PyTorch) inherit from this
+class and implement its abstract methods. The wrapper provides:</p>
+<ul class="simple">
+<li><p>A consistent <code class="docutils literal notranslate"><span class="pre">fit</span></code> / <code class="docutils literal notranslate"><span class="pre">predict</span></code> / <code class="docutils literal notranslate"><span class="pre">evaluate</span></code> / <code class="docutils literal notranslate"><span class="pre">assess</span></code> API.</p></li>
+<li><p>Automatic resource cleanup via <a class="reference internal" href="#ictonyx.core.BaseModelWrapper.cleanup" title="ictonyx.core.BaseModelWrapper.cleanup"><code class="xref py py-meth docutils literal notranslate"><span class="pre">cleanup()</span></code></a>.</p></li>
+<li><p>A standardized <a class="reference internal" href="#ictonyx.core.TrainingResult" title="ictonyx.core.TrainingResult"><code class="xref py py-class docutils literal notranslate"><span class="pre">TrainingResult</span></code></a> output from <code class="docutils literal notranslate"><span class="pre">fit()</span></code>.</p></li>
+<li><p>Memory tracking via <a class="reference internal" href="memory.html#ictonyx.memory.MemoryManager" title="ictonyx.memory.MemoryManager"><code class="xref py py-class docutils literal notranslate"><span class="pre">MemoryManager</span></code></a>.</p></li>
+</ul>
+<p>Subclasses must implement: <a class="reference internal" href="#ictonyx.core.BaseModelWrapper.fit" title="ictonyx.core.BaseModelWrapper.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">fit()</span></code></a>, <a class="reference internal" href="#ictonyx.core.BaseModelWrapper.predict" title="ictonyx.core.BaseModelWrapper.predict"><code class="xref py py-meth docutils literal notranslate"><span class="pre">predict()</span></code></a>,
+<a class="reference internal" href="#ictonyx.core.BaseModelWrapper.predict_proba" title="ictonyx.core.BaseModelWrapper.predict_proba"><code class="xref py py-meth docutils literal notranslate"><span class="pre">predict_proba()</span></code></a>, <a class="reference internal" href="#ictonyx.core.BaseModelWrapper.evaluate" title="ictonyx.core.BaseModelWrapper.evaluate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">evaluate()</span></code></a>, <a class="reference internal" href="#ictonyx.core.BaseModelWrapper.assess" title="ictonyx.core.BaseModelWrapper.assess"><code class="xref py py-meth docutils literal notranslate"><span class="pre">assess()</span></code></a>,
+<a class="reference internal" href="#ictonyx.core.BaseModelWrapper.save_model" title="ictonyx.core.BaseModelWrapper.save_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save_model()</span></code></a>, <a class="reference internal" href="#ictonyx.core.BaseModelWrapper.load_model" title="ictonyx.core.BaseModelWrapper.load_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_model()</span></code></a>, and
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">_cleanup_implementation()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – The underlying model object (Keras Model, sklearn estimator,
+PyTorch Module, etc.).</p></li>
+<li><p><strong>model_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – An optional string identifier for logging and display.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper.cleanup">
+<span class="sig-name descname"><span class="pre">cleanup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper.cleanup"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper.cleanup" title="Link to this definition"></a></dt>
+<dd><p>Clean up resources used by this model.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper.fit">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">validation_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper.fit" title="Link to this definition"></a></dt>
+<dd><p>Trains (fits) the encapsulated model on the provided data.</p>
+<p>This is an abstract method that must be implemented by concrete subclasses
+(e.g., KerasModelWrapper, ScikitLearnModelWrapper). The implementation
+is responsible for handling its specific data format (e.g.,
+tf.data.Dataset vs. numpy arrays) and storing the training
+history (if any) in the <cite>self.training_result</cite> attribute.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>train_data</strong> (<em>Any</em>) – The data to train the model on. The required
+format is defined by the subclass (e.g., a tuple (X, y)
+or a tf.data.Dataset).</p></li>
+<li><p><strong>validation_data</strong> (<em>Optional</em><em>[</em><em>Any</em><em>]</em><em>, </em><em>optional</em>) – The data to use for
+validation during training. The format should be compatible
+with <cite>train_data</cite>. Defaults to None.</p></li>
+<li><p><strong>**kwargs</strong> – Additional, framework-specific arguments to be passed
+to the model’s underlying <cite>.fit()</cite> method (e.g., <cite>epochs</cite>,
+<cite>batch_size</cite>, <cite>callbacks</cite>).</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper.predict">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper.predict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper.predict" title="Link to this definition"></a></dt>
+<dd><p>Generates predictions for the given input data.</p>
+<p>This abstract method must be implemented by subclasses. It is
+responsible for running the model’s prediction logic.</p>
+<p>The implementation should:
+1.  Generate raw predictions from <cite>self.model</cite>.
+2.  For classification models, convert probabilities or logits into</p>
+<blockquote>
+<div><p>final class indices (e.g., <cite>np.argmax(…, axis=1)</cite>).</p>
+</div></blockquote>
+<ol class="arabic simple" start="3">
+<li><p>For regression models, return the predicted values directly.</p></li>
+<li><p>Store the final predictions in the <cite>self.predictions</cite> attribute.</p></li>
+<li><p>Return the final predictions.</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>np.ndarray</em>) – The input data to generate predictions for.</p></li>
+<li><p><strong>**kwargs</strong> – Additional, framework-specific arguments to be passed
+to the model’s underlying <cite>.predict()</cite> method.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An array of predictions. For classification, this
+should be class indices (integers). For regression, this
+should be the predicted values (floats).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper.predict_proba">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">predict_proba</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper.predict_proba"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper.predict_proba" title="Link to this definition"></a></dt>
+<dd><p>Generates class probability predictions for the given input data.</p>
+<p>This abstract method is only applicable for classification models.
+It must be implemented by subclasses that support probability outputs.</p>
+<p>The implementation should:
+1.  Generate raw probability scores from <cite>self.model</cite>.
+2.  Ensure the output is a 2D array of shape <cite>(n_samples, n_classes)</cite>.
+3.  For binary models with a single sigmoid output, this means</p>
+<blockquote>
+<div><p>stacking <cite>(1-p, p)</cite> to create the 2D array.</p>
+</div></blockquote>
+<ol class="arabic simple" start="4">
+<li><p>For multi-class models, this is typically the direct output
+of a softmax layer.</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>np.ndarray</em>) – The input data to generate probabilities for.</p></li>
+<li><p><strong>**kwargs</strong> – Additional, framework-specific arguments to be passed
+to the model’s underlying <cite>.predict_proba()</cite> method.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A 2D array of shape <cite>(n_samples, n_classes)</cite>
+containing the probability for each class.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#NotImplementedError" title="(in Python v3.14)"><strong>NotImplementedError</strong></a> – If the underlying model does not support</p></li>
+<li><p><strong>probability predictions</strong><strong> (</strong><strong>e.g.</strong><strong>, </strong><strong>SVM with linear kernel</strong><strong>)</strong><strong>.</strong> – </p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If called on a regression model.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper.evaluate">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper.evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper.evaluate" title="Link to this definition"></a></dt>
+<dd><p>Evaluates the encapsulated model on a given dataset (e.g., test set).</p>
+<p>This abstract method must be implemented by subclasses. Unlike
+<cite>predict</cite>, the <cite>data</cite> argument here is expected to contain both
+features and true labels in whatever format the underlying
+framework requires (e.g., a tuple (X, y) or a tf.data.Dataset).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>Any</em>) – The data to evaluate the model on, including
+features and true labels.</p></li>
+<li><p><strong>**kwargs</strong> – Additional, framework-specific arguments to be passed
+to the model’s underlying <cite>.evaluate()</cite> method.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A dictionary of metrics, where keys are the
+metric names (e.g., ‘loss’, ‘accuracy’) and values are the
+scalar metric values.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, Any]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper.assess">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">assess</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">true_labels</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper.assess"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper.assess" title="Link to this definition"></a></dt>
+<dd><p>Provides a quick assessment of model performance using stored predictions.</p>
+<p>This method is typically called <em>after</em> <cite>predict()</cite> has been run.
+It compares the stored <cite>self.predictions</cite> against a set of true
+labels to calculate simple, high-level metrics (like accuracy).</p>
+<p>This differs from <cite>evaluate()</cite>, which often runs the model’s
+built-in evaluation method on a dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>true_labels</strong> (<em>np.ndarray</em>) – A 1D array of the true ground-truth
+labels, corresponding to the stored <cite>self.predictions</cite>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A simple dictionary of one or more
+assessment metrics, e.g., {‘accuracy’: 0.95}.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a>]</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <cite>predict()</cite> has not been called yet and
+    <cite>self.predictions</cite> is None.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper.save_model">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">save_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper.save_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper.save_model" title="Link to this definition"></a></dt>
+<dd><p>Saves the encapsulated model to a specified path.</p>
+<p>This abstract method must be implemented by subclasses. It is
+responsible for serializing the <em>inner</em> model (e.g., the Keras
+model or scikit-learn estimator) and saving it to disk in the
+appropriate format (e.g., HDF5, pickle).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The file path (or directory path, depending on
+the framework) where the model should be saved.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper.load_model">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper.load_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper.load_model" title="Link to this definition"></a></dt>
+<dd><p>Loads a model from a file and wraps it in a new class instance.</p>
+<p>This abstract class method must be implemented by subclasses. It is
+responsible for deserializing a model from disk and returning a
+new, fully-functional instance of the <em>wrapper</em> class (e.g.,
+<cite>KerasModelWrapper(loaded_keras_model)</cite>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The file path (or directory path) from which to
+load the model.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A new instance of the concrete wrapper class
+(e.g., <cite>KerasModelWrapper</cite>) containing the loaded model.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.core.BaseModelWrapper" title="ictonyx.core.BaseModelWrapper">BaseModelWrapper</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper.get_memory_report">
+<span class="sig-name descname"><span class="pre">get_memory_report</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper.get_memory_report"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper.get_memory_report" title="Link to this definition"></a></dt>
+<dd><p>Get comprehensive memory usage report (available on all model wrappers).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.BaseModelWrapper.check_memory_and_cleanup_if_needed">
+<span class="sig-name descname"><span class="pre">check_memory_and_cleanup_if_needed</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#BaseModelWrapper.check_memory_and_cleanup_if_needed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.BaseModelWrapper.check_memory_and_cleanup_if_needed" title="Link to this definition"></a></dt>
+<dd><p>Run cleanup and report if significant memory was freed.</p>
+<p>Returns a summary dict if more than 50 MB was freed, otherwise <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>] | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.core.ScikitLearnModelWrapper">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.core.</span></span><span class="sig-name descname"><span class="pre">ScikitLearnModelWrapper</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#ScikitLearnModelWrapper"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.ScikitLearnModelWrapper" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#ictonyx.core.BaseModelWrapper" title="ictonyx.core.BaseModelWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModelWrapper</span></code></a></p>
+<p>Wrapper for scikit-learn estimators.</p>
+<p>Provides a consistent <code class="docutils literal notranslate"><span class="pre">fit</span></code> / <code class="docutils literal notranslate"><span class="pre">predict</span></code> / <code class="docutils literal notranslate"><span class="pre">evaluate</span></code> / <code class="docutils literal notranslate"><span class="pre">assess</span></code>
+interface over any scikit-learn estimator, making it compatible with
+<a class="reference internal" href="runners.html#ictonyx.runners.ExperimentRunner" title="ictonyx.runners.ExperimentRunner"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExperimentRunner</span></code></a> and the variability study
+pipeline.</p>
+<p>Task type (classification vs. regression) is inferred automatically after
+<code class="docutils literal notranslate"><span class="pre">fit()</span></code> by inspecting the estimator for <code class="docutils literal notranslate"><span class="pre">predict_proba</span></code> or
+<code class="docutils literal notranslate"><span class="pre">classes_</span></code>. It can also be set explicitly via the <code class="docutils literal notranslate"><span class="pre">task</span></code> parameter
+if auto-detection is unreliable for a custom estimator.</p>
+<p>Because scikit-learn models train in a single call rather than
+epoch-by-epoch, <code class="docutils literal notranslate"><span class="pre">fit()</span></code> produces a one-entry mock history
+(<code class="docutils literal notranslate"><span class="pre">{'accuracy':</span> <span class="pre">[score],</span> <span class="pre">'val_accuracy':</span> <span class="pre">[score]}</span></code> for classifiers,
+or <code class="docutils literal notranslate"><span class="pre">{'r2':</span> <span class="pre">[score],</span> <span class="pre">'val_r2':</span> <span class="pre">[score]}</span></code> for regressors) so that
+downstream metric-aggregation code operates uniformly across all
+wrapper types.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<a class="reference external" href="https://scikit-learn.org/stable/modules/generated/sklearn.base.BaseEstimator.html#sklearn.base.BaseEstimator" title="(in scikit-learn v1.8)"><em>BaseEstimator</em></a>) – A scikit-learn estimator instance (any object implementing
+<code class="docutils literal notranslate"><span class="pre">fit</span></code> and <code class="docutils literal notranslate"><span class="pre">predict</span></code>).</p></li>
+<li><p><strong>model_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Optional string identifier for logging and display.</p></li>
+<li><p><strong>task</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – <code class="docutils literal notranslate"><span class="pre">'classification'</span></code>, <code class="docutils literal notranslate"><span class="pre">'regression'</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code>
+(default). When <code class="docutils literal notranslate"><span class="pre">None</span></code>, the task is inferred after the
+first <code class="docutils literal notranslate"><span class="pre">fit()</span></code> call. Set this explicitly for custom
+estimators that do not expose <code class="docutils literal notranslate"><span class="pre">predict_proba</span></code> or
+<code class="docutils literal notranslate"><span class="pre">classes_</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">RandomForestClassifier</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">ictonyx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ix</span>
+
+<span class="n">wrapper</span> <span class="o">=</span> <span class="n">ix</span><span class="o">.</span><span class="n">ScikitLearnModelWrapper</span><span class="p">(</span>
+    <span class="n">RandomForestClassifier</span><span class="p">(</span><span class="n">n_estimators</span><span class="o">=</span><span class="mi">100</span><span class="p">),</span>
+    <span class="n">model_id</span><span class="o">=</span><span class="s2">&quot;rf_baseline&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">wrapper</span><span class="o">.</span><span class="n">fit</span><span class="p">((</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">),</span> <span class="n">validation_data</span><span class="o">=</span><span class="p">(</span><span class="n">X_val</span><span class="p">,</span> <span class="n">y_val</span><span class="p">))</span>
+<span class="n">wrapper</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">wrapper</span><span class="o">.</span><span class="n">assess</span><span class="p">(</span><span class="n">y_test</span><span class="p">))</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.ScikitLearnModelWrapper.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">validation_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#ScikitLearnModelWrapper.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.ScikitLearnModelWrapper.fit" title="Link to this definition"></a></dt>
+<dd><p>Fits the encapsulated scikit-learn model and creates a mock history.</p>
+<p>This implementation is designed for compatibility with the
+Ictonyx <cite>ExperimentRunner</cite>, which expects an epoch-based history.
+Since scikit-learn models train in a single call, this method:
+1.  Fits the model using <cite>model.fit()</cite>.
+2.  Calculates training accuracy (and validation accuracy if</p>
+<blockquote>
+<div><p><cite>validation_data</cite> is provided).</p>
+</div></blockquote>
+<ol class="arabic simple" start="3">
+<li><p>Creates a <cite>TrainingResult</cite> containing a single “epoch”
+with these metrics (e.g., <cite>{‘accuracy’: [0.95],
+‘val_accuracy’: [0.92]}</cite>).</p></li>
+<li><p>Stores the result in <cite>self.training_result</cite>.</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>train_data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>, </em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>] </em><em>| </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – The training data, must be a tuple of
+<cite>(X_train, y_train)</cite> numpy arrays.</p></li>
+<li><p><strong>validation_data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>) – Optional tuple of <cite>(X_val, y_val)</cite>
+numpy arrays. If not provided, validation metrics in the
+mock history will be populated as a copy of the
+training metrics.</p></li>
+<li><p><strong>epochs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – <strong>Ignored.</strong> Accepted for API compatibility with Keras.</p></li>
+<li><p><strong>batch_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – <strong>Ignored.</strong> Accepted for API compatibility.</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – <strong>Ignored.</strong> Accepted for API compatibility.</p></li>
+<li><p><strong>**kwargs</strong> – Additional fit parameters (like <cite>sample_weight</cite>)
+that will be passed directly to the scikit-learn
+model’s <cite>.fit()</cite> method.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <cite>train_data</cite> is not a tuple of (X, y).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.ScikitLearnModelWrapper.predict">
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#ScikitLearnModelWrapper.predict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.ScikitLearnModelWrapper.predict" title="Link to this definition"></a></dt>
+<dd><p>Generates predictions for the given input data.</p>
+<p>This abstract method must be implemented by subclasses. It is
+responsible for running the model’s prediction logic.</p>
+<p>The implementation should:
+1.  Generate raw predictions from <cite>self.model</cite>.
+2.  For classification models, convert probabilities or logits into</p>
+<blockquote>
+<div><p>final class indices (e.g., <cite>np.argmax(…, axis=1)</cite>).</p>
+</div></blockquote>
+<ol class="arabic simple" start="3">
+<li><p>For regression models, return the predicted values directly.</p></li>
+<li><p>Store the final predictions in the <cite>self.predictions</cite> attribute.</p></li>
+<li><p>Return the final predictions.</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>np.ndarray</em>) – The input data to generate predictions for.</p></li>
+<li><p><strong>**kwargs</strong> – Additional, framework-specific arguments to be passed
+to the model’s underlying <cite>.predict()</cite> method.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An array of predictions. For classification, this
+should be class indices (integers). For regression, this
+should be the predicted values (floats).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.ScikitLearnModelWrapper.predict_proba">
+<span class="sig-name descname"><span class="pre">predict_proba</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#ScikitLearnModelWrapper.predict_proba"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.ScikitLearnModelWrapper.predict_proba" title="Link to this definition"></a></dt>
+<dd><p>Generates class probability predictions for the given input data.</p>
+<p>This abstract method is only applicable for classification models.
+It must be implemented by subclasses that support probability outputs.</p>
+<p>The implementation should:
+1.  Generate raw probability scores from <cite>self.model</cite>.
+2.  Ensure the output is a 2D array of shape <cite>(n_samples, n_classes)</cite>.
+3.  For binary models with a single sigmoid output, this means</p>
+<blockquote>
+<div><p>stacking <cite>(1-p, p)</cite> to create the 2D array.</p>
+</div></blockquote>
+<ol class="arabic simple" start="4">
+<li><p>For multi-class models, this is typically the direct output
+of a softmax layer.</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>np.ndarray</em>) – The input data to generate probabilities for.</p></li>
+<li><p><strong>**kwargs</strong> – Additional, framework-specific arguments to be passed
+to the model’s underlying <cite>.predict_proba()</cite> method.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A 2D array of shape <cite>(n_samples, n_classes)</cite>
+containing the probability for each class.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#NotImplementedError" title="(in Python v3.14)"><strong>NotImplementedError</strong></a> – If the underlying model does not support</p></li>
+<li><p><strong>probability predictions</strong><strong> (</strong><strong>e.g.</strong><strong>, </strong><strong>SVM with linear kernel</strong><strong>)</strong><strong>.</strong> – </p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If called on a regression model.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.ScikitLearnModelWrapper.evaluate">
+<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#ScikitLearnModelWrapper.evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.ScikitLearnModelWrapper.evaluate" title="Link to this definition"></a></dt>
+<dd><p>Evaluate the model on a test set, returning all applicable metrics.</p>
+<p>For classifiers (models with <code class="docutils literal notranslate"><span class="pre">predict_proba</span></code> or <code class="docutils literal notranslate"><span class="pre">classes_</span></code>):
+returns accuracy, precision, recall, and F1. For regressors:
+returns R², MSE, RMSE, and MAE.</p>
+<p>Multiclass classification uses weighted averaging for precision,
+recall, and F1. Binary classification uses binary averaging.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>, </em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>] </em><em>| </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – A tuple of <code class="docutils literal notranslate"><span class="pre">(X_test,</span> <span class="pre">y_test)</span></code> numpy arrays.</p></li>
+<li><p><strong>**kwargs</strong> – Unused, accepted for API compatibility.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dict mapping metric names to float values. Keys depend on
+model type — classifiers get <code class="docutils literal notranslate"><span class="pre">'accuracy'</span></code>, <code class="docutils literal notranslate"><span class="pre">'precision'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'recall'</span></code>, <code class="docutils literal notranslate"><span class="pre">'f1'</span></code>; regressors get <code class="docutils literal notranslate"><span class="pre">'r2'</span></code>, <code class="docutils literal notranslate"><span class="pre">'mse'</span></code>, <code class="docutils literal notranslate"><span class="pre">'rmse'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'mae'</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.ScikitLearnModelWrapper.assess">
+<span class="sig-name descname"><span class="pre">assess</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">true_labels</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#ScikitLearnModelWrapper.assess"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.ScikitLearnModelWrapper.assess" title="Link to this definition"></a></dt>
+<dd><p>Assess stored predictions against true labels.</p>
+<p>For classification: returns <code class="docutils literal notranslate"><span class="pre">{'accuracy':</span> <span class="pre">float}</span></code>.
+For regression models: returns <code class="docutils literal notranslate"><span class="pre">{'r2':</span> <span class="pre">float,</span> <span class="pre">'mse':</span> <span class="pre">float,</span> <span class="pre">'rmse':</span> <span class="pre">float,</span> <span class="pre">'mae':</span> <span class="pre">float}</span></code>,
+consistent with <a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper" title="ictonyx.core.ScikitLearnModelWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">ScikitLearnModelWrapper</span></code></a> and
+<code class="xref py py-class docutils literal notranslate"><span class="pre">KerasModelWrapper</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>true_labels</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a>) – 1-D array of ground-truth labels or values,
+corresponding to the stored <code class="docutils literal notranslate"><span class="pre">self.predictions</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dict of metric name → float.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper.predict" title="ictonyx.core.ScikitLearnModelWrapper.predict"><code class="xref py py-meth docutils literal notranslate"><span class="pre">predict()</span></code></a> has not been called yet.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.ScikitLearnModelWrapper.save_model">
+<span class="sig-name descname"><span class="pre">save_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#ScikitLearnModelWrapper.save_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.ScikitLearnModelWrapper.save_model" title="Link to this definition"></a></dt>
+<dd><p>Save the sklearn model using joblib.
+.. warning:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Only</span> <span class="n">load</span> <span class="n">files</span> <span class="kn">from</span><span class="w"> </span><span class="o">**</span><span class="n">trusted</span> <span class="n">sources</span><span class="o">**.</span> <span class="n">Joblib</span> <span class="n">files</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">untrusted</span> <span class="n">sources</span> <span class="n">can</span> <span class="n">execute</span> <span class="n">arbitrary</span> <span class="n">code</span><span class="o">.</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Destination file path (e.g. <code class="docutils literal notranslate"><span class="pre">'model.joblib'</span></code>).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.ScikitLearnModelWrapper.load_model">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#ScikitLearnModelWrapper.load_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.ScikitLearnModelWrapper.load_model" title="Link to this definition"></a></dt>
+<dd><p>Load a saved scikit-learn model.
+.. warning:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Only</span> <span class="n">load</span> <span class="n">files</span> <span class="kn">from</span><span class="w"> </span><span class="o">**</span><span class="n">trusted</span> <span class="n">sources</span><span class="o">**.</span> <span class="n">Serialized</span> <span class="n">files</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">untrusted</span> <span class="n">sources</span> <span class="n">can</span> <span class="n">execute</span> <span class="n">arbitrary</span> <span class="n">code</span><span class="o">.</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Path written by <a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper.save_model" title="ictonyx.core.ScikitLearnModelWrapper.save_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save_model()</span></code></a>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ScikitLearnModelWrapper wrapping the loaded model.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.core.ScikitLearnModelWrapper" title="ictonyx.core.ScikitLearnModelWrapper"><em>ScikitLearnModelWrapper</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.core.PyTorchModelWrapper">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.core.</span></span><span class="sig-name descname"><span class="pre">PyTorchModelWrapper</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">criterion</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'classification'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#PyTorchModelWrapper"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.PyTorchModelWrapper" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#ictonyx.core.BaseModelWrapper" title="ictonyx.core.BaseModelWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModelWrapper</span></code></a></p>
+<p>Wrapper for PyTorch nn.Module models.</p>
+<p>Provides a complete training loop, metric tracking, and device
+management. Designed to integrate seamlessly with Ictonyx’s
+ExperimentRunner and variability study pipeline.</p>
+<p>The optimizer is specified as a class + params dict (not an instance)
+because a fresh optimizer must be bound to each new model’s
+parameters when the ExperimentRunner rebuilds the model per run.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<em>nn.Module</em>) – A PyTorch nn.Module instance.</p></li>
+<li><p><strong>criterion</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – A PyTorch loss function instance (e.g., nn.CrossEntropyLoss()).</p></li>
+<li><p><strong>optimizer_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Optimizer class (e.g., torch.optim.Adam). Default: Adam.</p></li>
+<li><p><strong>optimizer_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>] </em><em>| </em><em>None</em>) – Dict of optimizer kwargs (e.g., {‘lr’: 0.001}).
+Default: {‘lr’: 0.001}.</p></li>
+<li><p><strong>device</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – ‘cuda’, ‘cpu’, or ‘auto’. Default: ‘auto’ (uses CUDA if available).</p></li>
+<li><p><strong>task</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – ‘classification’ or ‘regression’. Default: ‘classification’.
+Controls which metrics are computed during training and evaluation.</p></li>
+<li><p><strong>model_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Optional string identifier.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">wrapper</span> <span class="o">=</span> <span class="n">PyTorchModelWrapper</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">model</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">criterion</span><span class="o">=</span><span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(),</span>
+<span class="gp">... </span>    <span class="n">optimizer_class</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">optimizer_params</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;lr&#39;</span><span class="p">:</span> <span class="mf">0.001</span><span class="p">}</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">wrapper</span><span class="o">.</span><span class="n">fit</span><span class="p">((</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">),</span> <span class="n">validation_data</span><span class="o">=</span><span class="p">(</span><span class="n">X_val</span><span class="p">,</span> <span class="n">y_val</span><span class="p">),</span> <span class="n">epochs</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.PyTorchModelWrapper.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">validation_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#PyTorchModelWrapper.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.PyTorchModelWrapper.fit" title="Link to this definition"></a></dt>
+<dd><p>Trains the PyTorch model with a standard training loop.</p>
+<p>Accepts (X, y) numpy array tuples or PyTorch DataLoaders. Tracks
+loss and accuracy (classification) or MSE (regression) per epoch,
+storing results in self.training_result as a TrainingResult.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>train_data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Tuple of (X, y) numpy arrays, or a PyTorch DataLoader.</p></li>
+<li><p><strong>validation_data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>) – Optional tuple of (X_val, y_val) or DataLoader.</p></li>
+<li><p><strong>**kwargs</strong> – Accepts ‘epochs’ (default 10), ‘batch_size’ (default 32),
+‘verbose’ (default 0). Other kwargs are ignored for
+compatibility with ExperimentRunner.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.PyTorchModelWrapper.predict">
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#PyTorchModelWrapper.predict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.PyTorchModelWrapper.predict" title="Link to this definition"></a></dt>
+<dd><p>Generates predictions from numpy input.</p>
+<p>For classification, returns class indices (integers).
+For regression, returns predicted values (floats).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a>) – Input numpy array of shape (n_samples, n_features).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Predictions.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.PyTorchModelWrapper.predict_proba">
+<span class="sig-name descname"><span class="pre">predict_proba</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#PyTorchModelWrapper.predict_proba"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.PyTorchModelWrapper.predict_proba" title="Link to this definition"></a></dt>
+<dd><p>Generates class probability predictions.</p>
+<p>Applies softmax to the model’s raw logits. Only valid for
+classification models.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a>) – Input numpy array.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Probabilities of shape (n_samples, n_classes).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If task is ‘regression’.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.PyTorchModelWrapper.evaluate">
+<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#PyTorchModelWrapper.evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.PyTorchModelWrapper.evaluate" title="Link to this definition"></a></dt>
+<dd><p>Evaluates the model on labeled data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Tuple of (X, y) numpy arrays, or a DataLoader.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>Classification: ‘accuracy’, ‘correct’, ‘total’</p></li>
+<li><p>Regression: ‘mse’</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with ‘loss’ and task-specific metrics</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.PyTorchModelWrapper.assess">
+<span class="sig-name descname"><span class="pre">assess</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">true_labels</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#PyTorchModelWrapper.assess"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.PyTorchModelWrapper.assess" title="Link to this definition"></a></dt>
+<dd><p>Assess stored predictions against ground-truth labels.</p>
+<p>Computes metrics from <code class="docutils literal notranslate"><span class="pre">self.predictions</span></code>, which must have been
+populated by a prior call to <a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.predict" title="ictonyx.core.PyTorchModelWrapper.predict"><code class="xref py py-meth docutils literal notranslate"><span class="pre">predict()</span></code></a>. Does not run the
+model or require input data.</p>
+<p>For classification: returns <code class="docutils literal notranslate"><span class="pre">{'accuracy':</span> <span class="pre">float}</span></code>.
+For regression: returns <code class="docutils literal notranslate"><span class="pre">{'r2':</span> <span class="pre">float,</span> <span class="pre">'mse':</span> <span class="pre">float,</span> <span class="pre">'rmse':</span> <span class="pre">float,</span> <span class="pre">'mae':</span> <span class="pre">float}</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>true_labels</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a>) – 1-D array of ground-truth class indices (classification)
+or target values (regression), aligned with the data passed to
+the preceding <a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.predict" title="ictonyx.core.PyTorchModelWrapper.predict"><code class="xref py py-meth docutils literal notranslate"><span class="pre">predict()</span></code></a> call.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dict of metric name → float. Keys depend on task type — see above.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.predict" title="ictonyx.core.PyTorchModelWrapper.predict"><code class="xref py py-meth docutils literal notranslate"><span class="pre">predict()</span></code></a> has not been called yet
+    (<code class="docutils literal notranslate"><span class="pre">self.predictions</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code>).</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">self.predictions</span></code> contains NaN values.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">self.task</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code> and task type cannot be
+    determined. Set <code class="docutils literal notranslate"><span class="pre">task='classification'</span></code> or <code class="docutils literal notranslate"><span class="pre">task='regression'</span></code>
+    at construction to avoid ambiguity.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.PyTorchModelWrapper.save_model">
+<span class="sig-name descname"><span class="pre">save_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#PyTorchModelWrapper.save_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.PyTorchModelWrapper.save_model" title="Link to this definition"></a></dt>
+<dd><p>Save model state dict to disk.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.core.PyTorchModelWrapper.load_model">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'classification'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/core.html#PyTorchModelWrapper.load_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.core.PyTorchModelWrapper.load_model" title="Link to this definition"></a></dt>
+<dd><p>Load model weights from a state-dict checkpoint.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>PyTorch state dicts store <strong>weights only</strong>, not the model
+architecture. The architecture must be supplied via <code class="docutils literal notranslate"><span class="pre">model</span></code>
+and must match the one used when <a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.save_model" title="ictonyx.core.PyTorchModelWrapper.save_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save_model()</span></code></a> was called.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Path to the <code class="docutils literal notranslate"><span class="pre">.pt</span></code> checkpoint written by
+<a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.save_model" title="ictonyx.core.PyTorchModelWrapper.save_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save_model()</span></code></a>.</p></li>
+<li><p><strong>model</strong> (<em>Module</em><em> | </em><em>None</em>) – A <code class="docutils literal notranslate"><span class="pre">torch.nn.Module</span></code> instance whose architecture
+matches the saved checkpoint. <strong>Required</strong> — raises
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if omitted.</p></li>
+<li><p><strong>task</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – <code class="docutils literal notranslate"><span class="pre">'classification'</span></code> or <code class="docutils literal notranslate"><span class="pre">'regression'</span></code>. Overridden
+by the value stored in the checkpoint when present.</p></li>
+<li><p><strong>weights_only</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), restricts deserialization
+to tensors and primitives — safe for all checkpoints written
+by <a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper.save_model" title="ictonyx.core.PyTorchModelWrapper.save_model"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save_model()</span></code></a>. Set to <code class="docutils literal notranslate"><span class="pre">False</span></code> only for legacy
+checkpoints from untrusted sources. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper" title="ictonyx.core.PyTorchModelWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">PyTorchModelWrapper</span></code></a> with weights loaded from <em>path</em>.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <em>model</em> is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.core.PyTorchModelWrapper" title="ictonyx.core.PyTorchModelWrapper"><em>PyTorchModelWrapper</em></a></p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">net</span> <span class="o">=</span> <span class="n">MyNet</span><span class="p">()</span>   <span class="c1"># same architecture used at training time</span>
+<span class="n">wrapper</span> <span class="o">=</span> <span class="n">PyTorchModelWrapper</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;run1.pt&quot;</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">net</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="config.html" class="btn btn-neutral float-left" title="ictonyx.config" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="data.html" class="btn btn-neutral float-right" title="ictonyx.data" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

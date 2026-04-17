@@ -1,0 +1,383 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.memory &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ictonyx.exceptions" href="exceptions.html" />
+    <link rel="prev" title="ictonyx.tuning" href="tuning.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="analysis.html">ictonyx.analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">ictonyx.api</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runners.html">ictonyx.runners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bootstrap.html">ictonyx.bootstrap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html">ictonyx.config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core.html">ictonyx.core</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">ictonyx.data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plotting.html">ictonyx.plotting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="explainers.html">ictonyx.explainers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loggers.html">ictonyx.loggers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tuning.html">ictonyx.tuning</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ictonyx.memory</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.memory.MemoryResult"><code class="docutils literal notranslate"><span class="pre">MemoryResult</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryResult.success"><code class="docutils literal notranslate"><span class="pre">MemoryResult.success</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryResult.actions"><code class="docutils literal notranslate"><span class="pre">MemoryResult.actions</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryResult.errors"><code class="docutils literal notranslate"><span class="pre">MemoryResult.errors</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryResult.memory_before_mb"><code class="docutils literal notranslate"><span class="pre">MemoryResult.memory_before_mb</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryResult.memory_after_mb"><code class="docutils literal notranslate"><span class="pre">MemoryResult.memory_after_mb</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryResult.memory_freed_mb"><code class="docutils literal notranslate"><span class="pre">MemoryResult.memory_freed_mb</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryResult.mode"><code class="docutils literal notranslate"><span class="pre">MemoryResult.mode</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.memory.MemoryManager"><code class="docutils literal notranslate"><span class="pre">MemoryManager</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryManager.__init__"><code class="docutils literal notranslate"><span class="pre">MemoryManager.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryManager.setup"><code class="docutils literal notranslate"><span class="pre">MemoryManager.setup()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryManager.cleanup"><code class="docutils literal notranslate"><span class="pre">MemoryManager.cleanup()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.memory.MemoryManager.run_isolated"><code class="docutils literal notranslate"><span class="pre">MemoryManager.run_isolated()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.memory.get_memory_manager"><code class="docutils literal notranslate"><span class="pre">get_memory_manager()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.memory.managed_memory"><code class="docutils literal notranslate"><span class="pre">managed_memory()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.memory.cleanup_gpu_memory"><code class="docutils literal notranslate"><span class="pre">cleanup_gpu_memory()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.memory.get_memory_info"><code class="docutils literal notranslate"><span class="pre">get_memory_info()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.memory.check_isolation_capability"><code class="docutils literal notranslate"><span class="pre">check_isolation_capability()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="exceptions.html">ictonyx.exceptions</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">ictonyx.memory</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/memory.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ictonyx-memory">
+<h1>ictonyx.memory<a class="headerlink" href="#ictonyx-memory" title="Link to this heading"></a></h1>
+<p>GPU and system memory monitoring utilities.</p>
+<p id="module-ictonyx.memory">Memory management for ictonyx with two modes:
+1. Standard (default): Fast in-process execution with best-effort cleanup
+2. Process isolation (opt-in): Guaranteed cleanup via subprocess with smart serialization</p>
+<p>Process isolation uses cloudpickle when available to serialize notebook-defined
+functions, making it work seamlessly in Jupyter environments.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryResult">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.memory.</span></span><span class="sig-name descname"><span class="pre">MemoryResult</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">success</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actions=&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">errors=&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">memory_before_mb=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">memory_after_mb=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">memory_freed_mb=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode='standard'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#MemoryResult"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.MemoryResult" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Result of memory operations.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>success</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>actions</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a>)</p></li>
+<li><p><strong>errors</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a>)</p></li>
+<li><p><strong>memory_before_mb</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>memory_after_mb</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>memory_freed_mb</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryResult.success">
+<span class="sig-name descname"><span class="pre">success</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></em><a class="headerlink" href="#ictonyx.memory.MemoryResult.success" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryResult.actions">
+<span class="sig-name descname"><span class="pre">actions</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></em><a class="headerlink" href="#ictonyx.memory.MemoryResult.actions" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryResult.errors">
+<span class="sig-name descname"><span class="pre">errors</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></em><a class="headerlink" href="#ictonyx.memory.MemoryResult.errors" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryResult.memory_before_mb">
+<span class="sig-name descname"><span class="pre">memory_before_mb</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#ictonyx.memory.MemoryResult.memory_before_mb" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryResult.memory_after_mb">
+<span class="sig-name descname"><span class="pre">memory_after_mb</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#ictonyx.memory.MemoryResult.memory_after_mb" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryResult.memory_freed_mb">
+<span class="sig-name descname"><span class="pre">memory_freed_mb</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#ictonyx.memory.MemoryResult.memory_freed_mb" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryResult.mode">
+<span class="sig-name descname"><span class="pre">mode</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'standard'</span></em><a class="headerlink" href="#ictonyx.memory.MemoryResult.mode" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryManager">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.memory.</span></span><span class="sig-name descname"><span class="pre">MemoryManager</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">use_process_isolation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gpu_memory_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">process_timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3600</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_memory_growth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#MemoryManager"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.MemoryManager" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Unified memory manager for both standard and process-isolated training.</p>
+<p>Standard mode (default): Fast in-process execution with cleanup
+Process isolation mode: Subprocess execution with guaranteed cleanup</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>use_process_isolation</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>gpu_memory_limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>process_timeout</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>allow_memory_growth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryManager.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">use_process_isolation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gpu_memory_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">process_timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3600</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_memory_growth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#MemoryManager.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.MemoryManager.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize memory manager.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>use_process_isolation</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True, run in isolated subprocess</p></li>
+<li><p><strong>gpu_memory_limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – GPU memory limit in MB</p></li>
+<li><p><strong>process_timeout</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Timeout for subprocess execution</p></li>
+<li><p><strong>allow_memory_growth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Allow GPU memory to grow as needed</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Print informative messages</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryManager.setup">
+<span class="sig-name descname"><span class="pre">setup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#MemoryManager.setup"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.MemoryManager.setup" title="Link to this definition"></a></dt>
+<dd><p>Configure memory constraints for standard mode.
+Must be called before any GPU operations.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryManager.cleanup">
+<span class="sig-name descname"><span class="pre">cleanup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#MemoryManager.cleanup"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.MemoryManager.cleanup" title="Link to this definition"></a></dt>
+<dd><p>Perform memory cleanup (standard mode only).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.memory.MemoryResult" title="ictonyx.memory.MemoryResult"><em>MemoryResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.memory.MemoryManager.run_isolated">
+<span class="sig-name descname"><span class="pre">run_isolated</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#MemoryManager.run_isolated"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.MemoryManager.run_isolated" title="Link to this definition"></a></dt>
+<dd><p>Run function in isolated subprocess with smart serialization.</p>
+<p>Automatically uses cloudpickle if available for notebook functions,
+falls back to standard pickle for module functions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>func</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a>)</p></li>
+<li><p><strong>args</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a>)</p></li>
+<li><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.memory.get_memory_manager">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.memory.</span></span><span class="sig-name descname"><span class="pre">get_memory_manager</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">use_process_isolation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#get_memory_manager"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.get_memory_manager" title="Link to this definition"></a></dt>
+<dd><p>Create a memory manager.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>use_process_isolation</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Enable subprocess isolation (default: False)</p></li>
+<li><p><strong>**kwargs</strong> – Additional options</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Configured MemoryManager</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.memory.MemoryManager" title="ictonyx.memory.MemoryManager"><em>MemoryManager</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.memory.managed_memory">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.memory.</span></span><span class="sig-name descname"><span class="pre">managed_memory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">use_process_isolation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#managed_memory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.managed_memory" title="Link to this definition"></a></dt>
+<dd><p>Context manager for memory-managed operations.</p>
+<p class="rubric">Examples</p>
+<p># Standard mode (default)
+with managed_memory():</p>
+<blockquote>
+<div><p>model.fit(…)</p>
+</div></blockquote>
+<p># Process isolation for extended runs
+with managed_memory(use_process_isolation=True):</p>
+<blockquote>
+<div><dl class="simple">
+<dt>for i in range(100):</dt><dd><p>train_model()</p>
+</dd>
+</dl>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>use_process_isolation</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.memory.cleanup_gpu_memory">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.memory.</span></span><span class="sig-name descname"><span class="pre">cleanup_gpu_memory</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#cleanup_gpu_memory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.cleanup_gpu_memory" title="Link to this definition"></a></dt>
+<dd><p>Quick GPU memory cleanup.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.memory.MemoryResult" title="ictonyx.memory.MemoryResult"><em>MemoryResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.memory.get_memory_info">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.memory.</span></span><span class="sig-name descname"><span class="pre">get_memory_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#get_memory_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.get_memory_info" title="Link to this definition"></a></dt>
+<dd><p>Get current memory usage.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.memory.check_isolation_capability">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.memory.</span></span><span class="sig-name descname"><span class="pre">check_isolation_capability</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/memory.html#check_isolation_capability"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.memory.check_isolation_capability" title="Link to this definition"></a></dt>
+<dd><p>Check if a function can be used with process isolation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(can_isolate, reason)</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>func</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a>)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="tuning.html" class="btn btn-neutral float-left" title="ictonyx.tuning" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="exceptions.html" class="btn btn-neutral float-right" title="ictonyx.exceptions" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

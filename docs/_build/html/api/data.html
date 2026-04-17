@@ -1,0 +1,704 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.data &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ictonyx.plotting" href="plotting.html" />
+    <link rel="prev" title="ictonyx.core" href="core.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="analysis.html">ictonyx.analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">ictonyx.api</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runners.html">ictonyx.runners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bootstrap.html">ictonyx.bootstrap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html">ictonyx.config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core.html">ictonyx.core</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ictonyx.data</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.data.DataHandler"><code class="docutils literal notranslate"><span class="pre">DataHandler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.DataHandler.load"><code class="docutils literal notranslate"><span class="pre">DataHandler.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.DataHandler.data_type"><code class="docutils literal notranslate"><span class="pre">DataHandler.data_type</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.DataHandler.return_format"><code class="docutils literal notranslate"><span class="pre">DataHandler.return_format</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.DataHandler.get_data_info"><code class="docutils literal notranslate"><span class="pre">DataHandler.get_data_info()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.data.ImageDataHandler"><code class="docutils literal notranslate"><span class="pre">ImageDataHandler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.ImageDataHandler.data_type"><code class="docutils literal notranslate"><span class="pre">ImageDataHandler.data_type</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.ImageDataHandler.return_format"><code class="docutils literal notranslate"><span class="pre">ImageDataHandler.return_format</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.ImageDataHandler.__init__"><code class="docutils literal notranslate"><span class="pre">ImageDataHandler.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.ImageDataHandler.load"><code class="docutils literal notranslate"><span class="pre">ImageDataHandler.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.ImageDataHandler.get_data_info"><code class="docutils literal notranslate"><span class="pre">ImageDataHandler.get_data_info()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.data.TabularDataHandler"><code class="docutils literal notranslate"><span class="pre">TabularDataHandler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TabularDataHandler.data_type"><code class="docutils literal notranslate"><span class="pre">TabularDataHandler.data_type</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TabularDataHandler.return_format"><code class="docutils literal notranslate"><span class="pre">TabularDataHandler.return_format</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TabularDataHandler.__init__"><code class="docutils literal notranslate"><span class="pre">TabularDataHandler.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TabularDataHandler.load"><code class="docutils literal notranslate"><span class="pre">TabularDataHandler.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TabularDataHandler.get_data_info"><code class="docutils literal notranslate"><span class="pre">TabularDataHandler.get_data_info()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.data.TextDataHandler"><code class="docutils literal notranslate"><span class="pre">TextDataHandler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TextDataHandler.data_type"><code class="docutils literal notranslate"><span class="pre">TextDataHandler.data_type</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TextDataHandler.return_format"><code class="docutils literal notranslate"><span class="pre">TextDataHandler.return_format</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TextDataHandler.load"><code class="docutils literal notranslate"><span class="pre">TextDataHandler.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TextDataHandler.get_data_info"><code class="docutils literal notranslate"><span class="pre">TextDataHandler.get_data_info()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.data.TimeSeriesDataHandler"><code class="docutils literal notranslate"><span class="pre">TimeSeriesDataHandler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TimeSeriesDataHandler.data_type"><code class="docutils literal notranslate"><span class="pre">TimeSeriesDataHandler.data_type</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TimeSeriesDataHandler.return_format"><code class="docutils literal notranslate"><span class="pre">TimeSeriesDataHandler.return_format</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TimeSeriesDataHandler.load"><code class="docutils literal notranslate"><span class="pre">TimeSeriesDataHandler.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.TimeSeriesDataHandler.get_data_info"><code class="docutils literal notranslate"><span class="pre">TimeSeriesDataHandler.get_data_info()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.data.ArraysDataHandler"><code class="docutils literal notranslate"><span class="pre">ArraysDataHandler</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.ArraysDataHandler.data_type"><code class="docutils literal notranslate"><span class="pre">ArraysDataHandler.data_type</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.ArraysDataHandler.return_format"><code class="docutils literal notranslate"><span class="pre">ArraysDataHandler.return_format</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.ArraysDataHandler.__init__"><code class="docutils literal notranslate"><span class="pre">ArraysDataHandler.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.data.ArraysDataHandler.load"><code class="docutils literal notranslate"><span class="pre">ArraysDataHandler.load()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.data.auto_resolve_handler"><code class="docutils literal notranslate"><span class="pre">auto_resolve_handler()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="plotting.html">ictonyx.plotting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="explainers.html">ictonyx.explainers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loggers.html">ictonyx.loggers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tuning.html">ictonyx.tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="memory.html">ictonyx.memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="exceptions.html">ictonyx.exceptions</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">ictonyx.data</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/data.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ictonyx-data">
+<h1>ictonyx.data<a class="headerlink" href="#ictonyx-data" title="Link to this heading"></a></h1>
+<p>Data handlers and loading utilities.</p>
+<dl class="py class" id="module-ictonyx.data">
+<dt class="sig sig-object py" id="ictonyx.data.DataHandler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.data.</span></span><span class="sig-name descname"><span class="pre">DataHandler</span></span><a class="reference internal" href="../_modules/ictonyx/data.html#DataHandler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.DataHandler" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/abc.html#abc.ABC" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
+<p>Abstract base class for all data handlers.</p>
+<p>Provides a consistent interface regardless of data source.
+Handlers that load from the file system should inherit from
+<code class="xref py py-class docutils literal notranslate"><span class="pre">FileDataHandler</span></code> instead of this class directly.</p>
+<p>All subclasses must implement <a class="reference internal" href="#ictonyx.data.DataHandler.load" title="ictonyx.data.DataHandler.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a>, <a class="reference internal" href="#ictonyx.data.DataHandler.data_type" title="ictonyx.data.DataHandler.data_type"><code class="xref py py-attr docutils literal notranslate"><span class="pre">data_type</span></code></a>,
+and <a class="reference internal" href="#ictonyx.data.DataHandler.return_format" title="ictonyx.data.DataHandler.return_format"><code class="xref py py-attr docutils literal notranslate"><span class="pre">return_format</span></code></a>. The returned dict from <a class="reference internal" href="#ictonyx.data.DataHandler.load" title="ictonyx.data.DataHandler.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a>
+must have keys <code class="docutils literal notranslate"><span class="pre">'train_data'</span></code>, <code class="docutils literal notranslate"><span class="pre">'val_data'</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">'test_data'</span></code>, each a <code class="docutils literal notranslate"><span class="pre">(X,</span> <span class="pre">y)</span></code> tuple or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.DataHandler.load">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#DataHandler.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.DataHandler.load" title="Link to this definition"></a></dt>
+<dd><p>Load and split the dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with keys <code class="docutils literal notranslate"><span class="pre">'train_data'</span></code>, <code class="docutils literal notranslate"><span class="pre">'val_data'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'test_data'</span></code>.</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.DataHandler.data_type">
+<em class="property"><span class="k"><span class="pre">abstract</span></span><span class="w"> </span><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data_type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.DataHandler.data_type" title="Link to this definition"></a></dt>
+<dd><p>String identifier for the data type this handler processes.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.DataHandler.return_format">
+<em class="property"><span class="k"><span class="pre">abstract</span></span><span class="w"> </span><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">return_format</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.DataHandler.return_format" title="Link to this definition"></a></dt>
+<dd><p>String describing the format returned by <a class="reference internal" href="#ictonyx.data.DataHandler.load" title="ictonyx.data.DataHandler.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.DataHandler.get_data_info">
+<span class="sig-name descname"><span class="pre">get_data_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#DataHandler.get_data_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.DataHandler.get_data_info" title="Link to this definition"></a></dt>
+<dd><p>Get basic information about the dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.data.ImageDataHandler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.data.</span></span><span class="sig-name descname"><span class="pre">ImageDataHandler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">color_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'rgb'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#ImageDataHandler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.ImageDataHandler" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">FileDataHandler</span></code></p>
+<p>Data handler for image classification datasets in directory format.</p>
+<p>Expects a directory structure where each subdirectory is a class
+label containing image files. Images are loaded, resized, normalized
+to [0, 1], and split into train/val/test sets.</p>
+<p>Requires TensorFlow for image preprocessing. Install with
+<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">tensorflow</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Path to the root directory containing class subdirectories.</p></li>
+<li><p><strong>image_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>) – Target <code class="docutils literal notranslate"><span class="pre">(height,</span> <span class="pre">width)</span></code> for resizing, e.g. <code class="docutils literal notranslate"><span class="pre">(64,</span> <span class="pre">64)</span></code>.</p></li>
+<li><p><strong>color_mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – <code class="docutils literal notranslate"><span class="pre">'rgb'</span></code> (3 channels) or <code class="docutils literal notranslate"><span class="pre">'grayscale'</span></code> (1 channel).
+Default <code class="docutils literal notranslate"><span class="pre">'rgb'</span></code>.</p></li>
+<li><p><strong>batch_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>val_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the path is not a directory, contains no class
+    subdirectories, or no valid image files are found.</p>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.ImageDataHandler.data_type">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data_type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.ImageDataHandler.data_type" title="Link to this definition"></a></dt>
+<dd><p>String identifier for the data type this handler processes.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.ImageDataHandler.return_format">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">return_format</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.ImageDataHandler.return_format" title="Link to this definition"></a></dt>
+<dd><p>String describing the format returned by <a class="reference internal" href="#ictonyx.data.ImageDataHandler.load" title="ictonyx.data.ImageDataHandler.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.ImageDataHandler.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">color_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'rgb'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#ImageDataHandler.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.ImageDataHandler.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize the image data handler.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Path to directory containing class subdirectories.</p></li>
+<li><p><strong>image_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>) – <code class="docutils literal notranslate"><span class="pre">(height,</span> <span class="pre">width)</span></code> tuple for resizing images.</p></li>
+<li><p><strong>batch_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Batch size for the datasets. Default 32.</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Random seed for reproducibility. Default 42.</p></li>
+<li><p><strong>color_mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – <code class="docutils literal notranslate"><span class="pre">'rgb'</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">'grayscale'</span></code>.</p></li>
+<li><p><strong>val_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Fraction of data for validation. Default 0.2.</p></li>
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Fraction of data for test. Default 0.1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.ImageDataHandler.load">
+<span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">validation_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#ImageDataHandler.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.ImageDataHandler.load" title="Link to this definition"></a></dt>
+<dd><p>Loads and splits the dataset into training, validation, and test sets,
+ensuring stratified sampling.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>validation_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Proportion of data for validation</p></li>
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Proportion of data for testing</p></li>
+<li><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dict with ‘train_data’, ‘val_data’, ‘test_data’ as tf.data.Dataset objects</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.ImageDataHandler.get_data_info">
+<span class="sig-name descname"><span class="pre">get_data_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#ImageDataHandler.get_data_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.ImageDataHandler.get_data_info" title="Link to this definition"></a></dt>
+<dd><p>Get comprehensive information about the image dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.data.TabularDataHandler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.data.</span></span><span class="sig-name descname"><span class="pre">TabularDataHandler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sep</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">','</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">header</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#TabularDataHandler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.TabularDataHandler" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">FileDataHandler</span></code></p>
+<p>Data handler for structured tabular data from CSV files or DataFrames.</p>
+<p>Loads data, validates columns, and splits into train/val/test sets.
+Supports both file-path and in-memory DataFrame initialization.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>DataFrame</em>) – Path to a CSV file, or a <code class="docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>.</p></li>
+<li><p><strong>target_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Name of the column containing labels.</p></li>
+<li><p><strong>features</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Optional list of feature column names. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+all columns except <code class="docutils literal notranslate"><span class="pre">target_column</span></code> are used.</p></li>
+<li><p><strong>sep</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – CSV delimiter (only used for file paths). Default <code class="docutils literal notranslate"><span class="pre">','</span></code>.</p></li>
+<li><p><strong>header</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Header row number (only used for file paths). Default 0.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">data</span></code> or <code class="docutils literal notranslate"><span class="pre">target_column</span></code> is missing, or if
+    the target column is not found in the data.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.14)"><strong>TypeError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">data</span></code> is neither a string nor a DataFrame.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.TabularDataHandler.data_type">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data_type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.TabularDataHandler.data_type" title="Link to this definition"></a></dt>
+<dd><p>String identifier for the data type this handler processes.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.TabularDataHandler.return_format">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">return_format</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.TabularDataHandler.return_format" title="Link to this definition"></a></dt>
+<dd><p>String describing the format returned by <a class="reference internal" href="#ictonyx.data.TabularDataHandler.load" title="ictonyx.data.TabularDataHandler.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.TabularDataHandler.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sep</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">','</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">header</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#TabularDataHandler.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.TabularDataHandler.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize the tabular data handler.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>DataFrame</em>) – Path to CSV file OR a pandas DataFrame object.</p></li>
+<li><p><strong>target_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Name of the target column.</p></li>
+<li><p><strong>features</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – List of feature column names (None = all except target).</p></li>
+<li><p><strong>sep</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – CSV separator (only used if data is a path).</p></li>
+<li><p><strong>header</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Header row number (only used if data is a path).</p></li>
+<li><p><strong>**kwargs</strong> – Captures legacy ‘data_path’ argument.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.TabularDataHandler.load">
+<span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#TabularDataHandler.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.TabularDataHandler.load" title="Link to this definition"></a></dt>
+<dd><p>Load and split the dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with keys <code class="docutils literal notranslate"><span class="pre">'train_data'</span></code>, <code class="docutils literal notranslate"><span class="pre">'val_data'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'test_data'</span></code>.</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>val_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>random_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.TabularDataHandler.get_data_info">
+<span class="sig-name descname"><span class="pre">get_data_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#TabularDataHandler.get_data_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.TabularDataHandler.get_data_info" title="Link to this definition"></a></dt>
+<dd><p>Return metadata about the tabular dataset.</p>
+<p>When operating from an in-memory DataFrame, returns a <code class="docutils literal notranslate"><span class="pre">source</span></code> key
+with <code class="docutils literal notranslate"><span class="pre">'dataframe'</span></code> instead of a <code class="docutils literal notranslate"><span class="pre">data_path</span></code> / <code class="docutils literal notranslate"><span class="pre">path_exists</span></code> pair,
+which would otherwise show a nonsensical dummy path.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.data.TextDataHandler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.data.</span></span><span class="sig-name descname"><span class="pre">TextDataHandler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">text_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'text'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_features</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#TextDataHandler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.TextDataHandler" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">FileDataHandler</span></code></p>
+<p>Framework-agnostic text classification data handler.</p>
+<p>Converts raw text to TF-IDF feature vectors compatible with all three
+model wrappers (Keras, PyTorch, sklearn). Does not require TensorFlow.</p>
+<p>Requires scikit-learn: <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">ictonyx[sklearn]</span></code></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Path to a CSV file containing text and label columns.</p></li>
+<li><p><strong>text_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Name of the column containing raw text. Default
+<code class="docutils literal notranslate"><span class="pre">'text'</span></code>.</p></li>
+<li><p><strong>label_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Name of the column containing labels. Default
+<code class="docutils literal notranslate"><span class="pre">'label'</span></code>.</p></li>
+<li><p><strong>max_features</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Maximum number of TF-IDF features. Default 10000.</p></li>
+<li><p><strong>val_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Fraction of training data to use for validation.
+Default 0.1.</p></li>
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Fraction of all data to hold out for testing.
+Default 0.2.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.TextDataHandler.data_type">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data_type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.TextDataHandler.data_type" title="Link to this definition"></a></dt>
+<dd><p>String identifier for the data type this handler processes.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.TextDataHandler.return_format">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">return_format</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.TextDataHandler.return_format" title="Link to this definition"></a></dt>
+<dd><p>String describing the format returned by <a class="reference internal" href="#ictonyx.data.TextDataHandler.load" title="ictonyx.data.TextDataHandler.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.TextDataHandler.load">
+<span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#TextDataHandler.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.TextDataHandler.load" title="Link to this definition"></a></dt>
+<dd><p>Load text data, vectorise with TF-IDF, and split.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with <code class="docutils literal notranslate"><span class="pre">'train_data'</span></code>, <code class="docutils literal notranslate"><span class="pre">'val_data'</span></code>, <code class="docutils literal notranslate"><span class="pre">'test_data'</span></code> as
+<code class="docutils literal notranslate"><span class="pre">(X,</span> <span class="pre">y)</span></code> tuples of numpy arrays. <code class="docutils literal notranslate"><span class="pre">X</span></code> has shape
+<code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">max_features)</span></code>.</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>val_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>random_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.TextDataHandler.get_data_info">
+<span class="sig-name descname"><span class="pre">get_data_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#TextDataHandler.get_data_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.TextDataHandler.get_data_info" title="Link to this definition"></a></dt>
+<dd><p>Get information about the text dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.data.TimeSeriesDataHandler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.data.</span></span><span class="sig-name descname"><span class="pre">TimeSeriesDataHandler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lookback</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sequence_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'value'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#TimeSeriesDataHandler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.TimeSeriesDataHandler" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">FileDataHandler</span></code></p>
+<p>Framework-agnostic time series data handler using NumPy sliding windows.</p>
+<p>Creates overlapping input windows from a univariate or multivariate
+time series. Compatible with all three model wrappers (Keras, PyTorch,
+sklearn). Does not require TensorFlow.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Path to a CSV file containing time series data.</p></li>
+<li><p><strong>lookback</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of time steps in each input window.</p></li>
+<li><p><strong>value_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Name of the column to use as the target series.
+Default <code class="docutils literal notranslate"><span class="pre">'value'</span></code>.</p></li>
+<li><p><strong>target_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Name of the column to predict. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, uses
+<code class="docutils literal notranslate"><span class="pre">value_column</span></code> shifted by one step (next-step prediction).
+Default <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>stride</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Step between consecutive windows. Default 1.</p></li>
+<li><p><strong>val_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Fraction of data to use for validation (chronological).
+Default 0.1.</p></li>
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Fraction of data to hold out for testing (chronological,
+taken from the end). Default 0.2.</p></li>
+<li><p><strong>sequence_length</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.TimeSeriesDataHandler.data_type">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data_type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.TimeSeriesDataHandler.data_type" title="Link to this definition"></a></dt>
+<dd><p>String identifier for the data type this handler processes.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.TimeSeriesDataHandler.return_format">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">return_format</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.TimeSeriesDataHandler.return_format" title="Link to this definition"></a></dt>
+<dd><p>String describing the format returned by <a class="reference internal" href="#ictonyx.data.TimeSeriesDataHandler.load" title="ictonyx.data.TimeSeriesDataHandler.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.TimeSeriesDataHandler.load">
+<span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#TimeSeriesDataHandler.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.TimeSeriesDataHandler.load" title="Link to this definition"></a></dt>
+<dd><p>Load CSV, build sliding windows, and split chronologically.</p>
+<p>Splits are chronological (not shuffled) to avoid data leakage.
+<code class="docutils literal notranslate"><span class="pre">random_state</span></code> is accepted for API compatibility but not used.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with <code class="docutils literal notranslate"><span class="pre">'train_data'</span></code>, <code class="docutils literal notranslate"><span class="pre">'val_data'</span></code>, <code class="docutils literal notranslate"><span class="pre">'test_data'</span></code> as
+<code class="docutils literal notranslate"><span class="pre">(X,</span> <span class="pre">y)</span></code> tuples. X has shape
+<code class="docutils literal notranslate"><span class="pre">(n_windows,</span> <span class="pre">lookback,</span> <span class="pre">n_features)</span></code>.</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>val_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>random_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.TimeSeriesDataHandler.get_data_info">
+<span class="sig-name descname"><span class="pre">get_data_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#TimeSeriesDataHandler.get_data_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.TimeSeriesDataHandler.get_data_info" title="Link to this definition"></a></dt>
+<dd><p>Get information about the time series dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.data.ArraysDataHandler">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.data.</span></span><span class="sig-name descname"><span class="pre">ArraysDataHandler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X_test</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_test</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#ArraysDataHandler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.ArraysDataHandler" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#ictonyx.data.DataHandler" title="ictonyx.data.DataHandler"><code class="xref py py-class docutils literal notranslate"><span class="pre">DataHandler</span></code></a></p>
+<p>Data handler for pre-loaded in-memory arrays.</p>
+<p>Use this when data is already available as numpy arrays or Python
+lists, bypassing file I/O entirely. This is the handler used when
+passing <code class="docutils literal notranslate"><span class="pre">(X,</span> <span class="pre">y)</span></code> tuples to <a class="reference internal" href="api.html#ictonyx.api.variability_study" title="ictonyx.api.variability_study"><code class="xref py py-func docutils literal notranslate"><span class="pre">variability_study()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Feature array or list. Converted to <code class="docutils literal notranslate"><span class="pre">np.ndarray</span></code> on init.</p></li>
+<li><p><strong>y</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Label array or list. Must have the same length as <code class="docutils literal notranslate"><span class="pre">X</span></code>.</p></li>
+<li><p><strong>X_test</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>y_test</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>val_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">X</span></code> and <code class="docutils literal notranslate"><span class="pre">y</span></code> have different lengths.</p>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.ArraysDataHandler.data_type">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">data_type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.ArraysDataHandler.data_type" title="Link to this definition"></a></dt>
+<dd><p>String identifier for the data type this handler processes.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.data.ArraysDataHandler.return_format">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">return_format</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.data.ArraysDataHandler.return_format" title="Link to this definition"></a></dt>
+<dd><p>String describing the format returned by <a class="reference internal" href="#ictonyx.data.ArraysDataHandler.load" title="ictonyx.data.ArraysDataHandler.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.ArraysDataHandler.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X_test</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_test</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#ArraysDataHandler.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.ArraysDataHandler.__init__" title="Link to this definition"></a></dt>
+<dd><p>Data handler for pre-loaded in-memory arrays.</p>
+<p>Use this when data is already available as numpy arrays or Python
+lists, bypassing file I/O entirely. Optionally accepts a pre-held-out
+test set; if provided, it is passed through unchanged and only a
+train/val split is performed on the training arrays.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Feature array or list. Converted to <code class="docutils literal notranslate"><span class="pre">np.ndarray</span></code> on init.</p></li>
+<li><p><strong>y</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Label array or list. Must have the same length as <code class="docutils literal notranslate"><span class="pre">X</span></code>.</p></li>
+<li><p><strong>X_test</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>) – Optional pre-held-out test features. If provided,
+<code class="docutils literal notranslate"><span class="pre">load()</span></code> will not carve a test set from <code class="docutils literal notranslate"><span class="pre">X</span></code>/<code class="docutils literal notranslate"><span class="pre">y</span></code>.</p></li>
+<li><p><strong>y_test</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>) – Optional pre-held-out test labels. Required if
+<code class="docutils literal notranslate"><span class="pre">X_test</span></code> is provided.</p></li>
+<li><p><strong>val_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Default validation fraction passed to <code class="docutils literal notranslate"><span class="pre">load()</span></code></p></li>
+<li><p><strong>0.1.</strong> (<em>when not overridden there. Default</em>)</p></li>
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Default test fraction passed to <code class="docutils literal notranslate"><span class="pre">load()</span></code></p></li>
+<li><p><strong>0.2.</strong> (<em>when not overridden there. Default</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">X</span></code> and <code class="docutils literal notranslate"><span class="pre">y</span></code> have different lengths.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If exactly one of <code class="docutils literal notranslate"><span class="pre">X_test</span></code> / <code class="docutils literal notranslate"><span class="pre">y_test</span></code> is provided.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">X_test</span></code> and <code class="docutils literal notranslate"><span class="pre">y_test</span></code> have different lengths.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.data.ArraysDataHandler.load">
+<span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#ArraysDataHandler.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.ArraysDataHandler.load" title="Link to this definition"></a></dt>
+<dd><p>Split the pre-loaded arrays.</p>
+<p>If X_test and y_test were provided at construction, they are used
+as the test set directly and only a train/val split is performed.
+Otherwise, test_split is carved out of the provided arrays first.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>test_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>) – Fraction to reserve for test. Defaults to the
+value passed to <code class="docutils literal notranslate"><span class="pre">__init__</span></code> (default <code class="docutils literal notranslate"><span class="pre">0.2</span></code>). Pass
+<code class="docutils literal notranslate"><span class="pre">0</span></code> to skip the test split.</p></li>
+<li><p><strong>val_split</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>) – Fraction to reserve for validation. Defaults to
+the value passed to <code class="docutils literal notranslate"><span class="pre">__init__</span></code> (default <code class="docutils literal notranslate"><span class="pre">0.1</span></code>).</p></li>
+<li><p><strong>random_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Seed for reproducibility. Default <code class="docutils literal notranslate"><span class="pre">42</span></code>.</p></li>
+<li><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.data.auto_resolve_handler">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.data.</span></span><span class="sig-name descname"><span class="pre">auto_resolve_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/data.html#auto_resolve_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.data.auto_resolve_handler" title="Link to this definition"></a></dt>
+<dd><p>Factory function to automatically detect and initialize the appropriate DataHandler.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>DataFrame</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>, </em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>] </em><em>| </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – The input data. Supported formats:
+- str: Path to a directory (Images)
+- str: Path to a CSV file (Tabular, Text, or TimeSeries)
+- pd.DataFrame: Data object (Tabular)
+- tuple: (X, y) arrays (Arrays)</p></li>
+<li><p><strong>target_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Name of target column (Required for DataFrame/Tabular).</p></li>
+<li><p><strong>**kwargs</strong> – Additional arguments passed to the specific handler constructor
+(e.g., ‘image_size’, ‘text_column’, ‘sequence_length’).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An initialized instance of the appropriate handler.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.data.DataHandler" title="ictonyx.data.DataHandler">DataHandler</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If handler cannot be determined or required args missing.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#FileNotFoundError" title="(in Python v3.14)"><strong>FileNotFoundError</strong></a> – If string path does not exist.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="core.html" class="btn btn-neutral float-left" title="ictonyx.core" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="plotting.html" class="btn btn-neutral float-right" title="ictonyx.plotting" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

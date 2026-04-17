@@ -1,0 +1,369 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.api &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ictonyx.runners" href="runners.html" />
+    <link rel="prev" title="ictonyx.analysis" href="analysis.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="analysis.html">ictonyx.analysis</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ictonyx.api</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.api.variability_study"><code class="docutils literal notranslate"><span class="pre">variability_study()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.api.compare_models"><code class="docutils literal notranslate"><span class="pre">compare_models()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.api.compare_results"><code class="docutils literal notranslate"><span class="pre">compare_results()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="runners.html">ictonyx.runners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bootstrap.html">ictonyx.bootstrap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html">ictonyx.config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core.html">ictonyx.core</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">ictonyx.data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plotting.html">ictonyx.plotting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="explainers.html">ictonyx.explainers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loggers.html">ictonyx.loggers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tuning.html">ictonyx.tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="memory.html">ictonyx.memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="exceptions.html">ictonyx.exceptions</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">ictonyx.api</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/api.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ictonyx-api">
+<h1>ictonyx.api<a class="headerlink" href="#ictonyx-api" title="Link to this heading"></a></h1>
+<p>High-level study functions: <code class="docutils literal notranslate"><span class="pre">variability_study</span></code>, <code class="docutils literal notranslate"><span class="pre">compare_models</span></code>,
+<code class="docutils literal notranslate"><span class="pre">compare_results</span></code>, <code class="docutils literal notranslate"><span class="pre">test_against_null</span></code>.</p>
+<p id="module-ictonyx.api">The High-Level API for Ictonyx.</p>
+<p>This module provides a interface for running variability studies
+and model comparisons. It abstracts away the complexity of DataHandlers,
+ModelConfigs, and ExperimentRunners into single function calls.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.api.variability_study">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.api.</span></span><span class="sig-name descname"><span class="pre">variability_study</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">runs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tracker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_process_isolation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_parallel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/api.html#variability_study"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.api.variability_study" title="Link to this definition"></a></dt>
+<dd><p>Run a variability study: train a model N times and collect distributions.</p>
+<p>Trains the same model architecture on the same data <code class="docutils literal notranslate"><span class="pre">runs</span></code> times, each
+with a different random seed, and returns the full distribution of
+training metrics. This is the primary entry point for most users.</p>
+<p>The function handles data resolution, model wrapping, configuration,
+and execution automatically. For finer control, use
+<a class="reference internal" href="runners.html#ictonyx.runners.ExperimentRunner" title="ictonyx.runners.ExperimentRunner"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExperimentRunner</span></code></a> directly.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – <p>What to train. Accepted forms:</p>
+<ul>
+<li><p>A <strong>class</strong> with <code class="docutils literal notranslate"><span class="pre">fit</span></code>/<code class="docutils literal notranslate"><span class="pre">predict</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">RandomForestClassifier</span></code>) —
+a fresh instance is created for each run.</p></li>
+<li><p>A <strong>callable</strong> <code class="docutils literal notranslate"><span class="pre">f(config)</span> <span class="pre">-&gt;</span> <span class="pre">BaseModelWrapper</span></code> — called once per run.</p></li>
+<li><p>A <strong>Keras Model</strong> or <strong>PyTorch nn.Module</strong> — auto-wrapped.</p></li>
+<li><p>An <strong>instance</strong> with <code class="docutils literal notranslate"><span class="pre">fit</span></code>/<code class="docutils literal notranslate"><span class="pre">predict</span></code> — works, but a warning is
+emitted because fitted state persists between runs.</p></li>
+</ul>
+</p></li>
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>DataFrame</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>, </em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>]</em>) – <p>The dataset. Accepted forms:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">pd.DataFrame</span></code> — requires <code class="docutils literal notranslate"><span class="pre">target_column</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">(X,</span> <span class="pre">y)</span></code> tuple of array-likes.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">str</span></code> path to a CSV file (requires <code class="docutils literal notranslate"><span class="pre">target_column</span></code>) or an
+image directory (requires <code class="docutils literal notranslate"><span class="pre">image_size</span></code> in kwargs).</p></li>
+<li><p>An existing <a class="reference internal" href="data.html#ictonyx.data.DataHandler" title="ictonyx.data.DataHandler"><code class="xref py py-class docutils literal notranslate"><span class="pre">DataHandler</span></code></a> instance.</p></li>
+</ul>
+</p></li>
+<li><p><strong>target_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Column name containing labels. Required when <code class="docutils literal notranslate"><span class="pre">data</span></code>
+is a DataFrame or CSV path.</p></li>
+<li><p><strong>runs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of independent training runs. Default 20.</p></li>
+<li><p><strong>epochs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Training epochs per run. Ignored by scikit-learn models.
+Default 10.</p></li>
+<li><p><strong>batch_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Batch size per run. Ignored by scikit-learn models.
+Default 32.</p></li>
+<li><p><strong>tracker</strong> (<a class="reference internal" href="loggers.html#ictonyx.loggers.BaseLogger" title="ictonyx.loggers.BaseLogger"><em>BaseLogger</em></a><em> | </em><em>None</em>) – Optional <a class="reference internal" href="loggers.html#ictonyx.loggers.BaseLogger" title="ictonyx.loggers.BaseLogger"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseLogger</span></code></a> (or subclass
+such as <code class="docutils literal notranslate"><span class="pre">MLflowLogger</span></code>) for experiment tracking. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+a basic in-memory logger is used.</p></li>
+<li><p><strong>use_process_isolation</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, each run executes in a subprocess
+to guarantee GPU memory cleanup. Useful for Keras/TF models that
+leak memory across runs. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Base random seed. Each run receives an independent child seed
+derived via <code class="docutils literal notranslate"><span class="pre">np.random.SeedSequence.spawn()</span></code>, guaranteeing
+statistically uncorrelated RNG streams. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, a random
+seed is generated and stored in the results.</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">False</span></code>, suppress all training output. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>use_parallel</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, fan training runs across multiple
+processes using <code class="docutils literal notranslate"><span class="pre">joblib</span></code>. Safe for sklearn models. Not
+recommended for Keras/TF models. Mutually exclusive with
+<code class="docutils literal notranslate"><span class="pre">use_process_isolation</span></code>. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>n_jobs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of parallel workers. <code class="docutils literal notranslate"><span class="pre">-1</span></code> uses all CPUs.
+Ignored when <code class="docutils literal notranslate"><span class="pre">use_parallel=False</span></code>. Default <code class="docutils literal notranslate"><span class="pre">-1</span></code>.</p></li>
+<li><p><strong>**kwargs</strong> – Additional arguments forwarded to both the
+<a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelConfig</span></code></a> and the data handler
+(e.g. <code class="docutils literal notranslate"><span class="pre">image_size</span></code>, <code class="docutils literal notranslate"><span class="pre">test_split</span></code>, <code class="docutils literal notranslate"><span class="pre">val_split</span></code>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="runners.html#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">VariabilityStudyResults</span></code></a> containing
+per-run metric DataFrames, final metric distributions, and
+convenience methods for summarization and statistical analysis.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="runners.html#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a></p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">ictonyx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ix</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">RandomForestClassifier</span>
+
+<span class="n">results</span> <span class="o">=</span> <span class="n">ix</span><span class="o">.</span><span class="n">variability_study</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">RandomForestClassifier</span><span class="p">,</span>
+    <span class="n">data</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
+    <span class="n">target_column</span><span class="o">=</span><span class="s1">&#39;target&#39;</span><span class="p">,</span>
+    <span class="n">runs</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">summarize</span><span class="p">())</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.api.compare_models">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.api.</span></span><span class="sig-name descname"><span class="pre">compare_models</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">models</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">runs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">paired</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/api.html#compare_models"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.api.compare_models" title="Link to this definition"></a></dt>
+<dd><p>Run variability studies on multiple models and compare them statistically.</p>
+<p>Each model is trained <code class="docutils literal notranslate"><span class="pre">runs</span></code> times on the same data, producing a
+distribution of the chosen metric. The distributions are then compared
+using non-parametric statistical tests.</p>
+<p><strong>Seeding and pairing</strong></p>
+<p>All models receive the same base <code class="docutils literal notranslate"><span class="pre">seed</span></code>. Internally,
+<code class="docutils literal notranslate"><span class="pre">np.random.SeedSequence(seed).spawn(runs)</span></code> generates per-run child seeds
+that are identical across models: model A’s run <em>i</em> and model B’s run <em>i</em>
+always share the same child seed. The runs are therefore <strong>genuinely paired
+at the RNG level</strong>, regardless of framework.</p>
+<p>For this reason <code class="docutils literal notranslate"><span class="pre">paired</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>:</p>
+<ul class="simple">
+<li><p><strong>Two models (default, paired):</strong> Paired Wilcoxon signed-rank test on the
+per-run differences. More powerful than the independent-samples alternative
+because it removes run-to-run noise that is common to both models.</p></li>
+<li><p><strong>Two models (unpaired):</strong> Kruskal-Wallis omnibus + Mann-Whitney U with
+Holm correction. Valid but does not exploit the RNG pairing.</p></li>
+<li><p><strong>Three or more models:</strong> Kruskal-Wallis omnibus + pairwise Mann-Whitney U
+with Holm correction, regardless of <code class="docutils literal notranslate"><span class="pre">paired</span></code>. (Paired multi-group
+analysis requires a different design not yet implemented.)</p></li>
+</ul>
+<p><strong>Seeding guarantee by framework</strong></p>
+<ul class="simple">
+<li><p>scikit-learn: exact (<code class="docutils literal notranslate"><span class="pre">random_state</span></code> injected at wrapper construction).</p></li>
+<li><p>PyTorch: approximately deterministic under <code class="docutils literal notranslate"><span class="pre">cudnn.deterministic=True</span></code>;
+rare non-deterministic CUDA ops may introduce small deviations.</p></li>
+<li><p>TF/Keras + GPU: not fully controllable; pairing is approximate.</p></li>
+</ul>
+<p>If exact pairing cannot be guaranteed (e.g. Keras with GPU), pass
+<code class="docutils literal notranslate"><span class="pre">paired=False</span></code> to fall back to the independent-samples test, which
+is always valid regardless of seeding.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>models</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>) – List of models in any form accepted by
+<a class="reference internal" href="#ictonyx.api.variability_study" title="ictonyx.api.variability_study"><code class="xref py py-func docutils literal notranslate"><span class="pre">variability_study()</span></code></a> (classes, callables, instances, etc.).</p></li>
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>DataFrame</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>, </em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>]</em>) – The dataset, in any form accepted by <a class="reference internal" href="#ictonyx.api.variability_study" title="ictonyx.api.variability_study"><code class="xref py py-func docutils literal notranslate"><span class="pre">variability_study()</span></code></a>.</p></li>
+<li><p><strong>target_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Column name containing labels, if applicable.</p></li>
+<li><p><strong>runs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of independent training runs per model. Default 20.</p></li>
+<li><p><strong>epochs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Training epochs per run. Default 10.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Metric name to compare across models. Must be a key in
+the training history (e.g. <code class="docutils literal notranslate"><span class="pre">'val_accuracy'</span></code>, <code class="docutils literal notranslate"><span class="pre">'val_loss'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'val_f1'</span></code>). Default <code class="docutils literal notranslate"><span class="pre">None</span></code> (auto-resolved from results).</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Base random seed for reproducibility. All models use the same
+seed so the comparison can be reproduced exactly. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+a random seed is generated and stored in the result.</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">False</span></code>, suppress all output. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>paired</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), use the paired Wilcoxon signed-rank
+test for two-model comparisons, exploiting the fact that all
+models receive identical per-run seeds by construction. Ignored
+when comparing three or more models (KW + MW is used regardless).
+Pass <code class="docutils literal notranslate"><span class="pre">False</span></code> to use the independent-samples test instead —
+appropriate when seeds are not shared or when comparing against
+externally produced results.</p></li>
+<li><p><strong>**kwargs</strong> – Forwarded to each <a class="reference internal" href="#ictonyx.api.variability_study" title="ictonyx.api.variability_study"><code class="xref py py-func docutils literal notranslate"><span class="pre">variability_study()</span></code></a> call.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="analysis.html#ictonyx.analysis.ModelComparisonResults" title="ictonyx.analysis.ModelComparisonResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelComparisonResults</span></code></a> containing the
+omnibus test, pairwise comparisons, raw metric distributions, and
+summary methods.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="analysis.html#ictonyx.analysis.ModelComparisonResults" title="ictonyx.analysis.ModelComparisonResults"><em>ModelComparisonResults</em></a></p>
+</dd>
+</dl>
+<p>Example (two models, default paired analysis):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">results</span> <span class="o">=</span> <span class="n">ix</span><span class="o">.</span><span class="n">compare_models</span><span class="p">(</span>
+    <span class="n">models</span><span class="o">=</span><span class="p">[</span><span class="n">RandomForestClassifier</span><span class="p">,</span> <span class="n">GradientBoostingClassifier</span><span class="p">],</span>
+    <span class="n">data</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
+    <span class="n">target_column</span><span class="o">=</span><span class="s1">&#39;target&#39;</span><span class="p">,</span>
+    <span class="n">runs</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+    <span class="n">metric</span><span class="o">=</span><span class="s1">&#39;val_accuracy&#39;</span><span class="p">,</span>
+    <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">get_summary</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>Example (three models, or unpaired two-model comparison):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">results</span> <span class="o">=</span> <span class="n">ix</span><span class="o">.</span><span class="n">compare_models</span><span class="p">(</span>
+    <span class="n">models</span><span class="o">=</span><span class="p">[</span><span class="n">ModelA</span><span class="p">,</span> <span class="n">ModelB</span><span class="p">,</span> <span class="n">ModelC</span><span class="p">],</span>
+    <span class="n">data</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
+    <span class="n">target_column</span><span class="o">=</span><span class="s1">&#39;target&#39;</span><span class="p">,</span>
+    <span class="n">runs</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+    <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="c1"># Unpaired two-model:</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">ix</span><span class="o">.</span><span class="n">compare_models</span><span class="p">(</span>
+    <span class="n">models</span><span class="o">=</span><span class="p">[</span><span class="n">ModelA</span><span class="p">,</span> <span class="n">ModelB</span><span class="p">],</span>
+    <span class="n">data</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
+    <span class="n">target_column</span><span class="o">=</span><span class="s1">&#39;target&#39;</span><span class="p">,</span>
+    <span class="n">runs</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+    <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span>
+    <span class="n">paired</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>   <span class="c1"># fall back to KW + Mann-Whitney</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.api.compare_results">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.api.</span></span><span class="sig-name descname"><span class="pre">compare_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results_a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">paired</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/api.html#compare_results"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.api.compare_results" title="Link to this definition"></a></dt>
+<dd><p>Compare two pre-computed VariabilityStudyResults without re-running training.</p>
+<p>Extracts metric values from each results object and compares them
+statistically. Use this when you already have results from
+<a class="reference internal" href="#ictonyx.api.variability_study" title="ictonyx.api.variability_study"><code class="xref py py-func docutils literal notranslate"><span class="pre">variability_study()</span></code></a> and want to compare them without retraining.</p>
+<p><strong>Pairing:</strong> If both results were produced with the same <code class="docutils literal notranslate"><span class="pre">seed</span></code>, the runs
+are paired by construction. Pass <code class="docutils literal notranslate"><span class="pre">paired=True</span></code> (default) to exploit this
+with the more powerful paired Wilcoxon signed-rank test. Pass <code class="docutils literal notranslate"><span class="pre">paired=False</span></code>
+to use the independent-samples Mann-Whitney U test instead.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results_a</strong> (<a class="reference internal" href="runners.html#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a>) – First model’s results.</p></li>
+<li><p><strong>results_b</strong> (<a class="reference internal" href="runners.html#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a>) – Second model’s results.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Metric to compare. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, resolves via
+<code class="docutils literal notranslate"><span class="pre">results_a.preferred_metric()</span></code>.</p></li>
+<li><p><strong>paired</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) and run counts are equal, use the
+paired Wilcoxon signed-rank test. Falls back to Mann-Whitney U
+with a <code class="docutils literal notranslate"><span class="pre">UserWarning</span></code> when run counts differ.</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Random state for bootstrap CI computation. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>
+(non-deterministic CIs).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="analysis.html#ictonyx.analysis.ModelComparisonResults" title="ictonyx.analysis.ModelComparisonResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelComparisonResults</span></code></a>.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#KeyError" title="(in Python v3.14)"><strong>KeyError</strong></a> – If the resolved metric is not present in both results.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="analysis.html#ictonyx.analysis.ModelComparisonResults" title="ictonyx.analysis.ModelComparisonResults"><em>ModelComparisonResults</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="analysis.html" class="btn btn-neutral float-left" title="ictonyx.analysis" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="runners.html" class="btn btn-neutral float-right" title="ictonyx.runners" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

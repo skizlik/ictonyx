@@ -1,0 +1,495 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.bootstrap &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ictonyx.config" href="config.html" />
+    <link rel="prev" title="ictonyx.runners" href="runners.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="analysis.html">ictonyx.analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">ictonyx.api</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runners.html">ictonyx.runners</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ictonyx.bootstrap</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult.ci_lower"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.ci_lower</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult.ci_upper"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.ci_upper</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult.point_estimate"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.point_estimate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult.confidence_level"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.confidence_level</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult.method"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.method</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult.n_bootstrap"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.n_bootstrap</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult.se_bootstrap"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.se_bootstrap</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult.bootstrap_distribution"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.bootstrap_distribution</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id0"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.ci_lower</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id1"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.ci_upper</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id2"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.point_estimate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id3"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.confidence_level</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id4"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.method</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id5"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.n_bootstrap</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id6"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.se_bootstrap</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id7"><code class="docutils literal notranslate"><span class="pre">BootstrapCIResult.bootstrap_distribution</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.bootstrap.bootstrap_ci"><code class="docutils literal notranslate"><span class="pre">bootstrap_ci()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.bootstrap.bootstrap_mean_difference_ci"><code class="docutils literal notranslate"><span class="pre">bootstrap_mean_difference_ci()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.bootstrap.bootstrap_effect_size_ci"><code class="docutils literal notranslate"><span class="pre">bootstrap_effect_size_ci()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.bootstrap.bootstrap_hedges_g_ci"><code class="docutils literal notranslate"><span class="pre">bootstrap_hedges_g_ci()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.bootstrap.bootstrap_paired_difference_ci"><code class="docutils literal notranslate"><span class="pre">bootstrap_paired_difference_ci()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="config.html">ictonyx.config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core.html">ictonyx.core</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">ictonyx.data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plotting.html">ictonyx.plotting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="explainers.html">ictonyx.explainers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loggers.html">ictonyx.loggers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tuning.html">ictonyx.tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="memory.html">ictonyx.memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="exceptions.html">ictonyx.exceptions</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">ictonyx.bootstrap</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/bootstrap.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ictonyx-bootstrap">
+<h1>ictonyx.bootstrap<a class="headerlink" href="#ictonyx-bootstrap" title="Link to this heading"></a></h1>
+<p>Bootstrap confidence interval estimation.</p>
+<p id="module-ictonyx.bootstrap">Bootstrap confidence interval estimation for Ictonyx.</p>
+<p>Provides non-parametric confidence intervals for effect sizes, mean
+differences, and arbitrary statistics. Designed for the small-sample
+regime (5-30 runs) typical of ML model comparison experiments.</p>
+<dl class="simple">
+<dt>Methods implemented:</dt><dd><ul class="simple">
+<li><p>Percentile: Simple quantile-based CI. Adequate for symmetric distributions.</p></li>
+<li><p>BCa (Bias-Corrected and Accelerated): Gold-standard bootstrap CI.
+Corrects for both median bias and skewness in the bootstrap distribution.
+Recommended default for most use cases.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">References</p>
+<ul class="simple">
+<li><p>Efron, B. (1987). “Better Bootstrap Confidence Intervals.”
+Journal of the American Statistical Association, 82(397), 171-185.</p></li>
+<li><p>Efron, B. &amp; Tibshirani, R. (1993). “An Introduction to the Bootstrap.”
+Chapman &amp; Hall.</p></li>
+<li><p>DiCiccio, T.J. &amp; Efron, B. (1996). “Bootstrap Confidence Intervals.”
+Statistical Science, 11(3), 189-228.</p></li>
+</ul>
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.BootstrapCIResult">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.bootstrap.</span></span><span class="sig-name descname"><span class="pre">BootstrapCIResult</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ci_lower</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ci_upper</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">point_estimate</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">confidence_level</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_bootstrap</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">se_bootstrap</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bootstrap_distribution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/bootstrap.html#BootstrapCIResult"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.bootstrap.BootstrapCIResult" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Result of a bootstrap confidence interval estimation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ci_lower</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>ci_upper</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>point_estimate</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>confidence_level</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>method</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>n_bootstrap</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>se_bootstrap</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>bootstrap_distribution</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.BootstrapCIResult.ci_lower">
+<span class="sig-name descname"><span class="pre">ci_lower</span></span><a class="headerlink" href="#ictonyx.bootstrap.BootstrapCIResult.ci_lower" title="Link to this definition"></a></dt>
+<dd><p>Lower bound of the confidence interval.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.BootstrapCIResult.ci_upper">
+<span class="sig-name descname"><span class="pre">ci_upper</span></span><a class="headerlink" href="#ictonyx.bootstrap.BootstrapCIResult.ci_upper" title="Link to this definition"></a></dt>
+<dd><p>Upper bound of the confidence interval.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.BootstrapCIResult.point_estimate">
+<span class="sig-name descname"><span class="pre">point_estimate</span></span><a class="headerlink" href="#ictonyx.bootstrap.BootstrapCIResult.point_estimate" title="Link to this definition"></a></dt>
+<dd><p>The statistic computed on the original (non-resampled) data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.BootstrapCIResult.confidence_level">
+<span class="sig-name descname"><span class="pre">confidence_level</span></span><a class="headerlink" href="#ictonyx.bootstrap.BootstrapCIResult.confidence_level" title="Link to this definition"></a></dt>
+<dd><p>The confidence level (e.g. 0.95 for a 95% CI).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.BootstrapCIResult.method">
+<span class="sig-name descname"><span class="pre">method</span></span><a class="headerlink" href="#ictonyx.bootstrap.BootstrapCIResult.method" title="Link to this definition"></a></dt>
+<dd><p>The CI construction method (‘percentile’ or ‘bca’).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.BootstrapCIResult.n_bootstrap">
+<span class="sig-name descname"><span class="pre">n_bootstrap</span></span><a class="headerlink" href="#ictonyx.bootstrap.BootstrapCIResult.n_bootstrap" title="Link to this definition"></a></dt>
+<dd><p>Number of bootstrap resamples used.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.BootstrapCIResult.se_bootstrap">
+<span class="sig-name descname"><span class="pre">se_bootstrap</span></span><a class="headerlink" href="#ictonyx.bootstrap.BootstrapCIResult.se_bootstrap" title="Link to this definition"></a></dt>
+<dd><p>Standard error of the bootstrap distribution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.BootstrapCIResult.bootstrap_distribution">
+<span class="sig-name descname"><span class="pre">bootstrap_distribution</span></span><a class="headerlink" href="#ictonyx.bootstrap.BootstrapCIResult.bootstrap_distribution" title="Link to this definition"></a></dt>
+<dd><p>The full array of bootstrap replications
+(available for plotting or diagnostics).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)">numpy.ndarray</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">ci_lower</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></em><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id1">
+<span class="sig-name descname"><span class="pre">ci_upper</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></em><a class="headerlink" href="#id1" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id2">
+<span class="sig-name descname"><span class="pre">point_estimate</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></em><a class="headerlink" href="#id2" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id3">
+<span class="sig-name descname"><span class="pre">confidence_level</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></em><a class="headerlink" href="#id3" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id4">
+<span class="sig-name descname"><span class="pre">method</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#id4" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id5">
+<span class="sig-name descname"><span class="pre">n_bootstrap</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></em><a class="headerlink" href="#id5" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id6">
+<span class="sig-name descname"><span class="pre">se_bootstrap</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></em><a class="headerlink" href="#id6" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id7">
+<span class="sig-name descname"><span class="pre">bootstrap_distribution</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">ndarray</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#id7" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.bootstrap_ci">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.bootstrap.</span></span><span class="sig-name descname"><span class="pre">bootstrap_ci</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">statistic_fn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_bootstrap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">confidence</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bca'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_distribution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/bootstrap.html#bootstrap_ci"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.bootstrap.bootstrap_ci" title="Link to this definition"></a></dt>
+<dd><p>Compute a bootstrap confidence interval for an arbitrary statistic.</p>
+<p>This is the general-purpose engine. For common use cases, prefer the
+convenience functions <code class="docutils literal notranslate"><span class="pre">bootstrap_mean_difference_ci</span></code> and
+<code class="docutils literal notranslate"><span class="pre">bootstrap_effect_size_ci</span></code>, which handle two-sample data and call
+this function internally.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – 1-D array-like of observations.</p></li>
+<li><p><strong>statistic_fn</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – A callable that takes a 1-D numpy array and returns
+a scalar float. This function is applied to each bootstrap
+resample.</p></li>
+<li><p><strong>n_bootstrap</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of bootstrap resamples (default 10 000).
+Higher values give more precise CIs at the cost of compute time.</p></li>
+<li><p><strong>confidence</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Confidence level in (0, 1). Default 0.95.</p></li>
+<li><p><strong>method</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – CI construction method.
+<code class="docutils literal notranslate"><span class="pre">'percentile'</span></code> — simple quantile method.
+<code class="docutils literal notranslate"><span class="pre">'bca'</span></code> — bias-corrected and accelerated (recommended).</p></li>
+<li><p><strong>random_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><a class="reference external" href="https://numpy.org/doc/stable/reference/random/generator.html#numpy.random.Generator" title="(in NumPy v2.4)"><em>Generator</em></a><em> | </em><em>None</em>) – Seed for reproducibility. Pass an integer for
+deterministic results.</p></li>
+<li><p><strong>return_distribution</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True, the full bootstrap distribution is
+stored in the result (useful for plotting). Default False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>BootstrapCIResult with CI bounds, point estimate, and diagnostics.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If data has fewer than 2 observations, confidence is
+    outside (0, 1), n_bootstrap &lt; 100, or method is unrecognised.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult" title="ictonyx.bootstrap.BootstrapCIResult"><em>BootstrapCIResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.bootstrap_mean_difference_ci">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.bootstrap.</span></span><span class="sig-name descname"><span class="pre">bootstrap_mean_difference_ci</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_bootstrap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">confidence</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bca'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_distribution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/bootstrap.html#bootstrap_mean_difference_ci"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.bootstrap.bootstrap_mean_difference_ci" title="Link to this definition"></a></dt>
+<dd><p>Bootstrap CI for the difference in means (group1 - group2).</p>
+<p>Resamples each group independently, computes the difference in means
+for each bootstrap replicate, and constructs a CI on that distribution.</p>
+<p>This is the most directly actionable CI for model comparison: it tells
+you the plausible range of the true performance gap.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>group1</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Metric values for model 1 (e.g. accuracies from 10 runs).</p></li>
+<li><p><strong>group2</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Metric values for model 2.</p></li>
+<li><p><strong>n_bootstrap</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of bootstrap resamples (default 10 000).</p></li>
+<li><p><strong>confidence</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Confidence level (default 0.95).</p></li>
+<li><p><strong>method</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – ‘percentile’ or ‘bca’ (default ‘bca’).</p></li>
+<li><p><strong>random_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Seed for reproducibility.</p></li>
+<li><p><strong>return_distribution</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True, store the full bootstrap distribution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>BootstrapCIResult. The point_estimate is mean(group1) - mean(group2).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult" title="ictonyx.bootstrap.BootstrapCIResult"><em>BootstrapCIResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.bootstrap_effect_size_ci">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.bootstrap.</span></span><span class="sig-name descname"><span class="pre">bootstrap_effect_size_ci</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_bootstrap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">confidence</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bca'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pooled</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_distribution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/bootstrap.html#bootstrap_effect_size_ci"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.bootstrap.bootstrap_effect_size_ci" title="Link to this definition"></a></dt>
+<dd><p>Bootstrap CI for Cohen’s d effect size.</p>
+<p>Computes Cohen’s d on each bootstrap resample and constructs a CI.
+This pairs naturally with the effect sizes already reported by
+<code class="docutils literal notranslate"><span class="pre">compare_two_models</span></code> — it adds the uncertainty range around that
+point estimate.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>group1</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Metric values for model 1.</p></li>
+<li><p><strong>group2</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Metric values for model 2.</p></li>
+<li><p><strong>n_bootstrap</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of bootstrap resamples (default 10 000).</p></li>
+<li><p><strong>confidence</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Confidence level (default 0.95).</p></li>
+<li><p><strong>method</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – ‘percentile’ or ‘bca’ (default ‘bca’).</p></li>
+<li><p><strong>pooled</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True (default), use pooled standard deviation. If False,
+use group2’s std (Glass’s delta variant).</p></li>
+<li><p><strong>random_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Seed for reproducibility.</p></li>
+<li><p><strong>return_distribution</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True, store the full bootstrap distribution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>BootstrapCIResult. The point_estimate is Cohen’s d on the original data.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult" title="ictonyx.bootstrap.BootstrapCIResult"><em>BootstrapCIResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.bootstrap_hedges_g_ci">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.bootstrap.</span></span><span class="sig-name descname"><span class="pre">bootstrap_hedges_g_ci</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_bootstrap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">confidence</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bca'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_distribution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/bootstrap.html#bootstrap_hedges_g_ci"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.bootstrap.bootstrap_hedges_g_ci" title="Link to this definition"></a></dt>
+<dd><p>Bootstrap CI for Hedges’ g effect size.</p>
+<p>Applies the Hedges’ J correction on every bootstrap resample so that
+the CI and point estimate are for the same estimator. Use this instead
+of <a class="reference internal" href="#ictonyx.bootstrap.bootstrap_effect_size_ci" title="ictonyx.bootstrap.bootstrap_effect_size_ci"><code class="xref py py-func docutils literal notranslate"><span class="pre">bootstrap_effect_size_ci()</span></code></a> when the point estimate is Hedges’ g
+(i.e., the Welch’s t-test path in <a class="reference internal" href="analysis.html#ictonyx.analysis.compare_two_models" title="ictonyx.analysis.compare_two_models"><code class="xref py py-func docutils literal notranslate"><span class="pre">compare_two_models()</span></code></a>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>group1</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Metric values for model 1.</p></li>
+<li><p><strong>group2</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Metric values for model 2.</p></li>
+<li><p><strong>n_bootstrap</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of bootstrap resamples. Default 10 000.</p></li>
+<li><p><strong>confidence</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Confidence level. Default 0.95.</p></li>
+<li><p><strong>method</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – <code class="docutils literal notranslate"><span class="pre">'percentile'</span></code> or <code class="docutils literal notranslate"><span class="pre">'bca'</span></code>. Default <code class="docutils literal notranslate"><span class="pre">'bca'</span></code>.</p></li>
+<li><p><strong>random_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Seed for reproducibility.</p></li>
+<li><p><strong>return_distribution</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True, store the full bootstrap distribution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult" title="ictonyx.bootstrap.BootstrapCIResult"><code class="xref py py-class docutils literal notranslate"><span class="pre">BootstrapCIResult</span></code></a>. <code class="docutils literal notranslate"><span class="pre">point_estimate</span></code> is Hedges’ g computed
+on the original (non-resampled) data.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult" title="ictonyx.bootstrap.BootstrapCIResult"><em>BootstrapCIResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.bootstrap.bootstrap_paired_difference_ci">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.bootstrap.</span></span><span class="sig-name descname"><span class="pre">bootstrap_paired_difference_ci</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_bootstrap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">confidence</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bca'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_distribution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/bootstrap.html#bootstrap_paired_difference_ci"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.bootstrap.bootstrap_paired_difference_ci" title="Link to this definition"></a></dt>
+<dd><p>Bootstrap CI for paired mean differences.</p>
+<p>For paired data (e.g. two models evaluated on the same folds), this
+computes the CI on the mean of the pairwise differences. This is more
+powerful than the independent two-sample version because it removes
+between-fold variance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>group1</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Metric values for model 1.</p></li>
+<li><p><strong>group2</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Metric values for model 2 (same length, paired with group1).</p></li>
+<li><p><strong>n_bootstrap</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of bootstrap resamples (default 10 000).</p></li>
+<li><p><strong>confidence</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Confidence level (default 0.95).</p></li>
+<li><p><strong>method</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – ‘percentile’ or ‘bca’ (default ‘bca’).</p></li>
+<li><p><strong>random_state</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Seed for reproducibility.</p></li>
+<li><p><strong>return_distribution</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True, store the full bootstrap distribution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>BootstrapCIResult. The point_estimate is mean(group1 - group2).</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If groups differ in length (pairing is impossible).</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.bootstrap.BootstrapCIResult" title="ictonyx.bootstrap.BootstrapCIResult"><em>BootstrapCIResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="runners.html" class="btn btn-neutral float-left" title="ictonyx.runners" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="config.html" class="btn btn-neutral float-right" title="ictonyx.config" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

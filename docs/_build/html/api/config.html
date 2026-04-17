@@ -1,0 +1,520 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.config &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ictonyx.core" href="core.html" />
+    <link rel="prev" title="ictonyx.bootstrap" href="bootstrap.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="analysis.html">ictonyx.analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">ictonyx.api</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runners.html">ictonyx.runners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bootstrap.html">ictonyx.bootstrap</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ictonyx.config</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.config.ModelConfig"><code class="docutils literal notranslate"><span class="pre">ModelConfig</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.__init__"><code class="docutils literal notranslate"><span class="pre">ModelConfig.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.to_dict"><code class="docutils literal notranslate"><span class="pre">ModelConfig.to_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.get"><code class="docutils literal notranslate"><span class="pre">ModelConfig.get()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.set"><code class="docutils literal notranslate"><span class="pre">ModelConfig.set()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.update"><code class="docutils literal notranslate"><span class="pre">ModelConfig.update()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.merge"><code class="docutils literal notranslate"><span class="pre">ModelConfig.merge()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.has"><code class="docutils literal notranslate"><span class="pre">ModelConfig.has()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.keys"><code class="docutils literal notranslate"><span class="pre">ModelConfig.keys()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.values"><code class="docutils literal notranslate"><span class="pre">ModelConfig.values()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.items"><code class="docutils literal notranslate"><span class="pre">ModelConfig.items()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.copy"><code class="docutils literal notranslate"><span class="pre">ModelConfig.copy()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.freeze"><code class="docutils literal notranslate"><span class="pre">ModelConfig.freeze()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.validate_required"><code class="docutils literal notranslate"><span class="pre">ModelConfig.validate_required()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.validate_types"><code class="docutils literal notranslate"><span class="pre">ModelConfig.validate_types()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.epochs"><code class="docutils literal notranslate"><span class="pre">ModelConfig.epochs</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.batch_size"><code class="docutils literal notranslate"><span class="pre">ModelConfig.batch_size</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.learning_rate"><code class="docutils literal notranslate"><span class="pre">ModelConfig.learning_rate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.verbose"><code class="docutils literal notranslate"><span class="pre">ModelConfig.verbose</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.num_runs"><code class="docutils literal notranslate"><span class="pre">ModelConfig.num_runs</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.epochs_per_run"><code class="docutils literal notranslate"><span class="pre">ModelConfig.epochs_per_run</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.from_defaults"><code class="docutils literal notranslate"><span class="pre">ModelConfig.from_defaults()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.for_cnn"><code class="docutils literal notranslate"><span class="pre">ModelConfig.for_cnn()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.for_xgboost"><code class="docutils literal notranslate"><span class="pre">ModelConfig.for_xgboost()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.for_variability_study"><code class="docutils literal notranslate"><span class="pre">ModelConfig.for_variability_study()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.config.ModelConfig.cleanup_threshold"><code class="docutils literal notranslate"><span class="pre">ModelConfig.cleanup_threshold</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="core.html">ictonyx.core</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">ictonyx.data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plotting.html">ictonyx.plotting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="explainers.html">ictonyx.explainers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loggers.html">ictonyx.loggers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tuning.html">ictonyx.tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="memory.html">ictonyx.memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="exceptions.html">ictonyx.exceptions</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">ictonyx.config</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/config.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ictonyx-config">
+<h1>ictonyx.config<a class="headerlink" href="#ictonyx-config" title="Link to this heading"></a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">ModelConfig</span></code> and configuration helpers.</p>
+<dl class="py class" id="module-ictonyx.config">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.config.</span></span><span class="sig-name descname"><span class="pre">ModelConfig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Training configuration container with validation and factory methods.</p>
+<p>Stores hyperparameters as a flat dictionary with typed property
+accessors for common parameters (epochs, batch_size, learning_rate).
+Supports dictionary-style access, method chaining, deep copying, and
+parameter validation.</p>
+<p>Use the factory classmethods to create pre-configured defaults for
+common model types.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>] </em><em>| </em><em>None</em>) – Dictionary of hyperparameters. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, an empty
+config is created.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">config</span> <span class="o">=</span> <span class="n">ModelConfig</span><span class="p">({</span><span class="s1">&#39;epochs&#39;</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span> <span class="s1">&#39;batch_size&#39;</span><span class="p">:</span> <span class="mi">64</span><span class="p">})</span>
+<span class="n">config</span><span class="o">.</span><span class="n">learning_rate</span> <span class="o">=</span> <span class="mf">0.001</span>
+<span class="n">config</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s1">&#39;dropout&#39;</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">)</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s1">&#39;optimizer&#39;</span><span class="p">,</span> <span class="s1">&#39;adam&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#ictonyx.config.ModelConfig.from_defaults" title="ictonyx.config.ModelConfig.from_defaults"><code class="xref py py-meth docutils literal notranslate"><span class="pre">from_defaults()</span></code></a>, <a class="reference internal" href="#ictonyx.config.ModelConfig.for_cnn" title="ictonyx.config.ModelConfig.for_cnn"><code class="xref py py-meth docutils literal notranslate"><span class="pre">for_cnn()</span></code></a>, <a class="reference internal" href="#ictonyx.config.ModelConfig.for_xgboost" title="ictonyx.config.ModelConfig.for_xgboost"><code class="xref py py-meth docutils literal notranslate"><span class="pre">for_xgboost()</span></code></a>,
+<a class="reference internal" href="#ictonyx.config.ModelConfig.for_variability_study" title="ictonyx.config.ModelConfig.for_variability_study"><code class="xref py py-meth docutils literal notranslate"><span class="pre">for_variability_study()</span></code></a></p>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize the config with a dictionary of parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>] </em><em>| </em><em>None</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.to_dict" title="Link to this definition"></a></dt>
+<dd><p>Return a shallow copy of the parameters dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.get" title="Link to this definition"></a></dt>
+<dd><p>Get parameter with optional default value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>default</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.set">
+<span class="sig-name descname"><span class="pre">set</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.set"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.set" title="Link to this definition"></a></dt>
+<dd><p>Set parameter and return self for chaining.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.update">
+<span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.update"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.update" title="Link to this definition"></a></dt>
+<dd><p>Update multiple parameters at once and return self for chaining.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>other_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.merge">
+<span class="sig-name descname"><span class="pre">merge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.merge"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.merge" title="Link to this definition"></a></dt>
+<dd><p>Alias for <a class="reference internal" href="#ictonyx.config.ModelConfig.update" title="ictonyx.config.ModelConfig.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">update()</span></code></a>.</p>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">Deprecated since version 0.3.9: </span><code class="docutils literal notranslate"><span class="pre">merge()</span></code> is identical to <code class="docutils literal notranslate"><span class="pre">update()</span></code> and will be removed
+in v0.5.0. Use <code class="docutils literal notranslate"><span class="pre">update()</span></code> instead.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>other_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.has">
+<span class="sig-name descname"><span class="pre">has</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.has"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.has" title="Link to this definition"></a></dt>
+<dd><p>Check if parameter exists.</p>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">Deprecated since version 0.3.9: </span>Use the <code class="docutils literal notranslate"><span class="pre">in</span></code> operator instead: <code class="docutils literal notranslate"><span class="pre">'key'</span> <span class="pre">in</span> <span class="pre">config</span></code>.
+Will be removed in v0.5.0.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.keys">
+<span class="sig-name descname"><span class="pre">keys</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.keys"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.keys" title="Link to this definition"></a></dt>
+<dd><p>Get all parameter keys.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.KeysView" title="(in Python v3.14)"><em>KeysView</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.values">
+<span class="sig-name descname"><span class="pre">values</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.values"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.values" title="Link to this definition"></a></dt>
+<dd><p>Get all parameter values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.ValuesView" title="(in Python v3.14)"><em>ValuesView</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.items">
+<span class="sig-name descname"><span class="pre">items</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.items"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.items" title="Link to this definition"></a></dt>
+<dd><p>Get all parameter key-value pairs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.ItemsView" title="(in Python v3.14)"><em>ItemsView</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.copy">
+<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.copy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.copy" title="Link to this definition"></a></dt>
+<dd><p>Create a deep copy of the configuration.</p>
+<p>The frozen state is preserved: a frozen config produces a frozen copy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.freeze">
+<span class="sig-name descname"><span class="pre">freeze</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.freeze"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.freeze" title="Link to this definition"></a></dt>
+<dd><p>Make this config read-only to prevent mutation after construction.</p>
+<p>Once frozen, any attempt to set or update parameters raises
+<code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>. Returns <code class="docutils literal notranslate"><span class="pre">self</span></code> for method chaining.</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">config</span> <span class="o">=</span> <span class="n">ModelConfig</span><span class="p">({</span><span class="s2">&quot;epochs&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">})</span><span class="o">.</span><span class="n">freeze</span><span class="p">()</span>
+<span class="n">config</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;epochs&quot;</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>  <span class="c1"># raises RuntimeError</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.validate_required">
+<span class="sig-name descname"><span class="pre">validate_required</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">required_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.validate_required"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.validate_required" title="Link to this definition"></a></dt>
+<dd><p>Check if required parameters are present.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>required_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – List of parameter names that must be present</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of missing parameter names (empty if all present)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.validate_types">
+<span class="sig-name descname"><span class="pre">validate_types</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type_specs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.validate_types"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.validate_types" title="Link to this definition"></a></dt>
+<dd><p>Validate parameter types.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>type_specs</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><em>type</em></a><em>]</em>) – Dictionary mapping parameter names to expected types</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of validation error messages (empty if all valid)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.epochs">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">epochs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><a class="headerlink" href="#ictonyx.config.ModelConfig.epochs" title="Link to this definition"></a></dt>
+<dd><p>Get epochs parameter.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.batch_size">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">batch_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><a class="headerlink" href="#ictonyx.config.ModelConfig.batch_size" title="Link to this definition"></a></dt>
+<dd><p>Get batch_size parameter.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.learning_rate">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">learning_rate</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><a class="headerlink" href="#ictonyx.config.ModelConfig.learning_rate" title="Link to this definition"></a></dt>
+<dd><p>Get learning_rate parameter.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.verbose">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">verbose</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><a class="headerlink" href="#ictonyx.config.ModelConfig.verbose" title="Link to this definition"></a></dt>
+<dd><p>Get verbose parameter.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.num_runs">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">num_runs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><a class="headerlink" href="#ictonyx.config.ModelConfig.num_runs" title="Link to this definition"></a></dt>
+<dd><p>Get num_runs parameter for variability studies.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.epochs_per_run">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">epochs_per_run</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><a class="headerlink" href="#ictonyx.config.ModelConfig.epochs_per_run" title="Link to this definition"></a></dt>
+<dd><p>Get epochs_per_run parameter for variability studies.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.from_defaults">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_defaults</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.from_defaults"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.from_defaults" title="Link to this definition"></a></dt>
+<dd><p>Create a config with sensible defaults for a generic training run.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A <a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelConfig</span></code></a> with <code class="docutils literal notranslate"><span class="pre">epochs=10</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_size=32</span></code>,
+<code class="docutils literal notranslate"><span class="pre">learning_rate=0.001</span></code>, <code class="docutils literal notranslate"><span class="pre">verbose=0</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">cleanup_threshold=0.8</span></code>.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.for_cnn">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">for_cnn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(128,</span> <span class="pre">128,</span> <span class="pre">3)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.for_cnn"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.for_cnn" title="Link to this definition"></a></dt>
+<dd><p>Create a config with defaults suitable for a CNN model.</p>
+<p>Extends <a class="reference internal" href="#ictonyx.config.ModelConfig.from_defaults" title="ictonyx.config.ModelConfig.from_defaults"><code class="xref py py-meth docutils literal notranslate"><span class="pre">from_defaults()</span></code></a> with CNN-specific parameters and a
+more aggressive cleanup threshold (0.75) for memory-intensive models.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a>) – Spatial dimensions and channels, e.g. <code class="docutils literal notranslate"><span class="pre">(64,</span> <span class="pre">64,</span> <span class="pre">3)</span></code>.</p></li>
+<li><p><strong>num_classes</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of output classes.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A <a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelConfig</span></code></a> with CNN-appropriate defaults.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.for_xgboost">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">for_xgboost</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.for_xgboost"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.for_xgboost" title="Link to this definition"></a></dt>
+<dd><p>Create a config with defaults suitable for an XGBoost model.</p>
+<p>Extends <a class="reference internal" href="#ictonyx.config.ModelConfig.from_defaults" title="ictonyx.config.ModelConfig.from_defaults"><code class="xref py py-meth docutils literal notranslate"><span class="pre">from_defaults()</span></code></a> with <code class="docutils literal notranslate"><span class="pre">n_estimators=180</span></code>,
+<code class="docutils literal notranslate"><span class="pre">max_depth=7</span></code>, and the appropriate objective function
+(<code class="docutils literal notranslate"><span class="pre">binary:logistic</span></code> for 2 classes, <code class="docutils literal notranslate"><span class="pre">multi:softprob</span></code> otherwise).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>num_classes</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of output classes.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A <a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelConfig</span></code></a> with XGBoost-appropriate defaults.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.for_variability_study">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">for_variability_study</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_runs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/config.html#ModelConfig.for_variability_study"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.config.ModelConfig.for_variability_study" title="Link to this definition"></a></dt>
+<dd><p>Create a config for a variability study from an existing base config.</p>
+<p>Copies the base config and adds study-specific parameters
+(<code class="docutils literal notranslate"><span class="pre">num_runs</span></code>, <code class="docutils literal notranslate"><span class="pre">epochs_per_run</span></code>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>base_config</strong> (<a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a>) – An existing <a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelConfig</span></code></a> to use as a template.</p></li>
+<li><p><strong>num_runs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of independent training runs. Default 20.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A new <a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelConfig</span></code></a> with study parameters added.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.config.ModelConfig.cleanup_threshold">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cleanup_threshold</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><a class="headerlink" href="#ictonyx.config.ModelConfig.cleanup_threshold" title="Link to this definition"></a></dt>
+<dd><p>Get cleanup_threshold parameter.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="bootstrap.html" class="btn btn-neutral float-left" title="ictonyx.bootstrap" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="core.html" class="btn btn-neutral float-right" title="ictonyx.core" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

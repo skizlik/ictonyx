@@ -1,0 +1,572 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.exceptions &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ictonyx.exceptions</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ictonyx.exceptions</h1><div class="highlight"><pre>
+<span></span><span class="c1"># ictonyx/exceptions.py</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Custom exception classes for the ictonyx library.</span>
+
+<span class="sd">This module defines all exception types used throughout ictonyx,</span>
+<span class="sd">providing clear error categorization, context information, and</span>
+<span class="sd">better debugging experience.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">datetime</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">traceback</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+
+
+<div class="viewcode-block" id="IctonyxError">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.IctonyxError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">IctonyxError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base exception class for ictonyx library.</span>
+
+<span class="sd">    Provides common functionality for all ictonyx exceptions including</span>
+<span class="sd">    context tracking and enhanced error reporting.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">message</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">context</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="c1"># Capture timestamp when error occurs (UTC for timezone-safe logging)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+
+<div class="viewcode-block" id="IctonyxError.add_context">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.IctonyxError.add_context">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_context</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;IctonyxError&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add contextual information to the exception.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="IctonyxError.get_context_summary">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.IctonyxError.get_context_summary">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_context_summary</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get a formatted summary of the error context.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;No additional context available.&quot;</span>
+
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Error Context:&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">base_msg</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__str__</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_msg</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">get_context_summary</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">base_msg</span></div>
+
+
+
+<div class="viewcode-block" id="DataValidationError">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.DataValidationError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">DataValidationError</span><span class="p">(</span><span class="n">IctonyxError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Raised when data validation fails.</span>
+
+<span class="sd">    Inherits from ValueError for compatibility with existing error handling</span>
+<span class="sd">    that expects ValueError for invalid data.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">data_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">validation_rule</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">data_info</span><span class="p">:</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">data_info</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">validation_rule</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;validation_rule&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">validation_rule</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data_info</span> <span class="o">=</span> <span class="n">data_info</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">validation_rule</span> <span class="o">=</span> <span class="n">validation_rule</span>
+
+<div class="viewcode-block" id="DataValidationError.for_splits">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.DataValidationError.for_splits">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">for_splits</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">test_split</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">val_split</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;DataValidationError&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Factory method for split validation errors.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Invalid data splits: test_split=</span><span class="si">{</span><span class="n">test_split</span><span class="si">}</span><span class="s2">, val_split=</span><span class="si">{</span><span class="n">val_split</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">data_info</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;test_split&quot;</span><span class="p">:</span> <span class="n">test_split</span><span class="p">,</span>
+                <span class="s2">&quot;val_split&quot;</span><span class="p">:</span> <span class="n">val_split</span><span class="p">,</span>
+                <span class="s2">&quot;sum&quot;</span><span class="p">:</span> <span class="n">test_split</span> <span class="o">+</span> <span class="n">val_split</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="n">validation_rule</span><span class="o">=</span><span class="s2">&quot;test_split + val_split must be &lt; 1.0&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DataValidationError.for_empty_dataset">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.DataValidationError.for_empty_dataset">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">for_empty_dataset</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">dataset_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">expected_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;DataValidationError&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Factory method for empty dataset errors.&quot;&quot;&quot;</span>
+        <span class="n">context</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;dataset_name&quot;</span><span class="p">:</span> <span class="n">dataset_name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">expected_size</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;expected_min_size&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">expected_size</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Dataset &#39;</span><span class="si">{</span><span class="n">dataset_name</span><span class="si">}</span><span class="s2">&#39; is empty or has insufficient data&quot;</span><span class="p">,</span>
+            <span class="n">data_info</span><span class="o">=</span><span class="n">context</span><span class="p">,</span>
+            <span class="n">validation_rule</span><span class="o">=</span><span class="s2">&quot;Dataset must contain at least some valid samples&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ModelError">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.ModelError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ModelError</span><span class="p">(</span><span class="n">IctonyxError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Raised when model-related operations fail.</span>
+
+<span class="sd">    Includes information about the model state and operation that failed.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">model_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">operation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">model_state</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">model_info</span><span class="p">:</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">model_info</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">operation</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;failed_operation&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">operation</span>
+        <span class="k">if</span> <span class="n">model_state</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;model_state&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">model_state</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_info</span> <span class="o">=</span> <span class="n">model_info</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">operation</span> <span class="o">=</span> <span class="n">operation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_state</span> <span class="o">=</span> <span class="n">model_state</span>
+
+<div class="viewcode-block" id="ModelError.training_failed">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.ModelError.training_failed">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">training_failed</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">model_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">error_details</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ModelError&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Factory method for training failures.&quot;&quot;&quot;</span>
+        <span class="n">context</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;model_type&quot;</span><span class="p">:</span> <span class="n">model_type</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">epoch</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;failed_at_epoch&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epoch</span>
+        <span class="k">if</span> <span class="n">error_details</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;underlying_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">error_details</span>
+
+        <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Model training failed for </span><span class="si">{</span><span class="n">model_type</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="n">epoch</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; at epoch </span><span class="si">{</span><span class="n">epoch</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">model_info</span><span class="o">=</span><span class="n">context</span><span class="p">,</span> <span class="n">operation</span><span class="o">=</span><span class="s2">&quot;training&quot;</span><span class="p">,</span> <span class="n">model_state</span><span class="o">=</span><span class="s2">&quot;training&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ModelError.prediction_failed">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.ModelError.prediction_failed">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">prediction_failed</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">model_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">input_shape</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">error_details</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ModelError&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Factory method for prediction failures.&quot;&quot;&quot;</span>
+        <span class="n">context</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;model_type&quot;</span><span class="p">:</span> <span class="n">model_type</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">input_shape</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;input_shape&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">input_shape</span>
+        <span class="k">if</span> <span class="n">error_details</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;underlying_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">error_details</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Model prediction failed for </span><span class="si">{</span><span class="n">model_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">model_info</span><span class="o">=</span><span class="n">context</span><span class="p">,</span>
+            <span class="n">operation</span><span class="o">=</span><span class="s2">&quot;prediction&quot;</span><span class="p">,</span>
+            <span class="n">model_state</span><span class="o">=</span><span class="s2">&quot;trained&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ExperimentError">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.ExperimentError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ExperimentError</span><span class="p">(</span><span class="n">IctonyxError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Raised when experiment execution fails.</span>
+
+<span class="sd">    Tracks experiment state, run information, and failure patterns.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">experiment_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">run_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">stage</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">failure_count</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">experiment_info</span><span class="p">:</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">experiment_info</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">run_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;run_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">run_id</span>
+        <span class="k">if</span> <span class="n">stage</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;failure_stage&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">stage</span>
+        <span class="k">if</span> <span class="n">failure_count</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;total_failures&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">failure_count</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">experiment_info</span> <span class="o">=</span> <span class="n">experiment_info</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_id</span> <span class="o">=</span> <span class="n">run_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stage</span> <span class="o">=</span> <span class="n">stage</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">failure_count</span> <span class="o">=</span> <span class="n">failure_count</span>
+
+<div class="viewcode-block" id="ExperimentError.high_failure_rate">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.ExperimentError.high_failure_rate">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">high_failure_rate</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">failed_runs</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">total_runs</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ExperimentError&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Factory method for high failure rate errors.&quot;&quot;&quot;</span>
+        <span class="n">failure_rate</span> <span class="o">=</span> <span class="n">failed_runs</span> <span class="o">/</span> <span class="n">total_runs</span> <span class="k">if</span> <span class="n">total_runs</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mf">1.0</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Experiment stopped due to high failure rate: </span><span class="si">{</span><span class="n">failed_runs</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">total_runs</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;runs failed (</span><span class="si">{</span><span class="n">failure_rate</span><span class="si">:</span><span class="s2">.1%</span><span class="si">}</span><span class="s2"> &gt; </span><span class="si">{</span><span class="n">threshold</span><span class="si">:</span><span class="s2">.1%</span><span class="si">}</span><span class="s2"> threshold)&quot;</span><span class="p">,</span>
+            <span class="n">experiment_info</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;failed_runs&quot;</span><span class="p">:</span> <span class="n">failed_runs</span><span class="p">,</span>
+                <span class="s2">&quot;total_runs&quot;</span><span class="p">:</span> <span class="n">total_runs</span><span class="p">,</span>
+                <span class="s2">&quot;failure_rate&quot;</span><span class="p">:</span> <span class="n">failure_rate</span><span class="p">,</span>
+                <span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="n">threshold</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="n">failure_count</span><span class="o">=</span><span class="n">failed_runs</span><span class="p">,</span>
+            <span class="n">stage</span><span class="o">=</span><span class="s2">&quot;experiment_monitoring&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ExperimentError.resource_exhausted">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.ExperimentError.resource_exhausted">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">resource_exhausted</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">run_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ExperimentError&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Factory method for resource exhaustion errors.&quot;&quot;&quot;</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Experiment failed due to </span><span class="si">{</span><span class="n">resource_type</span><span class="si">}</span><span class="s2"> exhaustion&quot;</span>
+        <span class="k">if</span> <span class="n">run_id</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; during run </span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">message</span><span class="p">,</span>
+            <span class="n">experiment_info</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;resource_type&quot;</span><span class="p">:</span> <span class="n">resource_type</span><span class="p">},</span>
+            <span class="n">run_id</span><span class="o">=</span><span class="n">run_id</span><span class="p">,</span>
+            <span class="n">stage</span><span class="o">=</span><span class="s2">&quot;resource_management&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="StatisticalTestError">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.StatisticalTestError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StatisticalTestError</span><span class="p">(</span><span class="n">IctonyxError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Raised when statistical test prerequisites aren&#39;t met.</span>
+
+<span class="sd">    Provides detailed information about what validation failed</span>
+<span class="sd">    and suggestions for remediation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">test_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">data_summary</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">suggestion</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">test_info</span><span class="p">:</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">test_info</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">data_summary</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;data_summary&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data_summary</span>
+        <span class="k">if</span> <span class="n">suggestion</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;suggestion&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">suggestion</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_info</span> <span class="o">=</span> <span class="n">test_info</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data_summary</span> <span class="o">=</span> <span class="n">data_summary</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">suggestion</span> <span class="o">=</span> <span class="n">suggestion</span>
+
+<div class="viewcode-block" id="StatisticalTestError.insufficient_data">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.StatisticalTestError.insufficient_data">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">insufficient_data</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">test_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sample_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">minimum_required</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StatisticalTestError&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Factory method for insufficient data errors.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Insufficient data for </span><span class="si">{</span><span class="n">test_name</span><span class="si">}</span><span class="s2">: got </span><span class="si">{</span><span class="n">sample_size</span><span class="si">}</span><span class="s2"> samples, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;need at least </span><span class="si">{</span><span class="n">minimum_required</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">test_info</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;test_name&quot;</span><span class="p">:</span> <span class="n">test_name</span><span class="p">,</span> <span class="s2">&quot;minimum_samples&quot;</span><span class="p">:</span> <span class="n">minimum_required</span><span class="p">},</span>
+            <span class="n">data_summary</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;actual_samples&quot;</span><span class="p">:</span> <span class="n">sample_size</span><span class="p">},</span>
+            <span class="n">suggestion</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Collect more data points or use a different statistical test &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;that works with smaller samples&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="StatisticalTestError.invalid_distribution">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.StatisticalTestError.invalid_distribution">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">invalid_distribution</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">test_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">issue</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_properties</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StatisticalTestError&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Factory method for distribution assumption violations.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Statistical test </span><span class="si">{</span><span class="n">test_name</span><span class="si">}</span><span class="s2"> assumptions violated: </span><span class="si">{</span><span class="n">issue</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">test_info</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;test_name&quot;</span><span class="p">:</span> <span class="n">test_name</span><span class="p">,</span> <span class="s2">&quot;assumption_violation&quot;</span><span class="p">:</span> <span class="n">issue</span><span class="p">},</span>
+            <span class="n">data_summary</span><span class="o">=</span><span class="n">data_properties</span> <span class="ow">or</span> <span class="p">{},</span>
+            <span class="n">suggestion</span><span class="o">=</span><span class="s2">&quot;Consider using a non-parametric alternative or transform the data&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ConfigurationError">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.ConfigurationError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ConfigurationError</span><span class="p">(</span><span class="n">IctonyxError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Raised when configuration validation fails.</span>
+
+<span class="sd">    Helps users understand what configuration options are invalid</span>
+<span class="sd">    and provides guidance on valid alternatives.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">config_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">invalid_params</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">valid_options</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">config_info</span><span class="p">:</span>
+            <span class="n">context</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">config_info</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">invalid_params</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;invalid_parameters&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">invalid_params</span>
+        <span class="k">if</span> <span class="n">valid_options</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;valid_options&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">valid_options</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config_info</span> <span class="o">=</span> <span class="n">config_info</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">invalid_params</span> <span class="o">=</span> <span class="n">invalid_params</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">valid_options</span> <span class="o">=</span> <span class="n">valid_options</span> <span class="ow">or</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="ConfigurationError.invalid_parameter">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.ConfigurationError.invalid_parameter">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">invalid_parameter</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">param_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">param_value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">valid_options</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">valid_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ConfigurationError&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Factory method for invalid parameter errors.&quot;&quot;&quot;</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Invalid value for parameter &#39;</span><span class="si">{</span><span class="n">param_name</span><span class="si">}</span><span class="s2">&#39;: </span><span class="si">{</span><span class="n">param_value</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="n">context</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;parameter&quot;</span><span class="p">:</span> <span class="n">param_name</span><span class="p">,</span> <span class="s2">&quot;provided_value&quot;</span><span class="p">:</span> <span class="n">param_value</span><span class="p">}</span>
+        <span class="n">suggestion_parts</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">if</span> <span class="n">valid_options</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;valid_options&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">valid_options</span>
+            <span class="n">suggestion_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Valid options: </span><span class="si">{</span><span class="n">valid_options</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">valid_range</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;valid_range&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">valid_range</span>
+            <span class="n">suggestion_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Valid range: </span><span class="si">{</span><span class="n">valid_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">valid_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">suggestion_parts</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;. </span><span class="si">{</span><span class="s1">&#39;; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">suggestion_parts</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">config_info</span><span class="o">=</span><span class="n">context</span><span class="p">,</span> <span class="n">invalid_params</span><span class="o">=</span><span class="p">[</span><span class="n">param_name</span><span class="p">])</span></div>
+</div>
+
+
+
+<span class="c1"># Utility functions for common error patterns</span>
+<div class="viewcode-block" id="validate_not_empty">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.validate_not_empty">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_not_empty</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">min_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Utility function to validate data is not empty.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;__len__&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">min_size</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">DataValidationError</span><span class="o">.</span><span class="n">for_empty_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">min_size</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;empty&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">DataValidationError</span><span class="o">.</span><span class="n">for_empty_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">min_size</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="validate_splits">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.validate_splits">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_splits</span><span class="p">(</span><span class="n">test_split</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">val_split</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Utility function to validate train/val/test splits.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">test_split</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">val_split</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">DataValidationError</span><span class="p">(</span>
+            <span class="s2">&quot;Split values cannot be negative&quot;</span><span class="p">,</span>
+            <span class="n">data_info</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;test_split&quot;</span><span class="p">:</span> <span class="n">test_split</span><span class="p">,</span> <span class="s2">&quot;val_split&quot;</span><span class="p">:</span> <span class="n">val_split</span><span class="p">},</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">test_split</span> <span class="o">&gt;=</span> <span class="mf">1.0</span> <span class="ow">or</span> <span class="n">val_split</span> <span class="o">&gt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">DataValidationError</span><span class="p">(</span>
+            <span class="s2">&quot;Split values must be less than 1.0&quot;</span><span class="p">,</span>
+            <span class="n">data_info</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;test_split&quot;</span><span class="p">:</span> <span class="n">test_split</span><span class="p">,</span> <span class="s2">&quot;val_split&quot;</span><span class="p">:</span> <span class="n">val_split</span><span class="p">},</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">test_split</span> <span class="o">+</span> <span class="n">val_split</span> <span class="o">&gt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">DataValidationError</span><span class="o">.</span><span class="n">for_splits</span><span class="p">(</span><span class="n">test_split</span><span class="p">,</span> <span class="n">val_split</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="validate_statistical_input">
+<a class="viewcode-back" href="../../api/exceptions.html#ictonyx.exceptions.validate_statistical_input">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_statistical_input</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">min_samples</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Utility function to validate data for statistical tests.&quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="n">StatisticalTestError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> must be pandas Series, numpy array, or list&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Convert to pandas Series for consistent handling</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="c1"># Check for empty data</span>
+    <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">StatisticalTestError</span><span class="o">.</span><span class="n">insufficient_data</span><span class="p">(</span><span class="s2">&quot;statistical test&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">min_samples</span><span class="p">)</span>
+
+    <span class="c1"># Check for all NaN</span>
+    <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="n">StatisticalTestError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> contains only missing values&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Check for sufficient valid data</span>
+    <span class="n">valid_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">valid_data</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">min_samples</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">StatisticalTestError</span><span class="o">.</span><span class="n">insufficient_data</span><span class="p">(</span>
+            <span class="s2">&quot;statistical test&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">valid_data</span><span class="p">),</span> <span class="n">min_samples</span>
+        <span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

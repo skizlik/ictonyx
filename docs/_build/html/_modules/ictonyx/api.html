@@ -1,0 +1,821 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.api &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ictonyx.api</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ictonyx.api</h1><div class="highlight"><pre>
+<span></span><span class="c1"># ictonyx/api.py</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">The High-Level API for Ictonyx.</span>
+
+<span class="sd">This module provides a interface for running variability studies</span>
+<span class="sd">and model comparisons. It abstracts away the complexity of DataHandlers,</span>
+<span class="sd">ModelConfigs, and ExperimentRunners into single function calls.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">settings</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelComparisonResults</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">compare_multiple_models</span> <span class="k">as</span> <span class="n">_stat_compare</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelConfig</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">PYTORCH_AVAILABLE</span><span class="p">,</span> <span class="n">SKLEARN_AVAILABLE</span><span class="p">,</span> <span class="n">TENSORFLOW_AVAILABLE</span><span class="p">,</span> <span class="n">BaseModelWrapper</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataHandler</span><span class="p">,</span> <span class="n">auto_resolve_handler</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigurationError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.loggers</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseLogger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.runners</span><span class="w"> </span><span class="kn">import</span> <span class="n">VariabilityStudyResults</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.runners</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_variability_study</span> <span class="k">as</span> <span class="n">_run_study</span>
+
+<span class="c1"># Resolve torch.nn once at import time so isinstance checks below are reliable</span>
+<span class="c1"># and don&#39;t require repeated try/except blocks throughout this module.</span>
+<span class="k">if</span> <span class="n">PYTORCH_AVAILABLE</span><span class="p">:</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_torch_nn</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">_torch_nn</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># type: ignore[assignment]</span>
+
+
+<div class="viewcode-block" id="variability_study">
+<a class="viewcode-back" href="../../api/api.html#ictonyx.api.variability_study">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">variability_study</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]],</span>
+    <span class="n">target_column</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">runs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="n">epochs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">32</span><span class="p">,</span>
+    <span class="n">tracker</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">BaseLogger</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">use_process_isolation</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">use_parallel</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">n_jobs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VariabilityStudyResults</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run a variability study: train a model N times and collect distributions.</span>
+
+<span class="sd">    Trains the same model architecture on the same data ``runs`` times, each</span>
+<span class="sd">    with a different random seed, and returns the full distribution of</span>
+<span class="sd">    training metrics. This is the primary entry point for most users.</span>
+
+<span class="sd">    The function handles data resolution, model wrapping, configuration,</span>
+<span class="sd">    and execution automatically. For finer control, use</span>
+<span class="sd">    :class:`~ictonyx.runners.ExperimentRunner` directly.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        model: What to train. Accepted forms:</span>
+
+<span class="sd">            * A **class** with ``fit``/``predict`` (e.g. ``RandomForestClassifier``) —</span>
+<span class="sd">              a fresh instance is created for each run.</span>
+<span class="sd">            * A **callable** ``f(config) -&gt; BaseModelWrapper`` — called once per run.</span>
+<span class="sd">            * A **Keras Model** or **PyTorch nn.Module** — auto-wrapped.</span>
+<span class="sd">            * An **instance** with ``fit``/``predict`` — works, but a warning is</span>
+<span class="sd">              emitted because fitted state persists between runs.</span>
+
+<span class="sd">        data: The dataset. Accepted forms:</span>
+
+<span class="sd">            * ``pd.DataFrame`` — requires ``target_column``.</span>
+<span class="sd">            * ``(X, y)`` tuple of array-likes.</span>
+<span class="sd">            * ``str`` path to a CSV file (requires ``target_column``) or an</span>
+<span class="sd">              image directory (requires ``image_size`` in kwargs).</span>
+<span class="sd">            * An existing :class:`~ictonyx.data.DataHandler` instance.</span>
+
+<span class="sd">        target_column: Column name containing labels. Required when ``data``</span>
+<span class="sd">            is a DataFrame or CSV path.</span>
+<span class="sd">        runs: Number of independent training runs. Default 20.</span>
+<span class="sd">        epochs: Training epochs per run. Ignored by scikit-learn models.</span>
+<span class="sd">            Default 10.</span>
+<span class="sd">        batch_size: Batch size per run. Ignored by scikit-learn models.</span>
+<span class="sd">            Default 32.</span>
+<span class="sd">        tracker: Optional :class:`~ictonyx.loggers.BaseLogger` (or subclass</span>
+<span class="sd">            such as ``MLflowLogger``) for experiment tracking. If ``None``,</span>
+<span class="sd">            a basic in-memory logger is used.</span>
+<span class="sd">        use_process_isolation: If ``True``, each run executes in a subprocess</span>
+<span class="sd">            to guarantee GPU memory cleanup. Useful for Keras/TF models that</span>
+<span class="sd">            leak memory across runs. Default ``False``.</span>
+<span class="sd">        seed: Base random seed. Each run receives an independent child seed</span>
+<span class="sd">            derived via ``np.random.SeedSequence.spawn()``, guaranteeing</span>
+<span class="sd">            statistically uncorrelated RNG streams. If ``None``, a random</span>
+<span class="sd">            seed is generated and stored in the results.</span>
+<span class="sd">        verbose: If ``False``, suppress all training output. Default ``True``.</span>
+<span class="sd">        use_parallel: If ``True``, fan training runs across multiple</span>
+<span class="sd">            processes using ``joblib``. Safe for sklearn models. Not</span>
+<span class="sd">            recommended for Keras/TF models. Mutually exclusive with</span>
+<span class="sd">            ``use_process_isolation``. Default ``False``.</span>
+<span class="sd">        n_jobs: Number of parallel workers. ``-1`` uses all CPUs.</span>
+<span class="sd">            Ignored when ``use_parallel=False``. Default ``-1``.</span>
+<span class="sd">        **kwargs: Additional arguments forwarded to both the</span>
+<span class="sd">            :class:`~ictonyx.config.ModelConfig` and the data handler</span>
+<span class="sd">            (e.g. ``image_size``, ``test_split``, ``val_split``).</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`~ictonyx.runners.VariabilityStudyResults` containing</span>
+<span class="sd">        per-run metric DataFrames, final metric distributions, and</span>
+<span class="sd">        convenience methods for summarization and statistical analysis.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        import ictonyx as ix</span>
+<span class="sd">        from sklearn.ensemble import RandomForestClassifier</span>
+
+<span class="sd">        results = ix.variability_study(</span>
+<span class="sd">            model=RandomForestClassifier,</span>
+<span class="sd">            data=df,</span>
+<span class="sd">            target_column=&#39;target&#39;,</span>
+<span class="sd">            runs=20,</span>
+<span class="sd">        )</span>
+<span class="sd">        print(results.summarize())</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Separate infrastructure kwargs (forwarded to the data handler) from</span>
+    <span class="c1"># model kwargs (forwarded to ModelConfig). Add new DataHandler constructor</span>
+    <span class="c1"># parameters to _INFRA_KWARGS to prevent them from appearing in ModelConfig.</span>
+    <span class="n">_INFRA_KWARGS</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;image_size&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;test_split&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;val_split&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;gpu_memory_limit&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;color_mode&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="n">model_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_INFRA_KWARGS</span><span class="p">}</span>
+    <span class="n">infra_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">_INFRA_KWARGS</span><span class="p">}</span>
+
+    <span class="c1"># Apply verbose setting to global logger</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_verbose</span>
+
+    <span class="n">set_verbose</span><span class="p">(</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">runs</span> <span class="o">&lt;</span> <span class="mi">20</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;runs=</span><span class="si">{</span><span class="n">runs</span><span class="si">}</span><span class="s2"> may be insufficient for reliable statistical inference. &quot;</span>
+            <span class="s2">&quot;Mann-Whitney U has limited power against small effects below n=20. &quot;</span>
+            <span class="s2">&quot;Consider runs &gt;= 20 for publication-quality results.&quot;</span><span class="p">,</span>
+            <span class="ne">UserWarning</span><span class="p">,</span>
+            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># 1. Prepare Data</span>
+    <span class="n">handler</span> <span class="o">=</span> <span class="n">auto_resolve_handler</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">target_column</span><span class="o">=</span><span class="n">target_column</span><span class="p">,</span> <span class="o">**</span><span class="n">infra_kwargs</span><span class="p">)</span>
+
+    <span class="c1"># 2. Prepare Model Builder</span>
+    <span class="c1"># If the user passes a class (e.g. RandomForestClassifier), we instantiate it per run.</span>
+    <span class="c1"># If they pass a function, we use it directly.</span>
+    <span class="n">builder</span> <span class="o">=</span> <span class="n">_get_model_builder</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+    <span class="c1"># 3. Configure</span>
+    <span class="c1"># We explicitly pass kwargs into the config, trusting ModelConfig to ignore/store extras.</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">ModelConfig</span><span class="p">(</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;epochs&quot;</span><span class="p">:</span> <span class="n">epochs</span><span class="p">,</span>
+            <span class="s2">&quot;batch_size&quot;</span><span class="p">:</span> <span class="n">batch_size</span><span class="p">,</span>
+            <span class="s2">&quot;verbose&quot;</span><span class="p">:</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">verbose</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">model_kwargs</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">)</span>
+
+    <span class="c1"># 4. Execute</span>
+    <span class="k">return</span> <span class="n">_run_study</span><span class="p">(</span>
+        <span class="n">model_builder</span><span class="o">=</span><span class="n">builder</span><span class="p">,</span>
+        <span class="n">data_handler</span><span class="o">=</span><span class="n">handler</span><span class="p">,</span>
+        <span class="n">model_config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+        <span class="n">num_runs</span><span class="o">=</span><span class="n">runs</span><span class="p">,</span>
+        <span class="n">epochs_per_run</span><span class="o">=</span><span class="n">epochs</span><span class="p">,</span>
+        <span class="n">tracker</span><span class="o">=</span><span class="n">tracker</span><span class="p">,</span>
+        <span class="n">use_process_isolation</span><span class="o">=</span><span class="n">use_process_isolation</span><span class="p">,</span>
+        <span class="n">gpu_memory_limit</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;gpu_memory_limit&quot;</span><span class="p">),</span>
+        <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span>
+        <span class="n">use_parallel</span><span class="o">=</span><span class="n">use_parallel</span><span class="p">,</span>
+        <span class="n">n_jobs</span><span class="o">=</span><span class="n">n_jobs</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="compare_models">
+<a class="viewcode-back" href="../../api/api.html#ictonyx.api.compare_models">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">compare_models</span><span class="p">(</span>
+    <span class="n">models</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]],</span>
+    <span class="n">target_column</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">runs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="n">epochs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">metric</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">paired</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelComparisonResults</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run variability studies on multiple models and compare them statistically.</span>
+
+<span class="sd">    Each model is trained ``runs`` times on the same data, producing a</span>
+<span class="sd">    distribution of the chosen metric. The distributions are then compared</span>
+<span class="sd">    using non-parametric statistical tests.</span>
+
+<span class="sd">    **Seeding and pairing**</span>
+
+<span class="sd">    All models receive the same base ``seed``. Internally,</span>
+<span class="sd">    ``np.random.SeedSequence(seed).spawn(runs)`` generates per-run child seeds</span>
+<span class="sd">    that are identical across models: model A&#39;s run *i* and model B&#39;s run *i*</span>
+<span class="sd">    always share the same child seed. The runs are therefore **genuinely paired</span>
+<span class="sd">    at the RNG level**, regardless of framework.</span>
+
+<span class="sd">    For this reason ``paired`` defaults to ``True``:</span>
+
+<span class="sd">    * **Two models (default, paired):** Paired Wilcoxon signed-rank test on the</span>
+<span class="sd">      per-run differences. More powerful than the independent-samples alternative</span>
+<span class="sd">      because it removes run-to-run noise that is common to both models.</span>
+<span class="sd">    * **Two models (unpaired):** Kruskal-Wallis omnibus + Mann-Whitney U with</span>
+<span class="sd">      Holm correction. Valid but does not exploit the RNG pairing.</span>
+<span class="sd">    * **Three or more models:** Kruskal-Wallis omnibus + pairwise Mann-Whitney U</span>
+<span class="sd">      with Holm correction, regardless of ``paired``. (Paired multi-group</span>
+<span class="sd">      analysis requires a different design not yet implemented.)</span>
+
+<span class="sd">    **Seeding guarantee by framework**</span>
+
+<span class="sd">    * scikit-learn: exact (``random_state`` injected at wrapper construction).</span>
+<span class="sd">    * PyTorch: approximately deterministic under ``cudnn.deterministic=True``;</span>
+<span class="sd">      rare non-deterministic CUDA ops may introduce small deviations.</span>
+<span class="sd">    * TF/Keras + GPU: not fully controllable; pairing is approximate.</span>
+
+<span class="sd">    If exact pairing cannot be guaranteed (e.g. Keras with GPU), pass</span>
+<span class="sd">    ``paired=False`` to fall back to the independent-samples test, which</span>
+<span class="sd">    is always valid regardless of seeding.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        models: List of models in any form accepted by</span>
+<span class="sd">            :func:`variability_study` (classes, callables, instances, etc.).</span>
+<span class="sd">        data: The dataset, in any form accepted by :func:`variability_study`.</span>
+<span class="sd">        target_column: Column name containing labels, if applicable.</span>
+<span class="sd">        runs: Number of independent training runs per model. Default 20.</span>
+<span class="sd">        epochs: Training epochs per run. Default 10.</span>
+<span class="sd">        metric: Metric name to compare across models. Must be a key in</span>
+<span class="sd">            the training history (e.g. ``&#39;val_accuracy&#39;``, ``&#39;val_loss&#39;``,</span>
+<span class="sd">            ``&#39;val_f1&#39;``). Default ``None`` (auto-resolved from results).</span>
+<span class="sd">        seed: Base random seed for reproducibility. All models use the same</span>
+<span class="sd">            seed so the comparison can be reproduced exactly. If ``None``,</span>
+<span class="sd">            a random seed is generated and stored in the result.</span>
+<span class="sd">        verbose: If ``False``, suppress all output. Default ``True``.</span>
+<span class="sd">        paired: If ``True`` (default), use the paired Wilcoxon signed-rank</span>
+<span class="sd">            test for two-model comparisons, exploiting the fact that all</span>
+<span class="sd">            models receive identical per-run seeds by construction. Ignored</span>
+<span class="sd">            when comparing three or more models (KW + MW is used regardless).</span>
+<span class="sd">            Pass ``False`` to use the independent-samples test instead —</span>
+<span class="sd">            appropriate when seeds are not shared or when comparing against</span>
+<span class="sd">            externally produced results.</span>
+<span class="sd">        **kwargs: Forwarded to each :func:`variability_study` call.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`~ictonyx.analysis.ModelComparisonResults` containing the</span>
+<span class="sd">        omnibus test, pairwise comparisons, raw metric distributions, and</span>
+<span class="sd">        summary methods.</span>
+
+<span class="sd">    Example (two models, default paired analysis)::</span>
+
+<span class="sd">        results = ix.compare_models(</span>
+<span class="sd">            models=[RandomForestClassifier, GradientBoostingClassifier],</span>
+<span class="sd">            data=df,</span>
+<span class="sd">            target_column=&#39;target&#39;,</span>
+<span class="sd">            runs=20,</span>
+<span class="sd">            metric=&#39;val_accuracy&#39;,</span>
+<span class="sd">            seed=42,</span>
+<span class="sd">        )</span>
+<span class="sd">        print(results.get_summary())</span>
+
+<span class="sd">    Example (three models, or unpaired two-model comparison)::</span>
+
+<span class="sd">        results = ix.compare_models(</span>
+<span class="sd">            models=[ModelA, ModelB, ModelC],</span>
+<span class="sd">            data=df,</span>
+<span class="sd">            target_column=&#39;target&#39;,</span>
+<span class="sd">            runs=20,</span>
+<span class="sd">            seed=42,</span>
+<span class="sd">        )</span>
+<span class="sd">        # Unpaired two-model:</span>
+<span class="sd">        results = ix.compare_models(</span>
+<span class="sd">            models=[ModelA, ModelB],</span>
+<span class="sd">            data=df,</span>
+<span class="sd">            target_column=&#39;target&#39;,</span>
+<span class="sd">            runs=20,</span>
+<span class="sd">            seed=42,</span>
+<span class="sd">            paired=False,   # fall back to KW + Mann-Whitney</span>
+<span class="sd">        )</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Apply verbose setting to global logger</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_verbose</span>
+
+    <span class="n">set_verbose</span><span class="p">(</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">runs</span> <span class="o">&lt;</span> <span class="mi">20</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;runs=</span><span class="si">{</span><span class="n">runs</span><span class="si">}</span><span class="s2"> may be insufficient for reliable statistical inference. &quot;</span>
+            <span class="s2">&quot;Mann-Whitney U has limited power against small effects below n=20. &quot;</span>
+            <span class="s2">&quot;Consider runs &gt;= 20 for publication-quality results.&quot;</span><span class="p">,</span>
+            <span class="ne">UserWarning</span><span class="p">,</span>
+            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Resolve seed once — all models use the same base seed for reproducibility</span>
+    <span class="k">if</span> <span class="n">seed</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">seed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">()</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="o">**</span><span class="mi">31</span><span class="p">))</span>
+
+    <span class="c1"># Apply the same infra/model kwargs separation used in variability_study().</span>
+    <span class="c1"># Without this split, model hyperparameters like learning_rate reach</span>
+    <span class="c1"># auto_resolve_handler() and raise TypeError.</span>
+    <span class="n">_INFRA_KWARGS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;image_size&quot;</span><span class="p">,</span> <span class="s2">&quot;test_split&quot;</span><span class="p">,</span> <span class="s2">&quot;val_split&quot;</span><span class="p">,</span> <span class="s2">&quot;gpu_memory_limit&quot;</span><span class="p">,</span> <span class="s2">&quot;color_mode&quot;</span><span class="p">}</span>
+    <span class="n">infra_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">_INFRA_KWARGS</span><span class="p">}</span>
+    <span class="n">handler</span> <span class="o">=</span> <span class="n">auto_resolve_handler</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">target_column</span><span class="o">=</span><span class="n">target_column</span><span class="p">,</span> <span class="o">**</span><span class="n">infra_kwargs</span><span class="p">)</span>
+
+    <span class="n">settings</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;--- Starting Comparison of </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">models</span><span class="p">)</span><span class="si">}</span><span class="s2"> Models (seed=</span><span class="si">{</span><span class="n">seed</span><span class="si">}</span><span class="s2">) ---&quot;</span><span class="p">)</span>
+
+    <span class="c1"># --- Loop 1: run all studies, store full VariabilityStudyResults objects ---</span>
+    <span class="n">studies</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">VariabilityStudyResults</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">model_input</span> <span class="ow">in</span> <span class="n">models</span><span class="p">:</span>
+        <span class="n">base_name</span> <span class="o">=</span> <span class="n">_get_model_name</span><span class="p">(</span><span class="n">model_input</span><span class="p">)</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">base_name</span>
+        <span class="n">counter</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">while</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">studies</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">counter</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">counter</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">settings</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Evaluating: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">study_result</span> <span class="o">=</span> <span class="n">variability_study</span><span class="p">(</span>
+            <span class="n">model</span><span class="o">=</span><span class="n">model_input</span><span class="p">,</span>
+            <span class="n">data</span><span class="o">=</span><span class="n">handler</span><span class="p">,</span>
+            <span class="n">runs</span><span class="o">=</span><span class="n">runs</span><span class="p">,</span>
+            <span class="n">epochs</span><span class="o">=</span><span class="n">epochs</span><span class="p">,</span>
+            <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span>
+            <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">studies</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">study_result</span>
+
+    <span class="c1"># --- Resolve metric now that all studies are complete ---</span>
+    <span class="k">if</span> <span class="n">metric</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">metric</span> <span class="o">=</span> <span class="s2">&quot;val_accuracy&quot;</span>
+
+    <span class="c1"># --- Loop 2: extract metric values now that metric is a concrete string ---</span>
+    <span class="n">results_store</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">study_result</span> <span class="ow">in</span> <span class="n">studies</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">metric</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;test_&quot;</span><span class="p">):</span>
+                <span class="n">metric_values</span> <span class="o">=</span> <span class="n">study_result</span><span class="o">.</span><span class="n">get_test_metric_values</span><span class="p">(</span><span class="n">metric</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">metric_values</span> <span class="o">=</span> <span class="n">study_result</span><span class="o">.</span><span class="n">get_metric_values</span><span class="p">(</span><span class="n">metric</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="n">available</span> <span class="o">=</span> <span class="n">study_result</span><span class="o">.</span><span class="n">get_available_metrics</span><span class="p">()</span>
+            <span class="n">hint</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">if</span> <span class="n">metric</span> <span class="o">==</span> <span class="s2">&quot;val_accuracy&quot;</span> <span class="ow">and</span> <span class="s2">&quot;accuracy&quot;</span> <span class="ow">in</span> <span class="n">available</span><span class="p">:</span>
+                <span class="n">hint</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="s2">&quot; Tip: sklearn models only record &#39;val_accuracy&#39; when &quot;</span>
+                    <span class="s2">&quot;validation data is provided. Pass val_split=0.2 to your &quot;</span>
+                    <span class="s2">&quot;DataHandler, or use metric=&#39;accuracy&#39; instead.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="n">metric</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;val_&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">metric</span><span class="p">[</span><span class="mi">4</span><span class="p">:]</span> <span class="ow">in</span> <span class="n">available</span><span class="p">:</span>
+                <span class="n">hint</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot; &#39;</span><span class="si">{</span><span class="n">metric</span><span class="p">[</span><span class="mi">4</span><span class="p">:]</span><span class="si">}</span><span class="s2">&#39; was recorded but &#39;</span><span class="si">{</span><span class="n">metric</span><span class="si">}</span><span class="s2">&#39; was not. &quot;</span>
+                    <span class="s2">&quot;Ensure your DataHandler provides a validation split.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">raise</span> <span class="n">ConfigurationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;compare_models() could not find metric &#39;</span><span class="si">{</span><span class="n">metric</span><span class="si">}</span><span class="s2">&#39; for model &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;. Available metrics: </span><span class="si">{</span><span class="n">available</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">hint</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">metric_values</span><span class="p">:</span>
+            <span class="n">settings</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Metric &#39;</span><span class="si">{</span><span class="n">metric</span><span class="si">}</span><span class="s2">&#39; was tracked for &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; but contains no &quot;</span>
+                <span class="s2">&quot;values — all training runs for this model may have failed.&quot;</span>
+            <span class="p">)</span>
+            <span class="k">continue</span>
+        <span class="n">results_store</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">metric_values</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">results_store</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Insufficient valid results for comparison: only </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results_store</span><span class="p">)</span><span class="si">}</span><span class="s2"> model(s) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;produced &#39;</span><span class="si">{</span><span class="n">metric</span><span class="si">}</span><span class="s2">&#39; data. Check that your metric name is correct.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">paired</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">results_store</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">paired_wilcoxon_test</span>
+
+        <span class="n">names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">results_store</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">series_a</span> <span class="o">=</span> <span class="n">results_store</span><span class="p">[</span><span class="n">names</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+        <span class="n">series_b</span> <span class="o">=</span> <span class="n">results_store</span><span class="p">[</span><span class="n">names</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">series_a</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">series_b</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;compare_models(paired=True) requires equal run counts. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">series_a</span><span class="p">)</span><span class="si">}</span><span class="s2"> runs but &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">names</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">series_b</span><span class="p">)</span><span class="si">}</span><span class="s2"> runs. &quot;</span>
+                <span class="s2">&quot;Use paired=False for independent comparison.&quot;</span>
+            <span class="p">)</span>
+        <span class="n">paired_result</span> <span class="o">=</span> <span class="n">paired_wilcoxon_test</span><span class="p">(</span><span class="n">series_a</span><span class="p">,</span> <span class="n">series_b</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">seed</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ModelComparisonResults</span><span class="p">(</span>
+            <span class="n">overall_test</span><span class="o">=</span><span class="n">paired_result</span><span class="p">,</span>
+            <span class="n">raw_data</span><span class="o">=</span><span class="n">results_store</span><span class="p">,</span>
+            <span class="n">pairwise_comparisons</span><span class="o">=</span><span class="p">{</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">_vs_</span><span class="si">{</span><span class="n">names</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">:</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">paired_result</span><span class="p">)},</span>
+            <span class="n">significant_comparisons</span><span class="o">=</span><span class="p">(</span>
+                <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">_vs_</span><span class="si">{</span><span class="n">names</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">paired_result</span><span class="o">.</span><span class="n">is_significant</span><span class="p">()</span> <span class="k">else</span> <span class="p">[]</span>
+            <span class="p">),</span>
+            <span class="n">correction_method</span><span class="o">=</span><span class="s2">&quot;none&quot;</span><span class="p">,</span>
+            <span class="n">n_models</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="n">metric</span><span class="o">=</span><span class="n">metric</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">paired</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">results_store</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;compare_models(): paired=True has no effect when comparing &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results_store</span><span class="p">)</span><span class="si">}</span><span class="s2"> models. Paired analysis is only available &quot;</span>
+            <span class="s2">&quot;for exactly two models. Using Kruskal-Wallis + Mann-Whitney U &quot;</span>
+            <span class="s2">&quot;(independent-samples) for this comparison.&quot;</span><span class="p">,</span>
+            <span class="ne">UserWarning</span><span class="p">,</span>
+            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="n">stat_results</span> <span class="o">=</span> <span class="n">_stat_compare</span><span class="p">(</span><span class="n">results_store</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">stat_results</span><span class="o">.</span><span class="n">metric</span> <span class="o">=</span> <span class="n">metric</span>
+    <span class="n">stat_results</span><span class="o">.</span><span class="n">raw_data</span> <span class="o">=</span> <span class="n">results_store</span>
+    <span class="k">return</span> <span class="n">stat_results</span></div>
+
+
+
+<span class="c1"># --- Clean Helpers ---</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_model_builder</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalize diverse model inputs into a consistent factory function.</span>
+
+<span class="sd">    Accepts classes, callables, and instances and returns a callable</span>
+<span class="sd">    with signature ``f(ModelConfig) -&gt; BaseModelWrapper``. Instances</span>
+<span class="sd">    are wrapped with a warning about state leakage between runs.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        model: A model class, callable, or fitted/unfitted instance.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        A callable that takes a :class:`~ictonyx.config.ModelConfig` and</span>
+<span class="sd">        returns a :class:`~ictonyx.core.BaseModelWrapper`.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If ``model`` is not a class, callable, or object with</span>
+<span class="sd">            a ``fit`` method.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># If it&#39;s already a function, trust it.</span>
+    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+        <span class="k">return</span> <span class="k">lambda</span> <span class="n">conf</span><span class="p">:</span> <span class="n">_ensure_wrapper</span><span class="p">(</span><span class="n">model</span><span class="p">(</span><span class="n">conf</span><span class="p">))</span>
+
+    <span class="c1"># If it&#39;s a class (like RandomForestClassifier), instantiate it per run.</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_build_from_class</span><span class="p">(</span><span class="n">conf</span><span class="p">,</span> <span class="n">_model_class</span><span class="o">=</span><span class="n">model</span><span class="p">):</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
+
+            <span class="k">if</span> <span class="s2">&quot;random_state&quot;</span> <span class="ow">in</span> <span class="n">inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="n">_model_class</span><span class="p">)</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">_ensure_wrapper</span><span class="p">(</span><span class="n">_model_class</span><span class="p">(</span><span class="n">random_state</span><span class="o">=</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;run_seed&quot;</span><span class="p">)))</span>
+                <span class="k">except</span> <span class="ne">TypeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="s2">&quot;random_state&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;unexpected keyword&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">):</span>
+                        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Could not pass random_state to </span><span class="si">{</span><span class="n">_model_class</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">. &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;Reproducibility not guaranteed. Original error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                            <span class="ne">UserWarning</span><span class="p">,</span>
+                            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                        <span class="p">)</span>
+                        <span class="k">return</span> <span class="n">_ensure_wrapper</span><span class="p">(</span><span class="n">_model_class</span><span class="p">())</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Failed to construct </span><span class="si">{</span><span class="n">_model_class</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">. &quot;</span>
+                        <span class="s2">&quot;Check that the class accepts the arguments in your ModelConfig.&quot;</span>
+                    <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+
+            <span class="k">return</span> <span class="n">_ensure_wrapper</span><span class="p">(</span><span class="n">_model_class</span><span class="p">())</span>
+
+        <span class="k">return</span> <span class="n">_build_from_class</span>
+
+    <span class="c1"># If it&#39;s an instance, we need to clone it per run for independence.</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;fit&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_build_instance_cloner</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid model input: </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_instance_cloner</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a builder that produces independent copies of a model instance.</span>
+
+<span class="sd">    For sklearn estimators, uses sklearn.base.clone() which creates an</span>
+<span class="sd">    unfitted copy with the same hyperparameters. This preserves the user&#39;s</span>
+<span class="sd">    configuration (e.g., n_estimators=100) while ensuring each run starts</span>
+<span class="sd">    from scratch.</span>
+
+<span class="sd">    For Keras and PyTorch instances, cloning is not reliably possible, so</span>
+<span class="sd">    we raise an error guiding the user to pass a class or builder function.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># sklearn: clone() creates an unfitted copy with same hyperparameters</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;get_params&quot;</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">clone</span>
+
+            <span class="c1"># Test that clone works before committing to this path</span>
+            <span class="n">clone</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+            <span class="n">settings</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Cloning </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">model</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> instance per run for independence.&quot;</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="k">lambda</span> <span class="n">conf</span><span class="p">:</span> <span class="n">_ensure_wrapper</span><span class="p">(</span><span class="n">clone</span><span class="p">(</span><span class="n">model</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Cannot clone sklearn model instance: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Pass the class instead: model=</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">model</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+    <span class="c1"># Keras models: no clean clone path</span>
+    <span class="k">if</span> <span class="s2">&quot;keras&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">model</span><span class="p">))</span> <span class="ow">or</span> <span class="s2">&quot;tensorflow&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">model</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;Passing a Keras model instance risks weight leakage between runs. &quot;</span>
+            <span class="s2">&quot;Pass a builder function instead:</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;  def build_model(config):</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;      model = Sequential([...])</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;      model.compile(...)</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;      return KerasModelWrapper(model)</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;  ix.variability_study(model=build_model, ...)&quot;</span>
+        <span class="p">)</span>
+
+    <span class="c1"># PyTorch modules: no clean clone path</span>
+    <span class="k">if</span> <span class="n">PYTORCH_AVAILABLE</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">_torch_nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;Passing a PyTorch model instance risks weight leakage between runs. &quot;</span>
+            <span class="s2">&quot;Pass a builder function instead:</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;  def build_model(config):</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;      return PyTorchModelWrapper(MyNet(), ...)</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;  ix.variability_study(model=build_model, ...)&quot;</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Unknown instance with a fit method — cannot safely clone.</span>
+    <span class="c1"># Reusing the same instance across runs would leak trained weights,</span>
+    <span class="c1"># invalidating the independence assumption of the variability study.</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Passed an instance of </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">model</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> that cannot be cloned. &quot;</span>
+        <span class="s2">&quot;Reusing the same instance across runs would leak trained weights between &quot;</span>
+        <span class="s2">&quot;runs, invalidating the variability study.</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+        <span class="s2">&quot;Pass a class or builder function instead:</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;  ix.variability_study(model=</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">model</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">, ...)</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="s2">&quot;  ix.variability_study(model=lambda config: MyModel(**config.params), ...)&quot;</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_ensure_wrapper</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BaseModelWrapper</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wrap a raw model object in the appropriate Ictonyx model wrapper.</span>
+
+<span class="sd">    If ``obj`` is already a :class:`~ictonyx.core.BaseModelWrapper`, it is</span>
+<span class="sd">    returned unchanged. Otherwise, the function inspects the object to</span>
+<span class="sd">    determine the correct wrapper:</span>
+
+<span class="sd">    * Keras / TensorFlow models → :class:`KerasModelWrapper`</span>
+<span class="sd">    * PyTorch ``nn.Module`` → :class:`PyTorchModelWrapper`</span>
+<span class="sd">    * Objects with ``fit``/``predict`` → :class:`ScikitLearnModelWrapper`</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        obj: A model object to wrap.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        A :class:`~ictonyx.core.BaseModelWrapper` subclass instance.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ImportError: If the required framework (sklearn, TF, or PyTorch)</span>
+<span class="sd">            is not installed.</span>
+<span class="sd">        TypeError: If the object cannot be identified as a supported model.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">BaseModelWrapper</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">obj</span>
+
+    <span class="c1"># Framework-specific checks MUST come before generic duck-typing.</span>
+    <span class="c1"># Keras models expose .fit() and .predict() and would be mis-wrapped</span>
+    <span class="c1"># as ScikitLearnModelWrapper if the duck-typing branch ran first.</span>
+    <span class="k">if</span> <span class="n">TENSORFLOW_AVAILABLE</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tf</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">KerasModelWrapper</span>
+
+            <span class="k">return</span> <span class="n">KerasModelWrapper</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">PYTORCH_AVAILABLE</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">_torch_nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">PyTorchModelWrapper</span>
+
+        <span class="k">return</span> <span class="n">PyTorchModelWrapper</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">&quot;fit&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">&quot;predict&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">SKLEARN_AVAILABLE</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span>
+                <span class="s2">&quot;scikit-learn is required to auto-wrap models with fit/predict. &quot;</span>
+                <span class="s2">&quot;Install with: pip install scikit-learn&quot;</span>
+            <span class="p">)</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">ScikitLearnModelWrapper</span>
+
+        <span class="k">return</span> <span class="n">ScikitLearnModelWrapper</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+
+    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot wrap model of type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_model_name</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract a human-readable name from a model for logging and display.</span>
+
+<span class="sd">    Checks ``__name__`` (functions/classes), then ``__class__.__name__``</span>
+<span class="sd">    (instances), falling back to ``str(obj)``.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        obj: A model class, function, or instance.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        A string suitable for use in log messages and result keys.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">&quot;__name__&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="vm">__name__</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">&quot;__class__&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span>
+    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+
+
+<span class="c1"># AFTER (complete replacement)</span>
+<div class="viewcode-block" id="compare_results">
+<a class="viewcode-back" href="../../api/api.html#ictonyx.api.compare_results">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">compare_results</span><span class="p">(</span>
+    <span class="n">results_a</span><span class="p">:</span> <span class="s2">&quot;VariabilityStudyResults&quot;</span><span class="p">,</span>
+    <span class="n">results_b</span><span class="p">:</span> <span class="s2">&quot;VariabilityStudyResults&quot;</span><span class="p">,</span>
+    <span class="n">metric</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">paired</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ModelComparisonResults&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compare two pre-computed VariabilityStudyResults without re-running training.</span>
+
+<span class="sd">    Extracts metric values from each results object and compares them</span>
+<span class="sd">    statistically. Use this when you already have results from</span>
+<span class="sd">    :func:`variability_study` and want to compare them without retraining.</span>
+
+<span class="sd">    **Pairing:** If both results were produced with the same ``seed``, the runs</span>
+<span class="sd">    are paired by construction. Pass ``paired=True`` (default) to exploit this</span>
+<span class="sd">    with the more powerful paired Wilcoxon signed-rank test. Pass ``paired=False``</span>
+<span class="sd">    to use the independent-samples Mann-Whitney U test instead.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        results_a: First model&#39;s results.</span>
+<span class="sd">        results_b: Second model&#39;s results.</span>
+<span class="sd">        metric: Metric to compare. If ``None``, resolves via</span>
+<span class="sd">            ``results_a.preferred_metric()``.</span>
+<span class="sd">        paired: If ``True`` (default) and run counts are equal, use the</span>
+<span class="sd">            paired Wilcoxon signed-rank test. Falls back to Mann-Whitney U</span>
+<span class="sd">            with a ``UserWarning`` when run counts differ.</span>
+<span class="sd">        seed: Random state for bootstrap CI computation. Defaults to ``None``</span>
+<span class="sd">            (non-deterministic CIs).</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`~ictonyx.analysis.ModelComparisonResults`.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        KeyError: If the resolved metric is not present in both results.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">mann_whitney_test</span><span class="p">,</span> <span class="n">paired_wilcoxon_test</span>
+
+    <span class="n">resolved</span> <span class="o">=</span> <span class="n">metric</span> <span class="k">if</span> <span class="n">metric</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">results_a</span><span class="o">.</span><span class="n">preferred_metric</span><span class="p">(</span><span class="s2">&quot;accuracy&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">resolved</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;test_&quot;</span><span class="p">):</span>
+        <span class="n">values_a</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">results_a</span><span class="o">.</span><span class="n">get_test_metric_values</span><span class="p">(</span><span class="n">resolved</span><span class="p">))</span>
+        <span class="n">values_b</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">results_b</span><span class="o">.</span><span class="n">get_test_metric_values</span><span class="p">(</span><span class="n">resolved</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">values_a</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">results_a</span><span class="o">.</span><span class="n">get_metric_values</span><span class="p">(</span><span class="n">resolved</span><span class="p">))</span>
+        <span class="n">values_b</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">results_b</span><span class="o">.</span><span class="n">get_metric_values</span><span class="p">(</span><span class="n">resolved</span><span class="p">))</span>
+
+    <span class="n">pair_key</span> <span class="o">=</span> <span class="s2">&quot;results_a_vs_results_b&quot;</span>
+
+    <span class="k">if</span> <span class="n">paired</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values_a</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">values_b</span><span class="p">):</span>
+            <span class="n">test_result</span> <span class="o">=</span> <span class="n">paired_wilcoxon_test</span><span class="p">(</span><span class="n">values_a</span><span class="p">,</span> <span class="n">values_b</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">seed</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;compare_results(paired=True) requires equal run counts. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;results_a has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values_a</span><span class="p">)</span><span class="si">}</span><span class="s2"> runs, results_b has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values_b</span><span class="p">)</span><span class="si">}</span><span class="s2">. &quot;</span>
+                <span class="s2">&quot;Falling back to unpaired Mann-Whitney U test. &quot;</span>
+                <span class="s2">&quot;Pass paired=False to suppress this warning.&quot;</span><span class="p">,</span>
+                <span class="ne">UserWarning</span><span class="p">,</span>
+                <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">test_result</span> <span class="o">=</span> <span class="n">mann_whitney_test</span><span class="p">(</span><span class="n">values_a</span><span class="p">,</span> <span class="n">values_b</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">seed</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">test_result</span> <span class="o">=</span> <span class="n">mann_whitney_test</span><span class="p">(</span><span class="n">values_a</span><span class="p">,</span> <span class="n">values_b</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">seed</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">ModelComparisonResults</span><span class="p">(</span>
+        <span class="n">overall_test</span><span class="o">=</span><span class="n">test_result</span><span class="p">,</span>
+        <span class="n">raw_data</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;results_a&quot;</span><span class="p">:</span> <span class="n">values_a</span><span class="p">,</span> <span class="s2">&quot;results_b&quot;</span><span class="p">:</span> <span class="n">values_b</span><span class="p">},</span>
+        <span class="n">pairwise_comparisons</span><span class="o">=</span><span class="p">{</span><span class="n">pair_key</span><span class="p">:</span> <span class="n">test_result</span><span class="p">},</span>
+        <span class="n">significant_comparisons</span><span class="o">=</span><span class="p">([</span><span class="n">pair_key</span><span class="p">]</span> <span class="k">if</span> <span class="n">test_result</span><span class="o">.</span><span class="n">is_significant</span><span class="p">()</span> <span class="k">else</span> <span class="p">[]),</span>
+        <span class="n">correction_method</span><span class="o">=</span><span class="s2">&quot;none&quot;</span><span class="p">,</span>
+        <span class="n">n_models</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="n">metric</span><span class="o">=</span><span class="n">resolved</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

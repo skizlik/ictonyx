@@ -1,0 +1,834 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.bootstrap &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ictonyx.bootstrap</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ictonyx.bootstrap</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Bootstrap confidence interval estimation for Ictonyx.</span>
+
+<span class="sd">Provides non-parametric confidence intervals for effect sizes, mean</span>
+<span class="sd">differences, and arbitrary statistics. Designed for the small-sample</span>
+<span class="sd">regime (5-30 runs) typical of ML model comparison experiments.</span>
+
+<span class="sd">Methods implemented:</span>
+<span class="sd">    - Percentile: Simple quantile-based CI. Adequate for symmetric distributions.</span>
+<span class="sd">    - BCa (Bias-Corrected and Accelerated): Gold-standard bootstrap CI.</span>
+<span class="sd">      Corrects for both median bias and skewness in the bootstrap distribution.</span>
+<span class="sd">      Recommended default for most use cases.</span>
+
+<span class="sd">References:</span>
+<span class="sd">    - Efron, B. (1987). &quot;Better Bootstrap Confidence Intervals.&quot;</span>
+<span class="sd">      Journal of the American Statistical Association, 82(397), 171-185.</span>
+<span class="sd">    - Efron, B. &amp; Tibshirani, R. (1993). &quot;An Introduction to the Bootstrap.&quot;</span>
+<span class="sd">      Chapman &amp; Hall.</span>
+<span class="sd">    - DiCiccio, T.J. &amp; Efron, B. (1996). &quot;Bootstrap Confidence Intervals.&quot;</span>
+<span class="sd">      Statistical Science, 11(3), 189-228.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.special</span><span class="w"> </span><span class="kn">import</span> <span class="n">ndtri</span> <span class="k">as</span> <span class="n">_ndtri</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.stats</span><span class="w"> </span><span class="kn">import</span> <span class="n">norm</span> <span class="k">as</span> <span class="n">_norm</span>
+
+
+<div class="viewcode-block" id="BootstrapCIResult">
+<a class="viewcode-back" href="../../api/bootstrap.html#ictonyx.bootstrap.BootstrapCIResult">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">BootstrapCIResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Result of a bootstrap confidence interval estimation.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        ci_lower: Lower bound of the confidence interval.</span>
+<span class="sd">        ci_upper: Upper bound of the confidence interval.</span>
+<span class="sd">        point_estimate: The statistic computed on the original (non-resampled) data.</span>
+<span class="sd">        confidence_level: The confidence level (e.g. 0.95 for a 95% CI).</span>
+<span class="sd">        method: The CI construction method (&#39;percentile&#39; or &#39;bca&#39;).</span>
+<span class="sd">        n_bootstrap: Number of bootstrap resamples used.</span>
+<span class="sd">        se_bootstrap: Standard error of the bootstrap distribution.</span>
+<span class="sd">        bootstrap_distribution: The full array of bootstrap replications</span>
+<span class="sd">            (available for plotting or diagnostics).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">ci_lower</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">ci_upper</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">point_estimate</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">confidence_level</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">n_bootstrap</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">se_bootstrap</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">bootstrap_distribution</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">pct</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">confidence_level</span> <span class="o">*</span> <span class="mi">100</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">pct</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">% CI (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">method</span><span class="si">}</span><span class="s2">): &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ci_lower</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ci_upper</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">] &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;(point estimate: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">point_estimate</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1">#  Core bootstrap engine</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="bootstrap_ci">
+<a class="viewcode-back" href="../../api/bootstrap.html#ictonyx.bootstrap.bootstrap_ci">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">bootstrap_ci</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
+    <span class="n">statistic_fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="nb">float</span><span class="p">],</span>
+    <span class="n">n_bootstrap</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10000</span><span class="p">,</span>
+    <span class="n">confidence</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.95</span><span class="p">,</span>
+    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;bca&quot;</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">Generator</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">return_distribution</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BootstrapCIResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute a bootstrap confidence interval for an arbitrary statistic.</span>
+
+<span class="sd">    This is the general-purpose engine. For common use cases, prefer the</span>
+<span class="sd">    convenience functions ``bootstrap_mean_difference_ci`` and</span>
+<span class="sd">    ``bootstrap_effect_size_ci``, which handle two-sample data and call</span>
+<span class="sd">    this function internally.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        data: 1-D array-like of observations.</span>
+<span class="sd">        statistic_fn: A callable that takes a 1-D numpy array and returns</span>
+<span class="sd">            a scalar float. This function is applied to each bootstrap</span>
+<span class="sd">            resample.</span>
+<span class="sd">        n_bootstrap: Number of bootstrap resamples (default 10 000).</span>
+<span class="sd">            Higher values give more precise CIs at the cost of compute time.</span>
+<span class="sd">        confidence: Confidence level in (0, 1). Default 0.95.</span>
+<span class="sd">        method: CI construction method.</span>
+<span class="sd">            ``&#39;percentile&#39;`` — simple quantile method.</span>
+<span class="sd">            ``&#39;bca&#39;`` — bias-corrected and accelerated (recommended).</span>
+<span class="sd">        random_state: Seed for reproducibility. Pass an integer for</span>
+<span class="sd">            deterministic results.</span>
+<span class="sd">        return_distribution: If True, the full bootstrap distribution is</span>
+<span class="sd">            stored in the result (useful for plotting). Default False.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        BootstrapCIResult with CI bounds, point estimate, and diagnostics.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If data has fewer than 2 observations, confidence is</span>
+<span class="sd">            outside (0, 1), n_bootstrap &lt; 100, or method is unrecognised.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># --- Input validation ---</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">_to_clean_array</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Bootstrap requires at least 2 observations, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">confidence</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;confidence must be between 0 and 1 exclusive, got </span><span class="si">{</span><span class="n">confidence</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">n_bootstrap</span> <span class="o">&lt;</span> <span class="mi">100</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;n_bootstrap must be &gt;= 100 for meaningful CIs, got </span><span class="si">{</span><span class="n">n_bootstrap</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+    <span class="n">method</span> <span class="o">=</span> <span class="n">method</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">method</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;percentile&quot;</span><span class="p">,</span> <span class="s2">&quot;bca&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown method &#39;</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">&#39;. Use &#39;percentile&#39; or &#39;bca&#39;.&quot;</span><span class="p">)</span>
+
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">random_state</span><span class="p">)</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;bca&quot;</span> <span class="ow">and</span> <span class="n">n</span> <span class="o">&lt;</span> <span class="mi">15</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;BCa bootstrap CI with n=</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2"> &lt; 15: the jackknife acceleration &quot;</span>
+            <span class="s2">&quot;estimate is highly unstable at small sample sizes and may produce &quot;</span>
+            <span class="s2">&quot;poor CI coverage. Consider method=&#39;percentile&#39; or collecting &quot;</span>
+            <span class="s2">&quot;more runs (n &gt;= 15 recommended for BCa).&quot;</span><span class="p">,</span>
+            <span class="ne">UserWarning</span><span class="p">,</span>
+            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># --- Point estimate on original data ---</span>
+    <span class="n">point_estimate</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">statistic_fn</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+
+    <span class="c1"># --- Generate bootstrap distribution ---</span>
+    <span class="n">boot_indices</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">n_bootstrap</span><span class="p">,</span> <span class="n">n</span><span class="p">))</span>
+
+    <span class="c1"># Vectorised fast path for the mean — 10-100x faster than the loop</span>
+    <span class="n">_fn_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">statistic_fn</span><span class="p">,</span> <span class="s2">&quot;__name__&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">statistic_fn</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span> <span class="ow">or</span> <span class="n">_fn_name</span> <span class="o">==</span> <span class="s2">&quot;mean&quot;</span><span class="p">:</span>
+        <span class="n">boot_stats</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">boot_indices</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">boot_stats</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">n_bootstrap</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_bootstrap</span><span class="p">):</span>
+            <span class="n">boot_sample</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">boot_indices</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">boot_stats</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">statistic_fn</span><span class="p">(</span><span class="n">boot_sample</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">boot_stats</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+
+    <span class="c1"># Remove any failed bootstrap replicates</span>
+    <span class="n">valid_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">)</span>
+    <span class="n">n_valid</span> <span class="o">=</span> <span class="n">valid_mask</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">n_valid</span> <span class="o">&lt;</span> <span class="mi">100</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Only </span><span class="si">{</span><span class="n">n_valid</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="n">n_bootstrap</span><span class="si">}</span><span class="s2"> bootstrap replicates produced &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;finite values. The statistic function may be unstable for this data.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="n">boot_stats_clean</span> <span class="o">=</span> <span class="n">boot_stats</span><span class="p">[</span><span class="n">valid_mask</span><span class="p">]</span>
+
+    <span class="c1"># --- Compute CI ---</span>
+    <span class="n">alpha</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">confidence</span>
+
+    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;percentile&quot;</span><span class="p">:</span>
+        <span class="n">ci_lower</span><span class="p">,</span> <span class="n">ci_upper</span> <span class="o">=</span> <span class="n">_percentile_ci</span><span class="p">(</span><span class="n">boot_stats_clean</span><span class="p">,</span> <span class="n">alpha</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;bca&quot;</span><span class="p">:</span>
+        <span class="n">ci_lower</span><span class="p">,</span> <span class="n">ci_upper</span> <span class="o">=</span> <span class="n">_bca_ci</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">statistic_fn</span><span class="p">,</span> <span class="n">boot_stats_clean</span><span class="p">,</span> <span class="n">point_estimate</span><span class="p">,</span> <span class="n">alpha</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">BootstrapCIResult</span><span class="p">(</span>
+        <span class="n">ci_lower</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">ci_lower</span><span class="p">),</span>
+        <span class="n">ci_upper</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">ci_upper</span><span class="p">),</span>
+        <span class="n">point_estimate</span><span class="o">=</span><span class="n">point_estimate</span><span class="p">,</span>
+        <span class="n">confidence_level</span><span class="o">=</span><span class="n">confidence</span><span class="p">,</span>
+        <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span>
+        <span class="n">n_bootstrap</span><span class="o">=</span><span class="n">n_valid</span><span class="p">,</span>
+        <span class="n">se_bootstrap</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">boot_stats_clean</span><span class="p">,</span> <span class="n">ddof</span><span class="o">=</span><span class="mi">1</span><span class="p">)),</span>
+        <span class="n">bootstrap_distribution</span><span class="o">=</span><span class="n">boot_stats_clean</span> <span class="k">if</span> <span class="n">return_distribution</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1">#  CI construction methods</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_percentile_ci</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Simple percentile confidence interval.&quot;&quot;&quot;</span>
+    <span class="n">lower</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">,</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">alpha</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">upper</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">,</span> <span class="mi">100</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">alpha</span> <span class="o">/</span> <span class="mi">2</span><span class="p">))</span>
+    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">lower</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">upper</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_bca_ci</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">statistic_fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="nb">float</span><span class="p">],</span>
+    <span class="n">boot_stats</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">point_estimate</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bias-corrected and accelerated (BCa) confidence interval.</span>
+
+<span class="sd">    The BCa method adjusts the percentile interval for:</span>
+<span class="sd">    1. Bias: the proportion of bootstrap values below the point estimate</span>
+<span class="sd">       (z0 correction). If the bootstrap distribution is centered on the</span>
+<span class="sd">       point estimate, z0 ≈ 0 and the correction vanishes.</span>
+<span class="sd">    2. Acceleration: the skewness of the jackknife distribution (a</span>
+<span class="sd">       correction). If the statistic is perfectly symmetric under</span>
+<span class="sd">       resampling, a ≈ 0 and the method reduces to bias-corrected only.</span>
+
+<span class="sd">    Falls back to percentile method if numerical issues arise (e.g.</span>
+<span class="sd">    all bootstrap values are identical).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">n_boot</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">)</span>
+
+    <span class="c1"># --- Bias correction factor (z0) ---</span>
+    <span class="c1"># Proportion of bootstrap estimates below the point estimate</span>
+    <span class="n">prop_below</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">boot_stats</span> <span class="o">&lt;</span> <span class="n">point_estimate</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_boot</span>
+    <span class="c1"># Clamp to avoid infinite z-scores at 0 or 1</span>
+    <span class="n">prop_below</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">prop_below</span><span class="p">,</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_boot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">n_boot</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_boot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">z0</span> <span class="o">=</span> <span class="n">_ndtri</span><span class="p">(</span><span class="n">prop_below</span><span class="p">)</span>
+
+    <span class="c1"># --- Acceleration factor (a) via jackknife ---</span>
+    <span class="n">jackknife_stats</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+        <span class="n">jack_sample</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">jackknife_stats</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">statistic_fn</span><span class="p">(</span><span class="n">jack_sample</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="n">jackknife_stats</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+
+    <span class="n">valid_jack</span> <span class="o">=</span> <span class="n">jackknife_stats</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">jackknife_stats</span><span class="p">)]</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">valid_jack</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="c1"># Can&#39;t compute acceleration — fall back to percentile</span>
+        <span class="k">return</span> <span class="n">_percentile_ci</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">,</span> <span class="n">alpha</span><span class="p">)</span>
+
+    <span class="n">jack_mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">valid_jack</span><span class="p">)</span>
+    <span class="n">jack_diff</span> <span class="o">=</span> <span class="n">jack_mean</span> <span class="o">-</span> <span class="n">valid_jack</span>
+
+    <span class="n">denom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">jack_diff</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">denom</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="c1"># All jackknife estimates identical — no acceleration needed</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">jack_diff</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">6</span> <span class="o">*</span> <span class="n">denom</span><span class="o">**</span><span class="mf">1.5</span><span class="p">)</span>
+
+    <span class="c1"># --- Adjusted percentiles ---</span>
+    <span class="n">z_alpha_lower</span> <span class="o">=</span> <span class="n">_ndtri</span><span class="p">(</span><span class="n">alpha</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">z_alpha_upper</span> <span class="o">=</span> <span class="n">_ndtri</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">alpha</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="c1"># BCa formula for adjusted quantile positions</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_bca_quantile</span><span class="p">(</span><span class="n">z_alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="n">numerator</span> <span class="o">=</span> <span class="n">z0</span> <span class="o">+</span> <span class="n">z_alpha</span>
+        <span class="n">denominator</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">a</span> <span class="o">*</span> <span class="n">numerator</span>
+        <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">denominator</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-10</span><span class="p">:</span>
+            <span class="c1"># Degenerate case — fall back to unadjusted</span>
+            <span class="k">return</span> <span class="n">_norm</span><span class="o">.</span><span class="n">cdf</span><span class="p">(</span><span class="n">z_alpha</span><span class="p">)</span>
+        <span class="n">adjusted_z</span> <span class="o">=</span> <span class="n">z0</span> <span class="o">+</span> <span class="n">numerator</span> <span class="o">/</span> <span class="n">denominator</span>
+        <span class="k">return</span> <span class="n">_norm</span><span class="o">.</span><span class="n">cdf</span><span class="p">(</span><span class="n">adjusted_z</span><span class="p">)</span>
+
+    <span class="n">q_lower</span> <span class="o">=</span> <span class="n">_bca_quantile</span><span class="p">(</span><span class="n">z_alpha_lower</span><span class="p">)</span>
+    <span class="n">q_upper</span> <span class="o">=</span> <span class="n">_bca_quantile</span><span class="p">(</span><span class="n">z_alpha_upper</span><span class="p">)</span>
+
+    <span class="c1"># Clamp to valid percentile range</span>
+    <span class="n">q_lower</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">q_lower</span><span class="p">,</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">n_boot</span><span class="p">,</span> <span class="mi">1</span> <span class="o">-</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">n_boot</span><span class="p">)</span>
+    <span class="n">q_upper</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">q_upper</span><span class="p">,</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">n_boot</span><span class="p">,</span> <span class="mi">1</span> <span class="o">-</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">n_boot</span><span class="p">)</span>
+
+    <span class="n">ci_lower</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">,</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">q_lower</span><span class="p">))</span>
+    <span class="n">ci_upper</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">,</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">q_upper</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">ci_lower</span><span class="p">,</span> <span class="n">ci_upper</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1">#  Two-sample convenience functions</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="bootstrap_mean_difference_ci">
+<a class="viewcode-back" href="../../api/bootstrap.html#ictonyx.bootstrap.bootstrap_mean_difference_ci">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">bootstrap_mean_difference_ci</span><span class="p">(</span>
+    <span class="n">group1</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
+    <span class="n">group2</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
+    <span class="n">n_bootstrap</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10000</span><span class="p">,</span>
+    <span class="n">confidence</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.95</span><span class="p">,</span>
+    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;bca&quot;</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">return_distribution</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BootstrapCIResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bootstrap CI for the difference in means (group1 - group2).</span>
+
+<span class="sd">    Resamples each group independently, computes the difference in means</span>
+<span class="sd">    for each bootstrap replicate, and constructs a CI on that distribution.</span>
+
+<span class="sd">    This is the most directly actionable CI for model comparison: it tells</span>
+<span class="sd">    you the plausible range of the true performance gap.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        group1: Metric values for model 1 (e.g. accuracies from 10 runs).</span>
+<span class="sd">        group2: Metric values for model 2.</span>
+<span class="sd">        n_bootstrap: Number of bootstrap resamples (default 10 000).</span>
+<span class="sd">        confidence: Confidence level (default 0.95).</span>
+<span class="sd">        method: &#39;percentile&#39; or &#39;bca&#39; (default &#39;bca&#39;).</span>
+<span class="sd">        random_state: Seed for reproducibility.</span>
+<span class="sd">        return_distribution: If True, store the full bootstrap distribution.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        BootstrapCIResult. The point_estimate is mean(group1) - mean(group2).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">g1</span> <span class="o">=</span> <span class="n">_to_clean_array</span><span class="p">(</span><span class="n">group1</span><span class="p">)</span>
+    <span class="n">g2</span> <span class="o">=</span> <span class="n">_to_clean_array</span><span class="p">(</span><span class="n">group2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">g1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">g2</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Both groups need at least 2 observations. &quot;</span> <span class="sa">f</span><span class="s2">&quot;Got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">g1</span><span class="p">)</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">g2</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Resample each group independently to preserve group structure.</span>
+    <span class="c1"># Resampling the combined array would lose the group boundary.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_mean_difference</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">b</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">_two_sample_bootstrap</span><span class="p">(</span>
+        <span class="n">g1</span><span class="p">,</span>
+        <span class="n">g2</span><span class="p">,</span>
+        <span class="n">statistic_fn</span><span class="o">=</span><span class="n">_mean_difference</span><span class="p">,</span>
+        <span class="n">n_bootstrap</span><span class="o">=</span><span class="n">n_bootstrap</span><span class="p">,</span>
+        <span class="n">confidence</span><span class="o">=</span><span class="n">confidence</span><span class="p">,</span>
+        <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span>
+        <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">,</span>
+        <span class="n">return_distribution</span><span class="o">=</span><span class="n">return_distribution</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="bootstrap_effect_size_ci">
+<a class="viewcode-back" href="../../api/bootstrap.html#ictonyx.bootstrap.bootstrap_effect_size_ci">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">bootstrap_effect_size_ci</span><span class="p">(</span>
+    <span class="n">group1</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
+    <span class="n">group2</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
+    <span class="n">n_bootstrap</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10000</span><span class="p">,</span>
+    <span class="n">confidence</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.95</span><span class="p">,</span>
+    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;bca&quot;</span><span class="p">,</span>
+    <span class="n">pooled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">return_distribution</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BootstrapCIResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bootstrap CI for Cohen&#39;s d effect size.</span>
+
+<span class="sd">    Computes Cohen&#39;s d on each bootstrap resample and constructs a CI.</span>
+<span class="sd">    This pairs naturally with the effect sizes already reported by</span>
+<span class="sd">    ``compare_two_models`` — it adds the uncertainty range around that</span>
+<span class="sd">    point estimate.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        group1: Metric values for model 1.</span>
+<span class="sd">        group2: Metric values for model 2.</span>
+<span class="sd">        n_bootstrap: Number of bootstrap resamples (default 10 000).</span>
+<span class="sd">        confidence: Confidence level (default 0.95).</span>
+<span class="sd">        method: &#39;percentile&#39; or &#39;bca&#39; (default &#39;bca&#39;).</span>
+<span class="sd">        pooled: If True (default), use pooled standard deviation. If False,</span>
+<span class="sd">            use group2&#39;s std (Glass&#39;s delta variant).</span>
+<span class="sd">        random_state: Seed for reproducibility.</span>
+<span class="sd">        return_distribution: If True, store the full bootstrap distribution.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        BootstrapCIResult. The point_estimate is Cohen&#39;s d on the original data.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">g1</span> <span class="o">=</span> <span class="n">_to_clean_array</span><span class="p">(</span><span class="n">group1</span><span class="p">)</span>
+    <span class="n">g2</span> <span class="o">=</span> <span class="n">_to_clean_array</span><span class="p">(</span><span class="n">group2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">g1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">g2</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Both groups need at least 2 observations. &quot;</span> <span class="sa">f</span><span class="s2">&quot;Got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">g1</span><span class="p">)</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">g2</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_cohens_d</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="n">mean_diff</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">pooled</span><span class="p">:</span>
+            <span class="n">n1</span><span class="p">,</span> <span class="n">n2</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+            <span class="n">var1</span><span class="p">,</span> <span class="n">var2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">ddof</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">ddof</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">pooled_var</span> <span class="o">=</span> <span class="p">((</span><span class="n">n1</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">var1</span> <span class="o">+</span> <span class="p">(</span><span class="n">n2</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">var2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">n1</span> <span class="o">+</span> <span class="n">n2</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
+            <span class="n">denom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">pooled_var</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">denom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">ddof</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">mean_diff</span> <span class="o">/</span> <span class="n">denom</span><span class="p">)</span> <span class="k">if</span> <span class="n">denom</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mf">0.0</span>
+
+    <span class="k">return</span> <span class="n">_two_sample_bootstrap</span><span class="p">(</span>
+        <span class="n">g1</span><span class="p">,</span>
+        <span class="n">g2</span><span class="p">,</span>
+        <span class="n">statistic_fn</span><span class="o">=</span><span class="n">_cohens_d</span><span class="p">,</span>
+        <span class="n">n_bootstrap</span><span class="o">=</span><span class="n">n_bootstrap</span><span class="p">,</span>
+        <span class="n">confidence</span><span class="o">=</span><span class="n">confidence</span><span class="p">,</span>
+        <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span>
+        <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">,</span>
+        <span class="n">return_distribution</span><span class="o">=</span><span class="n">return_distribution</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="bootstrap_hedges_g_ci">
+<a class="viewcode-back" href="../../api/bootstrap.html#ictonyx.bootstrap.bootstrap_hedges_g_ci">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">bootstrap_hedges_g_ci</span><span class="p">(</span>
+    <span class="n">group1</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
+    <span class="n">group2</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
+    <span class="n">n_bootstrap</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10000</span><span class="p">,</span>
+    <span class="n">confidence</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.95</span><span class="p">,</span>
+    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;bca&quot;</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">return_distribution</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BootstrapCIResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bootstrap CI for Hedges&#39; g effect size.</span>
+
+<span class="sd">    Applies the Hedges&#39; J correction on every bootstrap resample so that</span>
+<span class="sd">    the CI and point estimate are for the same estimator. Use this instead</span>
+<span class="sd">    of :func:`bootstrap_effect_size_ci` when the point estimate is Hedges&#39; g</span>
+<span class="sd">    (i.e., the Welch&#39;s t-test path in :func:`~ictonyx.analysis.compare_two_models`).</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        group1: Metric values for model 1.</span>
+<span class="sd">        group2: Metric values for model 2.</span>
+<span class="sd">        n_bootstrap: Number of bootstrap resamples. Default 10 000.</span>
+<span class="sd">        confidence: Confidence level. Default 0.95.</span>
+<span class="sd">        method: ``&#39;percentile&#39;`` or ``&#39;bca&#39;``. Default ``&#39;bca&#39;``.</span>
+<span class="sd">        random_state: Seed for reproducibility.</span>
+<span class="sd">        return_distribution: If True, store the full bootstrap distribution.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`BootstrapCIResult`. ``point_estimate`` is Hedges&#39; g computed</span>
+<span class="sd">        on the original (non-resampled) data.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">g1</span> <span class="o">=</span> <span class="n">_to_clean_array</span><span class="p">(</span><span class="n">group1</span><span class="p">)</span>
+    <span class="n">g2</span> <span class="o">=</span> <span class="n">_to_clean_array</span><span class="p">(</span><span class="n">group2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">g1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">g2</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Both groups need at least 2 observations. Got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">g1</span><span class="p">)</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">g2</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_hedges_g_fn</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="n">n1</span><span class="p">,</span> <span class="n">n2</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">n1</span> <span class="o">+</span> <span class="n">n2</span> <span class="o">-</span> <span class="mi">2</span>
+        <span class="k">if</span> <span class="n">df</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mf">0.0</span>
+        <span class="n">pooled_var</span> <span class="o">=</span> <span class="p">((</span><span class="n">n1</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">ddof</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">n2</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">ddof</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span> <span class="o">/</span> <span class="n">df</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">pooled_var</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mf">0.0</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">b</span><span class="p">))</span> <span class="o">/</span> <span class="n">s</span>
+        <span class="n">j</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="p">(</span><span class="mf">3.0</span> <span class="o">/</span> <span class="p">(</span><span class="mf">4.0</span> <span class="o">*</span> <span class="n">df</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">))</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">d</span> <span class="o">*</span> <span class="n">j</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_two_sample_bootstrap</span><span class="p">(</span>
+        <span class="n">g1</span><span class="p">,</span>
+        <span class="n">g2</span><span class="p">,</span>
+        <span class="n">statistic_fn</span><span class="o">=</span><span class="n">_hedges_g_fn</span><span class="p">,</span>
+        <span class="n">n_bootstrap</span><span class="o">=</span><span class="n">n_bootstrap</span><span class="p">,</span>
+        <span class="n">confidence</span><span class="o">=</span><span class="n">confidence</span><span class="p">,</span>
+        <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span>
+        <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">,</span>
+        <span class="n">return_distribution</span><span class="o">=</span><span class="n">return_distribution</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="bootstrap_paired_difference_ci">
+<a class="viewcode-back" href="../../api/bootstrap.html#ictonyx.bootstrap.bootstrap_paired_difference_ci">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">bootstrap_paired_difference_ci</span><span class="p">(</span>
+    <span class="n">group1</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
+    <span class="n">group2</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
+    <span class="n">n_bootstrap</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10000</span><span class="p">,</span>
+    <span class="n">confidence</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.95</span><span class="p">,</span>
+    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;bca&quot;</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">return_distribution</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BootstrapCIResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bootstrap CI for paired mean differences.</span>
+
+<span class="sd">    For paired data (e.g. two models evaluated on the same folds), this</span>
+<span class="sd">    computes the CI on the mean of the pairwise differences. This is more</span>
+<span class="sd">    powerful than the independent two-sample version because it removes</span>
+<span class="sd">    between-fold variance.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        group1: Metric values for model 1.</span>
+<span class="sd">        group2: Metric values for model 2 (same length, paired with group1).</span>
+<span class="sd">        n_bootstrap: Number of bootstrap resamples (default 10 000).</span>
+<span class="sd">        confidence: Confidence level (default 0.95).</span>
+<span class="sd">        method: &#39;percentile&#39; or &#39;bca&#39; (default &#39;bca&#39;).</span>
+<span class="sd">        random_state: Seed for reproducibility.</span>
+<span class="sd">        return_distribution: If True, store the full bootstrap distribution.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        BootstrapCIResult. The point_estimate is mean(group1 - group2).</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If groups differ in length (pairing is impossible).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">g1</span> <span class="o">=</span> <span class="n">_to_clean_array</span><span class="p">(</span><span class="n">group1</span><span class="p">)</span>
+    <span class="n">g2</span> <span class="o">=</span> <span class="n">_to_clean_array</span><span class="p">(</span><span class="n">group2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">g1</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">g2</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Paired bootstrap requires equal-length groups. &quot;</span> <span class="sa">f</span><span class="s2">&quot;Got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">g1</span><span class="p">)</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">g2</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">g1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Need at least 2 paired observations, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">g1</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+
+    <span class="n">differences</span> <span class="o">=</span> <span class="n">g1</span> <span class="o">-</span> <span class="n">g2</span>
+
+    <span class="k">return</span> <span class="n">bootstrap_ci</span><span class="p">(</span>
+        <span class="n">data</span><span class="o">=</span><span class="n">differences</span><span class="p">,</span>
+        <span class="n">statistic_fn</span><span class="o">=</span><span class="k">lambda</span> <span class="n">d</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">d</span><span class="p">)),</span>
+        <span class="n">n_bootstrap</span><span class="o">=</span><span class="n">n_bootstrap</span><span class="p">,</span>
+        <span class="n">confidence</span><span class="o">=</span><span class="n">confidence</span><span class="p">,</span>
+        <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span>
+        <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">,</span>
+        <span class="n">return_distribution</span><span class="o">=</span><span class="n">return_distribution</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1">#  Two-sample bootstrap engine (independent resampling)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_two_sample_bootstrap</span><span class="p">(</span>
+    <span class="n">group1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">group2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">statistic_fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="nb">float</span><span class="p">],</span>
+    <span class="n">n_bootstrap</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10000</span><span class="p">,</span>
+    <span class="n">confidence</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.95</span><span class="p">,</span>
+    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;bca&quot;</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">Generator</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">return_distribution</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BootstrapCIResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Internal engine for two-sample independent bootstrap.</span>
+
+<span class="sd">    Resamples each group independently, which preserves the group structure</span>
+<span class="sd">    and is correct for independent (unpaired) comparisons.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">confidence</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;confidence must be between 0 and 1 exclusive, got </span><span class="si">{</span><span class="n">confidence</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">n_bootstrap</span> <span class="o">&lt;</span> <span class="mi">100</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;n_bootstrap must be &gt;= 100, got </span><span class="si">{</span><span class="n">n_bootstrap</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+    <span class="n">method</span> <span class="o">=</span> <span class="n">method</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">method</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;percentile&quot;</span><span class="p">,</span> <span class="s2">&quot;bca&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown method &#39;</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">&#39;. Use &#39;percentile&#39; or &#39;bca&#39;.&quot;</span><span class="p">)</span>
+
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">random_state</span><span class="p">)</span>
+    <span class="n">n1</span><span class="p">,</span> <span class="n">n2</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">group1</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">group2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;bca&quot;</span> <span class="ow">and</span> <span class="nb">min</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span> <span class="n">n2</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">15</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;BCa bootstrap CI with min(n1, n2)=</span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">)</span><span class="si">}</span><span class="s2"> &lt; 15: the jackknife &quot;</span>
+            <span class="s2">&quot;acceleration estimate is highly unstable at small sample sizes. &quot;</span>
+            <span class="s2">&quot;Consider method=&#39;percentile&#39; or collecting more runs.&quot;</span><span class="p">,</span>
+            <span class="ne">UserWarning</span><span class="p">,</span>
+            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;bca&quot;</span> <span class="ow">and</span> <span class="n">n1</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">n2</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">_ratio</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span> <span class="n">n2</span><span class="p">)</span> <span class="o">/</span> <span class="nb">min</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span> <span class="n">n2</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">_ratio</span> <span class="o">&gt;</span> <span class="mf">3.0</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;BCa bootstrap CI with group size ratio </span><span class="si">{</span><span class="n">_ratio</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">:1 &gt; 3:1: &quot;</span>
+                <span class="s2">&quot;unequal group sizes inflate the jackknife leverage estimate for &quot;</span>
+                <span class="s2">&quot;the smaller group, potentially producing unstable acceleration. &quot;</span>
+                <span class="s2">&quot;Consider method=&#39;percentile&#39; for highly unequal group sizes.&quot;</span><span class="p">,</span>
+                <span class="ne">UserWarning</span><span class="p">,</span>
+                <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+
+    <span class="c1"># Point estimate on original data</span>
+    <span class="n">point_estimate</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">statistic_fn</span><span class="p">(</span><span class="n">group1</span><span class="p">,</span> <span class="n">group2</span><span class="p">))</span>
+
+    <span class="c1"># Generate bootstrap distribution</span>
+    <span class="n">_fn_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">statistic_fn</span><span class="p">,</span> <span class="s2">&quot;__name__&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">_fn_name</span> <span class="o">==</span> <span class="s2">&quot;_mean_difference&quot;</span><span class="p">:</span>
+        <span class="n">b1</span> <span class="o">=</span> <span class="n">group1</span><span class="p">[</span><span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n1</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">n_bootstrap</span><span class="p">,</span> <span class="n">n1</span><span class="p">))]</span>
+        <span class="n">b2</span> <span class="o">=</span> <span class="n">group2</span><span class="p">[</span><span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n2</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">n_bootstrap</span><span class="p">,</span> <span class="n">n2</span><span class="p">))]</span>
+        <span class="n">boot_stats</span> <span class="o">=</span> <span class="n">b1</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="n">b2</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">boot_stats</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">n_bootstrap</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_bootstrap</span><span class="p">):</span>
+            <span class="n">boot1</span> <span class="o">=</span> <span class="n">group1</span><span class="p">[</span><span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n1</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">n1</span><span class="p">)]</span>
+            <span class="n">boot2</span> <span class="o">=</span> <span class="n">group2</span><span class="p">[</span><span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n2</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">n2</span><span class="p">)]</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">boot_stats</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">statistic_fn</span><span class="p">(</span><span class="n">boot1</span><span class="p">,</span> <span class="n">boot2</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">boot_stats</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+
+    <span class="n">valid_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">)</span>
+    <span class="n">n_valid</span> <span class="o">=</span> <span class="n">valid_mask</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">n_valid</span> <span class="o">&lt;</span> <span class="mi">100</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Only </span><span class="si">{</span><span class="n">n_valid</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="n">n_bootstrap</span><span class="si">}</span><span class="s2"> bootstrap replicates produced &quot;</span> <span class="sa">f</span><span class="s2">&quot;finite values.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="n">boot_stats_clean</span> <span class="o">=</span> <span class="n">boot_stats</span><span class="p">[</span><span class="n">valid_mask</span><span class="p">]</span>
+    <span class="n">alpha</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">confidence</span>
+
+    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;percentile&quot;</span><span class="p">:</span>
+        <span class="n">ci_lower</span><span class="p">,</span> <span class="n">ci_upper</span> <span class="o">=</span> <span class="n">_percentile_ci</span><span class="p">(</span><span class="n">boot_stats_clean</span><span class="p">,</span> <span class="n">alpha</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;bca&quot;</span><span class="p">:</span>
+        <span class="n">ci_lower</span><span class="p">,</span> <span class="n">ci_upper</span> <span class="o">=</span> <span class="n">_two_sample_bca_ci</span><span class="p">(</span>
+            <span class="n">group1</span><span class="p">,</span> <span class="n">group2</span><span class="p">,</span> <span class="n">statistic_fn</span><span class="p">,</span> <span class="n">boot_stats_clean</span><span class="p">,</span> <span class="n">point_estimate</span><span class="p">,</span> <span class="n">alpha</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">BootstrapCIResult</span><span class="p">(</span>
+        <span class="n">ci_lower</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">ci_lower</span><span class="p">),</span>
+        <span class="n">ci_upper</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">ci_upper</span><span class="p">),</span>
+        <span class="n">point_estimate</span><span class="o">=</span><span class="n">point_estimate</span><span class="p">,</span>
+        <span class="n">confidence_level</span><span class="o">=</span><span class="n">confidence</span><span class="p">,</span>
+        <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span>
+        <span class="n">n_bootstrap</span><span class="o">=</span><span class="n">n_valid</span><span class="p">,</span>
+        <span class="n">se_bootstrap</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">boot_stats_clean</span><span class="p">,</span> <span class="n">ddof</span><span class="o">=</span><span class="mi">1</span><span class="p">)),</span>
+        <span class="n">bootstrap_distribution</span><span class="o">=</span><span class="n">boot_stats_clean</span> <span class="k">if</span> <span class="n">return_distribution</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_two_sample_bca_ci</span><span class="p">(</span>
+    <span class="n">group1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">group2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">statistic_fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="nb">float</span><span class="p">],</span>
+    <span class="n">boot_stats</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">point_estimate</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;BCa CI for two-sample statistics using combined jackknife.&quot;&quot;&quot;</span>
+    <span class="n">n1</span><span class="p">,</span> <span class="n">n2</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">group1</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">group2</span><span class="p">)</span>
+    <span class="n">n_boot</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">)</span>
+
+    <span class="c1"># --- Bias correction (z0) ---</span>
+    <span class="n">prop_below</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">boot_stats</span> <span class="o">&lt;</span> <span class="n">point_estimate</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_boot</span>
+    <span class="n">prop_below</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">prop_below</span><span class="p">,</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_boot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">n_boot</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_boot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">z0</span> <span class="o">=</span> <span class="n">_ndtri</span><span class="p">(</span><span class="n">prop_below</span><span class="p">)</span>
+
+    <span class="c1"># --- Acceleration via combined jackknife ---</span>
+    <span class="c1"># Delete-one from each group in turn</span>
+    <span class="n">n_total</span> <span class="o">=</span> <span class="n">n1</span> <span class="o">+</span> <span class="n">n2</span>
+    <span class="n">jackknife_stats</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">n_total</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n1</span><span class="p">):</span>
+        <span class="n">jack1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">group1</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">jackknife_stats</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">statistic_fn</span><span class="p">(</span><span class="n">jack1</span><span class="p">,</span> <span class="n">group2</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="n">jackknife_stats</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n2</span><span class="p">):</span>
+        <span class="n">jack2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">group2</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">jackknife_stats</span><span class="p">[</span><span class="n">n1</span> <span class="o">+</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">statistic_fn</span><span class="p">(</span><span class="n">group1</span><span class="p">,</span> <span class="n">jack2</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="n">jackknife_stats</span><span class="p">[</span><span class="n">n1</span> <span class="o">+</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+
+    <span class="n">valid_jack</span> <span class="o">=</span> <span class="n">jackknife_stats</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">jackknife_stats</span><span class="p">)]</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">valid_jack</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_percentile_ci</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">,</span> <span class="n">alpha</span><span class="p">)</span>
+
+    <span class="n">jack_mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">valid_jack</span><span class="p">)</span>
+    <span class="n">jack_diff</span> <span class="o">=</span> <span class="n">jack_mean</span> <span class="o">-</span> <span class="n">valid_jack</span>
+    <span class="n">denom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">jack_diff</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">denom</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">jack_diff</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">6</span> <span class="o">*</span> <span class="n">denom</span><span class="o">**</span><span class="mf">1.5</span><span class="p">)</span>
+
+    <span class="c1"># --- Adjusted percentiles ---</span>
+    <span class="n">z_alpha_lower</span> <span class="o">=</span> <span class="n">_ndtri</span><span class="p">(</span><span class="n">alpha</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">z_alpha_upper</span> <span class="o">=</span> <span class="n">_ndtri</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">alpha</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_bca_quantile</span><span class="p">(</span><span class="n">z_alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="n">numerator</span> <span class="o">=</span> <span class="n">z0</span> <span class="o">+</span> <span class="n">z_alpha</span>
+        <span class="n">denominator</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">a</span> <span class="o">*</span> <span class="n">numerator</span>
+        <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">denominator</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-10</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_norm</span><span class="o">.</span><span class="n">cdf</span><span class="p">(</span><span class="n">z_alpha</span><span class="p">)</span>
+        <span class="n">adjusted_z</span> <span class="o">=</span> <span class="n">z0</span> <span class="o">+</span> <span class="n">numerator</span> <span class="o">/</span> <span class="n">denominator</span>
+        <span class="k">return</span> <span class="n">_norm</span><span class="o">.</span><span class="n">cdf</span><span class="p">(</span><span class="n">adjusted_z</span><span class="p">)</span>
+
+    <span class="n">q_lower</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">_bca_quantile</span><span class="p">(</span><span class="n">z_alpha_lower</span><span class="p">),</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">n_boot</span><span class="p">,</span> <span class="mi">1</span> <span class="o">-</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">n_boot</span><span class="p">)</span>
+    <span class="n">q_upper</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">_bca_quantile</span><span class="p">(</span><span class="n">z_alpha_upper</span><span class="p">),</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">n_boot</span><span class="p">,</span> <span class="mi">1</span> <span class="o">-</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="n">n_boot</span><span class="p">)</span>
+
+    <span class="n">ci_lower</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">,</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">q_lower</span><span class="p">))</span>
+    <span class="n">ci_upper</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">boot_stats</span><span class="p">,</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">q_upper</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">ci_lower</span><span class="p">,</span> <span class="n">ci_upper</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1">#  Utilities</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_to_clean_array</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert input to a clean 1-D numpy float array, dropping NaNs.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">):</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">arr</span><span class="p">)]</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">arr</span><span class="p">)]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected array-like, pd.Series, or list. Got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">arr</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

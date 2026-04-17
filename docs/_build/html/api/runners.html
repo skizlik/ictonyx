@@ -1,0 +1,1003 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.runners &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ictonyx.bootstrap" href="bootstrap.html" />
+    <link rel="prev" title="ictonyx.api" href="api.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="analysis.html">ictonyx.analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">ictonyx.api</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ictonyx.runners</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.runners.ExperimentRunner"><code class="docutils literal notranslate"><span class="pre">ExperimentRunner</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.ExperimentRunner.__init__"><code class="docutils literal notranslate"><span class="pre">ExperimentRunner.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.ExperimentRunner.run_study"><code class="docutils literal notranslate"><span class="pre">ExperimentRunner.run_study()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.ExperimentRunner.get_summary_stats"><code class="docutils literal notranslate"><span class="pre">ExperimentRunner.get_summary_stats()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.all_runs_metrics"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.all_runs_metrics</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.final_metrics"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.final_metrics</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.final_test_metrics"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.final_test_metrics</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.seed"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.seed</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.run_seeds"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.run_seeds</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id0"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.all_runs_metrics</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id1"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.final_metrics</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id2"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.final_test_metrics</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id3"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.seed</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id4"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.run_seeds</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.n_runs"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.n_runs</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.has_test_data"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.has_test_data</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.get_metric_values"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.get_metric_values()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.get_final_metrics"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.get_final_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.get_available_metrics"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.get_available_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.to_dataframe"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.to_dataframe()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.preferred_metric"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.preferred_metric()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.summarize"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.summarize()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.get_epoch_statistics"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.get_epoch_statistics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.get_test_metric_values"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.get_test_metric_values()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.test_against_null"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.test_against_null()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.compare_models_statistically"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.compare_models_statistically()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.save"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.save()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.load"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.to_json"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.to_json()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.from_mlflow_experiment"><code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults.from_mlflow_experiment()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.runners.GridStudyResults"><code class="docutils literal notranslate"><span class="pre">GridStudyResults</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.GridStudyResults.results"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.results</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.GridStudyResults.param_grid"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.param_grid</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.GridStudyResults.base_config"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.base_config</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.GridStudyResults.metric"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.metric</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id5"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.results</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id6"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.param_grid</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id7"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.base_config</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id8"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.metric</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.GridStudyResults.n_configurations"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.n_configurations</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.GridStudyResults.n_runs_per_config"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.n_runs_per_config</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.GridStudyResults.get_results_for_config"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.get_results_for_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.GridStudyResults.list_configurations"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.list_configurations()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.GridStudyResults.to_dataframe"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.to_dataframe()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.runners.GridStudyResults.summarize"><code class="docutils literal notranslate"><span class="pre">GridStudyResults.summarize()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.runners.run_variability_study"><code class="docutils literal notranslate"><span class="pre">run_variability_study()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.runners.run_grid_study"><code class="docutils literal notranslate"><span class="pre">run_grid_study()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="bootstrap.html">ictonyx.bootstrap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html">ictonyx.config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core.html">ictonyx.core</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">ictonyx.data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plotting.html">ictonyx.plotting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="explainers.html">ictonyx.explainers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loggers.html">ictonyx.loggers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tuning.html">ictonyx.tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="memory.html">ictonyx.memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="exceptions.html">ictonyx.exceptions</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">ictonyx.runners</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/runners.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ictonyx-runners">
+<h1>ictonyx.runners<a class="headerlink" href="#ictonyx-runners" title="Link to this heading"></a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">ExperimentRunner</span></code>, <code class="docutils literal notranslate"><span class="pre">VariabilityStudyResults</span></code>, <code class="docutils literal notranslate"><span class="pre">GridStudyResults</span></code>.</p>
+<p id="module-ictonyx.runners">Experiment runners for variability studies with memory management.
+Supports both standard and process-isolated execution modes.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.runners.ExperimentRunner">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.runners.</span></span><span class="sig-name descname"><span class="pre">ExperimentRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_builder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_handler</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tracker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_process_isolation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gpu_memory_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#ExperimentRunner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.ExperimentRunner" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Core engine for running variability studies with memory management.</p>
+<p>Trains a model multiple times with different random seeds, collecting
+per-epoch metrics from each run. Supports standard in-process execution
+and subprocess isolation for GPU memory cleanup.</p>
+<p>This class is the low-level interface. Most users should prefer
+<a class="reference internal" href="api.html#ictonyx.api.variability_study" title="ictonyx.api.variability_study"><code class="xref py py-func docutils literal notranslate"><span class="pre">variability_study()</span></code></a>, which handles data resolution
+and model wrapping automatically.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_builder</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a><em>]</em><em>, </em><a class="reference internal" href="core.html#ictonyx.core.BaseModelWrapper" title="ictonyx.core.BaseModelWrapper"><em>BaseModelWrapper</em></a><em>]</em>) – A callable <code class="docutils literal notranslate"><span class="pre">f(ModelConfig)</span> <span class="pre">-&gt;</span> <span class="pre">BaseModelWrapper</span></code>
+that constructs a fresh model for each run.</p></li>
+<li><p><strong>data_handler</strong> (<a class="reference internal" href="data.html#ictonyx.data.DataHandler" title="ictonyx.data.DataHandler"><em>DataHandler</em></a>) – A <a class="reference internal" href="data.html#ictonyx.data.DataHandler" title="ictonyx.data.DataHandler"><code class="xref py py-class docutils literal notranslate"><span class="pre">DataHandler</span></code></a> that provides
+train/val/test splits via its <code class="docutils literal notranslate"><span class="pre">load()</span></code> method.</p></li>
+<li><p><strong>model_config</strong> (<a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a>) – A <a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelConfig</span></code></a> containing
+training hyperparameters (epochs, batch_size, learning_rate, etc.).</p></li>
+<li><p><strong>tracker</strong> (<a class="reference internal" href="loggers.html#ictonyx.loggers.BaseLogger" title="ictonyx.loggers.BaseLogger"><em>BaseLogger</em></a><em> | </em><em>None</em>) – An optional <a class="reference internal" href="loggers.html#ictonyx.loggers.BaseLogger" title="ictonyx.loggers.BaseLogger"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseLogger</span></code></a> for
+experiment tracking. Defaults to a basic in-memory logger.</p></li>
+<li><p><strong>use_process_isolation</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, each run executes in a child
+process, ensuring GPU memory is fully released between runs.
+Required for long Keras/TF studies that would otherwise OOM.
+Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>gpu_memory_limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Optional GPU memory cap in MB, applied per run
+when using TensorFlow. Default <code class="docutils literal notranslate"><span class="pre">None</span></code> (no limit).</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Base random seed for reproducibility. Each run receives an
+independent child seed derived via <code class="docutils literal notranslate"><span class="pre">np.random.SeedSequence.spawn()</span></code>,
+which guarantees statistically uncorrelated RNG streams.
+If <code class="docutils literal notranslate"><span class="pre">None</span></code>, a random seed is generated and stored.</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, log study progress to stdout. If <code class="docutils literal notranslate"><span class="pre">tqdm</span></code> is
+installed, a progress bar replaces per-run log messages.
+Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.ExperimentRunner.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_builder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_handler</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tracker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_process_isolation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gpu_memory_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#ExperimentRunner.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.ExperimentRunner.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize the experiment runner.</p>
+<p>See class docstring for full parameter descriptions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_builder</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a><em>]</em><em>, </em><a class="reference internal" href="core.html#ictonyx.core.BaseModelWrapper" title="ictonyx.core.BaseModelWrapper"><em>BaseModelWrapper</em></a><em>]</em>)</p></li>
+<li><p><strong>data_handler</strong> (<a class="reference internal" href="data.html#ictonyx.data.DataHandler" title="ictonyx.data.DataHandler"><em>DataHandler</em></a>)</p></li>
+<li><p><strong>model_config</strong> (<a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a>)</p></li>
+<li><p><strong>tracker</strong> (<a class="reference internal" href="loggers.html#ictonyx.loggers.BaseLogger" title="ictonyx.loggers.BaseLogger"><em>BaseLogger</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>use_process_isolation</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>gpu_memory_limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.ExperimentRunner.run_study">
+<span class="sig-name descname"><span class="pre">run_study</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_runs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_per_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_on_failure_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">checkpoint_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_parallel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#ExperimentRunner.run_study"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.ExperimentRunner.run_study" title="Link to this definition"></a></dt>
+<dd><p>Execute the complete variability study.</p>
+<p>Trains the model <code class="docutils literal notranslate"><span class="pre">num_runs</span></code> times, collecting per-epoch training
+metrics from each run. Resets all internal accumulators before
+starting, so calling <code class="docutils literal notranslate"><span class="pre">run_study()</span></code> twice on the same runner is safe.</p>
+<p>If <code class="docutils literal notranslate"><span class="pre">tqdm</span></code> is installed and <code class="docutils literal notranslate"><span class="pre">verbose=True</span></code>, a progress bar is
+displayed with a live postfix showing the most informative validation
+metric from the latest completed run.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_runs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of independent training runs. Default 20.</p></li>
+<li><p><strong>epochs_per_run</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Epochs per run. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, uses the <code class="docutils literal notranslate"><span class="pre">epochs</span></code>
+value from <code class="xref py py-attr docutils literal notranslate"><span class="pre">model_config</span></code>. Default <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>stop_on_failure_rate</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – If the fraction of failed runs exceeds this
+threshold, the study halts early. Set to <code class="docutils literal notranslate"><span class="pre">1.0</span></code> to never
+stop early. Default <code class="docutils literal notranslate"><span class="pre">0.8</span></code>.</p></li>
+<li><p><strong>checkpoint_dir</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Optional path to a directory for saving progress
+after each completed run. If the directory contains a
+<code class="docutils literal notranslate"><span class="pre">checkpoint.pkl</span></code> file from a previous interrupted run,
+execution resumes from where it left off. Default <code class="docutils literal notranslate"><span class="pre">None</span></code>
+(no checkpointing).</p></li>
+<li><p><strong>use_parallel</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, fan training runs across multiple
+processes using <code class="docutils literal notranslate"><span class="pre">joblib.Parallel</span></code>. Safe for sklearn
+models. Not recommended for Keras/TF. Mutually exclusive
+with <code class="docutils literal notranslate"><span class="pre">use_process_isolation</span></code>. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>n_jobs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of parallel workers. <code class="docutils literal notranslate"><span class="pre">-1</span></code> uses all available
+CPUs. Ignored when <code class="docutils literal notranslate"><span class="pre">use_parallel=False</span></code>. Default <code class="docutils literal notranslate"><span class="pre">-1</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">VariabilityStudyResults</span></code></a> with per-run DataFrames, final
+metric distributions, and optional test-set metrics.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.ExperimentRunner.get_summary_stats">
+<span class="sig-name descname"><span class="pre">get_summary_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#ExperimentRunner.get_summary_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.ExperimentRunner.get_summary_stats" title="Link to this definition"></a></dt>
+<dd><p>Get summary statistics for the completed study.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">total_runs</span></code>, <code class="docutils literal notranslate"><span class="pre">successful_runs</span></code>, <code class="docutils literal notranslate"><span class="pre">failed_runs</span></code>,
+<code class="docutils literal notranslate"><span class="pre">failure_rate</span></code> — run accounting.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;metric&gt;_mean</span></code>, <code class="docutils literal notranslate"><span class="pre">&lt;metric&gt;_std</span></code>, <code class="docutils literal notranslate"><span class="pre">&lt;metric&gt;_min</span></code>,
+<code class="docutils literal notranslate"><span class="pre">&lt;metric&gt;_max</span></code> — descriptive statistics for each tracked
+metric (e.g. <code class="docutils literal notranslate"><span class="pre">val_accuracy_mean</span></code>).</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dict with keys</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.runners.</span></span><span class="sig-name descname"><span class="pre">VariabilityStudyResults</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">all_runs_metrics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">final_metrics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">final_test_metrics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_seeds=&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Container for variability study results with analysis methods.</p>
+<p>Returned by <a class="reference internal" href="api.html#ictonyx.api.variability_study" title="ictonyx.api.variability_study"><code class="xref py py-func docutils literal notranslate"><span class="pre">variability_study()</span></code></a> and
+<a class="reference internal" href="#ictonyx.runners.ExperimentRunner.run_study" title="ictonyx.runners.ExperimentRunner.run_study"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ExperimentRunner.run_study()</span></code></a>. Holds per-run training history
+DataFrames, aggregated final-epoch metrics, and optional test-set
+evaluation results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>all_runs_metrics</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><em>DataFrame</em><em>]</em>)</p></li>
+<li><p><strong>final_metrics</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em><em>]</em>)</p></li>
+<li><p><strong>final_test_metrics</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em><em>]</em>)</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>run_seeds</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.all_runs_metrics">
+<span class="sig-name descname"><span class="pre">all_runs_metrics</span></span><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.all_runs_metrics" title="Link to this definition"></a></dt>
+<dd><p>List of DataFrames, one per successful run. Each
+DataFrame has one row per epoch and columns for every tracked
+metric (e.g. <code class="docutils literal notranslate"><span class="pre">train_accuracy</span></code>, <code class="docutils literal notranslate"><span class="pre">val_loss</span></code>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List[pandas.core.frame.DataFrame]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.final_metrics">
+<span class="sig-name descname"><span class="pre">final_metrics</span></span><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.final_metrics" title="Link to this definition"></a></dt>
+<dd><p>Dict mapping metric names to lists of final-epoch
+values across runs. Example:
+<code class="docutils literal notranslate"><span class="pre">{'val_accuracy':</span> <span class="pre">[0.82,</span> <span class="pre">0.85,</span> <span class="pre">0.83]}</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, List[<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.final_test_metrics">
+<span class="sig-name descname"><span class="pre">final_test_metrics</span></span><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.final_test_metrics" title="Link to this definition"></a></dt>
+<dd><p>List of dicts, one per run, containing test-set
+evaluation results (empty if no test set was used).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List[Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, Any]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.seed">
+<span class="sig-name descname"><span class="pre">seed</span></span><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.seed" title="Link to this definition"></a></dt>
+<dd><p>The base random seed used for the study, for reproducibility.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.run_seeds">
+<span class="sig-name descname"><span class="pre">run_seeds</span></span><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.run_seeds" title="Link to this definition"></a></dt>
+<dd><p>List of per-run child seeds generated from the base
+seed via <code class="docutils literal notranslate"><span class="pre">SeedSequence.spawn()</span></code>. Empty when results are
+reconstructed from MLflow or loaded from JSON.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List[<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">all_runs_metrics</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><span class="pre">DataFrame</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id1">
+<span class="sig-name descname"><span class="pre">final_metrics</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#id1" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id2">
+<span class="sig-name descname"><span class="pre">final_test_metrics</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#id2" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id3">
+<span class="sig-name descname"><span class="pre">seed</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#id3" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id4">
+<span class="sig-name descname"><span class="pre">run_seeds</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#id4" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.n_runs">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">n_runs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></em><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.n_runs" title="Link to this definition"></a></dt>
+<dd><p>Number of successful runs.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.has_test_data">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">has_test_data</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></em><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.has_test_data" title="Link to this definition"></a></dt>
+<dd><p>True if at least one run produced test-set metrics.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.get_metric_values">
+<span class="sig-name descname"><span class="pre">get_metric_values</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metric_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.get_metric_values"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.get_metric_values" title="Link to this definition"></a></dt>
+<dd><p>Get collected final values for a specific metric.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>metric_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Metric key, e.g. ‘val_accuracy’, ‘train_loss’, ‘val_f1’</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of final-epoch values, one per run.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#KeyError" title="(in Python v3.14)"><strong>KeyError</strong></a> – If metric was not tracked.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.get_final_metrics">
+<span class="sig-name descname"><span class="pre">get_final_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metric_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'val_accuracy'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.get_final_metrics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.get_final_metrics" title="Link to this definition"></a></dt>
+<dd><p>Extract final metric values for each run (labeled run_1, run_2, …).</p>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">Deprecated since version Emits: </span><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#UserWarning" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">UserWarning</span></code></a>. Use <a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.get_metric_values" title="ictonyx.runners.VariabilityStudyResults.get_metric_values"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_metric_values()</span></code></a> instead.
+<code class="docutils literal notranslate"><span class="pre">get_final_metrics()</span></code> will be removed in v0.5.0.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>metric_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.get_available_metrics">
+<span class="sig-name descname"><span class="pre">get_available_metrics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.get_available_metrics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.get_available_metrics" title="Link to this definition"></a></dt>
+<dd><p>Get list of all available metrics across all runs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.to_dataframe">
+<span class="sig-name descname"><span class="pre">to_dataframe</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.to_dataframe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.to_dataframe" title="Link to this definition"></a></dt>
+<dd><p>Convert results to a summary DataFrame with one row per run.</p>
+<p>Test metrics are aligned by <code class="docutils literal notranslate"><span class="pre">run_id</span></code>, not list position, so a
+failed test evaluation for one run does not corrupt the alignment
+of subsequent runs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.preferred_metric">
+<span class="sig-name descname"><span class="pre">preferred_metric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'accuracy'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.preferred_metric"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.preferred_metric" title="Link to this definition"></a></dt>
+<dd><p>Return the preferred metric name for this study.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">f&quot;test_{base}&quot;</span></code> when test data is present and the base
+metric was tracked, <code class="docutils literal notranslate"><span class="pre">f&quot;val_{base}&quot;</span></code> otherwise.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">final_test_metrics</span></code> stores metrics under bare keys (e.g.
+<code class="docutils literal notranslate"><span class="pre">&quot;accuracy&quot;</span></code>, not <code class="docutils literal notranslate"><span class="pre">&quot;test_accuracy&quot;</span></code>). This method compares
+against the bare key and returns the prefixed form.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Base metric name without prefix. Default <code class="docutils literal notranslate"><span class="pre">&quot;accuracy&quot;</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The most appropriate metric key for this study’s results.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.summarize">
+<span class="sig-name descname"><span class="pre">summarize</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.summarize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.summarize" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.get_epoch_statistics">
+<span class="sig-name descname"><span class="pre">get_epoch_statistics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metric</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">confidence</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.get_epoch_statistics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.get_epoch_statistics" title="Link to this definition"></a></dt>
+<dd><p>Compute per-epoch mean, SD, SE, and confidence band across all runs.</p>
+<p>Aligns all runs at each epoch position. Runs with fewer epochs
+than the maximum are excluded from epochs beyond their last.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Column name in per-run DataFrames, e.g.
+<code class="docutils literal notranslate"><span class="pre">'val_accuracy'</span></code>, <code class="docutils literal notranslate"><span class="pre">'train_loss'</span></code>.</p></li>
+<li><p><strong>confidence</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Confidence level for the t-based confidence interval
+on the per-epoch mean across runs. The interval uses a
+Student t-distribution with <code class="docutils literal notranslate"><span class="pre">n_runs</span> <span class="pre">-</span> <span class="pre">1</span></code> degrees of freedom.
+Default 0.95.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">epoch</span></code>, <code class="docutils literal notranslate"><span class="pre">mean</span></code>, <code class="docutils literal notranslate"><span class="pre">sd</span></code>,
+<code class="docutils literal notranslate"><span class="pre">se</span></code>, <code class="docutils literal notranslate"><span class="pre">ci_lower</span></code>, <code class="docutils literal notranslate"><span class="pre">ci_upper</span></code>, <code class="docutils literal notranslate"><span class="pre">n_runs</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>DataFrame with columns</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If no runs are available.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#KeyError" title="(in Python v3.14)"><strong>KeyError</strong></a> – If <em>metric</em> is not found in any run’s DataFrame.</p></li>
+</ul>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">stats</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">get_epoch_statistics</span><span class="p">(</span><span class="s2">&quot;val_accuracy&quot;</span><span class="p">)</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">fill_between</span><span class="p">(</span>
+    <span class="n">stats</span><span class="p">[</span><span class="s2">&quot;epoch&quot;</span><span class="p">],</span> <span class="n">stats</span><span class="p">[</span><span class="s2">&quot;ci_lower&quot;</span><span class="p">],</span> <span class="n">stats</span><span class="p">[</span><span class="s2">&quot;ci_upper&quot;</span><span class="p">],</span>
+    <span class="n">alpha</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;95% CI&quot;</span>
+<span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;epoch&quot;</span><span class="p">],</span> <span class="n">stats</span><span class="p">[</span><span class="s2">&quot;mean&quot;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Mean&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.get_test_metric_values">
+<span class="sig-name descname"><span class="pre">get_test_metric_values</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metric</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.get_test_metric_values"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.get_test_metric_values" title="Link to this definition"></a></dt>
+<dd><p>Get per-run final values for a test-set metric.</p>
+<p>Accepts either bare key (<code class="docutils literal notranslate"><span class="pre">'accuracy'</span></code>) or prefixed form
+(<code class="docutils literal notranslate"><span class="pre">'test_accuracy'</span></code>) — both are resolved against the bare key,
+which is how <code class="docutils literal notranslate"><span class="pre">final_test_metrics</span></code> actually stores values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Metric key, e.g. <code class="docutils literal notranslate"><span class="pre">'accuracy'</span></code> or <code class="docutils literal notranslate"><span class="pre">'test_accuracy'</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of values, one per run, in run order.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#KeyError" title="(in Python v3.14)"><strong>KeyError</strong></a> – If the metric was not tracked or no test data was provided.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.test_against_null">
+<span class="sig-name descname"><span class="pre">test_against_null</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">null_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.test_against_null"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.test_against_null" title="Link to this definition"></a></dt>
+<dd><p>Test whether a metric’s distribution differs from a null value.</p>
+<p>Applies a one-sample Wilcoxon signed-rank test to the per-run final
+values of <code class="docutils literal notranslate"><span class="pre">metric</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>null_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – The null hypothesis value. Use 0.5 for chance-level
+binary classification accuracy.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Metric name. Must be a key in <code class="docutils literal notranslate"><span class="pre">final_metrics</span></code>.</p></li>
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Significance threshold (default 0.05).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A StatisticalTestResult with <code class="docutils literal notranslate"><span class="pre">is_significant</span></code>, <code class="docutils literal notranslate"><span class="pre">p_value</span></code>,
+<code class="docutils literal notranslate"><span class="pre">statistic</span></code>, and <code class="docutils literal notranslate"><span class="pre">conclusion</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="analysis.html#ictonyx.analysis.StatisticalTestResult" title="ictonyx.analysis.StatisticalTestResult">StatisticalTestResult</a></p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The Wilcoxon signed-rank test requires at least 6 non-zero
+differences for reliable results. Use <code class="docutils literal notranslate"><span class="pre">num_runs</span> <span class="pre">&gt;=</span> <span class="pre">20</span></code> for
+reliable inference — consistent with the library-wide minimum
+for Mann-Whitney U tests.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.compare_models_statistically">
+<span class="sig-name descname"><span class="pre">compare_models_statistically</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.compare_models_statistically"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.compare_models_statistically" title="Link to this definition"></a></dt>
+<dd><p>Removed in v0.3.10.</p>
+<p>This method applied Kruskal-Wallis to groups of one observation each
+(one per run), which is statistically incoherent — within-group variance
+is undefined with a single observation.</p>
+<p>To compare a single model’s run distribution against a null value, use:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">results</span><span class="o">.</span><span class="n">test_against_null</span><span class="p">(</span><span class="n">null_value</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="s2">&quot;val_accuracy&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To compare multiple distinct models against each other, use:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ix</span><span class="o">.</span><span class="n">compare_models</span><span class="p">(</span><span class="n">models</span><span class="o">=</span><span class="p">[</span><span class="n">model_a</span><span class="p">,</span> <span class="n">model_b</span><span class="p">],</span> <span class="n">data</span><span class="o">=...</span><span class="p">,</span> <span class="n">runs</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.save">
+<span class="sig-name descname"><span class="pre">save</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.save" title="Link to this definition"></a></dt>
+<dd><p>Persist results to disk as a plain dict via pickle.</p>
+<p>Preserves all_runs_metrics, final_metrics, final_test_metrics,
+and seed. Restore with <a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.load" title="ictonyx.runners.VariabilityStudyResults.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – File path. Recommended extension: <code class="docutils literal notranslate"><span class="pre">.pkl</span></code>.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.load">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.load" title="Link to this definition"></a></dt>
+<dd><p>Restore results previously saved with <a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.save" title="ictonyx.runners.VariabilityStudyResults.save"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – File path written by <a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.save" title="ictonyx.runners.VariabilityStudyResults.save"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save()</span></code></a>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Reconstructed VariabilityStudyResults.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.to_json">
+<span class="sig-name descname"><span class="pre">to_json</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.to_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.to_json" title="Link to this definition"></a></dt>
+<dd><p>Serialise final metrics to a compact JSON string.</p>
+<p>Does not include <code class="docutils literal notranslate"><span class="pre">all_runs_metrics</span></code> (per-epoch DataFrames).
+Use <a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.save" title="ictonyx.runners.VariabilityStudyResults.save"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save()</span></code></a> / <a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults.load" title="ictonyx.runners.VariabilityStudyResults.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a> for full round-trip fidelity.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>JSON string containing <code class="docutils literal notranslate"><span class="pre">final_metrics</span></code>, <code class="docutils literal notranslate"><span class="pre">final_test_metrics</span></code>,
+<code class="docutils literal notranslate"><span class="pre">seed</span></code>, and <code class="docutils literal notranslate"><span class="pre">n_runs</span></code>.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.VariabilityStudyResults.from_mlflow_experiment">
+<em class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_mlflow_experiment</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">experiment_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tracking_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#VariabilityStudyResults.from_mlflow_experiment"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.VariabilityStudyResults.from_mlflow_experiment" title="Link to this definition"></a></dt>
+<dd><p>Reconstruct results from a completed MLflow experiment.</p>
+<p>Allows running ictonyx statistical analysis on existing MLflow
+experiments without re-running training.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>experiment_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Name of the MLflow experiment.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Metric to extract per run (e.g. ‘val_accuracy’).</p></li>
+<li><p><strong>run_filter</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Optional MLflow filter string
+(e.g. “params.seed = ‘42’”).</p></li>
+<li><p><strong>tracking_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – MLflow tracking URI. Uses the environment’s
+MLFLOW_TRACKING_URI if not set.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>VariabilityStudyResults with final_metrics populated from
+the experiment’s runs. all_runs_metrics is empty —
+per-epoch history is not reconstructed from MLflow.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ImportError" title="(in Python v3.14)"><strong>ImportError</strong></a> – If mlflow is not installed.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If no matching runs are found, or if the
+    requested metric is not present in the runs.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.runners.</span></span><span class="sig-name descname"><span class="pre">GridStudyResults</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">param_grid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'val_accuracy'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#GridStudyResults"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.GridStudyResults" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Container for grid study results across multiple parameter configurations.</p>
+<p>Returned by <code class="xref py py-func docutils literal notranslate"><span class="pre">run_grid_study()</span></code>. Holds one
+<a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">VariabilityStudyResults</span></code></a> per parameter configuration, the
+param grid that generated them, and the base config used as the
+template for all runs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>, </em><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a><em>]</em>)</p></li>
+<li><p><strong>param_grid</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em><em>]</em>)</p></li>
+<li><p><strong>base_config</strong> (<a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a>)</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults.results">
+<span class="sig-name descname"><span class="pre">results</span></span><a class="headerlink" href="#ictonyx.runners.GridStudyResults.results" title="Link to this definition"></a></dt>
+<dd><p>Dict mapping frozen parameter tuples to
+VariabilityStudyResults. Keys are sorted tuples of
+(param_name, value) pairs for hashability and
+deterministic ordering.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict[Tuple, <a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults">ictonyx.runners.VariabilityStudyResults</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults.param_grid">
+<span class="sig-name descname"><span class="pre">param_grid</span></span><a class="headerlink" href="#ictonyx.runners.GridStudyResults.param_grid" title="Link to this definition"></a></dt>
+<dd><p>The original param_grid dict passed by the caller.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, List[Any]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults.base_config">
+<span class="sig-name descname"><span class="pre">base_config</span></span><a class="headerlink" href="#ictonyx.runners.GridStudyResults.base_config" title="Link to this definition"></a></dt>
+<dd><p>The ModelConfig used as the template for all runs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig">ictonyx.config.ModelConfig</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults.metric">
+<span class="sig-name descname"><span class="pre">metric</span></span><a class="headerlink" href="#ictonyx.runners.GridStudyResults.metric" title="Link to this definition"></a></dt>
+<dd><p>The primary metric used for summary statistics.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id5">
+<span class="sig-name descname"><span class="pre">results</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><span class="pre">VariabilityStudyResults</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#id5" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id6">
+<span class="sig-name descname"><span class="pre">param_grid</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#id6" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id7">
+<span class="sig-name descname"><span class="pre">base_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><span class="pre">ModelConfig</span></a></em><a class="headerlink" href="#id7" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id8">
+<span class="sig-name descname"><span class="pre">metric</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'val_accuracy'</span></em><a class="headerlink" href="#id8" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults.n_configurations">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">n_configurations</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></em><a class="headerlink" href="#ictonyx.runners.GridStudyResults.n_configurations" title="Link to this definition"></a></dt>
+<dd><p>Total number of parameter configurations run.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults.n_runs_per_config">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">n_runs_per_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></em><a class="headerlink" href="#ictonyx.runners.GridStudyResults.n_runs_per_config" title="Link to this definition"></a></dt>
+<dd><p>Number of runs per configuration (from first result).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults.get_results_for_config">
+<span class="sig-name descname"><span class="pre">get_results_for_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">param_combo</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#GridStudyResults.get_results_for_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.GridStudyResults.get_results_for_config" title="Link to this definition"></a></dt>
+<dd><p>Retrieve VariabilityStudyResults for a specific parameter combination.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>param_combo</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>) – Dict of parameter names to values, e.g.
+{‘learning_rate’: 0.001, ‘batch_size’: 8}</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">VariabilityStudyResults</span></code></a> for that configuration.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#KeyError" title="(in Python v3.14)"><strong>KeyError</strong></a> – If the configuration was not found in results.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults.list_configurations">
+<span class="sig-name descname"><span class="pre">list_configurations</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#GridStudyResults.list_configurations"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.GridStudyResults.list_configurations" title="Link to this definition"></a></dt>
+<dd><p>Return list of all parameter combinations as dicts.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults.to_dataframe">
+<span class="sig-name descname"><span class="pre">to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#GridStudyResults.to_dataframe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.GridStudyResults.to_dataframe" title="Link to this definition"></a></dt>
+<dd><p>Summary DataFrame with one row per configuration.</p>
+<p>Columns: all parameter names, mean, sd, se, min, max, n.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Metric to summarize. Defaults to self.metric.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame sorted by first parameter in param_grid.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.runners.GridStudyResults.summarize">
+<span class="sig-name descname"><span class="pre">summarize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#GridStudyResults.summarize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.GridStudyResults.summarize" title="Link to this definition"></a></dt>
+<dd><p>Generate text summary of grid study results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Metric to summarize. Defaults to self.metric.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.runners.run_variability_study">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.runners.</span></span><span class="sig-name descname"><span class="pre">run_variability_study</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_builder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_handler</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_runs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs_per_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tracker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_process_isolation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gpu_memory_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_parallel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#run_variability_study"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.run_variability_study" title="Link to this definition"></a></dt>
+<dd><p>Run a complete variability study (convenience function).</p>
+<p>Creates an <a class="reference internal" href="#ictonyx.runners.ExperimentRunner" title="ictonyx.runners.ExperimentRunner"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExperimentRunner</span></code></a> and calls
+<a class="reference internal" href="#ictonyx.runners.ExperimentRunner.run_study" title="ictonyx.runners.ExperimentRunner.run_study"><code class="xref py py-meth docutils literal notranslate"><span class="pre">run_study()</span></code></a>. This is the lower-level entry
+point; most users should prefer <a class="reference internal" href="api.html#ictonyx.api.variability_study" title="ictonyx.api.variability_study"><code class="xref py py-func docutils literal notranslate"><span class="pre">variability_study()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_builder</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a><em>]</em><em>, </em><a class="reference internal" href="core.html#ictonyx.core.BaseModelWrapper" title="ictonyx.core.BaseModelWrapper"><em>BaseModelWrapper</em></a><em>]</em>) – Callable <code class="docutils literal notranslate"><span class="pre">f(ModelConfig)</span> <span class="pre">-&gt;</span> <span class="pre">BaseModelWrapper</span></code>.</p></li>
+<li><p><strong>data_handler</strong> (<a class="reference internal" href="data.html#ictonyx.data.DataHandler" title="ictonyx.data.DataHandler"><em>DataHandler</em></a>) – A <a class="reference internal" href="data.html#ictonyx.data.DataHandler" title="ictonyx.data.DataHandler"><code class="xref py py-class docutils literal notranslate"><span class="pre">DataHandler</span></code></a> instance.</p></li>
+<li><p><strong>model_config</strong> (<a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a>) – A <a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelConfig</span></code></a> instance.</p></li>
+<li><p><strong>num_runs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of training runs. Default 20.</p></li>
+<li><p><strong>epochs_per_run</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Epochs per run. Default <code class="docutils literal notranslate"><span class="pre">None</span></code> (uses config).</p></li>
+<li><p><strong>tracker</strong> (<a class="reference internal" href="loggers.html#ictonyx.loggers.BaseLogger" title="ictonyx.loggers.BaseLogger"><em>BaseLogger</em></a><em> | </em><em>None</em>) – Optional experiment logger. Default <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>use_process_isolation</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Run each iteration in a subprocess.
+Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>gpu_memory_limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Optional GPU memory cap in MB.</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Base random seed. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, one is generated.</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Print progress to stdout. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>use_parallel</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>n_jobs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">VariabilityStudyResults</span></code></a>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.runners.run_grid_study">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.runners.</span></span><span class="sig-name descname"><span class="pre">run_grid_study</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_builder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_handler</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">param_grid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_runs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'val_accuracy'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_process_isolation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dry_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/runners.html#run_grid_study"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.runners.run_grid_study" title="Link to this definition"></a></dt>
+<dd><p>Run a variability study across a grid of parameter configurations.</p>
+<p>For each combination in the Cartesian product of <code class="docutils literal notranslate"><span class="pre">param_grid</span></code>,
+creates a modified copy of <code class="docutils literal notranslate"><span class="pre">base_config</span></code>, runs a full variability
+study, and collects results. All runs use process isolation by default
+to prevent CUDA memory accumulation across configurations.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_builder</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a>) – Callable accepting a ModelConfig, returning
+a compiled model.</p></li>
+<li><p><strong>data_handler</strong> (<a class="reference internal" href="data.html#ictonyx.data.DataHandler" title="ictonyx.data.DataHandler"><em>DataHandler</em></a>) – DataHandler instance providing train/val data.</p></li>
+<li><p><strong>base_config</strong> (<a class="reference internal" href="config.html#ictonyx.config.ModelConfig" title="ictonyx.config.ModelConfig"><em>ModelConfig</em></a>) – ModelConfig used as template. Values are
+overridden per configuration.</p></li>
+<li><p><strong>param_grid</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em><em>]</em>) – <p>Dict mapping parameter names to lists of
+values to sweep. Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s1">&#39;learning_rate&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.0001</span><span class="p">],</span>
+    <span class="s1">&#39;batch_size&#39;</span><span class="p">:</span>    <span class="p">[</span><span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Generates the full Cartesian product:
+4 configurations × num_runs each.</p>
+</p></li>
+<li><p><strong>num_runs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of training runs per configuration. Default 20.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Primary metric for summary statistics.</p></li>
+<li><p><strong>use_process_isolation</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True, each run executes in a subprocess.
+Strongly recommended to prevent GPU memory
+accumulation across configurations.</p></li>
+<li><p><strong>dry_run</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True, print execution plan and return
+without training. Use to verify configuration
+before committing to a long run.</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, log study progress.
+Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Base random seed for reproducibility. Each
+configuration receives an independent child seed
+derived via <code class="docutils literal notranslate"><span class="pre">SeedSequence.spawn()</span></code>. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+each configuration uses a random seed.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.runners.GridStudyResults" title="ictonyx.runners.GridStudyResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">GridStudyResults</span></code></a></p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If param_grid is empty or contains no values.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#ictonyx.runners.GridStudyResults" title="ictonyx.runners.GridStudyResults"><em>GridStudyResults</em></a></p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">results</span> <span class="o">=</span> <span class="n">run_grid_study</span><span class="p">(</span>
+    <span class="n">model_builder</span><span class="o">=</span><span class="n">build_cnn</span><span class="p">,</span>
+    <span class="n">data_handler</span><span class="o">=</span><span class="n">data_handler</span><span class="p">,</span>
+    <span class="n">base_config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+    <span class="n">param_grid</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;learning_rate&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.0001</span><span class="p">,</span> <span class="mf">0.00001</span><span class="p">]},</span>
+    <span class="n">num_runs</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+    <span class="n">use_process_isolation</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">summarize</span><span class="p">())</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">to_dataframe</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="api.html" class="btn btn-neutral float-left" title="ictonyx.api" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="bootstrap.html" class="btn btn-neutral float-right" title="ictonyx.bootstrap" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

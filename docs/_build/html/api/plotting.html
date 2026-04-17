@@ -1,0 +1,639 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.plotting &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ictonyx.explainers" href="explainers.html" />
+    <link rel="prev" title="ictonyx.data" href="data.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="analysis.html">ictonyx.analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">ictonyx.api</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runners.html">ictonyx.runners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bootstrap.html">ictonyx.bootstrap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html">ictonyx.config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core.html">ictonyx.core</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">ictonyx.data</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ictonyx.plotting</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix"><code class="docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_training_history"><code class="docutils literal notranslate"><span class="pre">plot_training_history()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_roc_curve"><code class="docutils literal notranslate"><span class="pre">plot_roc_curve()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_precision_recall_curve"><code class="docutils literal notranslate"><span class="pre">plot_precision_recall_curve()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_variability_summary"><code class="docutils literal notranslate"><span class="pre">plot_variability_summary()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_run_trajectories"><code class="docutils literal notranslate"><span class="pre">plot_run_trajectories()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_run_distribution"><code class="docutils literal notranslate"><span class="pre">plot_run_distribution()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_run_strip"><code class="docutils literal notranslate"><span class="pre">plot_run_strip()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_comparison_boxplots"><code class="docutils literal notranslate"><span class="pre">plot_comparison_boxplots()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_comparison_forest"><code class="docutils literal notranslate"><span class="pre">plot_comparison_forest()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_pairwise_comparison_matrix"><code class="docutils literal notranslate"><span class="pre">plot_pairwise_comparison_matrix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_grid_study_heatmap"><code class="docutils literal notranslate"><span class="pre">plot_grid_study_heatmap()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_training_stability"><code class="docutils literal notranslate"><span class="pre">plot_training_stability()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_autocorr_vs_lag"><code class="docutils literal notranslate"><span class="pre">plot_autocorr_vs_lag()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_averaged_autocorr"><code class="docutils literal notranslate"><span class="pre">plot_averaged_autocorr()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_pacf_vs_lag"><code class="docutils literal notranslate"><span class="pre">plot_pacf_vs_lag()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.plotting.plot_averaged_pacf"><code class="docutils literal notranslate"><span class="pre">plot_averaged_pacf()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="explainers.html">ictonyx.explainers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loggers.html">ictonyx.loggers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tuning.html">ictonyx.tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="memory.html">ictonyx.memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="exceptions.html">ictonyx.exceptions</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">ictonyx.plotting</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/plotting.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ictonyx-plotting">
+<h1>ictonyx.plotting<a class="headerlink" href="#ictonyx-plotting" title="Link to this heading"></a></h1>
+<p>Visualization functions for variability studies and model comparisons.</p>
+<dl class="py function" id="module-ictonyx.plotting">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_confusion_matrix">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_confusion_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cm_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_confusion_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_confusion_matrix" title="Link to this definition"></a></dt>
+<dd><p>Plot a confusion matrix as an annotated heatmap.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cm_df</strong> (<em>DataFrame</em>) – A square <code class="docutils literal notranslate"><span class="pre">pd.DataFrame</span></code> where rows are true labels and
+columns are predicted labels. Values are integer counts.
+Typically produced by
+<a class="reference internal" href="analysis.html#ictonyx.analysis.get_confusion_matrix_df" title="ictonyx.analysis.get_confusion_matrix_df"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_confusion_matrix_df()</span></code></a>.</p></li>
+<li><p><strong>title</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Plot title. Default: <code class="docutils literal notranslate"><span class="pre">&quot;Confusion</span> <span class="pre">Matrix&quot;</span></code>.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, call <code class="docutils literal notranslate"><span class="pre">plt.show()</span></code>. If <code class="docutils literal notranslate"><span class="pre">False</span></code>, return the
+figure without displaying. If <code class="docutils literal notranslate"><span class="pre">None</span></code> (default), defer to
+the global <code class="xref py py-func docutils literal notranslate"><span class="pre">set_display_plots()</span></code> setting.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if display is enabled.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_training_history">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_training_history</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">history</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_training_history"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_training_history" title="Link to this definition"></a></dt>
+<dd><p>Plot training and validation metrics over epochs.</p>
+<p>Creates one subplot per metric, each showing train and validation
+curves. Accepts DataFrames, dicts, lists of dicts, or Keras
+<code class="docutils literal notranslate"><span class="pre">History</span></code> objects.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>history</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Training history in any of the supported formats.
+Column/key naming convention: <code class="docutils literal notranslate"><span class="pre">'train_accuracy'</span></code> and
+<code class="docutils literal notranslate"><span class="pre">'val_accuracy'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'accuracy'</span></code> and <code class="docutils literal notranslate"><span class="pre">'val_accuracy'</span></code>.</p></li>
+<li><p><strong>title</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Plot title. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, auto-generated from epoch count.</p></li>
+<li><p><strong>metrics</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – List of metric base names to plot (e.g. <code class="docutils literal notranslate"><span class="pre">['accuracy',</span>
+<span class="pre">'loss']</span></code>). If <code class="docutils literal notranslate"><span class="pre">None</span></code>, auto-detected from available columns.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if display is enabled.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_roc_curve">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_roc_curve</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_wrapper</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_roc_curve"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_roc_curve" title="Link to this definition"></a></dt>
+<dd><p>Plot per-class ROC curves with AUC values.</p>
+<p>Binarizes labels using one-vs-rest and plots one ROC curve per class.
+Requires the model wrapper to have a <code class="docutils literal notranslate"><span class="pre">predict_proba</span></code> method.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_wrapper</strong> (<a class="reference internal" href="core.html#ictonyx.core.BaseModelWrapper" title="ictonyx.core.BaseModelWrapper"><em>BaseModelWrapper</em></a>) – A trained <a class="reference internal" href="core.html#ictonyx.core.BaseModelWrapper" title="ictonyx.core.BaseModelWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModelWrapper</span></code></a>
+with <code class="docutils literal notranslate"><span class="pre">predict_proba</span></code> support.</p></li>
+<li><p><strong>X_test</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a>) – Test feature array.</p></li>
+<li><p><strong>y_test</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a>) – True class labels (integer-encoded).</p></li>
+<li><p><strong>title</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Plot title. Default: <code class="docutils literal notranslate"><span class="pre">'Receiver</span> <span class="pre">Operating</span> <span class="pre">Characteristic'</span></code>.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the model does
+not support probability predictions.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Figure | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_precision_recall_curve">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_precision_recall_curve</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_wrapper</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_precision_recall_curve"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_precision_recall_curve" title="Link to this definition"></a></dt>
+<dd><p>Plot per-class precision-recall curves with AUC values.</p>
+<p>Binarizes labels using one-vs-rest and plots one PR curve per class.
+Requires the model wrapper to have a <code class="docutils literal notranslate"><span class="pre">predict_proba</span></code> method.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_wrapper</strong> (<a class="reference internal" href="core.html#ictonyx.core.BaseModelWrapper" title="ictonyx.core.BaseModelWrapper"><em>BaseModelWrapper</em></a>) – A trained <a class="reference internal" href="core.html#ictonyx.core.BaseModelWrapper" title="ictonyx.core.BaseModelWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModelWrapper</span></code></a>
+with <code class="docutils literal notranslate"><span class="pre">predict_proba</span></code> support.</p></li>
+<li><p><strong>X_test</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a>) – Test feature array.</p></li>
+<li><p><strong>y_test</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a>) – True class labels (integer-encoded).</p></li>
+<li><p><strong>title</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Plot title. Default: <code class="docutils literal notranslate"><span class="pre">'Precision-Recall</span> <span class="pre">Curve'</span></code>.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the model does
+not support probability predictions.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Figure | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_variability_summary">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_variability_summary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">all_runs_metrics_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">final_metrics_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">final_test_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'accuracy'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_histogram</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_boxplot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_mean_lines</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_train</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_val</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">histogram_orientation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'vertical'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dpi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">300</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_variability_summary"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_variability_summary" title="Link to this definition"></a></dt>
+<dd><p>Plot a multi-panel variability summary for a completed study.</p>
+<p>Generates a figure with:</p>
+<ul class="simple">
+<li><p><strong>Overlaid training curves</strong> — all runs plotted together,
+showing epoch-by-epoch convergence and spread.</p></li>
+<li><p><strong>Final metric distribution</strong> — histogram and/or boxplot of
+final-epoch values, showing the spread of outcomes across runs.</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>all_runs_metrics_list</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><em>DataFrame</em><em>] </em><em>| </em><em>None</em>) – List of per-run DataFrames (one per
+successful run), as stored in
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">VariabilityStudyResults.all_runs_metrics</span></code>.</p></li>
+<li><p><strong>final_metrics_series</strong> (<em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em> | </em><em>None</em>) – <code class="docutils literal notranslate"><span class="pre">pd.Series</span></code> of final-epoch validation
+metric values across runs.</p></li>
+<li><p><strong>final_test_series</strong> (<em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em> | </em><em>None</em>) – Optional <code class="docutils literal notranslate"><span class="pre">pd.Series</span></code> of test-set metric
+values. If provided, a second distribution is added.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Base metric name for labeling (default <code class="docutils literal notranslate"><span class="pre">'accuracy'</span></code>).</p></li>
+<li><p><strong>show_histogram</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Show histogram panel (default <code class="docutils literal notranslate"><span class="pre">True</span></code>).</p></li>
+<li><p><strong>show_boxplot</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Show boxplot panel (default <code class="docutils literal notranslate"><span class="pre">False</span></code>).</p></li>
+<li><p><strong>show_mean_lines</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Overlay mean training curves on the
+trajectory panel (default <code class="docutils literal notranslate"><span class="pre">True</span></code>). Set to <code class="docutils literal notranslate"><span class="pre">False</span></code>
+when runs diverge dramatically and the mean is
+misleading.</p></li>
+<li><p><strong>show_train</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Plot training metric curves (default <code class="docutils literal notranslate"><span class="pre">True</span></code>).</p></li>
+<li><p><strong>show_val</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Plot validation metric curves (default <code class="docutils literal notranslate"><span class="pre">True</span></code>).</p></li>
+<li><p><strong>histogram_orientation</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – <code class="docutils literal notranslate"><span class="pre">'vertical'</span></code> (default) or
+<code class="docutils literal notranslate"><span class="pre">'horizontal'</span></code>. Horizontal orientation aligns the
+distribution with the y-axis of the trajectory panel.</p></li>
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>) – Opacity of individual run curves. <code class="docutils literal notranslate"><span class="pre">None</span></code> (default)
+auto-calculates based on the number of runs.</p></li>
+<li><p><strong>figsize</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>] </em><em>| </em><em>None</em>) – Figure size as <code class="docutils literal notranslate"><span class="pre">(width,</span> <span class="pre">height)</span></code> in inches.
+<code class="docutils literal notranslate"><span class="pre">None</span></code> (default) auto-calculates based on the number
+of panels.</p></li>
+<li><p><strong>dpi</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Figure resolution in dots per inch (default <code class="docutils literal notranslate"><span class="pre">150</span></code>).</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+<li><p><strong>kind</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>results</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if display
+is enabled.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_run_trajectories">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_run_trajectories</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'val_accuracy'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_run_trajectories"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_run_trajectories" title="Link to this definition"></a></dt>
+<dd><p>Plot per-run epoch trajectories overlaid with the mean curve.</p>
+<p>Each run is drawn as a thin semi-transparent line; the mean trajectory
+is drawn as a solid thicker line. High spread at convergence signals
+seed-dependent behaviour.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> (<a class="reference internal" href="runners.html#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a>) – A completed <a class="reference internal" href="runners.html#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">VariabilityStudyResults</span></code></a>.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Metric name to plot. Default <code class="docutils literal notranslate"><span class="pre">'val_accuracy'</span></code>.</p></li>
+<li><p><strong>ax</strong> (<em>Axes</em><em> | </em><em>None</em>) – Optional existing Axes. Creates a new figure if <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The figure, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the metric is not found or display is active.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Figure | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_run_distribution">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_run_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_run_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_run_distribution" title="Link to this definition"></a></dt>
+<dd><p>Violin plot of final metric values with individual run points overlaid.</p>
+<p>Combines a KDE violin with individual run dots. Useful for understanding
+the shape of the performance distribution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> (<a class="reference internal" href="runners.html#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a>) – A completed <a class="reference internal" href="runners.html#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">VariabilityStudyResults</span></code></a>.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Metric key. Resolved via <code class="docutils literal notranslate"><span class="pre">preferred_metric()</span></code> if <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>ax</strong> (<em>Axes</em><em> | </em><em>None</em>) – Optional existing Axes.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The figure, or <code class="docutils literal notranslate"><span class="pre">None</span></code> on error or when display is active.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Figure | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_run_strip">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_run_strip</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_run_strip"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_run_strip" title="Link to this definition"></a></dt>
+<dd><p>Strip plot of final metric values with mean and SD markers.</p>
+<p>Best for small n (&lt; 20) where a violin would be oversmoothed.
+Each run is one dot; the mean and ±1 SD are marked with lines.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> (<a class="reference internal" href="runners.html#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><em>VariabilityStudyResults</em></a>) – A completed <a class="reference internal" href="runners.html#ictonyx.runners.VariabilityStudyResults" title="ictonyx.runners.VariabilityStudyResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">VariabilityStudyResults</span></code></a>.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Metric key. Resolved via <code class="docutils literal notranslate"><span class="pre">preferred_metric()</span></code> if <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>ax</strong> (<em>Axes</em><em> | </em><em>None</em>) – Optional existing Axes.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The figure, or <code class="docutils literal notranslate"><span class="pre">None</span></code> on error or when display is active.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Figure | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_comparison_boxplots">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_comparison_boxplots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">comparison_results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Accuracy'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_comparison_boxplots"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_comparison_boxplots" title="Link to this definition"></a></dt>
+<dd><p>Side-by-side boxplots comparing metric distributions across models.</p>
+<p>Each model’s runs are shown as a boxplot with individual data points
+overlaid. If pairwise statistical comparisons are present in the
+input, significance annotations are added to the title.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>comparison_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>) – Either a dict returned by
+<a class="reference internal" href="api.html#ictonyx.api.compare_models" title="ictonyx.api.compare_models"><code class="xref py py-func docutils literal notranslate"><span class="pre">compare_models()</span></code></a> (must contain a
+<code class="docutils literal notranslate"><span class="pre">'raw_data'</span></code> key), or a plain dict mapping model names
+to lists/arrays of metric values.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Label for the y-axis (default <code class="docutils literal notranslate"><span class="pre">'Accuracy'</span></code>).</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+<li><p><strong>ax</strong> (<a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.html#matplotlib.axes.Axes" title="(in Matplotlib v3.10.8)"><em>Axes</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the raw data
+cannot be extracted.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_comparison_forest">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_comparison_forest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">comparison_results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">baseline_model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Accuracy'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_comparison_forest"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_comparison_forest" title="Link to this definition"></a></dt>
+<dd><p>Forest plot of effect sizes relative to a baseline model.</p>
+<p>For each non-baseline model, shows the mean difference from the
+baseline with a 95% confidence interval, plotted as a horizontal
+error bar. A vertical dashed line at zero marks no difference.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>comparison_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Dict with a <code class="docutils literal notranslate"><span class="pre">'raw_data'</span></code> key mapping model
+names to arrays of metric values.</p></li>
+<li><p><strong>baseline_model</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Name of the model to use as the reference. Must
+be a key in <code class="docutils literal notranslate"><span class="pre">raw_data</span></code>.</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Label for the x-axis (default <code class="docutils literal notranslate"><span class="pre">'Accuracy'</span></code>).</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+<li><p><strong>ax</strong> (<a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.html#matplotlib.axes.Axes" title="(in Matplotlib v3.10.8)"><em>Axes</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the baseline
+model is not found in the data.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_pairwise_comparison_matrix">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_pairwise_comparison_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">comparison_results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(12,</span> <span class="pre">10)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_effect_sizes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">annotate_significance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_pairwise_comparison_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_pairwise_comparison_matrix" title="Link to this definition"></a></dt>
+<dd><p>Heatmap matrix of pairwise p-values, significance, and effect sizes.</p>
+<p>Creates 2–3 side-by-side heatmaps showing p-values, binary
+significance indicators, and (optionally) effect sizes for every
+pair of models.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>comparison_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>) – Dict returned by
+<a class="reference internal" href="api.html#ictonyx.api.compare_models" title="ictonyx.api.compare_models"><code class="xref py py-func docutils literal notranslate"><span class="pre">compare_models()</span></code></a>, containing a
+<code class="docutils literal notranslate"><span class="pre">'pairwise_comparisons'</span></code> key.</p></li>
+<li><p><strong>figsize</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>) – Figure dimensions. Default <code class="docutils literal notranslate"><span class="pre">(12,</span> <span class="pre">10)</span></code>.</p></li>
+<li><p><strong>show_effect_sizes</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, include an effect-size heatmap.
+Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>annotate_significance</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, mark significant cells with
+asterisks. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if no pairwise
+comparisons are present.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_grid_study_heatmap">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_grid_study_heatmap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">grid_results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_param</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_param</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stat</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'mean'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_grid_study_heatmap"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_grid_study_heatmap" title="Link to this definition"></a></dt>
+<dd><p>Heatmap of a grid study metric across two swept parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>grid_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – A <a class="reference internal" href="runners.html#ictonyx.runners.GridStudyResults" title="ictonyx.runners.GridStudyResults"><code class="xref py py-class docutils literal notranslate"><span class="pre">GridStudyResults</span></code></a> object.</p></li>
+<li><p><strong>x_param</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Parameter name for the x-axis (columns of heatmap).</p></li>
+<li><p><strong>y_param</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Parameter name for the y-axis (rows of heatmap).</p></li>
+<li><p><strong>metric</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Metric to display. Defaults to <code class="docutils literal notranslate"><span class="pre">grid_results.metric</span></code>.</p></li>
+<li><p><strong>stat</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Statistic to display — <code class="docutils literal notranslate"><span class="pre">'mean'</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">'sd'</span></code>.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_training_stability">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_training_stability</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stability_results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(12,</span> <span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_training_stability"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_training_stability" title="Link to this definition"></a></dt>
+<dd><p>Plot training stability diagnostics from a stability analysis.</p>
+<p>Creates a multi-panel figure showing convergence behavior, loss
+distributions, and coefficient of variation across runs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>stability_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>) – Dict produced by a stability analysis function,
+containing keys such as <code class="docutils literal notranslate"><span class="pre">'n_runs'</span></code>, <code class="docutils literal notranslate"><span class="pre">'common_length'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'final_loss_mean'</span></code>, <code class="docutils literal notranslate"><span class="pre">'final_loss_std'</span></code>, <code class="docutils literal notranslate"><span class="pre">'final_loss_cv'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'stability_assessment'</span></code>, <code class="docutils literal notranslate"><span class="pre">'converged_runs'</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">'final_losses_list'</span></code>.</p></li>
+<li><p><strong>figsize</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>) – Figure dimensions in inches. Default <code class="docutils literal notranslate"><span class="pre">(12,</span> <span class="pre">8)</span></code>.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if display is enabled.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_autocorr_vs_lag">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_autocorr_vs_lag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_lag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Autocorrelation</span> <span class="pre">of</span> <span class="pre">Loss'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_autocorr_vs_lag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_autocorr_vs_lag" title="Link to this definition"></a></dt>
+<dd><p>Plot autocorrelation of a metric series as a function of lag.</p>
+<p>Useful for diagnosing sequential dependence between runs — if
+autocorrelation is high at lag 1, consecutive runs may not be
+independent (e.g. due to incomplete GPU memory cleanup).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – A <code class="docutils literal notranslate"><span class="pre">pd.Series</span></code> or list of metric values ordered by run.</p></li>
+<li><p><strong>max_lag</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Maximum lag to compute. Default 20.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+<li><p><strong>title</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>ax</strong> (<a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.html#matplotlib.axes.Axes" title="(in Matplotlib v3.10.8)"><em>Axes</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if display is enabled.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_averaged_autocorr">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_averaged_autocorr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lags</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mean_autocorr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">std_autocorr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Averaged</span> <span class="pre">Autocorrelation</span> <span class="pre">of</span> <span class="pre">Loss'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_averaged_autocorr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_averaged_autocorr" title="Link to this definition"></a></dt>
+<dd><p>Plot averaged autocorrelation with error bands across multiple studies.</p>
+<p>Shows the mean autocorrelation at each lag with ±1 standard deviation
+shaded, summarizing sequential dependence across repeated studies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lags</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – List of integer lag values.</p></li>
+<li><p><strong>mean_autocorr</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Mean autocorrelation at each lag.</p></li>
+<li><p><strong>std_autocorr</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Standard deviation of autocorrelation at each lag.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+<li><p><strong>title</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>ax</strong> (<a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.html#matplotlib.axes.Axes" title="(in Matplotlib v3.10.8)"><em>Axes</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if display is enabled.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_pacf_vs_lag">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_pacf_vs_lag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_lag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Partial</span> <span class="pre">Autocorrelation</span> <span class="pre">of</span> <span class="pre">Loss'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_pacf_vs_lag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_pacf_vs_lag" title="Link to this definition"></a></dt>
+<dd><p>Plot partial autocorrelation function (PACF) with confidence bands.</p>
+<p>Requires <code class="docutils literal notranslate"><span class="pre">statsmodels</span></code>. PACF isolates the direct correlation at
+each lag, removing the influence of intermediate lags.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>Series</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – A <code class="docutils literal notranslate"><span class="pre">pd.Series</span></code> or list of metric values ordered by run.</p></li>
+<li><p><strong>max_lag</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Maximum lag to compute. Default 20.</p></li>
+<li><p><strong>title</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Plot title. Default <code class="docutils literal notranslate"><span class="pre">'Partial</span> <span class="pre">Autocorrelation</span> <span class="pre">of</span> <span class="pre">Loss'</span></code>.</p></li>
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Confidence level for the bands. Default 0.05 (95% CI).</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+<li><p><strong>ax</strong> (<a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.html#matplotlib.axes.Axes" title="(in Matplotlib v3.10.8)"><em>Axes</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if <code class="docutils literal notranslate"><span class="pre">statsmodels</span></code>
+is not installed or the series is too short.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ictonyx.plotting.plot_averaged_pacf">
+<span class="sig-prename descclassname"><span class="pre">ictonyx.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_averaged_pacf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lags</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mean_pacf</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">std_pacf</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Averaged</span> <span class="pre">Partial</span> <span class="pre">Autocorrelation</span> <span class="pre">of</span> <span class="pre">Loss'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conf_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/plotting.html#plot_averaged_pacf"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.plotting.plot_averaged_pacf" title="Link to this definition"></a></dt>
+<dd><p>Plot averaged partial autocorrelation with error bands across runs.</p>
+<p>Shows the mean PACF at each lag with ±1 standard deviation shaded.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lags</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – List of integer lag values.</p></li>
+<li><p><strong>mean_pacf</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Mean PACF at each lag.</p></li>
+<li><p><strong>std_pacf</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Standard deviation of PACF at each lag.</p></li>
+<li><p><strong>title</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Plot title. Default <code class="docutils literal notranslate"><span class="pre">'Averaged</span> <span class="pre">Partial</span> <span class="pre">Autocorrelation</span> <span class="pre">of</span> <span class="pre">Loss'</span></code>.</p></li>
+<li><p><strong>conf_level</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Confidence level for reference lines. Default 0.95.</p></li>
+<li><p><strong>show</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em> | </em><em>None</em>) – Display behavior. See <a class="reference internal" href="#ictonyx.plotting.plot_confusion_matrix" title="ictonyx.plotting.plot_confusion_matrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_confusion_matrix()</span></code></a>.</p></li>
+<li><p><strong>n_series</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <code class="docutils literal notranslate"><span class="pre">matplotlib.figure.Figure</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if display is enabled.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.10.8)"><em>Figure</em></a> | None</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>deprecated::</dt><dd><p><code class="docutils literal notranslate"><span class="pre">plot_averaged_pacf</span></code> is deprecated and will be removed in v0.5.0.
+Use <code class="docutils literal notranslate"><span class="pre">plot_run_independence_diagnostics()</span></code> (v0.4.4) instead.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="data.html" class="btn btn-neutral float-left" title="ictonyx.data" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="explainers.html" class="btn btn-neutral float-right" title="ictonyx.explainers" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

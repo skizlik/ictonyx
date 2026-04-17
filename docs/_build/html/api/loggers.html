@@ -1,0 +1,587 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ictonyx.loggers &mdash; Ictonyx 0.4.3 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5bfaad31"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ictonyx.tuning" href="tuning.html" />
+    <link rel="prev" title="ictonyx.explainers" href="explainers.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Ictonyx
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="analysis.html">ictonyx.analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">ictonyx.api</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runners.html">ictonyx.runners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bootstrap.html">ictonyx.bootstrap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html">ictonyx.config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core.html">ictonyx.core</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">ictonyx.data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="plotting.html">ictonyx.plotting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="explainers.html">ictonyx.explainers</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ictonyx.loggers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.loggers.BaseLogger"><code class="docutils literal notranslate"><span class="pre">BaseLogger</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.history"><code class="docutils literal notranslate"><span class="pre">BaseLogger.history</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.log_params"><code class="docutils literal notranslate"><span class="pre">BaseLogger.log_params()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.log_metric"><code class="docutils literal notranslate"><span class="pre">BaseLogger.log_metric()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.log_metrics"><code class="docutils literal notranslate"><span class="pre">BaseLogger.log_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.log_artifact"><code class="docutils literal notranslate"><span class="pre">BaseLogger.log_artifact()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.log_model"><code class="docutils literal notranslate"><span class="pre">BaseLogger.log_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.log_figure"><code class="docutils literal notranslate"><span class="pre">BaseLogger.log_figure()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.set_tags"><code class="docutils literal notranslate"><span class="pre">BaseLogger.set_tags()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.end_run"><code class="docutils literal notranslate"><span class="pre">BaseLogger.end_run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.start_child_run"><code class="docutils literal notranslate"><span class="pre">BaseLogger.start_child_run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.end_child_run"><code class="docutils literal notranslate"><span class="pre">BaseLogger.end_child_run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.BaseLogger.get_history"><code class="docutils literal notranslate"><span class="pre">BaseLogger.get_history()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger"><code class="docutils literal notranslate"><span class="pre">MLflowLogger</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.__init__"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.run_id"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.run_id</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.experiment_name"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.experiment_name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_params"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_params()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_metric"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_metric()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_metrics"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_artifact"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_artifact()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_model"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_figure"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_figure()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_dataframe"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_dataframe()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_confusion_matrix"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_confusion_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_training_history"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_training_history()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.set_tags"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.set_tags()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_system_info"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_system_info()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.start_child_run"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.start_child_run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.end_child_run"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.end_child_run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.end_run"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.end_run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.log_study_summary"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.log_study_summary()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ictonyx.loggers.MLflowLogger.get_run_url"><code class="docutils literal notranslate"><span class="pre">MLflowLogger.get_run_url()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tuning.html">ictonyx.tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="memory.html">ictonyx.memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="exceptions.html">ictonyx.exceptions</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Other</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html#id1">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Ictonyx</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">ictonyx.loggers</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/loggers.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ictonyx-loggers">
+<h1>ictonyx.loggers<a class="headerlink" href="#ictonyx-loggers" title="Link to this heading"></a></h1>
+<p>MLflow and other experiment logging integrations.</p>
+<dl class="py class" id="module-ictonyx.loggers">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.loggers.</span></span><span class="sig-name descname"><span class="pre">BaseLogger</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Base experiment logger with in-memory history tracking.</p>
+<p>Stores parameters and per-step metrics in a history dict. All
+<code class="docutils literal notranslate"><span class="pre">log_*</span></code> methods for artifacts, models, and figures are no-ops in
+the base class — subclasses (e.g. <a class="reference internal" href="#ictonyx.loggers.MLflowLogger" title="ictonyx.loggers.MLflowLogger"><code class="xref py py-class docutils literal notranslate"><span class="pre">MLflowLogger</span></code></a>) override
+them to persist data to external systems.</p>
+<p>This class is used as the default logger when no tracker is passed
+to <a class="reference internal" href="runners.html#ictonyx.runners.ExperimentRunner" title="ictonyx.runners.ExperimentRunner"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExperimentRunner</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, print activity to stdout. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>print_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> and <code class="docutils literal notranslate"><span class="pre">verbose</span></code>, print logged parameters.
+Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>print_metrics</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> and <code class="docutils literal notranslate"><span class="pre">verbose</span></code>, print logged metrics.
+Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.history">
+<span class="sig-name descname"><span class="pre">history</span></span><a class="headerlink" href="#ictonyx.loggers.BaseLogger.history" title="Link to this definition"></a></dt>
+<dd><p>Dict with keys <code class="docutils literal notranslate"><span class="pre">'params'</span></code> (Dict) and <code class="docutils literal notranslate"><span class="pre">'metrics'</span></code>
+(List of <code class="docutils literal notranslate"><span class="pre">{'key',</span> <span class="pre">'value',</span> <span class="pre">'step'}</span></code> dicts).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.log_params">
+<span class="sig-name descname"><span class="pre">log_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.log_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.log_params" title="Link to this definition"></a></dt>
+<dd><p>Logs a dictionary of parameters and stores it in history.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.log_metric">
+<span class="sig-name descname"><span class="pre">log_metric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.log_metric"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.log_metric" title="Link to this definition"></a></dt>
+<dd><p>Logs a single metric and stores it in history.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>step</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.log_metrics">
+<span class="sig-name descname"><span class="pre">log_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metrics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.log_metrics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.log_metrics" title="Link to this definition"></a></dt>
+<dd><p>Logs multiple metrics at once.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>metrics</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>)</p></li>
+<li><p><strong>step</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.log_artifact">
+<span class="sig-name descname"><span class="pre">log_artifact</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">artifact_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.log_artifact"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.log_artifact" title="Link to this definition"></a></dt>
+<dd><p>Logs an artifact (file) - base implementation does nothing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>artifact_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>artifact_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.log_model">
+<span class="sig-name descname"><span class="pre">log_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'model'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.log_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.log_model" title="Link to this definition"></a></dt>
+<dd><p>Logs a model - base implementation does nothing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>artifact_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.log_figure">
+<span class="sig-name descname"><span class="pre">log_figure</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">figure</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.log_figure"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.log_figure" title="Link to this definition"></a></dt>
+<dd><p>Logs a matplotlib figure - base implementation does nothing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>artifact_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.set_tags">
+<span class="sig-name descname"><span class="pre">set_tags</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.set_tags"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.set_tags" title="Link to this definition"></a></dt>
+<dd><p>Sets tags for the run - base implementation does nothing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>tags</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.end_run">
+<span class="sig-name descname"><span class="pre">end_run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.end_run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.end_run" title="Link to this definition"></a></dt>
+<dd><p>Called at the end of a run to finalize logging.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.start_child_run">
+<span class="sig-name descname"><span class="pre">start_child_run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">run_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.start_child_run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.start_child_run" title="Link to this definition"></a></dt>
+<dd><p>No-op for base logger. Returns empty string.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>run_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.end_child_run">
+<span class="sig-name descname"><span class="pre">end_child_run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.end_child_run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.end_child_run" title="Link to this definition"></a></dt>
+<dd><p>No-op for base logger.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.BaseLogger.get_history">
+<span class="sig-name descname"><span class="pre">get_history</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#BaseLogger.get_history"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.BaseLogger.get_history" title="Link to this definition"></a></dt>
+<dd><p>Returns the logged history.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ictonyx.loggers.</span></span><span class="sig-name descname"><span class="pre">MLflowLogger</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">run_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">experiment_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ictonyx_experiment'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tracking_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#ictonyx.loggers.BaseLogger" title="ictonyx.loggers.BaseLogger"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseLogger</span></code></a></p>
+<p>Experiment logger backed by MLflow.</p>
+<p>Extends <a class="reference internal" href="#ictonyx.loggers.BaseLogger" title="ictonyx.loggers.BaseLogger"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseLogger</span></code></a> to persist parameters, metrics, artifacts,
+models, and figures to an MLflow tracking server. Creates a new MLflow
+run on initialization and ends it on <a class="reference internal" href="#ictonyx.loggers.MLflowLogger.end_run" title="ictonyx.loggers.MLflowLogger.end_run"><code class="xref py py-meth docutils literal notranslate"><span class="pre">end_run()</span></code></a>.</p>
+<p>Requires <code class="docutils literal notranslate"><span class="pre">mlflow</span></code>. Install with <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">mlflow</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>run_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Optional display name for this MLflow run.</p></li>
+<li><p><strong>experiment_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – MLflow experiment name. Created if it does not
+exist. Default <code class="docutils literal notranslate"><span class="pre">'ictonyx_experiment'</span></code>.</p></li>
+<li><p><strong>tracking_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – MLflow tracking server URI. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, uses the
+local <code class="docutils literal notranslate"><span class="pre">mlruns/</span></code> directory. Default <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Print logging activity to stdout. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ImportError" title="(in Python v3.14)"><strong>ImportError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">mlflow</span></code> is not installed.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">run_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">experiment_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ictonyx_experiment'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tracking_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize MLflow logger.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>run_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Name for this specific run</p></li>
+<li><p><strong>experiment_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Name of the MLflow experiment</p></li>
+<li><p><strong>tracking_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – MLflow tracking server URI (None uses local mlruns/)</p></li>
+<li><p><strong>verbose</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Whether to print logging messages</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.run_id">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">run_id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.run_id" title="Link to this definition"></a></dt>
+<dd><p>Get the current run ID.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.experiment_name">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">experiment_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.experiment_name" title="Link to this definition"></a></dt>
+<dd><p>Get the current experiment name.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_params">
+<span class="sig-name descname"><span class="pre">log_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_params" title="Link to this definition"></a></dt>
+<dd><p>Logs parameters to MLflow and stores in history.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_metric">
+<span class="sig-name descname"><span class="pre">log_metric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_metric"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_metric" title="Link to this definition"></a></dt>
+<dd><p>Logs a metric to MLflow and stores in history.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>step</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_metrics">
+<span class="sig-name descname"><span class="pre">log_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metrics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_metrics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_metrics" title="Link to this definition"></a></dt>
+<dd><p>Logs multiple metrics efficiently.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>metrics</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>)</p></li>
+<li><p><strong>step</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_artifact">
+<span class="sig-name descname"><span class="pre">log_artifact</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">artifact_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_artifact"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_artifact" title="Link to this definition"></a></dt>
+<dd><p>Logs an artifact file to MLflow.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>artifact_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>artifact_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_model">
+<span class="sig-name descname"><span class="pre">log_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'model'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_model" title="Link to this definition"></a></dt>
+<dd><p>Log a model to MLflow using the framework-appropriate flavor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>artifact_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_figure">
+<span class="sig-name descname"><span class="pre">log_figure</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">figure</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_figure"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_figure" title="Link to this definition"></a></dt>
+<dd><p>Logs a matplotlib figure as an artifact.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>artifact_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_dataframe">
+<span class="sig-name descname"><span class="pre">log_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_dataframe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_dataframe" title="Link to this definition"></a></dt>
+<dd><p>Logs a pandas DataFrame as a CSV artifact.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>)</p></li>
+<li><p><strong>artifact_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_confusion_matrix">
+<span class="sig-name descname"><span class="pre">log_confusion_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cm_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'confusion_matrix.csv'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_confusion_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_confusion_matrix" title="Link to this definition"></a></dt>
+<dd><p>Logs a confusion matrix DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cm_df</strong> (<em>DataFrame</em>)</p></li>
+<li><p><strong>artifact_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_training_history">
+<span class="sig-name descname"><span class="pre">log_training_history</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">history</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'training_history.csv'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_training_history"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_training_history" title="Link to this definition"></a></dt>
+<dd><p>Logs training history as both metrics and artifact.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>history</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em> | </em><em>DataFrame</em>)</p></li>
+<li><p><strong>artifact_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.set_tags">
+<span class="sig-name descname"><span class="pre">set_tags</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tags</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.set_tags"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.set_tags" title="Link to this definition"></a></dt>
+<dd><p>Sets tags for the current run.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>tags</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_system_info">
+<span class="sig-name descname"><span class="pre">log_system_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_system_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_system_info" title="Link to this definition"></a></dt>
+<dd><p>Logs system information as tags.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.start_child_run">
+<span class="sig-name descname"><span class="pre">start_child_run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">run_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.start_child_run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.start_child_run" title="Link to this definition"></a></dt>
+<dd><p>Start a nested child run under the current parent run.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>run_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.end_child_run">
+<span class="sig-name descname"><span class="pre">end_child_run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.end_child_run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.end_child_run" title="Link to this definition"></a></dt>
+<dd><p>End the current nested child run.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.end_run">
+<span class="sig-name descname"><span class="pre">end_run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.end_run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.end_run" title="Link to this definition"></a></dt>
+<dd><p>Ends the MLflow run.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.log_study_summary">
+<span class="sig-name descname"><span class="pre">log_study_summary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.log_study_summary"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.log_study_summary" title="Link to this definition"></a></dt>
+<dd><p>Log statistical summary of a completed study to the parent run.</p>
+<p>Logs mean and SD for all tracked validation metrics, and mean
+and SD for all tracked test metrics when test data is present.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>results</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – A VariabilityStudyResults object from run_study()
+or variability_study().</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ictonyx.loggers.MLflowLogger.get_run_url">
+<span class="sig-name descname"><span class="pre">get_run_url</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ictonyx/loggers.html#MLflowLogger.get_run_url"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ictonyx.loggers.MLflowLogger.get_run_url" title="Link to this definition"></a></dt>
+<dd><p>Return the MLflow UI URL for this run.</p>
+<p>For remote tracking servers, uses the configured tracking URI directly.
+For local file-based tracking (<code class="docutils literal notranslate"><span class="pre">file://</span></code>), defaults to
+<code class="docutils literal notranslate"><span class="pre">http://localhost:5000</span></code> — the standard <code class="docutils literal notranslate"><span class="pre">mlflow</span> <span class="pre">ui</span></code> address.
+Override with the <code class="docutils literal notranslate"><span class="pre">MLFLOW_UI_URL</span></code> environment variable when serving
+the UI on a non-default host or port.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="explainers.html" class="btn btn-neutral float-left" title="ictonyx.explainers" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="tuning.html" class="btn btn-neutral float-right" title="ictonyx.tuning" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Stephen Kizlik.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -44,6 +44,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from .core import BaseModelWrapper
+    from .runners import VariabilityStudyResults
 
 
 # --- Helpers ---
@@ -414,6 +415,7 @@ def plot_variability_summary(
     final_metrics_series: Optional[Union[pd.Series, List]] = None,
     final_test_series: Optional[Union[pd.Series, List]] = None,
     metric: str = "accuracy",
+    kind: Optional[str] = None,
     show_histogram: bool = True,
     show_boxplot: bool = False,
     show_mean_lines: bool = True,
@@ -469,6 +471,33 @@ def plot_variability_summary(
     """
 
     _check_plotting()
+
+    # ── New dispatch path: results= + kind= ──────────────────────────────
+    if results is not None and kind is not None:
+        _dispatch = {
+            "trajectories": plot_run_trajectories,
+            "distribution": plot_run_distribution,
+            "strip": plot_run_strip,
+        }
+        fn = _dispatch.get(kind)
+        if fn is None:
+            raise ValueError(
+                f"Unknown kind='{kind}'. " f"Valid options: {sorted(_dispatch.keys())}."
+            )
+        return fn(results, metric=metric, show=show)
+
+    # ── Legacy positional-argument form deprecation ───────────────────────
+    if all_runs_metrics_list is not None or final_metrics_series is not None:
+        warnings.warn(
+            "Passing all_runs_metrics_list, final_metrics_series, or "
+            "final_test_series directly to plot_variability_summary() is "
+            "deprecated and will be removed in v0.5.0. "
+            "Pass a VariabilityStudyResults object via results= and use "
+            "kind= to select the plot type. Example: "
+            "ix.plot_variability_summary(results=my_results, kind='trajectories').",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     # Allow passing a VariabilityStudyResults object directly via results=
     if results is not None:
@@ -844,7 +873,10 @@ def plot_run_strip(
 
 
 def plot_comparison_boxplots(
-    comparison_results: Dict[str, Any], metric: str = "Accuracy", show: Optional[bool] = None
+    comparison_results: Dict[str, Any],
+    metric: str = "Accuracy",
+    ax: Optional["Axes"] = None,
+    show: Optional[bool] = None,
 ) -> Optional["Figure"]:
     """Side-by-side boxplots comparing metric distributions across models.
 
@@ -881,11 +913,48 @@ def plot_comparison_boxplots(
 
     df = pd.DataFrame(records)
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    if ax is None:
+        fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    else:
+        fig = ax.figure
 
     # Use themed palette if possible, else default
     sns.boxplot(data=df, x="Model", y=metric, hue="Model", palette="Blues", legend=False, ax=ax)
-    sns.stripplot(data=df, x="Model", y=metric, color="black", alpha=0.3, ax=ax)
+    sns.stripplot(data=df, x="Model", y=metric, color=settings.THEME["point"], alpha=0.3, ax=ax)
+
+    # ── Significance bracket annotations ─────────────────────────────────
+    if hasattr(comparison_results, "significant_comparisons"):
+        sig_pairs = comparison_results.significant_comparisons or []
+        model_names_sorted = sorted(df["Model"].unique())
+        y_max = df[metric].max()
+        y_range = df[metric].max() - df[metric].min()
+        step = y_range * 0.08
+
+        for k, pair in enumerate(sig_pairs[:5]):  # cap at 5 to avoid overlap
+            parts = pair.split("_vs_", maxsplit=1)
+            if len(parts) != 2:
+                continue
+            m1, m2 = parts
+            if m1 not in model_names_sorted or m2 not in model_names_sorted:
+                continue
+            x1 = model_names_sorted.index(m1)
+            x2 = model_names_sorted.index(m2)
+            y = y_max + step * (k + 1)
+            ax.plot(
+                [x1, x1, x2, x2],
+                [y - step * 0.2, y, y, y - step * 0.2],
+                lw=1.2,
+                color=settings.THEME["significant"],
+            )
+            ax.text(
+                (x1 + x2) / 2,
+                y + step * 0.05,
+                "*",
+                ha="center",
+                va="bottom",
+                color=settings.THEME["significant"],
+                fontsize=14,
+            )
 
     # Statistical Annotations Title
     if hasattr(comparison_results, "pairwise_comparisons"):
@@ -1378,6 +1447,7 @@ def plot_autocorr_vs_lag(
     data: Union[pd.Series, List[float]],
     max_lag: int = 20,
     title: str = "Autocorrelation of Loss",
+    ax: Optional["Axes"] = None,
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
     """Plot autocorrelation of a metric series as a function of lag.
@@ -1410,7 +1480,10 @@ def plot_autocorr_vs_lag(
     autocorr_values = [data.autocorr(lag) for lag in range(1, max_lag + 1)]
     lags = range(1, max_lag + 1)
 
-    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    else:
+        fig = ax.figure
     ax.stem(lags, autocorr_values)
     ax.set_title(title)
     ax.set_xlabel("Lag")
@@ -1426,6 +1499,7 @@ def plot_averaged_autocorr(
     mean_autocorr: List[float],
     std_autocorr: List[float],
     title: str = "Averaged Autocorrelation of Loss",
+    ax: Optional["Axes"] = None,
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
     """Plot averaged autocorrelation with error bands across multiple studies.
@@ -1443,7 +1517,10 @@ def plot_averaged_autocorr(
         The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
     """
     _check_plotting()
-    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    else:
+        fig = ax.figure
     ax.plot(lags, mean_autocorr, color=settings.THEME["val"], label="Mean Autocorrelation")
     ax.fill_between(
         lags,
@@ -1468,6 +1545,7 @@ def plot_pacf_vs_lag(
     max_lag: int = 20,
     title: str = "Partial Autocorrelation of Loss",
     alpha: float = 0.05,
+    ax: Optional["Axes"] = None,
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
     """Plot partial autocorrelation function (PACF) with confidence bands.
@@ -1503,7 +1581,10 @@ def plot_pacf_vs_lag(
     conf_int = conf_int[1:]
     lags = range(1, max_lag + 1)
 
-    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
+    else:
+        fig = ax.figure
     ax.stem(lags, pacf_values, label="PACF")
     # conf_int from statsmodels is already in absolute PACF value units.
     # Do NOT subtract pacf_values — that recenters the band at zero.

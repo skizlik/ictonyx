@@ -1,6 +1,7 @@
 # ictonyx/core.py
 
 import gc
+import os
 import pickle
 import warnings
 from abc import ABC, abstractmethod
@@ -1792,7 +1793,6 @@ if HUGGINGFACE_AVAILABLE:
                 logging_steps: Trainer log frequency. Default 50.
             """
             import gc
-            import os
             import tempfile
 
             # ── Seed control ─────────────────────────────────────────────
@@ -1975,8 +1975,6 @@ if HUGGINGFACE_AVAILABLE:
 
         def save_model(self, path: str) -> None:
             """Save fine-tuned model and tokenizer in HuggingFace format."""
-            import os
-
             os.makedirs(path, exist_ok=True)
             self.model.save_pretrained(path)
             if self.tokenizer is not None:
@@ -1999,7 +1997,6 @@ if HUGGINGFACE_AVAILABLE:
         def _cleanup_implementation(self) -> None:
             """Release GPU memory and delete temporary checkpoint directory."""
             import gc
-            import os
             import shutil
 
             import torch as _torch

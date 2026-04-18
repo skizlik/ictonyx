@@ -1477,11 +1477,14 @@ def compare_two_models(
             result.ci_method = ci_result.method
 
             # Compute CI for the effect size.
-            # Welch path uses Hedges' g as point estimate — use bootstrap_hedges_g_ci
-            # so the CI is for the same estimator as the point estimate.
-            # Student's t path uses Cohen's d — use bootstrap_effect_size_ci.
-            # Mann-Whitney path: no parametric effect-size CI at this time.
-            if result.effect_size is not None and "Mann-Whitney" not in result.test_name:
+            # Rank-based tests (Mann-Whitney, paired Wilcoxon) have bounded
+            # effect sizes (r <= 1.0) that are incompatible with the Cohen's d
+            # bootstrap below; skip effect-size CI for these. A proper
+            # Wilcoxon-r bootstrap CI is planned for a later release.
+            _skip_ci_effect_size = (
+                "Mann-Whitney" in result.test_name or "Wilcoxon" in result.test_name
+            )
+            if result.effect_size is not None and not _skip_ci_effect_size:
                 if "Welch" in result.test_name:
                     es_ci = bootstrap_hedges_g_ci(
                         clean1,

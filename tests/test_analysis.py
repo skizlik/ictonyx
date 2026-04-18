@@ -1550,3 +1550,50 @@ def test_paired_wilcoxon_normal_case_unchanged():
 
     assert "inconclusive" not in result.test_name.lower()
     assert not np.isnan(result.p_value)
+
+
+def test_ci_effect_size_none_for_paired_wilcoxon_large_effect():
+    """The CI attached to paired Wilcoxon must not be a Cohen's d CI.
+    Reproduces the case where a Cohen's d bootstrap CI would be disjoint
+    from the Wilcoxon r point estimate."""
+    from ictonyx.analysis import compare_two_models
+
+    rng = np.random.default_rng(0)
+    group_a = pd.Series(rng.normal(0.95, 0.01, size=20))
+    group_b = pd.Series(group_a.values - rng.normal(0.30, 0.02, size=20))
+
+    result = compare_two_models(group_a, group_b, paired=True)
+
+    assert "Wilcoxon" in result.test_name
+    assert result.ci_effect_size is None
+
+
+def test_ci_effect_size_none_for_mann_whitney():
+    """Mann-Whitney's exclusion from effect-size CI must still hold."""
+    from ictonyx.analysis import compare_two_models
+
+    rng = np.random.default_rng(1)
+    group_a = pd.Series(rng.normal(0.9, 0.05, size=15))
+    group_b = pd.Series(rng.normal(0.85, 0.05, size=15))
+
+    result = compare_two_models(group_a, group_b, paired=False)
+
+    if "Mann-Whitney" in result.test_name:
+        assert result.ci_effect_size is None
+
+
+def test_ci_effect_size_contains_point_estimate_for_parametric():
+    """Sanity: when a CI IS computed, the point estimate must be inside it."""
+    from ictonyx.analysis import compare_two_models
+
+    rng = np.random.default_rng(2)
+    group_a = pd.Series(rng.normal(0.90, 0.01, size=30))
+    group_b = pd.Series(rng.normal(0.85, 0.01, size=30))
+
+    result = compare_two_models(group_a, group_b, paired=False)
+
+    if result.ci_effect_size is not None:
+        lo, hi = result.ci_effect_size
+        assert lo <= result.effect_size <= hi, (
+            f"CI ({lo}, {hi}) does not contain point estimate " f"{result.effect_size}"
+        )

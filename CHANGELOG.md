@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - `VariabilityStudyResults.report()` for self-contained HTML/markdown summaries
 - `VariabilityStudyResults.bootstrap_ci()` convenience method
-- Infrastructure sweep: BUG-27 through BUG-54 (selected)
+- Infrastructure sweep
 - `PyTorchDataHandler`
 - Paired/blocked experimental designs for model comparison
 - `plot_run_independence_diagnostics`, `plot_paired_deltas`,

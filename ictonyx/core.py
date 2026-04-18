@@ -420,14 +420,29 @@ if TENSORFLOW_AVAILABLE:
             model: KerasModel,
             model_id: str = "",
             task: Optional[str] = None,
+            clear_session: bool = True,
         ):
+            """
+            Args:
+                model: A compiled ``tf.keras.Model``.
+                model_id: Optional label for logging.
+                task: ``'classification'``, ``'regression'``, or ``None``
+                    (auto-detect from loss function).
+                clear_session: If ``True`` (default), call
+                    ``tf.keras.backend.clear_session()`` at the start of
+                    each ``fit()`` call. This releases GPU memory from
+                    previous runs and prevents accumulation across a
+                    variability study. Set to ``False`` only if you manage
+                    the session lifecycle externally.
+            """
             if task is not None and task not in ("classification", "regression"):
                 raise ValueError(
                     f"task must be 'classification', 'regression', or None "
                     f"(auto-detect from loss), got '{task}'."
                 )
             super().__init__(model, model_id)
-            self.task: Optional[str] = task  # None = auto-detect from loss
+            self.task: Optional[str] = task
+            self.clear_session = clear_session
 
         def _cleanup_implementation(self):
             """TensorFlow/Keras specific cleanup."""
@@ -470,6 +485,14 @@ if TENSORFLOW_AVAILABLE:
                 TypeError: If `train_data` is not in one of the three
                     supported formats.
             """
+            if self.clear_session:
+                try:
+                    import tensorflow as tf
+
+                    tf.keras.backend.clear_session()
+                except Exception:
+                    pass
+
             if isinstance(train_data, (tf.data.Dataset, Sequence)):
                 keras_history = self.model.fit(
                     train_data, validation_data=validation_data, **kwargs

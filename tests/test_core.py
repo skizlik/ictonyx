@@ -2124,3 +2124,46 @@ class TestPredictProbaToleranceCheck:
         with patch.object(wrapper, "model", model):
             proba = wrapper.predict_proba(np_.zeros((2, 4)))
         assert proba is not None
+
+
+class TestKerasClearSession:
+    """clear_session parameter controls session clearing in fit()."""
+
+    def test_default_is_true(self):
+        pytest.importorskip("tensorflow")
+        from unittest.mock import MagicMock
+
+        from ictonyx.core import KerasModelWrapper
+
+        model = MagicMock()
+        model.metrics_names = ["loss", "accuracy"]
+        wrapper = KerasModelWrapper(model)
+        assert wrapper.clear_session is True
+
+    def test_false_disables_clear(self):
+        pytest.importorskip("tensorflow")
+        from unittest.mock import MagicMock
+
+        from ictonyx.core import KerasModelWrapper
+
+        model = MagicMock()
+        wrapper = KerasModelWrapper(model, clear_session=False)
+        assert wrapper.clear_session is False
+
+    def test_clear_session_called_during_fit(self):
+        pytest.importorskip("tensorflow")
+        from unittest.mock import MagicMock, patch
+
+        import tensorflow as tf
+
+        from ictonyx.core import KerasModelWrapper
+
+        model = MagicMock()
+        model.metrics_names = ["loss", "accuracy"]
+        model.fit.return_value = MagicMock(history={"loss": [0.5], "accuracy": [0.8]})
+        model.evaluate.return_value = [0.4, 0.85]
+
+        wrapper = KerasModelWrapper(model, clear_session=True)
+        with patch.object(tf.keras.backend, "clear_session") as mock_clear:
+            wrapper.fit((np.zeros((10, 4)), np.zeros(10)))
+        mock_clear.assert_called()

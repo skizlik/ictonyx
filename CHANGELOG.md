@@ -8,17 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- `HuggingFaceModelWrapper` — text classification via `transformers.Trainer`;
-  seed-controlled fine-tuning for variability studies. `pip install ictonyx[huggingface]`
-- Sphinx documentation site hosted on ReadTheDocs
-- `plot_rank_correlation_over_epoch` — Spearman correlation between epoch-k
-  rankings and final rankings; identifies the training step at which seed
-  order stabilises
 - `VariabilityStudyResults.report()` for self-contained HTML/markdown summaries
 - `VariabilityStudyResults.bootstrap_ci()` convenience method
-- Infrastructure sweep
-- Paired/blocked experimental designs for model comparison
+- Infrastructure sweep: BUG-27 through BUG-54 (selected)
 - `PyTorchDataHandler`
+- Paired/blocked experimental designs for model comparison
+- `plot_run_independence_diagnostics`, `plot_paired_deltas`,
+  `plot_epoch_run_heatmap`, `plot_sequential_ci`, `plot_stability_pareto`,
+  `plot_run_metric_correlations`
+- Migration Guide (prerequisite for v0.5.0 deprecated API removal)
 
 ---
 

@@ -1230,6 +1230,7 @@ def paired_wilcoxon_test(
     series_b: pd.Series,
     alpha: float = 0.05,
     random_state: Optional[int] = None,
+    deterministic_tol: float = 1e-10,
 ) -> StatisticalTestResult:
     """Paired Wilcoxon signed-rank test for two matched samples.
 
@@ -1251,6 +1252,30 @@ def paired_wilcoxon_test(
     n = len(aligned)
     differences = aligned["a"] - aligned["b"]
     nonzero = differences[differences != 0]
+
+    if np.std(differences) < deterministic_tol:
+        warnings.warn(
+            "All paired differences are effectively constant "
+            f"(std < {deterministic_tol}). A paired test on deterministic "
+            "differences is not informative — p-values will be trivially "
+            "significant or trivially not. Returning inconclusive result. "
+            "If both models used identical seeds and produced identical "
+            "predictions, the paired comparison is undefined; use "
+            "test_above_chance() or inspect per-run values directly.",
+            UserWarning,
+            stacklevel=2,
+        )
+        result = StatisticalTestResult(
+            test_name="Paired Wilcoxon Signed-Rank Test (inconclusive)",
+            statistic=float("nan"),
+            p_value=float("nan"),
+        )
+        result.sample_sizes = {"n_pairs": n, "non_zero_differences": 0}
+        result.conclusion = (
+            "Inconclusive: paired differences have zero variance " "(deterministic model pair)."
+        )
+        result.warnings.append("Deterministic paired differences; test returned inconclusive.")
+        return result
 
     result = StatisticalTestResult(
         test_name="Paired Wilcoxon Signed-Rank Test",

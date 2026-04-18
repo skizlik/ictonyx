@@ -31,6 +31,7 @@ from ictonyx.analysis import (  # Dataclass; Validation; Effect sizes; Multiple 
     get_confusion_matrix_df,
     kruskal_wallis_test,
     mann_whitney_test,
+    paired_wilcoxon_test,
     rank_biserial_correlation,
     shapiro_wilk_test,
     validate_sample_sizes,
@@ -1315,7 +1316,7 @@ class TestPairedWilcoxonTest:
 
         # Clearly different models — all runs A > B
         a = pd.Series([0.85, 0.87, 0.86, 0.88, 0.84, 0.89])
-        b = pd.Series([0.70, 0.72, 0.71, 0.73, 0.69, 0.74])
+        b = pd.Series([0.70, 0.73, 0.71, 0.72, 0.68, 0.75])
         result = paired_wilcoxon_test(a, b)
 
         assert not np.isnan(result.p_value), "p_value must not be NaN"
@@ -1331,7 +1332,7 @@ class TestPairedWilcoxonTest:
         from ictonyx.analysis import paired_wilcoxon_test, wilcoxon_signed_rank_test
 
         a = pd.Series([0.82, 0.84, 0.83, 0.85, 0.81, 0.86])
-        b = pd.Series([0.70, 0.72, 0.71, 0.73, 0.69, 0.74])
+        b = pd.Series([0.70, 0.73, 0.71, 0.72, 0.68, 0.75])
         differences = a - b  # all positive
 
         paired_result = paired_wilcoxon_test(a, b)
@@ -1509,3 +1510,43 @@ class TestWilcoxonSignedRankDeprecation:
             warnings.simplefilter("ignore", DeprecationWarning)
             result = wilcoxon_signed_rank_test(pd.Series([0.85, 0.87, 0.83, 0.86, 0.84, 0.88]))
         assert isinstance(result, StatisticalTestResult)
+
+
+def test_paired_wilcoxon_inconclusive_on_identical_pairs():
+    """Paired Wilcoxon must return inconclusive, not significant, when
+    all differences are zero (same model run twice with identical seeds)."""
+    a = pd.Series([0.9, 0.91, 0.89, 0.92, 0.88])
+    b = pd.Series([0.9, 0.91, 0.89, 0.92, 0.88])
+
+    with pytest.warns(UserWarning, match="deterministic"):
+        result = paired_wilcoxon_test(a, b)
+
+    assert "inconclusive" in result.test_name.lower()
+    assert np.isnan(result.p_value)
+    assert np.isnan(result.statistic)
+
+
+def test_paired_wilcoxon_inconclusive_on_constant_offset():
+    """Also triggers when differences are all a constant nonzero value."""
+    a = pd.Series([0.9, 0.91, 0.89, 0.92, 0.88])
+    b = a + 0.01
+
+    with pytest.warns(UserWarning, match="deterministic"):
+        result = paired_wilcoxon_test(a, b)
+
+    assert "inconclusive" in result.test_name.lower()
+    assert np.isnan(result.p_value)
+
+
+def test_paired_wilcoxon_normal_case_unchanged():
+    """Guardrail must not trip on genuinely variable data."""
+    rng = np.random.default_rng(42)
+    a = pd.Series(rng.normal(0.9, 0.02, size=20))
+    b = pd.Series(rng.normal(0.92, 0.02, size=20))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = paired_wilcoxon_test(a, b)
+
+    assert "inconclusive" not in result.test_name.lower()
+    assert not np.isnan(result.p_value)

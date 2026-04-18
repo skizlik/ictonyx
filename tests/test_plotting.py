@@ -221,6 +221,53 @@ class TestStatisticalPlots:
         assert fig is not None
 
     @patch("matplotlib.pyplot.show")
+    def test_plot_training_stability_accepts_results_object(self, mock_show):
+        """Passing results=... computes stability analysis internally."""
+        from sklearn.datasets import make_classification
+        from sklearn.linear_model import LogisticRegression
+
+        import ictonyx as ix
+
+        X, y = make_classification(n_samples=100, random_state=0)
+        # PyTorch wrapper would give real loss curves; for sklearn we
+        # just need *some* per-epoch data. Use a minimal fixture:
+        results = ix.variability_study(model=LogisticRegression, data=(X, y), runs=5, seed=42)
+        # sklearn wrappers create a 1-epoch mock history with "loss" key
+        # if available; skip this test if not present
+        if "loss" not in results.all_runs_metrics[0].columns:
+            pytest.skip("sklearn mock history does not contain 'loss' key")
+        fig = plot_training_stability(results=results)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_plot_training_stability_both_inputs_raises(self, mock_show):
+        """Passing both stability_results and results raises ValueError."""
+        stability_dict = {
+            "n_runs": 5,
+            "common_length": 10,
+            "final_loss_mean": 0.5,
+            "final_loss_std": 0.1,
+            "final_loss_cv": 0.2,
+            "stability_assessment": "moderate",
+            "convergence_rate": 0.8,
+            "converged_runs": 4,
+            "final_losses_list": [0.4, 0.5, 0.6, 0.5, 0.5],
+        }
+        # Make a minimal results-like object via Mock
+        from unittest.mock import MagicMock
+
+        fake_results = MagicMock()
+        fake_results.all_runs_metrics = [pd.DataFrame({"loss": [0.5, 0.4, 0.3]})]
+        with pytest.raises(ValueError, match="either"):
+            plot_training_stability(stability_results=stability_dict, results=fake_results)
+
+    @patch("matplotlib.pyplot.show")
+    def test_plot_training_stability_neither_input_raises(self, mock_show):
+        """Passing nothing raises ValueError."""
+        with pytest.raises(ValueError, match="requires either"):
+            plot_training_stability()
+
+    @patch("matplotlib.pyplot.show")
     def test_plot_comparison_boxplots(self, mock_show, mock_comparison_results):
         """Test the new boxplot visualization."""
         fig = plot_comparison_boxplots(mock_comparison_results, metric="Accuracy")

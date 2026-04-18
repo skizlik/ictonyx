@@ -1488,7 +1488,11 @@ def plot_grid_study_heatmap(
 
 
 def plot_training_stability(
-    stability_results: Dict[str, Any],
+    stability_results: Optional[Dict[str, Any]] = None,
+    *,
+    results: Optional["VariabilityStudyResults"] = None,
+    metric: str = "loss",
+    window_size: int = 10,
     figsize: Tuple[int, int] = (12, 8),
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
@@ -1497,20 +1501,61 @@ def plot_training_stability(
     Creates a multi-panel figure showing convergence behavior, loss
     distributions, and coefficient of variation across runs.
 
+    Two ways to call this function:
+
+    1. **Direct**: pass a :class:`VariabilityStudyResults` via ``results=``
+       and the stability analysis will be computed for you::
+
+           ix.plot_training_stability(results=my_results)
+
+    2. **Precomputed**: pass a stability dict (useful when you want
+       multiple views of the same analysis)::
+
+           stability = ix.assess_training_stability(
+               [df['loss'] for df in my_results.all_runs_metrics]
+           )
+           ix.plot_training_stability(stability)
+
     Args:
-        stability_results: Dict produced by a stability analysis function,
-            containing keys such as ``'n_runs'``, ``'common_length'``,
+        stability_results: Dict produced by
+            :func:`~ictonyx.analysis.assess_training_stability`, containing
+            keys such as ``'n_runs'``, ``'common_length'``,
             ``'final_loss_mean'``, ``'final_loss_std'``, ``'final_loss_cv'``,
             ``'stability_assessment'``, ``'converged_runs'``, and
-            ``'final_losses_list'``.
+            ``'final_losses_list'``. Mutually exclusive with ``results``.
+        results: A :class:`VariabilityStudyResults` object. When provided,
+            the stability analysis is computed internally using the
+            specified ``metric`` column from each run's history. Mutually
+            exclusive with ``stability_results``.
+        metric: Name of the column in each run's history DataFrame to
+            analyze. Default ``"loss"``. Only used when ``results`` is
+            provided.
+        window_size: Number of recent epochs for convergence statistics.
+            Default ``10``. Only used when ``results`` is provided.
         figsize: Figure dimensions in inches. Default ``(12, 8)``.
         show: Display behavior. See :func:`plot_confusion_matrix`.
 
     Returns:
-        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
+        The ``matplotlib.figure.Figure``, or ``None`` if display is
+        enabled.
+
+    Raises:
+        ValueError: If both ``stability_results`` and ``results`` are
+            provided, or if neither is.
+        KeyError: If ``metric`` is not found in a run's history.
     """
     _check_plotting()
+    if results is not None:
+        if stability_results is not None:
+            raise ValueError("Pass either `results` or `stability_results`, not both.")
+        from .analysis import assess_training_stability
 
+        loss_histories = [pd.Series(run_df[metric]) for run_df in results.all_runs_metrics]
+        stability_results = assess_training_stability(loss_histories, window_size=window_size)
+    elif stability_results is None:
+        raise ValueError(
+            "plot_training_stability requires either `results` or `stability_results`."
+        )
     if "error" in stability_results:
         settings.logger.error(f"Cannot plot training stability: {stability_results['error']}")
         return None

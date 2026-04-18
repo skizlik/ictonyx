@@ -822,7 +822,7 @@ class TestCompareTwoModels:
 
     def test_paired_comparison_has_ci(self):
         m1 = pd.Series([0.80, 0.82, 0.79, 0.81, 0.83, 0.80, 0.82, 0.79])
-        m2 = pd.Series([0.75, 0.77, 0.74, 0.76, 0.78, 0.75, 0.77, 0.74])
+        m2 = pd.Series([0.75, 0.78, 0.74, 0.75, 0.78, 0.76, 0.77, 0.73])
         result = compare_two_models(m1, m2, paired=True)
         assert result.confidence_interval is not None
         lo, hi = result.confidence_interval
@@ -1277,7 +1277,7 @@ class TestPairedWilcoxonTest:
         from ictonyx.analysis import paired_wilcoxon_test
 
         a = pd.Series([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89, 0.93, 0.90])
-        b = pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69, 0.73, 0.70])
+        b = pd.Series([0.70, 0.73, 0.69, 0.71, 0.68, 0.71, 0.72, 0.69, 0.74, 0.70])
         result = paired_wilcoxon_test(a, b)
         assert result.p_value < 0.05
         assert result.statistic is not None
@@ -1355,7 +1355,7 @@ class TestPairedWilcoxonTest:
         from ictonyx.analysis import paired_wilcoxon_test
 
         a = pd.Series([0.85, 0.87, 0.86, 0.88, 0.84, 0.89])
-        b = pd.Series([0.70, 0.72, 0.71, 0.73, 0.69, 0.74])
+        b = pd.Series([0.70, 0.73, 0.71, 0.72, 0.68, 0.75])
         result = paired_wilcoxon_test(a, b)
 
         assert result.effect_size is not None

@@ -2067,7 +2067,7 @@ class TestCompareResults:
         from ictonyx.api import compare_results
 
         a = self._make_results([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89, 0.90, 0.91])
-        b = self._make_results([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69, 0.70, 0.71])
+        b = self._make_results([0.70, 0.73, 0.69, 0.71, 0.68, 0.71, 0.72, 0.69, 0.74, 0.70])
         result = compare_results(a, b)
         assert result.overall_test.is_significant()
 

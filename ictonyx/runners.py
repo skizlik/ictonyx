@@ -20,7 +20,7 @@ import pandas as pd
 from scipy import stats as _scipy_stats
 
 from .config import ModelConfig
-from .core import BaseModelWrapper
+from .core import BaseModelWrapper, ScikitLearnModelWrapper
 from .data import DataHandler
 from .loggers import BaseLogger
 from .memory import get_memory_info, get_memory_manager
@@ -437,14 +437,20 @@ class ExperimentRunner:
             wrapped_model = self.model_builder(self.model_config)
 
             # Train — use deterministic cudnn for reproducibility, restore after
+            # Build kwargs conditionally: sklearn wrappers ignore training-loop
+            # kwargs and emit DeprecationWarning when they're passed. Only forward
+            # epochs/batch_size/verbose to wrappers that use them.
+            fit_kwargs = {
+                "train_data": self.train_data,
+                "validation_data": self.val_data,
+            }
+            if not isinstance(wrapped_model, ScikitLearnModelWrapper):
+                fit_kwargs["epochs"] = epochs
+                fit_kwargs["batch_size"] = self.model_config.get("batch_size", 32)
+                fit_kwargs["verbose"] = self.model_config.get("verbose", 0)
+
             with self._deterministic_cudnn():
-                wrapped_model.fit(
-                    train_data=self.train_data,
-                    validation_data=self.val_data,
-                    epochs=epochs,
-                    batch_size=self.model_config.get("batch_size", 32),
-                    verbose=self.model_config.get("verbose", 0),
-                )
+                wrapped_model.fit(**fit_kwargs)
 
             # Extract training result
             if wrapped_model.training_result is None:

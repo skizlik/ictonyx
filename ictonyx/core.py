@@ -1944,6 +1944,13 @@ if HUGGINGFACE_AVAILABLE:
                     history_buffer.setdefault("loss", []).append(entry["loss"])
                     break
 
+                # Align history lengths — val metrics have one value per epoch
+                # but train loss is captured as a single final value.
+                # Mismatched lengths cause DataFrame construction to fail silently.
+            n_epochs = max((len(v) for v in history_buffer.values()), default=0)
+            if "loss" in history_buffer and len(history_buffer["loss"]) == 1:
+                history_buffer["loss"] = history_buffer["loss"] * n_epochs
+
             self.training_result = TrainingResult(
                 history=history_buffer,
                 params={

@@ -1066,14 +1066,14 @@ class VariabilityStudyResults:
         def _format_metric_block(metric_name: str, values: list) -> list:
             n = len(values)
             mean = np.mean(values)
-            sd = np.std(values, ddof=1)
+            sd = np.std(values, ddof=1) if n > 1 else float("nan")
+            se = sd / np.sqrt(n) if n > 1 else float("nan")
             block = [
                 f"{metric_name}:",
+                f"  N:                {n}",
                 f"  Mean:             {mean:.4f}",
                 f"  SD (sample, N-1): {sd:.4f}",
-            ]
-
-            block += [
+                f"  SE:               {se:.4f}",
                 f"  Min:              {np.min(values):.4f}",
                 f"  Max:              {np.max(values):.4f}",
             ]

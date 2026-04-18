@@ -2333,3 +2333,31 @@ class TestFailedRunsCheckpoint:
         assert total == 4
         failure_rate = len(runner.failed_runs) / total
         assert failure_rate == pytest.approx(0.25, abs=0.01)
+
+
+class TestSummarizeNAndSE:
+    """summarize() must include N and SE for each metric."""
+
+    def test_summarize_includes_n(self):
+        from ictonyx.runners import VariabilityStudyResults
+
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": [0.80, 0.82, 0.79, 0.83, 0.81]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        summary = results.summarize()
+        assert "N:" in summary or "N:                5" in summary
+
+    def test_summarize_includes_se(self):
+        from ictonyx.runners import VariabilityStudyResults
+
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": [0.80, 0.82, 0.79, 0.83, 0.81]},
+            final_test_metrics=[],
+            seed=42,
+        )
+        summary = results.summarize()
+        assert "SE:" in summary

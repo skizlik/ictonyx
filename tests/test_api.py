@@ -694,3 +694,87 @@ def test_build_from_class_passes_all_kwargs_when_var_keyword():
         assert "random_state" not in instance.kwargs
     finally:
         api_mod._ensure_wrapper = original_ensure
+
+
+def test_compare_models_k2_paired_carries_ci():
+    """compare_models(paired=True) must surface the mean-difference CI
+    from the analytic core. The ci_effect_size is None for paired Wilcoxon
+    (per the earlier Wilcoxon-CI fix) but confidence_interval must be
+    populated."""
+    import numpy as np
+    from sklearn.datasets import make_classification
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.tree import DecisionTreeClassifier
+
+    import ictonyx as ix
+
+    X, y = make_classification(n_samples=200, random_state=0)
+    result = ix.compare_models(
+        models=[LogisticRegression(max_iter=1000), DecisionTreeClassifier()],
+        data=(X, y),
+        runs=10,
+        seed=42,
+        paired=True,
+    )
+    assert len(result.pairwise_comparisons) == 1
+    pair = next(iter(result.pairwise_comparisons.values()))
+    # Mean-difference CI must be populated.
+    assert pair.confidence_interval is not None
+    # Paired Wilcoxon: effect-size CI is None by design (Commit 4).
+    assert pair.ci_effect_size is None
+
+
+def test_compare_models_k2_unpaired_carries_ci():
+    """compare_models(paired=False) on two models routes to compare_two_models
+    via the multi-model KW+MW path. Verify the pairwise comparison carries
+    a mean-difference CI when one is computed."""
+    from sklearn.datasets import make_classification
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.tree import DecisionTreeClassifier
+
+    import ictonyx as ix
+
+    X, y = make_classification(n_samples=200, random_state=0)
+    result = ix.compare_models(
+        models=[LogisticRegression(max_iter=1000), DecisionTreeClassifier()],
+        data=(X, y),
+        runs=10,
+        seed=42,
+        paired=False,
+    )
+    assert len(result.pairwise_comparisons) >= 1
+    pair = next(iter(result.pairwise_comparisons.values()))
+    # The pairwise_comparison object must have the CI attribute, populated
+    # or None (None is acceptable for MW path at present; see Commit 4).
+    assert hasattr(pair, "confidence_interval")
+    assert hasattr(pair, "ci_effect_size")
+
+
+def test_compare_results_paired_carries_ci():
+    """compare_results(paired=True) must carry the CI from compare_two_models."""
+    import numpy as np
+    import pandas as pd
+
+    import ictonyx as ix
+    from ictonyx.runners import VariabilityStudyResults
+
+    rng = np.random.default_rng(7)
+    # Build two fake results objects with genuine paired variation.
+    results_a = VariabilityStudyResults(
+        all_runs_metrics=[pd.DataFrame({"val_accuracy": [v]}) for v in rng.normal(0.90, 0.02, 20)],
+        final_metrics={"val_accuracy": list(rng.normal(0.90, 0.02, 20))},
+        final_test_metrics=[],
+        seed=42,
+        run_seeds=list(range(20)),
+    )
+    results_b = VariabilityStudyResults(
+        all_runs_metrics=[pd.DataFrame({"val_accuracy": [v]}) for v in rng.normal(0.87, 0.02, 20)],
+        final_metrics={"val_accuracy": list(rng.normal(0.87, 0.02, 20))},
+        final_test_metrics=[],
+        seed=42,
+        run_seeds=list(range(20)),
+    )
+
+    result = ix.compare_results(results_a, results_b, paired=True, metric="val_accuracy")
+    pair = next(iter(result.pairwise_comparisons.values()))
+    assert pair.confidence_interval is not None

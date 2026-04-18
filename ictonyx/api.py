@@ -389,7 +389,7 @@ def compare_models(
         )
 
     if paired and len(results_store) == 2:
-        from .analysis import paired_wilcoxon_test
+        from .analysis import compare_two_models
 
         names = list(results_store.keys())
         series_a = results_store[names[0]]
@@ -401,7 +401,7 @@ def compare_models(
                 f"'{names[1]}' has {len(series_b)} runs. "
                 "Use paired=False for independent comparison."
             )
-        paired_result = paired_wilcoxon_test(series_a, series_b, random_state=seed)
+        paired_result = compare_two_models(series_a, series_b, paired=True, random_state=seed)
         return ModelComparisonResults(
             overall_test=paired_result,
             raw_data=results_store,
@@ -696,21 +696,23 @@ def compare_results(
 
     pair_key = "results_a_vs_results_b"
 
+    from .analysis import compare_two_models
+
     if paired:
         if len(values_a) == len(values_b):
-            test_result = paired_wilcoxon_test(values_a, values_b, random_state=seed)
+            test_result = compare_two_models(values_a, values_b, paired=True, random_state=seed)
         else:
             warnings.warn(
                 f"compare_results(paired=True) requires equal run counts. "
                 f"results_a has {len(values_a)} runs, results_b has {len(values_b)}. "
-                "Falling back to unpaired Mann-Whitney U test. "
+                "Falling back to unpaired comparison. "
                 "Pass paired=False to suppress this warning.",
                 UserWarning,
                 stacklevel=2,
             )
-            test_result = mann_whitney_test(values_a, values_b, random_state=seed)
+            test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
     else:
-        test_result = mann_whitney_test(values_a, values_b, random_state=seed)
+        test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
 
     return ModelComparisonResults(
         overall_test=test_result,

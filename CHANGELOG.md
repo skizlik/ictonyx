@@ -19,6 +19,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Infrastructure sweep
 - Paired/blocked experimental designs for model comparison
 - `PyTorchDataHandler`
+
+---
+
+## [0.4.4] — 2026-04-18
+
+### Added
+- `HuggingFaceModelWrapper` — text classification via `transformers.Trainer`.
+  Accepts `(List[str], List[int])` or `datasets.Dataset`. Seed-controlled via
+  `transformers.set_seed()` and `TrainingArguments(seed=..., data_seed=...)`.
+  Temporary checkpoint directory cleaned up after each run to prevent disk
+  accumulation. `pip install ictonyx[huggingface]`
+- `plot_rank_correlation_over_epoch(results, metric, threshold, window, ax, show)` —
+  Spearman correlation between epoch-k and final-epoch run rankings over training.
+  Annotates the first epoch at which the smoothed correlation exceeds `threshold`.
+  Requires `n_runs >= 15`.
+- Sphinx documentation site with ReadTheDocs integration at
+  `https://ictonyx.readthedocs.io`. API reference pages for all 13 modules.
+
+### Fixed
+- `PyTorchModelWrapper` regression history now records `val_mse`, `val_r2`,
+  `val_mae`, and `val_rmse` per epoch via a new
+  `_compute_epoch_regression_metrics()` helper. Previously only `val_loss` was
+  recorded for regression tasks.
+- `_standardize_history_df()` rename map extended to cover `r2 → train_r2`,
+  `mse → train_mse`, `rmse → train_rmse`, `mae → train_mae`.
+- `failed_runs` count is now persisted to and restored from checkpoint. Previously
+  reset to zero on resume, under-counting failures.
+- Failure rate denominator now uses attempted runs (successful + failed). A study
+  losing 5 of 20 runs previously reported 0% failure rate.
+- `assert` guards in public paths replaced with explicit `RuntimeError` or
+  `ValueError`, and `# type: ignore[return-value]` where the assert was
+  suppressing a mypy false positive. `assert` is silently stripped by `python -O`.
+- `KerasModelWrapper.predict_proba()`: `rtol` changed to `atol` in probability
+  sum check. Relative tolerance is semantically wrong for checking whether
+  probabilities sum to 1.
+- `HuggingFaceModelWrapper.fit()`: history buffer lengths now aligned before
+  constructing `TrainingResult`. Mismatched lengths (val metrics captured per
+  epoch; train loss captured once) caused silent run failures in `variability_study()`.
+- `KerasModelWrapper` gains `clear_session: bool = True` constructor parameter.
+  When `True`, calls `tf.keras.backend.clear_session()` at the start of each
+  `fit()` to release GPU memory from previous runs.
+- `summarize()` output now includes N (run count) and SE (standard error) for
+  each metric block.
+- `stability_weight` now raises `ValueError` at construction time for values
+  outside `[0, 1]`.
+- `os` moved to top-level import in `core.py`; redundant local imports removed.
+
+### Deprecated
+- `wilcoxon_signed_rank_test()` now emits `DeprecationWarning`. Use
+  `compare_results()` or `test_against_null()` instead. Will be removed in v0.5.0.
+
+### Compatibility notes
+- `TrainingArguments`: `no_cuda` replaced with `use_cpu` (transformers ≥ 4.45).
+- `Trainer.__init__()`: `tokenizer` parameter removed (transformers ≥ 4.46).
+  Padding is handled entirely by `DataCollatorWithPadding`.
+- Test model for CI: `prajjwal/bert-tiny` replaced with
+  `google/bert_uncased_L-2_H-128_A-2` which includes a complete `tokenizer.json`.
+
 ---
 
 ## [0.4.3] — 2026-04-17

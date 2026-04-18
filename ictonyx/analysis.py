@@ -827,6 +827,13 @@ def wilcoxon_signed_rank_test(
         effect size (Wilcoxon r), and interpretation.
     """
 
+    warnings.warn(
+        "wilcoxon_signed_rank_test() is deprecated and will be removed in "
+        "v0.5.0. Use compare_results() or test_against_null() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     result = StatisticalTestResult(
         test_name="Wilcoxon Signed-Rank Test", statistic=float("nan"), p_value=float("nan")
     )

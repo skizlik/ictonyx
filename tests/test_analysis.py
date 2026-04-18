@@ -1484,3 +1484,28 @@ class TestAssumptionsMetNone:
         )
         df = create_results_dataframe([result])
         assert df["assumptions_untestable"].iloc[0] == 1
+
+
+class TestWilcoxonSignedRankDeprecation:
+    """wilcoxon_signed_rank_test must emit DeprecationWarning."""
+
+    def test_emits_deprecation_warning(self):
+        import pandas as pd
+
+        from ictonyx.analysis import wilcoxon_signed_rank_test
+
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            wilcoxon_signed_rank_test(pd.Series([0.85, 0.87, 0.83, 0.86, 0.84, 0.88]))
+
+    def test_still_returns_result(self):
+        """Deprecated function must still work — only a warning, not an error."""
+        import warnings
+
+        import pandas as pd
+
+        from ictonyx.analysis import StatisticalTestResult, wilcoxon_signed_rank_test
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            result = wilcoxon_signed_rank_test(pd.Series([0.85, 0.87, 0.83, 0.86, 0.84, 0.88]))
+        assert isinstance(result, StatisticalTestResult)

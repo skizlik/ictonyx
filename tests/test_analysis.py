@@ -31,6 +31,7 @@ from ictonyx.analysis import (  # Dataclass; Validation; Effect sizes; Multiple 
     get_confusion_matrix_df,
     kruskal_wallis_test,
     mann_whitney_test,
+    paired_wilcoxon_test,
     rank_biserial_correlation,
     shapiro_wilk_test,
     validate_sample_sizes,
@@ -821,7 +822,7 @@ class TestCompareTwoModels:
 
     def test_paired_comparison_has_ci(self):
         m1 = pd.Series([0.80, 0.82, 0.79, 0.81, 0.83, 0.80, 0.82, 0.79])
-        m2 = pd.Series([0.75, 0.77, 0.74, 0.76, 0.78, 0.75, 0.77, 0.74])
+        m2 = pd.Series([0.75, 0.78, 0.74, 0.75, 0.78, 0.76, 0.77, 0.73])
         result = compare_two_models(m1, m2, paired=True)
         assert result.confidence_interval is not None
         lo, hi = result.confidence_interval
@@ -1276,7 +1277,7 @@ class TestPairedWilcoxonTest:
         from ictonyx.analysis import paired_wilcoxon_test
 
         a = pd.Series([0.90, 0.91, 0.89, 0.92, 0.88, 0.90, 0.91, 0.89, 0.93, 0.90])
-        b = pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69, 0.73, 0.70])
+        b = pd.Series([0.70, 0.73, 0.69, 0.71, 0.68, 0.71, 0.72, 0.69, 0.74, 0.70])
         result = paired_wilcoxon_test(a, b)
         assert result.p_value < 0.05
         assert result.statistic is not None
@@ -1315,7 +1316,7 @@ class TestPairedWilcoxonTest:
 
         # Clearly different models — all runs A > B
         a = pd.Series([0.85, 0.87, 0.86, 0.88, 0.84, 0.89])
-        b = pd.Series([0.70, 0.72, 0.71, 0.73, 0.69, 0.74])
+        b = pd.Series([0.70, 0.73, 0.71, 0.72, 0.68, 0.75])
         result = paired_wilcoxon_test(a, b)
 
         assert not np.isnan(result.p_value), "p_value must not be NaN"
@@ -1331,7 +1332,7 @@ class TestPairedWilcoxonTest:
         from ictonyx.analysis import paired_wilcoxon_test, wilcoxon_signed_rank_test
 
         a = pd.Series([0.82, 0.84, 0.83, 0.85, 0.81, 0.86])
-        b = pd.Series([0.70, 0.72, 0.71, 0.73, 0.69, 0.74])
+        b = pd.Series([0.70, 0.73, 0.71, 0.72, 0.68, 0.75])
         differences = a - b  # all positive
 
         paired_result = paired_wilcoxon_test(a, b)
@@ -1354,7 +1355,7 @@ class TestPairedWilcoxonTest:
         from ictonyx.analysis import paired_wilcoxon_test
 
         a = pd.Series([0.85, 0.87, 0.86, 0.88, 0.84, 0.89])
-        b = pd.Series([0.70, 0.72, 0.71, 0.73, 0.69, 0.74])
+        b = pd.Series([0.70, 0.73, 0.71, 0.72, 0.68, 0.75])
         result = paired_wilcoxon_test(a, b)
 
         assert result.effect_size is not None
@@ -1509,3 +1510,90 @@ class TestWilcoxonSignedRankDeprecation:
             warnings.simplefilter("ignore", DeprecationWarning)
             result = wilcoxon_signed_rank_test(pd.Series([0.85, 0.87, 0.83, 0.86, 0.84, 0.88]))
         assert isinstance(result, StatisticalTestResult)
+
+
+def test_paired_wilcoxon_inconclusive_on_identical_pairs():
+    """Paired Wilcoxon must return inconclusive, not significant, when
+    all differences are zero (same model run twice with identical seeds)."""
+    a = pd.Series([0.9, 0.91, 0.89, 0.92, 0.88])
+    b = pd.Series([0.9, 0.91, 0.89, 0.92, 0.88])
+
+    with pytest.warns(UserWarning, match="deterministic"):
+        result = paired_wilcoxon_test(a, b)
+
+    assert "inconclusive" in result.test_name.lower()
+    assert np.isnan(result.p_value)
+    assert np.isnan(result.statistic)
+
+
+def test_paired_wilcoxon_inconclusive_on_constant_offset():
+    """Also triggers when differences are all a constant nonzero value."""
+    a = pd.Series([0.9, 0.91, 0.89, 0.92, 0.88])
+    b = a + 0.01
+
+    with pytest.warns(UserWarning, match="deterministic"):
+        result = paired_wilcoxon_test(a, b)
+
+    assert "inconclusive" in result.test_name.lower()
+    assert np.isnan(result.p_value)
+
+
+def test_paired_wilcoxon_normal_case_unchanged():
+    """Guardrail must not trip on genuinely variable data."""
+    rng = np.random.default_rng(42)
+    a = pd.Series(rng.normal(0.9, 0.02, size=20))
+    b = pd.Series(rng.normal(0.92, 0.02, size=20))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = paired_wilcoxon_test(a, b)
+
+    assert "inconclusive" not in result.test_name.lower()
+    assert not np.isnan(result.p_value)
+
+
+def test_ci_effect_size_none_for_paired_wilcoxon_large_effect():
+    """The CI attached to paired Wilcoxon must not be a Cohen's d CI.
+    Reproduces the case where a Cohen's d bootstrap CI would be disjoint
+    from the Wilcoxon r point estimate."""
+    from ictonyx.analysis import compare_two_models
+
+    rng = np.random.default_rng(0)
+    group_a = pd.Series(rng.normal(0.95, 0.01, size=20))
+    group_b = pd.Series(group_a.values - rng.normal(0.30, 0.02, size=20))
+
+    result = compare_two_models(group_a, group_b, paired=True)
+
+    assert "Wilcoxon" in result.test_name
+    assert result.ci_effect_size is None
+
+
+def test_ci_effect_size_none_for_mann_whitney():
+    """Mann-Whitney's exclusion from effect-size CI must still hold."""
+    from ictonyx.analysis import compare_two_models
+
+    rng = np.random.default_rng(1)
+    group_a = pd.Series(rng.normal(0.9, 0.05, size=15))
+    group_b = pd.Series(rng.normal(0.85, 0.05, size=15))
+
+    result = compare_two_models(group_a, group_b, paired=False)
+
+    if "Mann-Whitney" in result.test_name:
+        assert result.ci_effect_size is None
+
+
+def test_ci_effect_size_contains_point_estimate_for_parametric():
+    """Sanity: when a CI IS computed, the point estimate must be inside it."""
+    from ictonyx.analysis import compare_two_models
+
+    rng = np.random.default_rng(2)
+    group_a = pd.Series(rng.normal(0.90, 0.01, size=30))
+    group_b = pd.Series(rng.normal(0.85, 0.01, size=30))
+
+    result = compare_two_models(group_a, group_b, paired=False)
+
+    if result.ci_effect_size is not None:
+        lo, hi = result.ci_effect_size
+        assert lo <= result.effect_size <= hi, (
+            f"CI ({lo}, {hi}) does not contain point estimate " f"{result.effect_size}"
+        )

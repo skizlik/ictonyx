@@ -20,6 +20,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.5] — 2026-04-18
+
+### Fixed
+
+- `compare_two_models()` was attaching a Cohen's d bootstrap confidence
+  interval to paired Wilcoxon results. The two estimators have
+  incompatible scales: Wilcoxon's `r = |z|/sqrt(n)` is bounded by 1.0,
+  Cohen's d is unbounded. On large-effect paired data the CI could
+  exclude the point estimate. Paired Wilcoxon now returns
+  `ci_effect_size=None`; a Wilcoxon-r bootstrap CI is planned for v0.4.9.
+- `compare_models()` now routes pairwise comparisons through
+  `compare_two_models()`, surfacing the bootstrap confidence intervals
+  that the analytic core was already computing. Previously, the public
+  API silently dropped `ci_effect_size` and `confidence_interval`.
+  Multiple-comparison corrections continue to apply to p-values only.
+- `_build_from_class()` now forwards kwargs from ModelConfig to wrapper
+  constructors. Previously, user-supplied constructor arguments
+  (including required ones like `model_name_or_path` for
+  `HuggingFaceModelWrapper`) were silently dropped, causing every run
+  to fail.
+- `paired_wilcoxon_test` emits `UserWarning` and returns
+  `conclusion="inconclusive"` when `std(differences) < 1e-10`.
+  Previously, deterministic model pairs produced spurious p-values. The
+  tolerance is exposed via the `deterministic_tol` parameter.
+
+### Added
+
+- `VariabilityStudyResults.save()` now includes a `_schema_version`
+  field. `load()` warns via `UserWarning` on missing or mismatched
+  schema versions.
+- `VariabilityStudyResults.run_seeds: List[int]` captures the per-run
+  child seeds spawned via `SeedSequence.spawn()`, enabling exact
+  per-run reproduction of a study.
+
+### Tests
+
+- Several pre-existing paired-comparison tests used constant-offset
+  data, which the new deterministic-pair guardrail correctly rejects.
+  Test inputs updated to use genuine paired variation. One integration
+  test (iris + sklearn) was rewritten to verify the integration path
+  rather than assert significance on a mathematically undefined
+  comparison.
+
+### Documentation
+
+- New README section *What variability does Ictonyx measure?* clarifies
+  that the library characterizes training-stochastic variance under a
+  fixed data split, not sampling variance.
+
+---
+
 ## [0.4.4] — 2026-04-18
 
 ### Added

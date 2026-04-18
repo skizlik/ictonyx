@@ -389,7 +389,7 @@ def compare_models(
         )
 
     if paired and len(results_store) == 2:
-        from .analysis import paired_wilcoxon_test
+        from .analysis import compare_two_models
 
         names = list(results_store.keys())
         series_a = results_store[names[0]]
@@ -401,7 +401,7 @@ def compare_models(
                 f"'{names[1]}' has {len(series_b)} runs. "
                 "Use paired=False for independent comparison."
             )
-        paired_result = paired_wilcoxon_test(series_a, series_b, random_state=seed)
+        paired_result = compare_two_models(series_a, series_b, paired=True, random_state=seed)
         return ModelComparisonResults(
             overall_test=paired_result,
             raw_data=results_store,
@@ -462,9 +462,31 @@ def _get_model_builder(model: Any) -> Callable:
         def _build_from_class(conf, _model_class=model):
             import inspect
 
-            if "random_state" in inspect.signature(_model_class).parameters:
+            sig = inspect.signature(_model_class)
+            # Extract kwargs from the ModelConfig that the wrapper's constructor
+            # actually accepts. Filter out infra keys the constructor doesn't know
+            # about (e.g. run_seed), and `random_state` which we pass explicitly
+            # below when the signature supports it.
+            accepted = set(sig.parameters.keys())
+            accepts_var_keyword = any(
+                p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            )
+            construction_kwargs = {
+                k: v
+                for k, v in conf.items()
+                if k != "run_seed"
+                and k != "random_state"
+                and (accepts_var_keyword or k in accepted)
+            }
+
+            if "random_state" in accepted:
                 try:
-                    return _ensure_wrapper(_model_class(random_state=conf.get("run_seed")))
+                    return _ensure_wrapper(
+                        _model_class(
+                            random_state=conf.get("run_seed"),
+                            **construction_kwargs,
+                        )
+                    )
                 except TypeError as e:
                     if "random_state" in str(e) or "unexpected keyword" in str(e):
                         warnings.warn(
@@ -473,13 +495,12 @@ def _get_model_builder(model: Any) -> Callable:
                             UserWarning,
                             stacklevel=3,
                         )
-                        return _ensure_wrapper(_model_class())
+                        return _ensure_wrapper(_model_class(**construction_kwargs))
                     raise ValueError(
                         f"Failed to construct {_model_class.__name__}: {e}. "
                         "Check that the class accepts the arguments in your ModelConfig."
                     ) from e
-
-            return _ensure_wrapper(_model_class())
+            return _ensure_wrapper(_model_class(**construction_kwargs))
 
         return _build_from_class
 
@@ -675,21 +696,23 @@ def compare_results(
 
     pair_key = "results_a_vs_results_b"
 
+    from .analysis import compare_two_models
+
     if paired:
         if len(values_a) == len(values_b):
-            test_result = paired_wilcoxon_test(values_a, values_b, random_state=seed)
+            test_result = compare_two_models(values_a, values_b, paired=True, random_state=seed)
         else:
             warnings.warn(
                 f"compare_results(paired=True) requires equal run counts. "
                 f"results_a has {len(values_a)} runs, results_b has {len(values_b)}. "
-                "Falling back to unpaired Mann-Whitney U test. "
+                "Falling back to unpaired comparison. "
                 "Pass paired=False to suppress this warning.",
                 UserWarning,
                 stacklevel=2,
             )
-            test_result = mann_whitney_test(values_a, values_b, random_state=seed)
+            test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
     else:
-        test_result = mann_whitney_test(values_a, values_b, random_state=seed)
+        test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
 
     return ModelComparisonResults(
         overall_test=test_result,

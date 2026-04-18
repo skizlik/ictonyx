@@ -508,7 +508,7 @@ class TestBuilderInstanceClonerSafety:
 
 
 class TestCompareResultsPairing:
-    def _make_results(self, seed, n=5):
+    def _make_results(self, seed, n=8):
         from sklearn.datasets import load_wine
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.preprocessing import StandardScaler
@@ -533,14 +533,24 @@ class TestCompareResultsPairing:
         ra = self._make_results(seed=42)
         rb = self._make_results(seed=42)
         result = api.compare_results(ra, rb, paired=False)
-        assert "Mann-Whitney" in result.overall_test.test_name
+        # compare_two_models(paired=False) dispatches to Student/Welch/Mann-Whitney
+        # based on normality; all three are valid independent comparisons.
+        assert (
+            "Independent Comparison" in result.overall_test.test_name
+            or "Mann-Whitney" in result.overall_test.test_name
+        )
 
     def test_unequal_runs_warns_and_falls_back(self):
-        ra = self._make_results(seed=42, n=5)
-        rb = self._make_results(seed=99, n=4)
+        ra = self._make_results(seed=42, n=10)
+        rb = self._make_results(seed=99, n=8)
         with pytest.warns(UserWarning, match="equal run counts"):
             result = api.compare_results(ra, rb, paired=True)
-        assert "Mann-Whitney" in result.overall_test.test_name
+        # Unequal run counts fall back to unpaired comparison via compare_two_models,
+        # which dispatches to Student/Welch/Mann-Whitney based on normality.
+        assert (
+            "Independent Comparison" in result.overall_test.test_name
+            or "Mann-Whitney" in result.overall_test.test_name
+        )
 
     def test_seed_parameter_accepted(self):
         ra = self._make_results(seed=42)

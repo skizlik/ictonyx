@@ -693,7 +693,7 @@ def plot_run_trajectories(
     """
     _check_plotting()
     if metric is None:
-        metric = results.preferred_metric()
+        metric = results.preferred_metric(context="epoch")
     if ax is None:
         fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
     else:
@@ -920,7 +920,7 @@ def plot_rank_correlation_over_epoch(
             f"15 seeds to use this plot."
         )
 
-    resolved = metric or results.preferred_metric()
+    resolved = metric or results.preferred_metric(context="epoch")
     run_dfs = results.all_runs_metrics
     if not run_dfs:
         settings.logger.warning("plot_rank_correlation_over_epoch: no run data available.")

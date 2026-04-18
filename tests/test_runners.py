@@ -1628,6 +1628,53 @@ class TestDeterministicCudnn:
         ), "cudnn.benchmark was not restored after exception."
 
 
+class TestPreferredMetricContext:
+    """Context parameter on preferred_metric: scalar vs epoch resolution."""
+
+    def _make_results_with_test_data(self):
+        """Minimal results with both val and test metrics tracked."""
+        return VariabilityStudyResults(
+            all_runs_metrics=[
+                pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88], "val_loss": [0.5, 0.3, 0.2]}),
+            ],
+            final_metrics={"val_accuracy": [0.88], "val_loss": [0.2]},
+            final_test_metrics=[{"accuracy": 0.87, "run_id": 0}],
+            seed=42,
+        )
+
+    def _make_results_no_test_data(self):
+        return VariabilityStudyResults(
+            all_runs_metrics=[
+                pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88]}),
+            ],
+            final_metrics={"val_accuracy": [0.88]},
+            final_test_metrics=[],
+            seed=42,
+        )
+
+    def test_scalar_context_prefers_test_when_present(self):
+        results = self._make_results_with_test_data()
+        assert results.preferred_metric("accuracy", context="scalar") == "test_accuracy"
+
+    def test_scalar_context_falls_back_to_val_when_no_test_data(self):
+        results = self._make_results_no_test_data()
+        assert results.preferred_metric("accuracy", context="scalar") == "val_accuracy"
+
+    def test_epoch_context_always_returns_val(self):
+        results = self._make_results_with_test_data()
+        assert results.preferred_metric("accuracy", context="epoch") == "val_accuracy"
+
+    def test_epoch_context_returns_val_even_without_test_data(self):
+        results = self._make_results_no_test_data()
+        assert results.preferred_metric("accuracy", context="epoch") == "val_accuracy"
+
+    def test_default_context_is_scalar(self):
+        """Backward compatibility: calling preferred_metric() with no context
+        argument behaves identically to the pre-v0.4.6 implementation."""
+        results = self._make_results_with_test_data()
+        assert results.preferred_metric("accuracy") == "test_accuracy"
+
+
 class TestVariabilityStudyResultsTestMetrics:
     """Tests for test-metric surfacing: has_test_data, preferred_metric,
     get_test_metric_values, summarize, and test_against_null auto-resolution.

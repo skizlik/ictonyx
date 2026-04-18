@@ -10,7 +10,7 @@ import random
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union, cast
 
 if TYPE_CHECKING:
     from .analysis import StatisticalTestResult
@@ -1038,11 +1038,22 @@ class VariabilityStudyResults:
 
         return pd.DataFrame(rows)
 
-    def preferred_metric(self, base: str = "accuracy") -> str:
+    def preferred_metric(
+        self,
+        base: str = "accuracy",
+        context: Literal["scalar", "epoch"] = "scalar",
+    ) -> str:
         """Return the preferred metric name for this study.
 
-        Returns ``f"test_{base}"`` when test data is present and the base
-        metric was tracked, ``f"val_{base}"`` otherwise.
+        The preferred metric depends on the *context* in which it will be
+        used:
+
+        - **scalar** (default): Terminal metric reporting. Returns
+          ``f"test_{base}"`` when test data is present and the base metric
+          was tracked, ``f"val_{base}"`` otherwise.
+        - **epoch**: Per-epoch plotting and analysis. Always returns
+          ``f"val_{base}"`` because test metrics are scalar (single
+          final value) and per-epoch plotters cannot resolve them.
 
         Note:
             ``final_test_metrics`` stores metrics under bare keys (e.g.
@@ -1051,13 +1062,19 @@ class VariabilityStudyResults:
 
         Args:
             base: Base metric name without prefix. Default ``"accuracy"``.
+            context: ``"scalar"`` for terminal reporting (prefers
+                ``test_*`` when available), ``"epoch"`` for per-epoch
+                plotters (always ``val_*``). Default ``"scalar"`` for
+                backward compatibility.
 
         Returns:
             The most appropriate metric key for this study's results.
         """
+        if context == "epoch":
+            return f"val_{base}"
         if self.has_test_data:
             tracked = {k for m in self.final_test_metrics for k in m if k != "run_id"}
-            if base in tracked:  # "accuracy" in {"accuracy"} → correct
+            if base in tracked:
                 return f"test_{base}"
         return f"val_{base}"
 

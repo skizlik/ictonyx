@@ -218,3 +218,38 @@ class TestTuningImportErrors:
 
             with pytest.raises(ImportError, match="Hyperopt"):
                 create_search_space()
+
+
+class TestStabilityWeightValidation:
+    """Stability_weight outside [0, 1] must raise ValueError."""
+
+    def _make_tuner(self, stability_weight):
+        pytest.importorskip("optuna")
+        from unittest.mock import MagicMock
+
+        from ictonyx.config import ModelConfig
+        from ictonyx.tuning import VariabilityAwareTuner  # adjust to actual class name
+
+        return VariabilityAwareTuner(
+            model_builder=lambda cfg: MagicMock(),
+            data_handler=MagicMock(),
+            model_config=ModelConfig({}),
+            stability_weight=stability_weight,
+        )
+
+    def test_zero_is_valid(self):
+        self._make_tuner(0.0)  # must not raise
+
+    def test_one_is_valid(self):
+        self._make_tuner(1.0)  # must not raise
+
+    def test_midpoint_is_valid(self):
+        self._make_tuner(0.5)  # must not raise
+
+    def test_negative_raises(self):
+        with pytest.raises(ValueError, match="stability_weight"):
+            self._make_tuner(-0.1)
+
+    def test_above_one_raises(self):
+        with pytest.raises(ValueError, match="stability_weight"):
+            self._make_tuner(1.1)

@@ -93,6 +93,12 @@ class HyperparameterTuner:
         self.metric = metric
         self.n_evals_per_trial = n_evals_per_trial
         self.stability_weight = stability_weight
+        if not 0.0 <= self.stability_weight <= 1.0:
+            raise ValueError(
+                f"stability_weight must be between 0.0 and 1.0, "
+                f"got {stability_weight!r}. "
+                "Values > 1 apply an unstable over-penalization of variance."
+            )
         self._data_dict: Optional[Dict[str, Any]] = None
         self.train_data = None
         self.val_data = None

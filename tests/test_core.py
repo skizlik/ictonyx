@@ -2097,3 +2097,30 @@ class TestNoAssertGuards:
             f"Found {len(assert_nodes)} assert statement(s) in ictonyx/core.py. "
             "Replace with explicit RuntimeError or ValueError."
         )
+
+
+class TestPredictProbaToleranceCheck:
+    """predict_proba must use atol not rtol for probability sum check."""
+
+    def test_probabilities_summing_to_one_pass(self):
+        """Valid softmax output (sums exactly to 1.0) must not raise."""
+        pytest.importorskip("tensorflow")
+        from unittest.mock import MagicMock, patch
+
+        import numpy as np_
+
+        from ictonyx.core import KerasModelWrapper
+
+        model = MagicMock()
+        model.metrics_names = ["loss", "accuracy"]
+        model.evaluate.return_value = [0.3, 0.9]
+        wrapper = KerasModelWrapper(model, task="classification")
+
+        # Construct output that sums exactly to 1.0
+        raw = np_.array([[0.7, 0.3], [0.4, 0.6]])
+        model.predict = MagicMock(return_value=raw)
+
+        # Should not raise
+        with patch.object(wrapper, "model", model):
+            proba = wrapper.predict_proba(np_.zeros((2, 4)))
+        assert proba is not None

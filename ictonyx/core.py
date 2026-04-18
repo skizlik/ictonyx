@@ -577,7 +577,9 @@ if TENSORFLOW_AVAILABLE:
                 # Multi-class with softmax output
                 # Validate probabilities sum to approximately 1
                 row_sums = np.sum(raw_predictions, axis=1)
-                if not np.allclose(row_sums, 1.0, rtol=1e-3):
+                # Use atol, not rtol: checking whether probabilities sum to 1
+                # is an absolute (not relative) tolerance question.
+                if not np.allclose(row_sums, 1.0, atol=1e-3):
                     raise ValueError(
                         "Multi-class model output doesn't sum to 1 across classes. "
                         "Ensure final layer uses softmax activation."

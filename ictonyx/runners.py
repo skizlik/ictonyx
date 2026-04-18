@@ -1310,7 +1310,7 @@ class VariabilityStudyResults:
         """Persist results to disk as a plain dict via pickle.
 
         Preserves all_runs_metrics, final_metrics, final_test_metrics,
-        and seed. Restore with :meth:`load`.
+        seed, and run_seeds. Restore with :meth:`load`.
 
         Args:
             path: File path. Recommended extension: ``.pkl``.
@@ -1318,10 +1318,12 @@ class VariabilityStudyResults:
         import pickle
 
         data = {
+            "_schema_version": _ICTONYX_VERSION,
             "all_runs_metrics": self.all_runs_metrics,
             "final_metrics": self.final_metrics,
             "final_test_metrics": self.final_test_metrics,
             "seed": self.seed,
+            "run_seeds": list(self.run_seeds),
         }
         with open(path, "wb") as f:
             pickle.dump(data, f)
@@ -1340,11 +1342,29 @@ class VariabilityStudyResults:
 
         with open(path, "rb") as f:
             data = pickle.load(f)
+        _schema = data.get("_schema_version")
+        if _schema is None:
+            warnings.warn(
+                "Loading results saved without a schema version. "
+                "This file predates ictonyx v0.4.5; compatibility is "
+                "best-effort.",
+                UserWarning,
+                stacklevel=2,
+            )
+        elif _schema != _ICTONYX_VERSION:
+            warnings.warn(
+                f"Results schema version '{_schema}' does not match "
+                f"current '{_ICTONYX_VERSION}'. The file was written by a "
+                "different version of Ictonyx and may be incompatible.",
+                UserWarning,
+                stacklevel=2,
+            )
         return cls(
             all_runs_metrics=data["all_runs_metrics"],
             final_metrics=data["final_metrics"],
             final_test_metrics=data["final_test_metrics"],
             seed=data.get("seed"),
+            run_seeds=list(data.get("run_seeds", [])),
         )
 
     def to_json(self) -> str:

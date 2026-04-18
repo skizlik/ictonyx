@@ -47,6 +47,31 @@ pip install "ictonyx[tensorflow,isolation]"
 ```
 
 Requires Python 3.10+. Current release: **0.4.4** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
+
+---
+
+## What variability does Ictonyx measure?
+
+Ictonyx characterizes **training-stochastic variance** under a fixed data
+split. The reported uncertainty is the variance of your metric across
+different seeds — initialization, batch order, augmentation, dropout —
+holding the train/val/test split constant. This answers the question:
+*"How stable is this training procedure?"*
+
+Ictonyx does **not** currently measure **sampling variance** — the
+uncertainty that comes from which examples landed in train vs. validation
+vs. test. If you change the split, you get a different answer about model
+quality, and that difference is its own source of uncertainty, distinct
+from seed stochasticity.
+
+For sampling-variance analysis today, pair Ictonyx with an outer k-fold
+loop. In a later release, Ictonyx will ship `ResamplingPolicy` for
+nested (data × seed) designs with corrected comparison tests
+(Nadeau-Bengio, Bouckaert, Dietterich 5×2).
+
+Reference: Bouthillier et al. (2021), *Accounting for Variance in
+Machine Learning Benchmarks*, MLSys.
+
 ---
 
 ## Quick start

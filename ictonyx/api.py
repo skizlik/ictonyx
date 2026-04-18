@@ -462,9 +462,31 @@ def _get_model_builder(model: Any) -> Callable:
         def _build_from_class(conf, _model_class=model):
             import inspect
 
-            if "random_state" in inspect.signature(_model_class).parameters:
+            sig = inspect.signature(_model_class)
+            # Extract kwargs from the ModelConfig that the wrapper's constructor
+            # actually accepts. Filter out infra keys the constructor doesn't know
+            # about (e.g. run_seed), and `random_state` which we pass explicitly
+            # below when the signature supports it.
+            accepted = set(sig.parameters.keys())
+            accepts_var_keyword = any(
+                p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            )
+            construction_kwargs = {
+                k: v
+                for k, v in conf.items()
+                if k != "run_seed"
+                and k != "random_state"
+                and (accepts_var_keyword or k in accepted)
+            }
+
+            if "random_state" in accepted:
                 try:
-                    return _ensure_wrapper(_model_class(random_state=conf.get("run_seed")))
+                    return _ensure_wrapper(
+                        _model_class(
+                            random_state=conf.get("run_seed"),
+                            **construction_kwargs,
+                        )
+                    )
                 except TypeError as e:
                     if "random_state" in str(e) or "unexpected keyword" in str(e):
                         warnings.warn(
@@ -473,13 +495,12 @@ def _get_model_builder(model: Any) -> Callable:
                             UserWarning,
                             stacklevel=3,
                         )
-                        return _ensure_wrapper(_model_class())
+                        return _ensure_wrapper(_model_class(**construction_kwargs))
                     raise ValueError(
                         f"Failed to construct {_model_class.__name__}: {e}. "
                         "Check that the class accepts the arguments in your ModelConfig."
                     ) from e
-
-            return _ensure_wrapper(_model_class())
+            return _ensure_wrapper(_model_class(**construction_kwargs))
 
         return _build_from_class
 

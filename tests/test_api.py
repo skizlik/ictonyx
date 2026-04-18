@@ -565,3 +565,132 @@ def test_compare_models_model_kwargs_do_not_reach_data_handler():
         verbose=False,
     )
     assert result is not None
+
+
+def test_build_from_class_passes_construction_kwargs():
+    """X-3: wrapper classes whose __init__ requires args beyond random_state
+    must receive those args from ModelConfig. Regression test for the
+    HuggingFaceModelWrapper silent-failure bug in v0.4.4."""
+    from ictonyx.api import _get_model_builder
+    from ictonyx.config import ModelConfig
+
+    class RequiresArg:
+        def __init__(self, required_arg, optional=None):
+            self.required_arg = required_arg
+            self.optional = optional
+
+        # The builder calls _ensure_wrapper() on the result. For this test,
+        # we want the raw instance back, so we monkeypatch around that below.
+
+    # Use a class that doesn't require wrapping by bypassing _ensure_wrapper.
+    # Easier: use a class that _ensure_wrapper accepts as-is.
+    # _ensure_wrapper raises on unknown types, so we patch it for this test.
+    import ictonyx.api as api_mod
+
+    original_ensure = api_mod._ensure_wrapper
+    api_mod._ensure_wrapper = lambda x: x
+    try:
+        builder = _get_model_builder(RequiresArg)
+        conf = ModelConfig(
+            {
+                "required_arg": "value",
+                "optional": "other",
+                "run_seed": 42,  # infra; must NOT be passed to constructor
+            }
+        )
+        instance = builder(conf)
+        assert instance.required_arg == "value"
+        assert instance.optional == "other"
+    finally:
+        api_mod._ensure_wrapper = original_ensure
+
+
+def test_build_from_class_with_random_state_and_extra_kwargs():
+    """X-3: a class that accepts BOTH random_state and other required args
+    must receive both."""
+    import ictonyx.api as api_mod
+    from ictonyx.api import _get_model_builder
+    from ictonyx.config import ModelConfig
+
+    class Combined:
+        def __init__(self, required_arg, random_state=None):
+            self.required_arg = required_arg
+            self.random_state = random_state
+
+    original_ensure = api_mod._ensure_wrapper
+    api_mod._ensure_wrapper = lambda x: x
+    try:
+        builder = _get_model_builder(Combined)
+        conf = ModelConfig(
+            {
+                "required_arg": "x",
+                "run_seed": 123,
+            }
+        )
+        instance = builder(conf)
+        assert instance.required_arg == "x"
+        assert instance.random_state == 123
+    finally:
+        api_mod._ensure_wrapper = original_ensure
+
+
+def test_build_from_class_filters_unknown_kwargs_for_fixed_signature():
+    """X-3: for a constructor WITHOUT **kwargs, only accepted parameters
+    are splatted. ModelConfig keys not in the signature (e.g. 'epochs' for
+    a wrapper that doesn't take epochs) must be filtered out."""
+    import ictonyx.api as api_mod
+    from ictonyx.api import _get_model_builder
+    from ictonyx.config import ModelConfig
+
+    class Strict:
+        def __init__(self, wanted):
+            self.wanted = wanted
+
+    original_ensure = api_mod._ensure_wrapper
+    api_mod._ensure_wrapper = lambda x: x
+    try:
+        builder = _get_model_builder(Strict)
+        conf = ModelConfig(
+            {
+                "wanted": "yes",
+                "epochs": 10,  # irrelevant to Strict.__init__
+                "batch_size": 32,  # also irrelevant
+                "run_seed": 1,
+            }
+        )
+        # Must not raise TypeError about unexpected kwargs
+        instance = builder(conf)
+        assert instance.wanted == "yes"
+    finally:
+        api_mod._ensure_wrapper = original_ensure
+
+
+def test_build_from_class_passes_all_kwargs_when_var_keyword():
+    """X-3: for a constructor WITH **kwargs, all non-infra ModelConfig
+    keys are forwarded (minus run_seed and random_state)."""
+    import ictonyx.api as api_mod
+    from ictonyx.api import _get_model_builder
+    from ictonyx.config import ModelConfig
+
+    class Flexible:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    original_ensure = api_mod._ensure_wrapper
+    api_mod._ensure_wrapper = lambda x: x
+    try:
+        builder = _get_model_builder(Flexible)
+        conf = ModelConfig(
+            {
+                "model_name_or_path": "distilbert-base-uncased",
+                "num_labels": 4,
+                "run_seed": 42,  # excluded
+            }
+        )
+        instance = builder(conf)
+        assert instance.kwargs["model_name_or_path"] == "distilbert-base-uncased"
+        assert instance.kwargs["num_labels"] == 4
+        assert "run_seed" not in instance.kwargs
+        assert "random_state" not in instance.kwargs
+    finally:
+        api_mod._ensure_wrapper = original_ensure

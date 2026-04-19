@@ -1956,7 +1956,7 @@ def plot_paired_deltas(
         from .bootstrap import bootstrap_ci
 
         try:
-            ci = bootstrap_ci(deltas, confidence=ci_confidence, method="bca")
+            ci = bootstrap_ci(deltas, np.mean, confidence=ci_confidence, method="bca")
             ci_lo, ci_hi = ci.ci_lower, ci.ci_upper
         except Exception:
             ci_lo, ci_hi = None, None
@@ -1964,7 +1964,7 @@ def plot_paired_deltas(
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
 
     run_indices = np.arange(1, n + 1)
     colors = [
@@ -2023,12 +2023,7 @@ def plot_paired_deltas(
             bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
         )
 
-    if show is None:
-        show = settings.get_display_plots()
-    if show:
-        plt.show()
-        return None
-    return fig
+    return _finalize_plot(fig, show)
 
 
 def plot_run_independence_diagnostics(
@@ -2092,7 +2087,7 @@ def plot_run_independence_diagnostics(
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
 
     # Handle untestable case (series too short)
     if is_independent is None:
@@ -2109,12 +2104,8 @@ def plot_run_independence_diagnostics(
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_title("Run Independence Diagnostic (untestable)")
-        if show is None:
-            show = settings.get_display_plots()
-        if show:
-            plt.show()
-            return None
-        return fig
+
+        return _finalize_plot(fig, show)
 
         # Extract pre-computed per-lag ACFs and thresholds from check_independence
     autocorrs = details["autocorrelations"]  # dict "lag_1" -> float
@@ -2168,12 +2159,7 @@ def plot_run_independence_diagnostics(
     ax.legend(loc="best", fontsize=9)
     ax.grid(True, alpha=0.3, zorder=0)
 
-    if show is None:
-        show = settings.get_display_plots()
-    if show:
-        plt.show()
-        return None
-    return fig
+    return _finalize_plot(fig, show)
 
 
 def plot_epoch_run_heatmap(
@@ -2261,7 +2247,7 @@ def plot_epoch_run_heatmap(
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     else:
-        fig = ax.figure
+        fig = ax.figure  # type: ignore[assignment]
 
     # Render via seaborn; mask NaNs so trailing cells in short runs render
     # as background rather than color-scale extreme
@@ -2290,9 +2276,4 @@ def plot_epoch_run_heatmap(
     ax.set_ylabel("Run")
     ax.set_title(f"Per-Epoch {col} Across {n_runs} Runs")
 
-    if show is None:
-        show = settings.get_display_plots()
-    if show:
-        plt.show()
-        return None
-    return fig
+    return _finalize_plot(fig, show)

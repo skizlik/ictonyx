@@ -102,3 +102,11 @@ python_files = "test_*.py"
 python_functions = "test_*"
 markers = ["slow: marks tests as slow (skip with '-m not slow')"]
 addopts = "--cov=ictonyx --cov-report=html --cov-report=term --cov-fail-under=60"
+
+[tool.mypy]
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_unused_ignores = false
+warn_redundant_casts = true
+no_implicit_optional = true
+files = ["ictonyx/"]

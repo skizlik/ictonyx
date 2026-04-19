@@ -20,6 +20,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.6] — 2026-04-19
+
+### Added
+
+- `plot_paired_deltas(results_a, results_b, metric)` — per-run paired
+  differences between two variability studies with a zero reference
+  line, mean line, and optional bootstrap CI band. Shows "winner
+  reverses" cases where the mean difference is positive but individual
+  runs can reverse.
+- `plot_run_independence_diagnostics(results, metric)` — visualizes
+  per-lag autocorrelation of the run-indexed final-metric series with
+  Bonferroni-corrected confidence bands. Wraps the existing
+  `check_independence()` so the plot reflects exactly what the
+  statistical test uses. Replaces the deprecated `plot_averaged_pacf`.
+- `plot_epoch_run_heatmap(results, metric)` — epoch × run heatmap of a
+  per-epoch metric, with NaN padding for ragged run lengths. Reveals
+  which runs train fast, plateau early, or diverge.
+- `plot_sequential_ci(results, metric)` — bootstrap CI width as a
+  function of number of runs. Supports the "how many runs do I need?"
+  methodology argument by showing where additional runs stop
+  meaningfully improving precision.
+- `VariabilityStudyResults.preferred_metric()` now accepts a
+  `context="scalar"|"epoch"` keyword. Epoch context always resolves to
+  `val_*` (matching what per-epoch plotters can actually use); scalar
+  context preserves the prior `test_* when available, else val_*`
+  behavior.
+
+### Fixed
+
+- `plot_training_stability()` now accepts a `VariabilityStudyResults`
+  directly via `results=`, with the stability analysis computed
+  internally. The existing dict form (precomputed stability results)
+  stays as a valid API for users who want multiple views of the same
+  analysis.
+- Per-epoch plotters (`plot_run_trajectories`,
+  `plot_rank_correlation_over_epoch`) now request epoch-context
+  metrics explicitly, which correctly resolves to `val_*` regardless
+  of whether test data is present. Previously, the presence of test
+  metrics could cause these plotters to attempt to resolve `test_*`
+  keys that don't exist in per-epoch history DataFrames.
+- `ExperimentRunner` no longer passes `epochs`, `batch_size`, or
+  `verbose` to `ScikitLearnModelWrapper.fit()`, which had deprecated
+  them. Eliminates three `DeprecationWarning` emissions per sklearn
+  run from library-internal code.
+
+---
+
 ## [0.4.5] — 2026-04-18
 
 ### Fixed

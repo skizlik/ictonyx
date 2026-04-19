@@ -2174,3 +2174,125 @@ def plot_run_independence_diagnostics(
         plt.show()
         return None
     return fig
+
+
+def plot_epoch_run_heatmap(
+    results: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    *,
+    cmap: str = "viridis",
+    ax: Optional["Axes"] = None,
+    figsize: Optional[Tuple[float, float]] = None,
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Epoch × run heatmap of a per-epoch metric.
+
+    Rows are runs in run order (top = run 1). Columns are epochs. Cells
+    are the metric value, colored by the supplied ``cmap``. Reveals at
+    a glance which runs train fast, which plateau early, which diverge,
+    and how run-to-run consistency evolves over training.
+
+    Runs with fewer recorded epochs (early stopping, crashes, varied
+    grid configs) have trailing NaN cells, which render as background.
+    This is intentional — padding with zero or extrapolating would
+    mislead.
+
+    Uses the epoch-context metric (:func:`preferred_metric` with
+    ``context="epoch"``) because per-epoch plotters show training
+    dynamics, and test-set metrics are single scalars not captured
+    across epochs.
+
+    Args:
+        results: A completed :class:`VariabilityStudyResults`.
+        metric: Metric to plot. If ``None``, resolved via
+            ``results.preferred_metric(context="epoch")``.
+        cmap: Matplotlib colormap name. Default ``"viridis"``.
+        ax: Optional existing Axes. Creates a new figure if ``None``.
+        figsize: Figure dimensions. If ``None``, auto-sized from the
+            matrix shape.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if the metric is
+        not found in any run or display is enabled.
+    """
+    _check_plotting()
+
+    if metric is None:
+        metric = results.preferred_metric(context="epoch")
+
+    run_dfs = results.all_runs_metrics
+    if not run_dfs:
+        settings.logger.warning("plot_epoch_run_heatmap: no run data available.")
+        return None
+
+    # Resolve column using the standard helper; prefer val over train
+    train_col, val_col = _find_metric_columns(run_dfs[0], metric)
+    col = val_col or train_col
+    if col is None:
+        settings.logger.warning(f"plot_epoch_run_heatmap: metric '{metric}' not found in run data.")
+        return None
+
+    # Collect per-run value arrays, skipping runs missing the column
+    per_run_values: List[np.ndarray] = []
+    for run_df in run_dfs:
+        if col not in run_df.columns:
+            continue
+        per_run_values.append(np.asarray(run_df[col].values, dtype=float))
+
+    if not per_run_values:
+        settings.logger.warning(f"plot_epoch_run_heatmap: metric '{metric}' found in no run.")
+        return None
+
+    # Build a (n_runs, max_epochs) matrix padded with NaN for ragged runs
+    n_runs = len(per_run_values)
+    max_epochs = max(len(v) for v in per_run_values)
+    matrix = np.full((n_runs, max_epochs), np.nan, dtype=float)
+    for i, vals in enumerate(per_run_values):
+        matrix[i, : len(vals)] = vals
+
+    # Auto-figsize if not provided
+    if figsize is None:
+        figsize = (
+            max(6.0, min(16.0, max_epochs * 0.25)),
+            max(4.0, min(12.0, n_runs * 0.3)),
+        )
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+
+    # Render via seaborn; mask NaNs so trailing cells in short runs render
+    # as background rather than color-scale extreme
+    sns.heatmap(
+        matrix,
+        ax=ax,
+        cmap=cmap,
+        cbar_kws={"label": col},
+        mask=np.isnan(matrix),
+        linewidths=0,
+    )
+
+    # Sparsify epoch tick labels when epoch count is large
+    epoch_step = max(1, max_epochs // 20)
+    epoch_ticks = np.arange(0, max_epochs, epoch_step)
+    ax.set_xticks(epoch_ticks + 0.5)
+    ax.set_xticklabels([str(e + 1) for e in epoch_ticks], rotation=0)
+
+    # Y-tick labels: Run 1..N, but sparsify when run count is large
+    run_step = max(1, n_runs // 20)
+    run_ticks = np.arange(0, n_runs, run_step)
+    ax.set_yticks(run_ticks + 0.5)
+    ax.set_yticklabels([f"Run {r + 1}" for r in run_ticks], rotation=0)
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Run")
+    ax.set_title(f"Per-Epoch {col} Across {n_runs} Runs")
+
+    if show is None:
+        show = settings.get_display_plots()
+    if show:
+        plt.show()
+        return None
+    return fig

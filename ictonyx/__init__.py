@@ -269,6 +269,7 @@ try:
         plot_comparison_boxplots,
         plot_comparison_forest,
         plot_confusion_matrix,
+        plot_epoch_run_heatmap,
         plot_grid_study_heatmap,
         plot_pacf_vs_lag,
         plot_paired_deltas,
@@ -307,6 +308,7 @@ try:
             "plot_comparison_forest",
             "plot_paired_deltas",
             "plot_grid_study_heatmap",
+            "plot_epoch_run_heatmap",
         ]
     )
     _has_plotting_functions = True

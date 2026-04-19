@@ -2,6 +2,7 @@
 
 # Imports
 
+from typing import List
 from unittest.mock import MagicMock, patch
 
 import matplotlib
@@ -1112,3 +1113,90 @@ class TestPlotRunIndependenceDiagnostics:
         r = self._make_results_with_values(values)
         fig = plot_run_independence_diagnostics(r, metric="test_accuracy", max_lag=10, show=False)
         assert fig is not None
+
+
+class TestPlotEpochRunHeatmap:
+    """plot_epoch_run_heatmap — epoch × run matrix of per-epoch metric."""
+
+    def _make_results_with_histories(
+        self,
+        histories: list[pd.DataFrame],
+        metric_key: str = "val_accuracy",
+    ):
+        """Mock results with explicit per-run histories."""
+        from unittest.mock import MagicMock
+
+        fake = MagicMock()
+        fake.all_runs_metrics = histories
+        fake.preferred_metric = MagicMock(return_value=metric_key)
+        return fake
+
+    @patch("matplotlib.pyplot.show")
+    def test_returns_figure_uniform_runs(self, mock_show):
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        histories = [
+            pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88, 0.89, 0.90]}),
+            pd.DataFrame({"val_accuracy": [0.78, 0.83, 0.87, 0.88, 0.89]}),
+            pd.DataFrame({"val_accuracy": [0.79, 0.84, 0.88, 0.89, 0.90]}),
+        ]
+        r = self._make_results_with_histories(histories)
+        fig = plot_epoch_run_heatmap(r, metric="val_accuracy", show=False)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_handles_ragged_runs(self, mock_show):
+        """Unequal epoch counts should render without crashing."""
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        histories = [
+            pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88, 0.89, 0.90]}),
+            pd.DataFrame({"val_accuracy": [0.78, 0.83, 0.87]}),  # early stop
+            pd.DataFrame({"val_accuracy": [0.79, 0.84, 0.88, 0.89]}),
+        ]
+        r = self._make_results_with_histories(histories)
+        fig = plot_epoch_run_heatmap(r, metric="val_accuracy", show=False)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_empty_runs_returns_none(self, mock_show):
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        r = self._make_results_with_histories([])
+        result = plot_epoch_run_heatmap(r, metric="val_accuracy", show=False)
+        assert result is None
+
+    @patch("matplotlib.pyplot.show")
+    def test_missing_metric_returns_none(self, mock_show):
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        histories = [
+            pd.DataFrame({"val_loss": [0.5, 0.4, 0.3]}),  # no accuracy column
+        ]
+        r = self._make_results_with_histories(histories)
+        result = plot_epoch_run_heatmap(r, metric="val_accuracy", show=False)
+        assert result is None
+
+    @patch("matplotlib.pyplot.show")
+    def test_metric_auto_resolved_when_none(self, mock_show):
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        histories = [
+            pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88]}),
+        ]
+        r = self._make_results_with_histories(histories)
+        fig = plot_epoch_run_heatmap(r, show=False)
+        r.preferred_metric.assert_called_with(context="epoch")
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_accepts_ax_parameter(self, mock_show):
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        histories = [
+            pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88]}),
+        ]
+        r = self._make_results_with_histories(histories)
+        fig, ax = plt.subplots()
+        result = plot_epoch_run_heatmap(r, metric="val_accuracy", ax=ax, show=False)
+        assert result is fig

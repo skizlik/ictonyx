@@ -1863,11 +1863,21 @@ if HUGGINGFACE_AVAILABLE:
             import tempfile
 
             # ── Seed control ─────────────────────────────────────────────
-            run_seed = None
-            if hasattr(self, "model_config") and self.model_config is not None:
-                run_seed = self.model_config.get("run_seed")
+            # Per-run seed is threaded via fit_kwargs by the runner (X-40 fix,
+            # v0.4.7). The prior implementation read from self.model_config,
+            # which is never populated on the wrapper — so every run used the
+            # fallback 42, producing bit-for-bit identical metrics across all
+            # runs in a variability study.
+            run_seed = kwargs.pop("run_seed", None)
             if run_seed is None:
                 run_seed = 42
+                warnings.warn(
+                    "HuggingFaceModelWrapper.fit() received no run_seed; "
+                    "using default 42. All runs will produce identical results. "
+                    "This indicates a runner-wrapper integration bug.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             _hf_set_seed(run_seed)
 
             # ── Tokenizer + data ─────────────────────────────────────────

@@ -448,6 +448,7 @@ class ExperimentRunner:
                 fit_kwargs["epochs"] = epochs
                 fit_kwargs["batch_size"] = self.model_config.get("batch_size", 32)
                 fit_kwargs["verbose"] = self.model_config.get("verbose", 0)
+                fit_kwargs["run_seed"] = self.model_config.get("run_seed")
 
             with self._deterministic_cudnn():
                 wrapped_model.fit(**fit_kwargs)

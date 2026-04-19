@@ -2029,3 +2029,148 @@ def plot_paired_deltas(
         plt.show()
         return None
     return fig
+
+
+def plot_run_independence_diagnostics(
+    results: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    max_lag: int = 5,
+    *,
+    alpha: float = 0.05,
+    ax: Optional["Axes"] = None,
+    figsize: Tuple[float, float] = (8, 5),
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Autocorrelation diagnostic for run-level independence.
+
+    Runs from :func:`variability_study` should be IID by
+    ``SeedSequence.spawn()`` construction. This plot helps detect
+    violations — e.g. GPU state, wall-clock ordering, or caching leaking
+    between runs — by showing autocorrelation at lags ``1..max_lag`` of
+    the run-indexed final-metric series.
+
+    Uses :func:`~ictonyx.analysis.check_independence` internally, which
+    applies a Bonferroni correction across the tested lags to control
+    the familywise false-positive rate at ``alpha``.
+
+    **At small N the test has low power.** With ``n=10`` runs and
+    ``max_lag=5``, the plot bands are wide; absence of a flagged lag is
+    not strong evidence of independence. Consider ``runs >= 20``
+    before reading too much into a clean diagnostic.
+
+    Args:
+        results: A completed :class:`VariabilityStudyResults`.
+        metric: Metric key to diagnose. If ``None``, resolved via
+            ``results.preferred_metric(context="scalar")``.
+        max_lag: Maximum lag to test. Default ``5``. Effective lag may
+            be reduced if the run count is small.
+        alpha: Familywise significance level. Default ``0.05``.
+        ax: Optional existing Axes. Creates a new figure if ``None``.
+        figsize: Figure dimensions when ``ax`` is ``None``.
+            Default ``(8, 5)``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is
+        enabled.
+    """
+    _check_plotting()
+    from .analysis import check_independence
+
+    if metric is None:
+        metric = results.preferred_metric(context="scalar")
+
+    # Fetch run-indexed series (reusing the dispatch logic from paired deltas)
+    if metric.startswith("test_"):
+        values = np.asarray(results.get_test_metric_values(metric[len("test_") :]), dtype=float)
+    else:
+        values = np.asarray(results.get_metric_values(metric), dtype=float)
+
+    series = pd.Series(values)
+    is_independent, details = check_independence(series, max_lag=max_lag, alpha=alpha)
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+
+    # Handle untestable case (series too short)
+    if is_independent is None:
+        ax.text(
+            0.5,
+            0.5,
+            details.get("error", "Series too short to assess independence."),
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            fontsize=10,
+            wrap=True,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title("Run Independence Diagnostic (untestable)")
+        if show is None:
+            show = settings.get_display_plots()
+        if show:
+            plt.show()
+            return None
+        return fig
+
+        # Extract pre-computed per-lag ACFs and thresholds from check_independence
+    autocorrs = details["autocorrelations"]  # dict "lag_1" -> float
+    thresholds = details["thresholds"]  # dict "lag_1" -> float (±threshold)
+    significant_lags = set(details["significant_lags"])
+
+    lags = sorted(int(k.split("_")[1]) for k in autocorrs.keys())
+    acfs = [autocorrs[f"lag_{k}"] for k in lags]
+    thrs = [thresholds[f"lag_{k}"] for k in lags]
+
+    # Stem plot: one vertical line per lag from 0 to ACF value
+    color_sig = settings.THEME.get("significant", "C3")
+    color_ok = settings.THEME.get("val", "C0")
+    bar_colors = [color_sig if lag in significant_lags else color_ok for lag in lags]
+
+    ax.vlines(lags, 0, acfs, colors=bar_colors, linewidth=2.5)
+    ax.scatter(lags, acfs, c=bar_colors, s=60, zorder=3, edgecolor="black", linewidth=0.5)
+
+    # Zero line
+    ax.axhline(0, color="black", linewidth=0.8, alpha=0.5, zorder=1)
+
+    # Per-lag Bonferroni-adjusted critical value bands (stepped, not flat)
+    ax.plot(
+        lags,
+        thrs,
+        color="gray",
+        linestyle="--",
+        linewidth=1,
+        label=f"Bonferroni α={alpha} threshold",
+        alpha=0.7,
+    )
+    ax.plot(lags, [-t for t in thrs], color="gray", linestyle="--", linewidth=1, alpha=0.7)
+
+    # Labels
+    ax.set_xlabel("Lag")
+    ax.set_ylabel(f"Autocorrelation ({metric})")
+    ax.set_xticks(lags)
+
+    # Title reflects the result
+    n = details.get("n", len(values))
+    if is_independent:
+        title = f"Run Independence: OK  (n={n}, no lags exceed threshold)"
+    else:
+        flagged = sorted(significant_lags)
+        title = (
+            f"Run Independence: FLAGGED  (n={n}, "
+            f"lag{'s' if len(flagged) > 1 else ''} "
+            f"{', '.join(str(l) for l in flagged)} exceed threshold)"
+        )
+    ax.set_title(title, fontsize=10)
+    ax.legend(loc="best", fontsize=9)
+    ax.grid(True, alpha=0.3, zorder=0)
+
+    if show is None:
+        show = settings.get_display_plots()
+    if show:
+        plt.show()
+        return None
+    return fig

@@ -1041,3 +1041,74 @@ class TestPlotPairedDeltas:
         ax = fig.axes[0]
         texts = [t.get_text() for t in ax.texts]
         assert any("Winner reverses" in t for t in texts)
+
+
+class TestPlotRunIndependenceDiagnostics:
+    """plot_run_independence_diagnostics — run-level autocorrelation plot."""
+
+    def _make_results_with_values(self, values: list, metric_key: str = "test_accuracy"):
+        """Minimal results-shaped mock."""
+        from unittest.mock import MagicMock
+
+        fake = MagicMock()
+        fake.get_metric_values = MagicMock(return_value=list(values))
+        fake.get_test_metric_values = MagicMock(return_value=list(values))
+        fake.preferred_metric = MagicMock(return_value=metric_key)
+        return fake
+
+    @patch("matplotlib.pyplot.show")
+    def test_returns_figure_for_adequate_n(self, mock_show):
+        from ictonyx.plotting import plot_run_independence_diagnostics
+
+        # 20 values, enough for max_lag=5 (need max_lag + 2 = 7 minimum)
+        values = [0.85 + 0.01 * (-1) ** i for i in range(20)]
+        r = self._make_results_with_values(values)
+        fig = plot_run_independence_diagnostics(r, metric="test_accuracy", show=False)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_untestable_series_renders_notice(self, mock_show):
+        from ictonyx.plotting import plot_run_independence_diagnostics
+
+        # Only 3 values, too few for max_lag=5
+        values = [0.85, 0.86, 0.87]
+        r = self._make_results_with_values(values)
+        fig = plot_run_independence_diagnostics(r, metric="test_accuracy", show=False)
+        # Should render something (not crash), with an annotation about
+        # insufficient data
+        assert fig is not None
+        ax = fig.axes[0]
+        texts = [t.get_text() for t in ax.texts]
+        assert (
+            any("too short" in t.lower() or "untestable" in t.lower() for t in texts)
+            or "untestable" in ax.get_title().lower()
+        )
+
+    @patch("matplotlib.pyplot.show")
+    def test_metric_auto_resolved_when_none(self, mock_show):
+        from ictonyx.plotting import plot_run_independence_diagnostics
+
+        values = [0.85 + 0.01 * (-1) ** i for i in range(20)]
+        r = self._make_results_with_values(values)
+        fig = plot_run_independence_diagnostics(r, show=False)
+        r.preferred_metric.assert_called_with(context="scalar")
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_accepts_ax_parameter(self, mock_show):
+        from ictonyx.plotting import plot_run_independence_diagnostics
+
+        values = [0.85 + 0.01 * (-1) ** i for i in range(20)]
+        r = self._make_results_with_values(values)
+        fig, ax = plt.subplots()
+        result = plot_run_independence_diagnostics(r, metric="test_accuracy", ax=ax, show=False)
+        assert result is fig
+
+    @patch("matplotlib.pyplot.show")
+    def test_custom_max_lag(self, mock_show):
+        from ictonyx.plotting import plot_run_independence_diagnostics
+
+        values = [0.85 + 0.01 * (-1) ** i for i in range(30)]
+        r = self._make_results_with_values(values)
+        fig = plot_run_independence_diagnostics(r, metric="test_accuracy", max_lag=10, show=False)
+        assert fig is not None

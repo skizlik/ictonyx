@@ -1451,3 +1451,66 @@ class TestTimeSeriesDataHandlerFrameworkAgnostic:
         assert "lookback" in info
         assert "value_column" in info
         assert "stride" in info
+
+
+class TestImageDataHandlerShuffleSeeding:
+    """Tests: shuffle must vary across variability-study runs.
+
+    Pre-v0.4.7, ImageDataHandler placed .shuffle() before .cache(). The
+    cache materialized one shuffle order on first pass; every subsequent
+    iteration replayed that order. Per-run batch-ordering variance — one
+    of three variance sources the library claims to measure — was silently
+    suppressed on image studies.
+
+    Fix (Option C1): shuffle moved after cache with
+    reshuffle_each_iteration=True. Combined with the runner's per-run
+    tf.random.set_seed(child_seed), this produces distinct orderings
+    across runs iterating the same cached dataset.
+    """
+
+    @pytest.fixture
+    def tiny_image_dataset(self, tmp_path):
+        """Minimal on-disk image dataset: 2 classes, 10 images each, 16x16 RGB."""
+        pytest.importorskip("PIL", reason="Pillow not installed")
+        from PIL import Image
+
+        rng = np.random.default_rng(2026)
+        root = tmp_path / "dataset"
+        root.mkdir()
+        for class_id in range(2):
+            class_dir = root / f"class_{class_id}"
+            class_dir.mkdir()
+            for sample_id in range(10):
+                arr = rng.integers(0, 255, size=(16, 16, 3), dtype=np.uint8)
+                Image.fromarray(arr).save(class_dir / f"img_{sample_id:02d}.png")
+        return str(root)
+
+    @pytest.mark.slow
+    def test_shuffle_varies_across_global_seeds(self, tiny_image_dataset):
+        """Same cached dataset under different global TF seeds → different orderings."""
+        tf = pytest.importorskip("tensorflow", reason="TensorFlow not installed")
+        from ictonyx.data import ImageDataHandler
+
+        handler = ImageDataHandler(
+            data_path=tiny_image_dataset,
+            image_size=(16, 16),
+            batch_size=4,
+            seed=42,
+            val_split=0.2,
+            test_split=0.2,
+        )
+        output = handler.load(validation_split=0.2, test_split=0.2)
+        train_ds = output["train_data"]
+
+        orderings = []
+        for global_seed in (100, 200, 300):
+            tf.random.set_seed(global_seed)
+            labels = []
+            for _images, lbls in train_ds:
+                labels.extend(lbls.numpy().tolist())
+            orderings.append(tuple(labels))
+
+        assert len(set(orderings)) > 1, (
+            f"X-72 regression: 3 simulated runs produced identical orderings "
+            f"despite distinct global TF seeds: {orderings}"
+        )

@@ -2277,3 +2277,136 @@ def plot_epoch_run_heatmap(
     ax.set_title(f"Per-Epoch {col} Across {n_runs} Runs")
 
     return _finalize_plot(fig, show)
+
+
+def plot_sequential_ci(
+    results: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    *,
+    min_n: int = 3,
+    method: str = "bca",
+    confidence: float = 0.95,
+    ax: Optional["Axes"] = None,
+    figsize: Tuple[float, float] = (8, 5),
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Bootstrap CI width as a function of number of runs.
+
+    For each ``n`` in ``[min_n, N]``, computes a bootstrap CI for the
+    mean of the first ``n`` runs and plots the upper/lower bounds along
+    with the running mean. The narrowing band illustrates how quickly
+    additional runs reduce uncertainty and where returns diminish.
+
+    Useful for the "how many runs do I need?" methodology argument.
+    Look for the point where the band stops meaningfully narrowing —
+    additional runs past that point buy little precision.
+
+    Args:
+        results: A completed :class:`VariabilityStudyResults`.
+        metric: Metric key. If ``None``, resolved via
+            ``results.preferred_metric(context="scalar")``.
+        min_n: Smallest N at which to compute a CI. Floored at 3 because
+            bootstrap CIs are meaningless with fewer observations.
+            Default ``3``.
+        method: Bootstrap CI method. ``"bca"`` (default) or
+            ``"percentile"``.
+        confidence: Confidence level in (0, 1). Default ``0.95``.
+        ax: Optional existing Axes. Creates a new figure if ``None``.
+        figsize: Figure dimensions when ``ax`` is ``None``.
+            Default ``(8, 5)``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is
+        enabled or fewer than ``min_n`` runs are available.
+
+    Raises:
+        ValueError: If ``min_n < 3`` or if the study has fewer than
+            ``min_n`` runs.
+    """
+    _check_plotting()
+    from .bootstrap import bootstrap_ci
+
+    if min_n < 3:
+        raise ValueError(f"min_n must be >= 3 for meaningful bootstrap CIs; got {min_n}")
+
+    if metric is None:
+        metric = results.preferred_metric(context="scalar")
+
+    # Fetch the scalar run-indexed series (same dispatch as plot_paired_deltas)
+    if metric.startswith("test_"):
+        values = np.asarray(results.get_test_metric_values(metric[len("test_") :]), dtype=float)
+    else:
+        values = np.asarray(results.get_metric_values(metric), dtype=float)
+
+    n_total = len(values)
+    if n_total < min_n:
+        raise ValueError(f"Sequential CI requires at least min_n={min_n} runs; " f"got {n_total}.")
+
+    # Compute running CI at each N
+    ns: List[int] = []
+    means: List[float] = []
+    lowers: List[float] = []
+    uppers: List[float] = []
+    for n in range(min_n, n_total + 1):
+        subset = values[:n]
+        try:
+            ci = bootstrap_ci(subset, np.mean, confidence=confidence, method=method)
+            ns.append(n)
+            means.append(float(np.mean(subset)))
+            lowers.append(ci.ci_lower)
+            uppers.append(ci.ci_upper)
+        except Exception:
+            # Catastrophic bootstrap failure at this N — record a gap
+            ns.append(n)
+            means.append(float(np.mean(subset)))
+            lowers.append(np.nan)
+            uppers.append(np.nan)
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure  # type: ignore[assignment]
+
+    color_mean = settings.THEME.get("val", "C0")
+    color_band = settings.THEME.get("significant", "C1")
+
+    # Shaded CI band
+    ax.fill_between(
+        ns,
+        lowers,
+        uppers,
+        color=color_band,
+        alpha=0.2,
+        label=f"{int(confidence * 100)}% CI ({method})",
+    )
+
+    # CI bound lines (thin, for emphasis at edges)
+    ax.plot(ns, lowers, color=color_band, linewidth=0.8, alpha=0.6)
+    ax.plot(ns, uppers, color=color_band, linewidth=0.8, alpha=0.6)
+
+    # Running mean line
+    ax.plot(ns, means, color=color_mean, linewidth=2, label="Running mean")
+
+    # Annotate final CI width
+    final_width = uppers[-1] - lowers[-1] if not np.isnan(uppers[-1]) else np.nan
+    if not np.isnan(final_width):
+        ax.text(
+            0.98,
+            0.02,
+            f"CI width at N={n_total}: {final_width:.4f}",
+            transform=ax.transAxes,
+            fontsize=9,
+            horizontalalignment="right",
+            verticalalignment="bottom",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+        )
+
+    ax.set_xlabel("Number of runs (N)")
+    ax.set_ylabel(metric)
+    ax.set_title(f"Sequential Bootstrap CI: {metric}")
+    ax.set_xticks(ns if len(ns) <= 20 else ns[:: max(1, len(ns) // 20)])
+    ax.legend(loc="best", fontsize=9)
+    _apply_style(ax)
+
+    return _finalize_plot(fig, show)

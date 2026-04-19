@@ -1200,3 +1200,78 @@ class TestPlotEpochRunHeatmap:
         fig, ax = plt.subplots()
         result = plot_epoch_run_heatmap(r, metric="val_accuracy", ax=ax, show=False)
         assert result is fig
+
+
+class TestPlotSequentialCi:
+    """plot_sequential_ci — CI width as a function of N runs."""
+
+    def _make_results_with_values(self, values: list, metric_key: str = "test_accuracy"):
+        """Minimal results-shaped mock."""
+        from unittest.mock import MagicMock
+
+        fake = MagicMock()
+        fake.get_metric_values = MagicMock(return_value=list(values))
+        fake.get_test_metric_values = MagicMock(return_value=list(values))
+        fake.preferred_metric = MagicMock(return_value=metric_key)
+        return fake
+
+    @patch("matplotlib.pyplot.show")
+    def test_returns_figure(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        # 15 values with real variance so bootstrap produces a non-zero CI
+        rng = np.random.default_rng(42)
+        values = list(0.85 + 0.02 * rng.standard_normal(15))
+        r = self._make_results_with_values(values)
+        fig = plot_sequential_ci(r, metric="test_accuracy", show=False)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_metric_auto_resolved_when_none(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        rng = np.random.default_rng(42)
+        values = list(0.85 + 0.02 * rng.standard_normal(15))
+        r = self._make_results_with_values(values)
+        fig = plot_sequential_ci(r, show=False)
+        r.preferred_metric.assert_called_with(context="scalar")
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_min_n_below_3_raises(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        values = [0.85, 0.87, 0.86, 0.88, 0.84]
+        r = self._make_results_with_values(values)
+        with pytest.raises(ValueError, match=">= 3"):
+            plot_sequential_ci(r, metric="test_accuracy", min_n=2, show=False)
+
+    @patch("matplotlib.pyplot.show")
+    def test_insufficient_runs_raises(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        values = [0.85, 0.87]  # only 2 runs
+        r = self._make_results_with_values(values)
+        with pytest.raises(ValueError, match="at least min_n"):
+            plot_sequential_ci(r, metric="test_accuracy", min_n=3, show=False)
+
+    @patch("matplotlib.pyplot.show")
+    def test_accepts_ax_parameter(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        rng = np.random.default_rng(42)
+        values = list(0.85 + 0.02 * rng.standard_normal(10))
+        r = self._make_results_with_values(values)
+        fig, ax = plt.subplots()
+        result = plot_sequential_ci(r, metric="test_accuracy", ax=ax, show=False)
+        assert result is fig
+
+    @patch("matplotlib.pyplot.show")
+    def test_custom_min_n(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        rng = np.random.default_rng(42)
+        values = list(0.85 + 0.02 * rng.standard_normal(20))
+        r = self._make_results_with_values(values)
+        fig = plot_sequential_ci(r, metric="test_accuracy", min_n=5, show=False)
+        assert fig is not None

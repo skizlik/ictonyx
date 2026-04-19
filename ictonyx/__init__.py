@@ -281,6 +281,7 @@ try:
         plot_run_independence_diagnostics,
         plot_run_strip,
         plot_run_trajectories,
+        plot_sequential_ci,
         plot_training_history,
         plot_training_stability,
         plot_variability_summary,
@@ -309,6 +310,7 @@ try:
             "plot_paired_deltas",
             "plot_grid_study_heatmap",
             "plot_epoch_run_heatmap",
+            "plot_sequential_ci",
         ]
     )
     _has_plotting_functions = True

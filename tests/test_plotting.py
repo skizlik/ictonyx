@@ -967,3 +967,77 @@ class TestRankCorrelationPlot:
         matplotlib.use("Agg")
         fig = plot_rank_correlation_over_epoch(large_results, threshold=0.5, show=False)
         assert fig is not None
+
+
+class TestPlotPairedDeltas:
+    """plot_paired_deltas — per-run paired differences."""
+
+    def _make_results_with_values(self, values: list, metric_key: str = "test_accuracy"):
+        """Minimal results-shaped mock for plot_paired_deltas tests."""
+        from unittest.mock import MagicMock
+
+        fake = MagicMock()
+        fake.get_metric_values = MagicMock(return_value=list(values))
+        fake.get_test_metric_values = MagicMock(return_value=list(values))
+        fake.preferred_metric = MagicMock(return_value=metric_key)
+        return fake
+
+    @patch("matplotlib.pyplot.show")
+    def test_returns_figure(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.85, 0.87, 0.86, 0.88, 0.84])
+        b = self._make_results_with_values([0.83, 0.86, 0.85, 0.84, 0.82])
+        fig = plot_paired_deltas(a, b, metric="test_accuracy", show=False)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_unequal_run_counts_raises(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.85, 0.87, 0.86, 0.88, 0.84])
+        b = self._make_results_with_values([0.83, 0.86, 0.85])
+        with pytest.raises(ValueError, match="equal run counts"):
+            plot_paired_deltas(a, b, metric="test_accuracy", show=False)
+
+    @patch("matplotlib.pyplot.show")
+    def test_metric_auto_resolved_when_none(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.85, 0.87, 0.86, 0.88, 0.84])
+        b = self._make_results_with_values([0.83, 0.86, 0.85, 0.84, 0.82])
+        fig = plot_paired_deltas(a, b, show=False)
+        a.preferred_metric.assert_called_with(context="scalar")
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_accepts_ax_parameter(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.85, 0.87, 0.86])
+        b = self._make_results_with_values([0.83, 0.86, 0.85])
+        fig, ax = plt.subplots()
+        result = plot_paired_deltas(a, b, metric="test_accuracy", ax=ax, show=False)
+        assert result is fig
+
+    @patch("matplotlib.pyplot.show")
+    def test_no_reversal_case_does_not_annotate(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.90, 0.91, 0.92, 0.93, 0.94])
+        b = self._make_results_with_values([0.80, 0.81, 0.82, 0.83, 0.84])
+        fig = plot_paired_deltas(a, b, metric="test_accuracy", show=False)
+        ax = fig.axes[0]
+        texts = [t.get_text() for t in ax.texts]
+        assert not any("Winner reverses" in t for t in texts)
+
+    @patch("matplotlib.pyplot.show")
+    def test_reversal_case_does_annotate(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.90, 0.80, 0.88, 0.82, 0.85])
+        b = self._make_results_with_values([0.85, 0.82, 0.86, 0.84, 0.83])
+        fig = plot_paired_deltas(a, b, metric="test_accuracy", show=False)
+        ax = fig.axes[0]
+        texts = [t.get_text() for t in ax.texts]
+        assert any("Winner reverses" in t for t in texts)

@@ -271,6 +271,7 @@ try:
         plot_confusion_matrix,
         plot_grid_study_heatmap,
         plot_pacf_vs_lag,
+        plot_paired_deltas,
         plot_pairwise_comparison_matrix,
         plot_precision_recall_curve,
         plot_rank_correlation_over_epoch,
@@ -302,6 +303,7 @@ try:
             "plot_rank_correlation_over_epoch",
             "plot_comparison_boxplots",
             "plot_comparison_forest",
+            "plot_paired_deltas",
             "plot_grid_study_heatmap",
         ]
     )

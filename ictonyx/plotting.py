@@ -1875,3 +1875,157 @@ def plot_averaged_pacf(
     _apply_style(ax)
 
     return _finalize_plot(fig, show)
+
+
+def plot_paired_deltas(
+    results_a: "VariabilityStudyResults",
+    results_b: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    *,
+    name_a: str = "Model A",
+    name_b: str = "Model B",
+    show_ci: bool = True,
+    ci_confidence: float = 0.95,
+    ax: Optional["Axes"] = None,
+    figsize: Tuple[float, float] = (8, 6),
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Per-run paired differences between two model studies.
+
+    Shows each run's ``metric_a[i] - metric_b[i]`` as a point on a strip,
+    with a horizontal zero line separating "Model A wins" (above) from
+    "Model B wins" (below). When points appear on both sides of zero,
+    the winner *reverses* depending on which seeds you picked — a
+    phenomenon invisible from mean comparisons alone.
+
+    Requires equal run counts in both studies (paired comparison is
+    undefined otherwise).
+
+    Args:
+        results_a: First model's variability study.
+        results_b: Second model's variability study.
+        metric: Metric key to compare. If ``None``, resolved from
+            ``results_a.preferred_metric(context="scalar")``.
+        name_a: Label for model A in the legend and axes. Default
+            ``"Model A"``.
+        name_b: Label for model B. Default ``"Model B"``.
+        show_ci: Whether to overlay a bootstrap CI band on the mean
+            delta. Default ``True``.
+        ci_confidence: Confidence level for the mean-delta CI.
+            Default ``0.95``.
+        ax: Optional existing Axes. Creates a new figure if ``None``.
+        figsize: Figure dimensions when ``ax`` is ``None``.
+            Default ``(8, 6)``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is
+        enabled.
+
+    Raises:
+        ValueError: If the two studies have different run counts.
+    """
+    _check_plotting()
+
+    if metric is None:
+        metric = results_a.preferred_metric(context="scalar")
+
+    # Dispatch to the correct accessor based on metric scope
+    def _fetch(res, m: str) -> np.ndarray:
+        if m.startswith("test_"):
+            # test_* metrics live in final_test_metrics; strip the prefix
+            return np.asarray(res.get_test_metric_values(m[len("test_") :]), dtype=float)
+        return np.asarray(res.get_metric_values(m), dtype=float)
+
+    values_a = _fetch(results_a, metric)
+    values_b = _fetch(results_b, metric)
+
+    if len(values_a) != len(values_b):
+        raise ValueError(
+            f"Paired delta requires equal run counts; got "
+            f"{len(values_a)} (A) and {len(values_b)} (B). "
+            f"Use an unpaired comparison for unequal runs."
+        )
+
+    deltas = values_a - values_b
+    n = len(deltas)
+    mean_delta = float(np.mean(deltas))
+
+    ci_lo, ci_hi = None, None
+    if show_ci and n >= 3:
+        from .bootstrap import bootstrap_ci
+
+        try:
+            ci = bootstrap_ci(deltas, confidence=ci_confidence, method="bca")
+            ci_lo, ci_hi = ci.ci_lower, ci.ci_upper
+        except Exception:
+            ci_lo, ci_hi = None, None
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+
+    run_indices = np.arange(1, n + 1)
+    colors = [
+        settings.THEME.get("significant", "C0") if d >= 0 else settings.THEME.get("val", "C1")
+        for d in deltas
+    ]
+    ax.scatter(
+        run_indices,
+        deltas,
+        c=colors,
+        s=60,
+        zorder=3,
+        edgecolor="black",
+        linewidth=0.5,
+    )
+
+    ax.axhline(0, color="black", linestyle="-", linewidth=1, alpha=0.6, zorder=1)
+
+    ax.axhline(
+        mean_delta,
+        color=settings.THEME.get("significant", "C0"),
+        linestyle="--",
+        linewidth=1.2,
+        label=f"Mean Δ = {mean_delta:.4f}",
+        zorder=2,
+    )
+
+    if ci_lo is not None and ci_hi is not None:
+        ax.axhspan(
+            ci_lo,
+            ci_hi,
+            color=settings.THEME.get("significant", "C0"),
+            alpha=0.15,
+            label=f"{int(ci_confidence * 100)}% CI: [{ci_lo:.4f}, {ci_hi:.4f}]",
+            zorder=0,
+        )
+
+    ax.set_xlabel("Run")
+    ax.set_ylabel(f"{name_a} − {name_b}  ({metric})")
+    ax.set_title(f"Paired Run Differences: {name_a} vs {name_b}")
+    ax.set_xticks(run_indices)
+    ax.legend(loc="best", fontsize=9)
+    ax.grid(True, alpha=0.3, zorder=0)
+
+    n_above = int(np.sum(deltas > 0))
+    n_below = int(np.sum(deltas < 0))
+    if n_above > 0 and n_below > 0:
+        ax.text(
+            0.02,
+            0.02,
+            f"Winner reverses: {n_above} favor {name_a}, {n_below} favor {name_b}",
+            transform=ax.transAxes,
+            fontsize=9,
+            style="italic",
+            verticalalignment="bottom",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+        )
+
+    if show is None:
+        show = settings.get_display_plots()
+    if show:
+        plt.show()
+        return None
+    return fig

@@ -1601,16 +1601,75 @@ class GridStudyResults:
             rows.append(row)
 
         df = pd.DataFrame(rows)
+
+        # Empty results (from dry_run=True) produces a DataFrame with no
+        # columns. Sorting by param-grid columns would raise KeyError.
+        # Return a typed empty DataFrame with the expected schema so
+        # downstream consumers (summarize, external code) get a
+        # well-formed result.
+        if df.empty:
+            schema_cols = list(self.param_grid.keys()) + [
+                "mean",
+                "sd",
+                "se",
+                "min",
+                "max",
+                "n",
+            ]
+            return pd.DataFrame(columns=schema_cols)
+
         sort_cols = list(self.param_grid.keys())
         return df.sort_values(sort_cols).reset_index(drop=True)
 
     def summarize(self, metric: Optional[str] = None) -> str:
         """Generate text summary of grid study results.
 
+        For executed studies, returns a summary of configurations and
+        their metric statistics. For dry-run results (empty
+        ``self.results``), returns a preview showing the parameter grid
+        and the planned configurations that would be executed.
+
         Args:
             metric: Metric to summarize. Defaults to self.metric.
         """
         metric = metric or self.metric
+
+        # Dry-run path: no results to summarize, but self.param_grid
+        # lets us preview what would have been run. Runs-per-config
+        # is not preserved on a dry-run result in v0.4.7, so this
+        # preview reports the planned configurations without a run
+        # count. The architectural fix to carry num_runs through to
+        # the dry-run result object is scheduled for v0.5.0.
+        if not self.results:
+            import itertools
+
+            param_names = list(self.param_grid.keys())
+            param_value_lists = [self.param_grid[k] for k in param_names]
+            combinations = list(itertools.product(*param_value_lists))
+            n_planned_configs = len(combinations)
+
+            lines = [
+                "Grid Study Results (Dry Run — not yet executed)",
+                "=" * 40,
+                "Parameter grid:",
+            ]
+            for name, param_values in self.param_grid.items():
+                lines.append(f"  {name}: {param_values}")
+            lines.extend(
+                [
+                    "",
+                    f"Planned configurations: {n_planned_configs}",
+                    f"Metric:                 {metric}",
+                    "",
+                    "Configurations to run:",
+                ]
+            )
+            for i, combo in enumerate(combinations, 1):
+                combo_dict = dict(zip(param_names, combo))
+                lines.append(f"  {i:>3}. {combo_dict}")
+            return "\n".join(lines)
+
+        # Normal path: study was executed, report statistics.
         df = self.to_dataframe(metric)
         lines = [
             "Grid Study Results",

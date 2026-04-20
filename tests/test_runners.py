@@ -1872,20 +1872,37 @@ class TestVariabilityStudyResultsTestMetrics:
         assert results.preferred_metric("accuracy") == "test_accuracy"
 
     def test_preferred_metric_falls_back_to_val_when_test_key_not_tracked(self):
-        """Test data present but doesn't contain the requested base metric."""
+        """Test data present but doesn't contain the requested base metric.
+        Val tracks the metric, so preferred_metric should fall back to val."""
         results = VariabilityStudyResults(
             all_runs_metrics=[],
-            final_metrics={"val_loss": [0.3, 0.28, 0.31]},
+            # Val tracks both loss and accuracy; test only tracks loss.
+            final_metrics={"val_loss": [0.3, 0.28, 0.31], "val_accuracy": [0.80, 0.82, 0.81]},
             final_test_metrics=[{"run_id": 1, "test_loss": 0.32}],
             seed=42,
         )
-        # test_accuracy not tracked — should fall back to val_accuracy
+        # test_accuracy not tracked, but val_accuracy is — falls back to val.
         assert results.preferred_metric("accuracy") == "val_accuracy"
 
     def test_preferred_metric_different_bases(self):
-        results = self._make_results_with_test()
+        """Multiple bases resolve correctly when both val and test track them."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            # Val tracks both; test tracks only accuracy.
+            final_metrics={
+                "val_accuracy": [0.80, 0.82, 0.81],
+                "val_loss": [0.30, 0.28, 0.31],
+            },
+            final_test_metrics=[
+                {"run_id": 1, "accuracy": 0.78},
+                {"run_id": 2, "accuracy": 0.80},
+                {"run_id": 3, "accuracy": 0.79},
+            ],
+            seed=42,
+        )
+        # accuracy is tracked in both val and test — scalar context prefers test.
         assert results.preferred_metric("accuracy") == "test_accuracy"
-        # loss not in test metrics — falls back
+        # loss is not tracked in test — falls back to val_loss.
         assert results.preferred_metric("loss") == "val_loss"
 
     # --- get_test_metric_values ---

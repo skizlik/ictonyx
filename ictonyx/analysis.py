@@ -25,6 +25,7 @@ from scipy import stats
 from scipy.stats import (
     beta,
     f_oneway,
+    friedmanchisquare,
     jarque_bera,
     kruskal,
     levene,
@@ -647,6 +648,29 @@ def _interpret_epsilon_squared(eps_sq: float) -> str:
         return "large"
 
 
+def _interpret_kendalls_w(w: float) -> str:
+    """Interpret Kendall's W (coefficient of concordance) for the Friedman test.
+
+    Kendall's W measures the degree of agreement among related groups in
+    a Friedman-style repeated-measures design. Bounded [0, 1]. Conventional
+    thresholds match the broader variance-explained convention.
+
+    Args:
+        w: Kendall's W value in range [0, 1].
+
+    Returns:
+        One of ``'negligible'``, ``'small'``, ``'medium'``, ``'large'``.
+    """
+    if w < 0.1:
+        return "negligible"
+    elif w < 0.3:
+        return "small"
+    elif w < 0.5:
+        return "medium"
+    else:
+        return "large"
+
+
 # MULTIPLE COMPARISON CORRECTIONS
 
 
@@ -1192,6 +1216,149 @@ def kruskal_wallis_test(
 
     # Generate interpretation
     result.conclusion = _generate_kruskal_wallis_conclusion(result, alpha)
+    result.detailed_interpretation = _generate_detailed_interpretation(result, alpha)
+
+    return result
+
+
+def friedman_test(
+    model_metrics: Dict[str, pd.Series], alpha: float = 0.05
+) -> StatisticalTestResult:
+    """Friedman chi-squared test for three or more related (paired) groups.
+
+    Non-parametric analog of repeated-measures ANOVA. Use when comparing
+    3+ models evaluated on the same runs (same seeds, same folds) — each
+    "subject" is a run and each "condition" is a model.
+
+    The Friedman test ranks values within each subject (row), then tests
+    whether the rank distributions across groups (columns) differ
+    significantly. Paired counterpart to :func:`kruskal_wallis_test`.
+
+    All groups must have the same number of observations, matched by
+    index (implicit pairing). Mismatched lengths are a methodological
+    error and raise ValueError.
+
+    Args:
+        model_metrics: Dict mapping model names to ``pd.Series`` of metric
+            values. All Series must have the same length (matched pairs).
+        alpha: Significance level. Default 0.05.
+
+    Returns:
+        :class:`StatisticalTestResult` with chi-squared statistic,
+        p-value, Kendall's W effect size, and interpretation.
+
+    Raises:
+        ValueError: If fewer than 3 groups are provided (use
+            :func:`compare_two_models` for 2 groups), or if groups have
+            mismatched lengths.
+
+    Note:
+        Recommended n (runs per model) >= 10 for reliable inference.
+        At n < 6, exact Friedman null distributions from tables should
+        be preferred over the chi-squared approximation; scipy's
+        implementation uses the chi-squared approximation throughout.
+
+    Example:
+        >>> metrics = {
+        ...     "BERT":      pd.Series([0.85, 0.86, 0.84, ...]),
+        ...     "RoBERTa":   pd.Series([0.87, 0.88, 0.86, ...]),
+        ...     "DeBERTa":   pd.Series([0.89, 0.90, 0.88, ...]),
+        ... }
+        >>> result = friedman_test(metrics)
+        >>> if result.is_significant(alpha=0.05):
+        ...     print(f"Models differ (W = {result.effect_size:.3f})")
+    """
+    # Validate input
+    if len(model_metrics) < 3:
+        raise ValueError(
+            f"Friedman test requires at least three groups (got {len(model_metrics)}). "
+            "Use compare_two_models() for paired two-group comparisons."
+        )
+
+    # Clean data and validate matched lengths
+    clean_groups: List[pd.Series] = []
+    group_names: List[str] = []
+    for name, series in model_metrics.items():
+        clean_data = series.dropna()
+        if len(clean_data) > 0:
+            clean_groups.append(clean_data)
+            group_names.append(name)
+
+    if len(clean_groups) < 3:
+        raise ValueError(
+            "Insufficient data after cleaning. Friedman test requires at "
+            "least three non-empty groups."
+        )
+
+    # All groups must have the same length — Friedman requires matched pairs.
+    lengths = [len(g) for g in clean_groups]
+    if len(set(lengths)) > 1:
+        raise ValueError(
+            f"Friedman test requires matched pairs: all groups must have the "
+            f"same length. Got lengths {dict(zip(group_names, lengths))}. "
+            f"If your data is unpaired or has mismatched n, use "
+            f"kruskal_wallis_test() instead."
+        )
+
+    n = lengths[0]  # Number of subjects / rows / runs
+    k = len(clean_groups)  # Number of groups / conditions / models
+
+    # Sample size validation
+    adequate_size = n >= 10
+
+    try:
+        statistic, p_value = friedmanchisquare(*clean_groups)
+
+        result = StatisticalTestResult(
+            test_name="Friedman Chi-Squared Test",
+            statistic=float(statistic),
+            p_value=float(p_value),
+        )
+
+        # Sample size information
+        result.sample_sizes = {name: n for name in group_names}
+        result.assumptions_met["adequate_sample_size"] = adequate_size
+        if not adequate_size:
+            result.warnings.append(
+                f"n={n} per group; Friedman test is more reliable at n >= 10. "
+                "For small n, the chi-squared approximation may be inaccurate; "
+                "consider exact Friedman tables."
+            )
+
+        # Kendall's W (coefficient of concordance): χ² / (n * (k - 1))
+        # Bounded [0, 1]. Conventional thresholds: 0.1/0.3/0.5 (small/medium/large).
+        if n > 0 and k > 1:
+            w = statistic / (n * (k - 1))
+            w = max(0.0, min(1.0, w))  # Clamp to valid range
+        else:
+            w = 0.0
+
+        result.effect_size = w
+        result.effect_size_name = "Kendall's W"
+        result.effect_size_interpretation = _interpret_kendalls_w(w)
+
+    except Exception as e:
+        result = StatisticalTestResult(
+            test_name="Friedman Chi-Squared Test",
+            statistic=float("nan"),
+            p_value=float("nan"),
+        )
+        result.warnings.append(f"Friedman test failed: {str(e)}")
+        result.sample_sizes = {name: n for name in group_names}
+        return result
+
+    # Generate conclusion
+    if result.is_significant(alpha=alpha):
+        result.conclusion = (
+            f"Significant differences among {k} models across paired runs "
+            f"(χ²={statistic:.3f}, p={p_value:.4f}, W={w:.3f} "
+            f"[{result.effect_size_interpretation}])."
+        )
+    else:
+        result.conclusion = (
+            f"No significant difference among {k} models detected "
+            f"(χ²={statistic:.3f}, p={p_value:.4f}, n={n})."
+        )
     result.detailed_interpretation = _generate_detailed_interpretation(result, alpha)
 
     return result

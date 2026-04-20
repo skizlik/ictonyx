@@ -1980,3 +1980,131 @@ class TestRequiredRunsPaired:
 
         assert hasattr(ictonyx, "required_runs_paired")
         assert "required_runs_paired" in ictonyx.__all__
+
+
+class TestFriedmanTest:
+    """Tests for friedman_test — Friedman chi-squared test for 3+ paired
+    groups (X-19-14c, v0.4.7). Non-parametric analog of repeated-measures
+    ANOVA; paired counterpart to kruskal_wallis_test."""
+
+    def _make_significant_groups(self):
+        """Three models with clearly different paired performance."""
+        # Use matched seeds so pairing is meaningful
+        rng = np.random.default_rng(42)
+        base = rng.normal(0.85, 0.02, size=15)
+        return {
+            "ModelA": pd.Series(base - 0.10),  # ~0.75
+            "ModelB": pd.Series(base),  # ~0.85
+            "ModelC": pd.Series(base + 0.05),  # ~0.90
+        }
+
+    def _make_similar_groups(self):
+        """Three models with paired performance from the same distribution."""
+        rng = np.random.default_rng(42)
+        return {
+            "ModelA": pd.Series(rng.normal(0.85, 0.02, size=15)),
+            "ModelB": pd.Series(rng.normal(0.85, 0.02, size=15)),
+            "ModelC": pd.Series(rng.normal(0.85, 0.02, size=15)),
+        }
+
+    def test_returns_statistical_test_result(self):
+        """Returns a StatisticalTestResult with standard fields populated."""
+        from ictonyx.analysis import StatisticalTestResult, friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert isinstance(result, StatisticalTestResult)
+        assert result.test_name == "Friedman Chi-Squared Test"
+        assert result.p_value is not None
+        assert result.statistic is not None
+
+    def test_detects_real_difference(self):
+        """Clearly different paired groups produce a significant result."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert result.p_value < 0.05
+
+    def test_no_false_positive_on_similar_groups(self):
+        """Identical distributions should not be flagged as significantly different."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_similar_groups()
+        result = friedman_test(groups)
+        assert result.p_value > 0.05
+
+    def test_effect_size_is_kendalls_w(self):
+        """Effect size is Kendall's W, bounded [0, 1]."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert result.effect_size_name == "Kendall's W"
+        assert 0.0 <= result.effect_size <= 1.0
+
+    def test_effect_size_interpretation_present(self):
+        """Effect size has a qualitative interpretation label."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert result.effect_size_interpretation in ("negligible", "small", "medium", "large")
+
+    def test_raises_on_fewer_than_three_groups(self):
+        """Fewer than 3 groups raises ValueError."""
+        from ictonyx.analysis import friedman_test
+
+        with pytest.raises(ValueError, match="at least three groups"):
+            friedman_test({"A": pd.Series([1, 2, 3]), "B": pd.Series([4, 5, 6])})
+
+    def test_raises_on_mismatched_lengths(self):
+        """Mismatched group lengths raise ValueError (pairing broken)."""
+        from ictonyx.analysis import friedman_test
+
+        with pytest.raises(ValueError, match="matched pairs"):
+            friedman_test(
+                {
+                    "A": pd.Series([0.80, 0.82, 0.79]),
+                    "B": pd.Series([0.75, 0.78]),  # different length
+                    "C": pd.Series([0.90, 0.88, 0.91]),
+                }
+            )
+
+    def test_sample_size_warning_at_small_n(self):
+        """n < 10 triggers a sample-size warning."""
+        from ictonyx.analysis import friedman_test
+
+        # Only 5 observations per group
+        groups = {
+            "A": pd.Series([0.75, 0.77, 0.73, 0.76, 0.74]),
+            "B": pd.Series([0.85, 0.87, 0.83, 0.86, 0.84]),
+            "C": pd.Series([0.90, 0.92, 0.88, 0.91, 0.89]),
+        }
+        result = friedman_test(groups)
+        # At n=5, we expect the small-sample warning
+        small_n_warnings = [w for w in result.warnings if "n >= 10" in w or "n=5" in w]
+        assert small_n_warnings, f"Expected small-n warning, got: {result.warnings}"
+
+    def test_top_level_namespace_export(self):
+        """friedman_test is importable from top-level ictonyx."""
+        import ictonyx
+
+        assert hasattr(ictonyx, "friedman_test")
+        assert "friedman_test" in ictonyx.__all__
+
+    def test_conclusion_mentions_model_count(self):
+        """Conclusion text references the number of models compared."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert "3 models" in result.conclusion
+
+    def test_sample_sizes_populated(self):
+        """sample_sizes dict is populated with group names and n."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert result.sample_sizes == {"ModelA": 15, "ModelB": 15, "ModelC": 15}

@@ -64,3 +64,63 @@ def test_huggingface_variability_study_varies_seed_per_run():
         f"X-40 regression: all 3 runs produced val_accuracy={val_accs[0]:.6f}. "
         f"Seeds are not varying per run. Values: {val_accs}"
     )
+
+
+class TestHuggingFaceVerboseHandling:
+    """Regression test for X-39: HuggingFaceModelWrapper must respect
+    verbose=False.
+
+    Pre-v0.4.7: variability_study(verbose=False, model=HuggingFaceModelWrapper)
+    still produced 50+ lines of stdout per run as the Trainer logged
+    mid-epoch loss/grad_norm/learning_rate every logging_steps. In a
+    20-run variability study this was 1000+ lines of noise.
+
+    Fix: HF wrapper's fit() reads verbose from kwargs (threaded from
+    runner alongside run_seed) and translates to:
+      - TrainingArguments(disable_tqdm=not verbose, log_level=...)
+      - transformers.logging.set_verbosity_error() when verbose=False
+    """
+
+    @pytest.mark.slow
+    def test_verbose_false_produces_quiet_output(self, capfd):
+        """A 2-run verbose=False HF study must produce fewer than 30 lines
+        of stdout+stderr. Previously 50+ lines per run (100+ for 2 runs)."""
+        pytest.importorskip("transformers", reason="transformers not installed")
+        import ictonyx as ix
+        from ictonyx import HuggingFaceModelWrapper
+
+        train_texts = [f"training text {i}" for i in range(20)]
+        train_labels = [i % 2 for i in range(20)]
+        val_texts = [f"val text {i}" for i in range(10)]
+        val_labels = [i % 2 for i in range(10)]
+
+        _ = ix.variability_study(
+            model=HuggingFaceModelWrapper,
+            model_kwargs={
+                "model_name_or_path": "google/bert_uncased_L-2_H-128_A-2",
+                "num_labels": 2,
+            },
+            data=(train_texts, train_labels),
+            validation_data=(val_texts, val_labels),
+            runs=2,
+            epochs=1,
+            batch_size=8,
+            learning_rate=5e-5,
+            seed=2026,
+            verbose=False,
+        )
+
+        out, err = capfd.readouterr()
+        combined = out + err
+        # Filter out HF Hub chatter, warnings, deprecation notices — count
+        # only genuinely informational lines. The regression target is
+        # eliminating the per-step Trainer loss-log stream.
+        nontrivial_lines = [
+            line
+            for line in combined.split("\n")
+            if line.strip() and not line.startswith(("Warning:", "W ", "I ", "E "))
+        ]
+        assert len(nontrivial_lines) < 30, (
+            f"Expected fewer than 30 nontrivial stdout lines with verbose=False, "
+            f"got {len(nontrivial_lines)}. Output:\n{combined}"
+        )

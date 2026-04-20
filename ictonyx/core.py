@@ -1880,6 +1880,21 @@ if HUGGINGFACE_AVAILABLE:
                 )
             _hf_set_seed(run_seed)
 
+            # ── Verbose control ──────────────────────────────────────────
+            # Threaded via fit_kwargs by the runner (same pattern as run_seed).
+            # Translates to disable_tqdm in TrainingArguments + transformers
+            # global logging level. Prior to v0.4.7, verbose=False in
+            # variability_study produced 50+ lines of stdout per run.
+            verbose_flag = bool(kwargs.pop("verbose", True))
+            if not verbose_flag:
+                # Quiet the transformers library root logger for this run.
+                try:
+                    from transformers import logging as _hf_logging
+
+                    _hf_logging.set_verbosity_error()
+                except ImportError:
+                    pass
+
             # ── Tokenizer + data ─────────────────────────────────────────
             self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name_or_path)
             train_dataset = self._resolve_data(train_data)
@@ -1922,6 +1937,8 @@ if HUGGINGFACE_AVAILABLE:
                 gradient_accumulation_steps=gradient_accumulation_steps,
                 fp16=fp16,
                 logging_steps=logging_steps,
+                disable_tqdm=not verbose_flag,
+                log_level="error" if not verbose_flag else "passive",
                 eval_strategy="epoch" if eval_dataset is not None else "no",
                 save_strategy="no",
                 load_best_model_at_end=False,  # MUST be False — see class docstring

@@ -132,8 +132,20 @@ def variability_study(
         "gpu_memory_limit",
         "color_mode",
     }
+
     model_kwargs = {k: v for k, v in kwargs.items() if k not in _INFRA_KWARGS}
     infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
+
+    # If model is a class and the user passed model_kwargs=dict (the pattern
+    # documented in the HuggingFaceModelWrapper docstring), unpack it into
+    # model_kwargs so individual constructor parameters flow through the
+    # normal ModelConfig path. Without this unpacking, the entire dict lands
+    # in ModelConfig as a single 'model_kwargs' key, which the wrapper's
+    # __init__ then sees as one kwarg instead of unpacked arguments.
+    if isinstance(model, type) and "model_kwargs" in model_kwargs:
+        user_model_kwargs = model_kwargs.pop("model_kwargs")
+        if isinstance(user_model_kwargs, dict):
+            model_kwargs.update(user_model_kwargs)
 
     # Apply verbose setting to global logger
     from .settings import set_verbose
@@ -471,11 +483,47 @@ def _get_model_builder(model: Any) -> Callable:
             accepts_var_keyword = any(
                 p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
             )
+
+            # Runner-concern kwargs that must not reach model constructors,
+            # even when the constructor accepts **kwargs. Wrappers that need
+            # these values read them from fit_kwargs at fit() time instead.
+
+            # These are training-loop or training-args concerns, not model-constructor
+            # concerns. Exclude even when the class accepts **kwargs. Wrappers that
+            # need these values (HuggingFaceModelWrapper uses learning_rate for
+            # TrainingArguments, for example) read them from fit_kwargs at fit() time.
+            #
+            # This list is intentionally conservative — it covers the kwargs that
+            # commonly leak in practice, specifically those used by
+            # HuggingFaceModelWrapper and the Keras wrapper. An architectural fix
+            # that introspects the underlying model's signature (not just the
+            # wrapper's) is scheduled for v0.5.0.
+            _RUNNER_ONLY_KWARGS = {
+                # Training-loop kwargs
+                "epochs",
+                "batch_size",
+                "verbose",
+                # Data-pipeline kwargs (same conceptual layer as 'data' but routed via **kwargs)
+                # this is a serious code flaw that MUST be addressed in near future versions
+                "validation_data",
+                # HuggingFace TrainingArguments kwargs commonly passed to variability_study
+                "learning_rate",
+                "weight_decay",
+                "warmup_steps",
+                "warmup_ratio",
+                "logging_steps",
+                "gradient_accumulation_steps",
+                "max_grad_norm",
+                # to be added in near-term commits
+                "lr_scheduler_type",
+            }
+
             construction_kwargs = {
                 k: v
                 for k, v in conf.items()
                 if k != "run_seed"
                 and k != "random_state"
+                and k not in _RUNNER_ONLY_KWARGS
                 and (accepts_var_keyword or k in accepted)
             }
 

@@ -2172,3 +2172,45 @@ class TestKerasClearSession:
         with patch.object(tf.keras.backend, "clear_session") as mock_clear:
             wrapper.fit((np.zeros((10, 4)), np.zeros(10)))
         mock_clear.assert_called()
+
+
+class TestDelShutdownRace:
+    """BaseModelWrapper.__del__ must not raise ImportError during interpreter shutdown.
+
+    Pre-v0.4.7: __del__ had 'import sys' inline. At interpreter shutdown,
+    sys.meta_path is None, causing the import statement itself to raise
+    ImportError. The error appeared as 'Exception ignored in: <function
+    BaseModelWrapper.__del__>' in stderr on every clean exit of any
+    Python process that had constructed a wrapper.
+
+    The sys.is_finalizing() guard inside __del__ was correct but
+    unreachable — the import statement that would let it run was failing
+    first.
+
+    Fix: move 'import sys' to module scope in core.py.
+    """
+
+    def test_subprocess_exit_has_no_ignored_exception(self):
+        """A subprocess that constructs and deletes a wrapper must exit
+        without 'Exception ignored' in stderr."""
+        import subprocess
+        import sys as _sys
+
+        code = (
+            "from ictonyx.core import ScikitLearnModelWrapper; "
+            "from sklearn.ensemble import RandomForestClassifier; "
+            "w = ScikitLearnModelWrapper(RandomForestClassifier(n_estimators=2)); "
+            "del w"
+        )
+        result = subprocess.run(
+            [_sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert (
+            "Exception ignored in" not in result.stderr
+        ), f"Shutdown race detected. stderr:\n{result.stderr}"
+        assert (
+            "sys.meta_path is None" not in result.stderr
+        ), f"sys.meta_path error detected. stderr:\n{result.stderr}"

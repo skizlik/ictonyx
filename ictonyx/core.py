@@ -3,6 +3,7 @@
 import gc
 import os
 import pickle
+import sys
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -168,7 +169,6 @@ class BaseModelWrapper(ABC):
         Calling framework teardown (e.g. ``tf.keras.backend.clear_session()``)
         in that state can trigger out-of-order shutdown sequences.
         """
-        import sys
 
         if sys.is_finalizing():
             return

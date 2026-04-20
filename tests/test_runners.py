@@ -2399,6 +2399,102 @@ class TestParallelExecution:
         )
 
 
+class TestPreferredMetricHelpfulError:
+    """Regression test for X-37: preferred_metric() must raise a helpful
+    KeyError when the requested base metric isn't tracked, not return a
+    phantom key that downstream get_metric_values() blows up on.
+
+    Pre-v0.4.7: preferred_metric(base='accuracy') on a regression study
+    returned 'val_accuracy' without checking self.final_metrics. The
+    subsequent get_metric_values('val_accuracy') raised a cryptic
+    KeyError from deep in the library.
+
+    Fix: preferred_metric introspects self.final_metrics and raises
+    KeyError with a message naming the attempted keys, available
+    metrics, and a suggested base.
+    """
+
+    def _make_regression_results(self):
+        """Helper: a VariabilityStudyResults as would be produced by a
+        regression study — tracks mse/mae/r2, not accuracy."""
+        values = [0.12, 0.14, 0.11, 0.13, 0.15, 0.10, 0.12, 0.14, 0.11, 0.13]
+        df = pd.DataFrame(
+            {
+                "val_mse": np.linspace(0.30, 0.12, 10),
+                "val_r2": np.linspace(0.20, 0.85, 10),
+                "train_loss": np.linspace(0.40, 0.10, 10),
+            }
+        )
+        return VariabilityStudyResults(
+            all_runs_metrics=[df] * 10,
+            final_metrics={"val_mse": values, "val_r2": values},
+            final_test_metrics=[],
+            seed=42,
+        )
+
+    def test_regression_study_accuracy_raises_helpful_error(self):
+        """preferred_metric(base='accuracy') on a regression study must
+        raise KeyError, not return a phantom 'val_accuracy'."""
+        results = self._make_regression_results()
+        with pytest.raises(KeyError, match="preferred_metric.*could not resolve"):
+            results.preferred_metric(base="accuracy")
+
+    def test_error_message_names_available_metrics(self):
+        """Error message must list the metrics that ARE tracked so users
+        can see what to pass explicitly."""
+        results = self._make_regression_results()
+        try:
+            results.preferred_metric(base="accuracy")
+        except KeyError as e:
+            msg = str(e)
+            assert "val_mse" in msg
+            assert "val_r2" in msg
+        else:
+            pytest.fail("Expected KeyError, got none")
+
+    def test_error_message_suggests_alternate_base(self):
+        """Error message must suggest a base that would work."""
+        results = self._make_regression_results()
+        try:
+            results.preferred_metric(base="accuracy")
+        except KeyError as e:
+            msg = str(e)
+            assert "Did you mean" in msg
+        else:
+            pytest.fail("Expected KeyError, got none")
+
+    def test_classification_study_accuracy_resolves_normally(self):
+        """Sanity check: preferred_metric(base='accuracy') on a normal
+        classification study still returns val_accuracy without raising."""
+        values = [0.80, 0.82, 0.78, 0.85, 0.79, 0.83, 0.81, 0.84, 0.77, 0.86]
+        df = pd.DataFrame(
+            {
+                "val_accuracy": np.linspace(0.5, 0.85, 10),
+                "val_loss": np.linspace(1.0, 0.4, 10),
+            }
+        )
+        results = VariabilityStudyResults(
+            all_runs_metrics=[df] * 10,
+            final_metrics={"val_accuracy": values},
+            final_test_metrics=[],
+            seed=42,
+        )
+        assert results.preferred_metric(base="accuracy") == "val_accuracy"
+
+    def test_epoch_context_regression_also_raises(self):
+        """Epoch context on a regression study should raise with the same
+        shape — val_accuracy is phantom there too."""
+        results = self._make_regression_results()
+        with pytest.raises(KeyError, match="preferred_metric.*could not resolve"):
+            results.preferred_metric(base="accuracy", context="epoch")
+
+    def test_explicit_correct_base_resolves(self):
+        """Passing the right base for a regression study works."""
+        results = self._make_regression_results()
+        # val_mse is tracked, so base='mse' should resolve
+        assert results.preferred_metric(base="mse") == "val_mse"
+
+
 class TestPreferredMetricKeyResolution:
     """Verify preferred_metric() uses bare keys to match final_test_metrics."""
 

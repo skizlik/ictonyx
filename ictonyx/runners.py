@@ -1056,6 +1056,11 @@ class VariabilityStudyResults:
           ``f"val_{base}"`` because test metrics are scalar (single
           final value) and per-epoch plotters cannot resolve them.
 
+        Before returning, verifies the resolved key exists in the study's
+        tracked metrics. If neither the primary nor alternate prefix
+        resolves, raises a helpful ``KeyError`` naming the attempted keys,
+        what metrics *are* tracked, and how to pass ``base`` explicitly.
+
         Note:
             ``final_test_metrics`` stores metrics under bare keys (e.g.
             ``"accuracy"``, not ``"test_accuracy"``). This method compares
@@ -1070,14 +1075,74 @@ class VariabilityStudyResults:
 
         Returns:
             The most appropriate metric key for this study's results.
+
+        Raises:
+            KeyError: If neither the primary candidate nor the alternate
+                prefix resolves to a tracked metric on this study. The
+                error message names the attempted keys, the available
+                val/test metrics, and suggests how to fix the call.
         """
+        # Build the list of candidate prefixed keys to try, in priority order.
+        # Scalar context: prefer test_* when test data present, fall back to val_*.
+        # Epoch context: only val_* makes sense (test metrics are scalar).
+        candidates: list[str] = []
         if context == "epoch":
-            return f"val_{base}"
+            candidates.append(f"val_{base}")
+        else:
+            # scalar
+            if self.has_test_data:
+                tracked_test_set = {k for m in self.final_test_metrics for k in m if k != "run_id"}
+                if base in tracked_test_set:
+                    # Primary candidate: the bare-key test metric, returned with prefix.
+                    candidates.append(f"test_{base}")
+            candidates.append(f"val_{base}")
+
+        # Try each candidate against self.final_metrics (for val_*) or the
+        # test_metrics tracking (for test_*). A test_* candidate only reaches
+        # here if it was already verified present above, so it's safe to return
+        # directly. For val_*, verify against self.final_metrics.
+        for candidate in candidates:
+            if candidate.startswith("test_"):
+                # Already verified present when the candidate was added.
+                return candidate
+            if candidate in self.final_metrics:
+                return candidate
+
+        # Neither primary nor alternate candidate resolved. Build a helpful
+        # error message naming what was attempted and what's available.
+        tracked_val = sorted(self.final_metrics.keys())
+        tracked_test = (
+            sorted({k for m in self.final_test_metrics for k in m if k != "run_id"})
+            if self.has_test_data
+            else []
+        )
+
+        message_parts = [
+            f"preferred_metric(base={base!r}, context={context!r}) could not "
+            f"resolve a tracked metric.",
+            f"Tried: {candidates}.",
+            f"Available val metrics: {tracked_val}.",
+        ]
         if self.has_test_data:
-            tracked = {k for m in self.final_test_metrics for k in m if k != "run_id"}
-            if base in tracked:
-                return f"test_{base}"
-        return f"val_{base}"
+            message_parts.append(f"Available test metrics: {tracked_test}.")
+
+        # Try to suggest a better base: if the user asked for 'accuracy' but
+        # we see something like 'mse' or 'r2', infer they're on a regression
+        # study and offer the first available val metric as a hint.
+        if tracked_val:
+            suggested_base = tracked_val[0].replace("val_", "").replace("test_", "")
+            message_parts.append(
+                f"Did you mean base={suggested_base!r}? "
+                f"Pass base explicitly to preferred_metric(), or pass "
+                f"metric=<name> directly to the plotting or analysis function."
+            )
+        else:
+            message_parts.append(
+                "No val metrics tracked at all — this study may have failed "
+                "to record metrics. Check the runner's metric extraction."
+            )
+
+        raise KeyError(" ".join(message_parts))
 
     def summarize(self) -> str:
         lines = [

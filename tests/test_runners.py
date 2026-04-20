@@ -505,6 +505,95 @@ class TestTestAgainstNull:
         with pytest.warns(DeprecationWarning, match="wilcoxon_signed_rank_test"):
             wilcoxon_signed_rank_test(values, null_value=0.5)
 
+    def test_alternative_parameter_greater(self):
+        """X-28 extension: alternative='greater' is one-sided."""
+        results = self._make_results([0.85, 0.87, 0.83, 0.88, 0.86, 0.84, 0.89, 0.85, 0.87, 0.86])
+        two_sided = results.test_against_null(null_value=0.5, alternative="two-sided")
+        one_sided = results.test_against_null(null_value=0.5, alternative="greater")
+        # For data clearly above null, one-sided p-value should be ~half the two-sided.
+        assert one_sided.p_value <= two_sided.p_value
+
+    def test_alternative_parameter_less(self):
+        """alternative='less' is the opposite one-sided."""
+        # Data clearly below 0.5 — alternative='less' should be significant
+        results = self._make_results([0.3, 0.32, 0.28, 0.35, 0.29, 0.33, 0.31, 0.34, 0.27, 0.36])
+        less = results.test_against_null(null_value=0.5, alternative="less")
+        greater = results.test_against_null(null_value=0.5, alternative="greater")
+        assert less.p_value < greater.p_value
+
+
+class TestTestAboveChance:
+    """Tests for VariabilityStudyResults.test_above_chance() (X-19-14a, v0.4.7).
+
+    Convenience wrapper around test_against_null for the common
+    'model is better than chance' one-sided test.
+    """
+
+    def _make_results(self, values, metric="val_accuracy"):
+        return VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={metric: values},
+            final_test_metrics=[],
+            seed=42,
+        )
+
+    def test_detects_above_chance_performance(self):
+        """Values clearly above 0.5 should be significant."""
+        results = self._make_results([0.85, 0.87, 0.83, 0.88, 0.86, 0.84, 0.89, 0.85, 0.87, 0.86])
+        result = results.test_above_chance()
+        assert result.is_significant(alpha=0.05)
+        assert result.p_value < 0.05
+
+    def test_not_significant_at_chance(self):
+        """Values near 0.5 should not be significantly above chance."""
+        results = self._make_results([0.49, 0.52, 0.48, 0.51, 0.50, 0.49, 0.52, 0.50, 0.51, 0.48])
+        result = results.test_above_chance()
+        assert not result.is_significant(alpha=0.05)
+
+    def test_below_chance_not_significant_one_sided(self):
+        """Values BELOW chance must produce high p-value (one-sided, greater).
+
+        This is the key difference from two-sided test_against_null: a model
+        substantially worse than chance correctly yields p close to 1 for
+        the one-sided 'above chance' test.
+        """
+        results = self._make_results([0.30, 0.32, 0.28, 0.35, 0.29, 0.33, 0.31, 0.34, 0.27, 0.36])
+        result = results.test_above_chance()
+        # One-sided 'greater' on data below null should give p close to 1
+        assert result.p_value > 0.5
+
+    def test_custom_chance_level(self):
+        """chance_level parameter lets users specify multi-class chance rate."""
+        # 4-class balanced → chance = 0.25; data at ~0.40 is above chance
+        results = self._make_results([0.38, 0.42, 0.39, 0.41, 0.40, 0.43, 0.37, 0.42, 0.40, 0.39])
+        result = results.test_above_chance(chance_level=0.25)
+        assert result.is_significant(alpha=0.05)
+
+    def test_explicit_metric_argument(self):
+        """metric parameter can be passed explicitly."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={
+                "val_accuracy": [0.85, 0.87, 0.83, 0.88, 0.86, 0.84, 0.89, 0.85, 0.87, 0.86],
+                "val_loss": [1.0] * 10,
+            },
+            final_test_metrics=[],
+            seed=42,
+        )
+        result = results.test_above_chance(metric="val_accuracy")
+        assert result.is_significant(alpha=0.05)
+
+    def test_returns_statistical_test_result(self):
+        """Return type is StatisticalTestResult with expected attributes."""
+        from ictonyx.analysis import StatisticalTestResult
+
+        results = self._make_results([0.85, 0.87, 0.83, 0.88, 0.86, 0.84, 0.89, 0.85, 0.87, 0.86])
+        result = results.test_above_chance()
+        assert isinstance(result, StatisticalTestResult)
+        assert hasattr(result, "p_value")
+        assert hasattr(result, "is_significant")
+        assert hasattr(result, "conclusion")
+
 
 class TestConvenienceFunction:
     """Test run_variability_study convenience function."""

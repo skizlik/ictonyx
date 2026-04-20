@@ -1324,6 +1324,7 @@ class VariabilityStudyResults:
         null_value: float = 0.5,
         metric: Optional[str] = None,
         alpha: float = 0.05,
+        alternative: str = "two-sided",
     ) -> "StatisticalTestResult":
         """Test whether a metric's distribution differs from a null value.
 
@@ -1335,6 +1336,10 @@ class VariabilityStudyResults:
                 binary classification accuracy.
             metric: Metric name. Must be a key in ``final_metrics``.
             alpha: Significance threshold (default 0.05).
+            alternative: ``'two-sided'`` (default), ``'greater'``, or
+                ``'less'``. Use ``'greater'`` for one-sided tests of the
+                form "is metric above the null" — or call
+                :meth:`test_above_chance` which is a shortcut for that.
 
         Returns:
             A StatisticalTestResult with ``is_significant``, ``p_value``,
@@ -1370,7 +1375,61 @@ class VariabilityStudyResults:
                 raise ValueError(f"Metric '{metric}' not found. Available: {available}")
             values = pd.Series(self.get_metric_values(metric))
 
-        return _wilcoxon_signed_rank_impl(values, null_value=null_value, alpha=alpha)
+        return _wilcoxon_signed_rank_impl(
+            values,
+            null_value=null_value,
+            alpha=alpha,
+            alternative=alternative,
+        )
+
+    def test_above_chance(
+        self,
+        metric: Optional[str] = None,
+        alpha: float = 0.05,
+        chance_level: float = 0.5,
+    ) -> "StatisticalTestResult":
+        """Test whether a model performs significantly above chance.
+
+        One-sided variant of :meth:`test_against_null` that tests the
+        specific hypothesis "this model's median performance is greater
+        than chance." Null hypothesis: median = chance_level. Alternative:
+        median > chance_level.
+
+        Uses a one-sided Wilcoxon signed-rank test (equivalent to calling
+        ``test_against_null(null_value=chance_level, alternative='greater')``).
+
+        Args:
+            metric: Metric name. Must be a key in ``final_metrics`` or the
+                bare key in a ``final_test_metrics`` entry. Defaults to the
+                study's preferred accuracy metric.
+            alpha: Significance threshold. Default 0.05.
+            chance_level: The chance-level baseline to test against.
+                Default 0.5 (binary classification with balanced classes).
+                For multi-class tasks with k balanced classes, pass
+                ``chance_level = 1.0 / k``.
+
+        Returns:
+            A StatisticalTestResult with ``is_significant``, ``p_value``,
+            ``statistic``, and ``conclusion``. The test is one-sided, so
+            ``p_value`` reflects P(median <= chance_level | observed data).
+
+        Note:
+            Recommended sample size: ``num_runs >= 20`` for reliable
+            inference, consistent with the library-wide minimum for
+            rank-based tests.
+
+        Example:
+            >>> results = ix.variability_study(model=..., runs=20)
+            >>> outcome = results.test_above_chance()
+            >>> if outcome.is_significant():
+            ...     print(f"Model above chance (p={outcome.p_value:.4f})")
+        """
+        return self.test_against_null(
+            null_value=chance_level,
+            metric=metric,
+            alpha=alpha,
+            alternative="greater",
+        )
 
     def compare_models_statistically(self, *args, **kwargs):
         """Removed in v0.3.10.

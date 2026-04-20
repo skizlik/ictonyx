@@ -1127,6 +1127,116 @@ class TestAssessTrainingStability:
         assert np.isnan(result["final_loss_cv"])
 
 
+class TestCompareTwoModelsTestMethod:
+    """Regression tests for X-15: compare_two_models' test_method parameter
+    lets users choose test upfront rather than data-driven pre-test-then-choose.
+    The 'auto' default preserves v0.4.6 behavior but emits a DeprecationWarning.
+
+    Pre-v0.4.7: paired=False always triggered Shapiro-Wilk + Levene then
+    dispatched to Student/Welch/Mann-Whitney. This pre-test-then-choose
+    pattern inflates Type I error rates and is methodologically criticized.
+    """
+
+    def _make_normal_groups(self):
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.normal(0.9, 0.02, size=20))
+        g2 = pd.Series(rng.normal(0.85, 0.02, size=20))
+        return g1, g2
+
+    def test_mann_whitney_explicit(self):
+        """test_method='mann_whitney' dispatches to MW regardless of normality."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        result = compare_two_models(
+            g1,
+            g2,
+            paired=False,
+            test_method="mann_whitney",
+            ci_target="mean_difference",
+        )
+        assert "Mann-Whitney" in result.test_name
+
+    def test_student_t_explicit(self):
+        """test_method='student_t' always uses Student's t."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        result = compare_two_models(
+            g1,
+            g2,
+            paired=False,
+            test_method="student_t",
+            ci_target="mean_difference",
+        )
+        assert "Student" in result.test_name
+
+    def test_welch_t_explicit(self):
+        """test_method='welch_t' always uses Welch's t."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        result = compare_two_models(
+            g1,
+            g2,
+            paired=False,
+            test_method="welch_t",
+            ci_target="mean_difference",
+        )
+        assert "Welch" in result.test_name
+
+    def test_parametric_auto_chooses_student_or_welch(self):
+        """test_method='parametric' dispatches between Student and Welch."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        result = compare_two_models(
+            g1,
+            g2,
+            paired=False,
+            test_method="parametric",
+            ci_target="mean_difference",
+        )
+        assert "Student" in result.test_name or "Welch" in result.test_name
+
+    def test_auto_emits_deprecation_warning(self):
+        """test_method='auto' (default) must emit a DeprecationWarning."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        with pytest.warns(DeprecationWarning, match="test_method"):
+            compare_two_models(g1, g2, paired=False, ci_target="mean_difference")
+
+    def test_invalid_test_method_raises(self):
+        """Invalid test_method value raises ValueError."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        with pytest.raises(ValueError, match="test_method"):
+            compare_two_models(
+                g1,
+                g2,
+                paired=False,
+                test_method="invalid",
+                ci_target="mean_difference",
+            )
+
+    def test_paired_ignores_test_method(self):
+        """When paired=True, test_method is ignored (paired Wilcoxon always)."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        # Should not raise even with nonsensical test_method for paired path
+        result = compare_two_models(
+            g1,
+            g2,
+            paired=True,
+            test_method="student_t",
+            ci_target="mean_difference",
+        )
+        assert "Wilcoxon" in result.test_name
+
+
 # ===================================================================
 #  Confusion Matrix
 # ===================================================================

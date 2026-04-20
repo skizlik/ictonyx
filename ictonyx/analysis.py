@@ -1385,6 +1385,7 @@ def compare_two_models(
     alpha: float = 0.05,
     random_state: Optional[int] = None,
     ci_target: str = "auto",
+    test_method: str = "auto",
 ) -> StatisticalTestResult:
     """
     Compares two models using intelligent, assumption-driven test selection.
@@ -1393,12 +1394,10 @@ def compare_two_models(
     on the data's properties and whether the samples are paired.
 
     - If `paired=True`, performs a Wilcoxon signed-rank test on the differences.
-    - If `paired=False`, it performs an "intelligent independent test":
-        1. Checks for normality in both groups (using `check_normality`).
-        2. If both are normal, checks for equal variance (using `check_equal_variances`).
-        3.  - Normal + Equal Variance: Runs a Student's t-test.
-        4.  - Normal + Unequal Variance: Runs a Welch's t-test.
-        5.  - Not Normal: Runs a Mann-Whitney U test.
+    - If `paired=False`, the test is selected by ``test_method``. The
+      default is ``"auto"`` which applies data-driven selection (deprecated
+      — see test_method parameter); v0.5.0 will default to
+      ``"mann_whitney"``.
 
     Args:
         model1_results (pd.Series): A Series of metric results for model 1.
@@ -1422,6 +1421,27 @@ def compare_two_models(
             - ``"auto"`` (default in v0.4.7): emits a DeprecationWarning
               and uses ``"mean_difference"`` for backward compatibility.
               The default changes to ``"median_difference"`` in v0.5.0.
+        test_method (str, optional): Which test to use for the unpaired
+            comparison. Ignored when ``paired=True`` (paired comparisons
+            always use paired Wilcoxon).
+
+            - ``"mann_whitney"``: Mann-Whitney U test. The non-parametric
+              default, methodologically appropriate for small-n variability
+              studies where distributional assumptions are fragile.
+            - ``"student_t"``: Student's t-test (assumes normality + equal
+              variances).
+            - ``"welch_t"``: Welch's t-test (assumes normality; does not
+              assume equal variances).
+            - ``"parametric"``: auto-choose between Student's and Welch's
+              based on an equal-variance pre-test. Does not pre-test
+              normality; caller is asserting normality holds.
+            - ``"auto"`` (default in v0.4.7): emits a DeprecationWarning
+              and applies data-driven test selection (pre-tests normality
+              via Shapiro-Wilk, then equal variances via Levene, then
+              dispatches to Student/Welch/Mann-Whitney accordingly).
+              This pre-test-then-choose pattern inflates Type I error
+              rates and is methodologically criticized. The default
+              changes to ``"mann_whitney"`` in v0.5.0.
 
     Returns:
         StatisticalTestResult: A rich object containing the test name,
@@ -1453,6 +1473,22 @@ def compare_two_models(
             stacklevel=2,
         )
         ci_target = "mean_difference"
+    # Validate and resolve test_method
+    _valid_test_methods = ("auto", "mann_whitney", "student_t", "welch_t", "parametric")
+    if test_method not in _valid_test_methods:
+        raise ValueError(
+            f"test_method must be one of {_valid_test_methods}; " f"got {test_method!r}."
+        )
+    if test_method == "auto":
+        warnings.warn(
+            "compare_two_models: test_method defaults to 'auto' (data-driven "
+            "pre-test-then-choose) in v0.4.7 for backward compatibility. This "
+            "pattern inflates Type I error rates and is methodologically "
+            "criticized. The default changes to 'mann_whitney' in v0.5.0. "
+            "Pass test_method explicitly to silence this warning.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     # Clean data
     if paired:
@@ -1479,52 +1515,87 @@ def compare_two_models(
     if paired:
         result = paired_wilcoxon_test(clean1, clean2, alpha=alpha)
     else:
-        # For independent comparisons, use intelligent test selection
-
-        # 1. Check assumptions
-        is_normal1, norm_details1 = check_normality(clean1, alpha=alpha, require_all_tests=True)
-        is_normal2, norm_details2 = check_normality(clean2, alpha=alpha, require_all_tests=True)
-
-        assumptions_met = {"normality_group1": is_normal1, "normality_group2": is_normal2}
-        assumption_details = {"normality_group1": norm_details1, "normality_group2": norm_details2}
-
-        if is_normal1 and is_normal2:
-            # 2. Both are normal: Check variances
-            equal_vars, var_details = check_equal_variances(clean1, clean2, alpha=alpha)
-            assumptions_met["equal_variances"] = equal_vars
-            assumption_details["variance_test"] = var_details
-
-            if equal_vars:
-                # 3a. Normal + Equal Variance = Student's t-test
-                test_name = "Independent Comparison (Student's t-test)"
-                statistic, p_value = ttest_ind(clean1, clean2, equal_var=True)
-                effect_size, es_interp = cohens_d(clean1, clean2, pooled=True)
-                es_name = "Cohen's d"
-            else:
-                # 3b. Normal + Unequal Variance = Welch's t-test
-                test_name = "Independent Comparison (Welch's t-test)"
-                statistic, p_value = ttest_ind(clean1, clean2, equal_var=False)
-                effect_size, es_interp = _hedges_g(clean1, clean2)
-                es_name = "Hedges' g"
-
-            result = StatisticalTestResult(
-                test_name=test_name,
-                statistic=statistic,
-                p_value=p_value,
+        # Dispatch based on test_method. Helper closure to avoid repeating
+        # the Student/Welch construction in two places.
+        def _run_student_t(clean1: pd.Series, clean2: pd.Series) -> StatisticalTestResult:
+            statistic, p_value = ttest_ind(clean1, clean2, equal_var=True)
+            effect_size, es_interp = cohens_d(clean1, clean2, pooled=True)
+            return StatisticalTestResult(
+                test_name="Independent Comparison (Student's t-test)",
+                statistic=float(statistic),
+                p_value=float(p_value),
                 effect_size=effect_size,
-                effect_size_name=es_name,
+                effect_size_name="Cohen's d",
                 effect_size_interpretation=es_interp,
             )
 
-        else:
-            # 4. Not normal: Use Mann-Whitney U test
+        def _run_welch_t(clean1: pd.Series, clean2: pd.Series) -> StatisticalTestResult:
+            statistic, p_value = ttest_ind(clean1, clean2, equal_var=False)
+            effect_size, es_interp = _hedges_g(clean1, clean2)
+            return StatisticalTestResult(
+                test_name="Independent Comparison (Welch's t-test)",
+                statistic=float(statistic),
+                p_value=float(p_value),
+                effect_size=effect_size,
+                effect_size_name="Hedges' g",
+                effect_size_interpretation=es_interp,
+            )
+
+        if test_method == "mann_whitney":
             result = mann_whitney_test(clean1, clean2, alpha=alpha)
             result.test_name = "Independent Comparison (Mann-Whitney U)"
 
-            # Add assumption info without overwriting keys already set by the chosen test.
+        elif test_method == "student_t":
+            result = _run_student_t(clean1, clean2)
+
+        elif test_method == "welch_t":
+            result = _run_welch_t(clean1, clean2)
+
+        elif test_method == "parametric":
+            # Analyst asserts normality; we only choose between Student
+            # and Welch based on variance equality.
+            equal_vars, var_details = check_equal_variances(clean1, clean2, alpha=alpha)
+            if equal_vars:
+                result = _run_student_t(clean1, clean2)
+            else:
+                result = _run_welch_t(clean1, clean2)
+            result.assumptions_met["equal_variances"] = equal_vars
+            result.assumption_details["variance_test"] = var_details
+
+        else:
+            # test_method == "auto" — legacy data-driven path.
+            # Pre-test normality via Shapiro-Wilk, then equal variances
+            # via Levene (if both groups normal), then dispatch to
+            # Student/Welch/Mann-Whitney accordingly. This pattern is
+            # methodologically criticized and deprecated; the default
+            # flips to "mann_whitney" in v0.5.0.
+            is_normal1, norm_details1 = check_normality(clean1, alpha=alpha, require_all_tests=True)
+            is_normal2, norm_details2 = check_normality(clean2, alpha=alpha, require_all_tests=True)
+            assumptions_met = {
+                "normality_group1": is_normal1,
+                "normality_group2": is_normal2,
+            }
+            assumption_details = {
+                "normality_group1": norm_details1,
+                "normality_group2": norm_details2,
+            }
+            if is_normal1 and is_normal2:
+                equal_vars, var_details = check_equal_variances(clean1, clean2, alpha=alpha)
+                assumptions_met["equal_variances"] = equal_vars
+                assumption_details["variance_test"] = var_details
+                if equal_vars:
+                    result = _run_student_t(clean1, clean2)
+                else:
+                    result = _run_welch_t(clean1, clean2)
+            else:
+                result = mann_whitney_test(clean1, clean2, alpha=alpha)
+                result.test_name = "Independent Comparison (Mann-Whitney U)"
+
+            # Attach assumption info without overwriting keys set by the chosen test.
             for _k, _v in assumptions_met.items():
                 result.assumptions_met.setdefault(_k, _v)
             result.assumption_details.update(assumption_details)
+
     # --- Bootstrap confidence intervals ---
     if HAS_BOOTSTRAP and not np.isnan(result.p_value):
         try:

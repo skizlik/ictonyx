@@ -2131,6 +2131,82 @@ class TestVariabilityStudyResultsPersistence:
         data = json.loads(results.to_json())
         assert "all_runs_metrics" not in data
 
+        # --- from_json (X-19, v0.4.7) -------------------------------------------
+
+        def test_from_json_round_trip_preserves_final_metrics(self):
+            """to_json -> from_json preserves final_metrics exactly."""
+            original = self._make_results()
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.final_metrics == original.final_metrics
+
+        def test_from_json_round_trip_preserves_final_test_metrics(self):
+            """to_json -> from_json preserves final_test_metrics exactly."""
+            original = self._make_results()
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.final_test_metrics == original.final_test_metrics
+
+        def test_from_json_round_trip_preserves_seed(self):
+            """to_json -> from_json preserves seed exactly."""
+            original = self._make_results()
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.seed == original.seed
+
+        def test_from_json_all_runs_metrics_is_empty(self):
+            """from_json produces empty all_runs_metrics since to_json drops it."""
+            original = self._make_results()
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.all_runs_metrics == []
+            assert restored.n_runs == 0
+
+        def test_from_json_run_seeds_is_empty(self):
+            """from_json produces empty run_seeds since to_json doesn't serialize it."""
+            original = self._make_results()
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.run_seeds == []
+
+        def test_from_json_without_test_data(self):
+            """from_json handles empty final_test_metrics correctly."""
+            original = VariabilityStudyResults(
+                all_runs_metrics=[],
+                final_metrics={"val_accuracy": [0.80, 0.82, 0.81]},
+                final_test_metrics=[],
+                seed=42,
+            )
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.final_test_metrics == []
+            assert restored.has_test_data is False
+
+        def test_from_json_raises_on_malformed_json(self):
+            """from_json raises ValueError on unparseable JSON."""
+            with pytest.raises(ValueError, match="Malformed JSON"):
+                VariabilityStudyResults.from_json("not valid json {{{")
+
+        def test_from_json_raises_on_missing_required_keys(self):
+            """from_json raises ValueError when JSON lacks required keys."""
+            import json
+
+            bad = json.dumps({"seed": 42})
+            with pytest.raises(ValueError, match="missing required keys"):
+                VariabilityStudyResults.from_json(bad)
+
+        def test_from_json_raises_on_non_object(self):
+            """from_json raises ValueError on JSON that isn't a top-level object."""
+            import json
+
+            with pytest.raises(ValueError, match="expects a JSON object"):
+                VariabilityStudyResults.from_json(json.dumps([1, 2, 3]))
+
+        def test_from_json_seed_none_round_trips(self):
+            """seed=None survives the round trip."""
+            original = VariabilityStudyResults(
+                all_runs_metrics=[],
+                final_metrics={"val_accuracy": [0.8, 0.82, 0.81]},
+                final_test_metrics=[],
+                seed=None,
+            )
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.seed is None
+
 
 class TestVariabilityStudyResultsRepr:
     """__repr__ must be concise and informative — not a wall of DataFrames."""

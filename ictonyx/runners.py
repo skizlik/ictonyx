@@ -1479,6 +1479,58 @@ class VariabilityStudyResults:
         )
 
     @classmethod
+    def from_json(cls, json_str: str) -> "VariabilityStudyResults":
+        """Reconstruct a VariabilityStudyResults from a JSON string.
+
+        Symmetric with :meth:`to_json`. Note that ``to_json`` does not
+        serialize ``all_runs_metrics`` (per-epoch DataFrames), so the
+        reconstructed object has an empty ``all_runs_metrics`` and
+        empty ``run_seeds``. Use :meth:`save` / :meth:`load` for full
+        round-trip fidelity including per-epoch history.
+
+        Args:
+            json_str: JSON string produced by :meth:`to_json`.
+
+        Returns:
+            VariabilityStudyResults with ``final_metrics``,
+            ``final_test_metrics``, and ``seed`` populated from the
+            JSON. ``all_runs_metrics`` is empty; ``run_seeds`` is empty.
+
+        Raises:
+            ValueError: If the JSON is malformed or missing required keys.
+
+        Example:
+            >>> serialized = results.to_json()
+            >>> restored = VariabilityStudyResults.from_json(serialized)
+            >>> assert restored.final_metrics == results.final_metrics
+        """
+        import json
+
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Malformed JSON passed to from_json: {e}") from e
+
+        if not isinstance(data, dict):
+            raise ValueError(f"from_json expects a JSON object, got {type(data).__name__}.")
+
+        required = ("final_metrics", "final_test_metrics")
+        missing = [k for k in required if k not in data]
+        if missing:
+            raise ValueError(
+                f"from_json JSON missing required keys: {missing}. "
+                f"Keys present: {sorted(data.keys())}."
+            )
+
+        return cls(
+            all_runs_metrics=[],
+            final_metrics=data["final_metrics"],
+            final_test_metrics=data["final_test_metrics"],
+            seed=data.get("seed"),
+            run_seeds=[],
+        )
+
+    @classmethod
     def from_mlflow_experiment(
         cls,
         experiment_name: str,

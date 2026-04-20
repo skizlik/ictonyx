@@ -1717,15 +1717,30 @@ if HUGGINGFACE_AVAILABLE:
         into :class:`~ictonyx.runners.TrainingResult` in the format expected
         by :class:`~ictonyx.runners.ExperimentRunner`.
 
-        Seeding is controlled via ``transformers.set_seed()`` at the start of
-        ``fit()`` and via ``TrainingArguments(seed=..., data_seed=...)`` so
-        that weight initialisation, batch ordering, and dropout are all
-        deterministic per run.
+        Per-run seeding (v0.4.7+): the runner threads a ``run_seed`` through
+        ``fit_kwargs`` generated via ``SeedSequence.spawn()``. Each call to
+        ``fit()`` pops ``run_seed`` from ``kwargs`` and applies it via
+        ``transformers.set_seed()`` plus ``TrainingArguments(seed=run_seed,
+        data_seed=run_seed)`` so that weight initialisation, batch ordering,
+        and dropout are all deterministic per run. Pre-v0.4.7, the wrapper
+        read from ``self.model_config`` (never populated) and silently fell
+        back to 42 on every run, causing variability studies to produce
+        identical metrics across all runs.
 
         .. note::
             ``load_best_model_at_end`` is always ``False``. Setting it to
             ``True`` causes Trainer to silently replace the final model weights
             with an earlier checkpoint, invalidating run-to-run comparison.
+
+        .. note::
+            The wrapper does not override ``lr_scheduler_type``, so it inherits
+            the HF default of ``'linear'`` — a linear decay from the peak
+            learning rate (``learning_rate``) to zero over the course of
+            training, with an initial warmup controlled by ``warmup_ratio``.
+            This is the standard behavior for transformer fine-tuning; to use
+            a different schedule (e.g., cosine), subclass
+            ``HuggingFaceModelWrapper`` and override the ``fit()`` method
+            with a custom ``TrainingArguments`` call.
 
         Args:
             model_name_or_path: HuggingFace Hub model identifier or local path.
@@ -1744,6 +1759,9 @@ if HUGGINGFACE_AVAILABLE:
 
         Example::
 
+            # model_kwargs is forwarded to the wrapper's __init__; additional
+            # kwargs in model_kwargs beyond the wrapper's init signature
+            # are forwarded to from_pretrained() via **model_kwargs.
             results = ix.variability_study(
                 model=ix.HuggingFaceModelWrapper,
                 model_kwargs={
@@ -1753,7 +1771,11 @@ if HUGGINGFACE_AVAILABLE:
                 data=(texts_train, labels_train),
                 validation_data=(texts_val, labels_val),
                 runs=20,
+                epochs=3,
+                batch_size=16,
+                learning_rate=2e-5,
                 seed=42,
+                verbose=False,  # disables Trainer mid-epoch log chatter
             )
         """
 

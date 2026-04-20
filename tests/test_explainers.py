@@ -144,3 +144,76 @@ class TestSHAPEdgeCases:
         wrapper, X, names = trained_tree_model
         with pytest.raises(ValueError, match="out of range"):
             plot_shap_waterfall(wrapper, X, len(X) + 100, names)
+
+
+class TestShapWaterfallMulticlass:
+    """Regression test: plot_shap_waterfall must handle SHAP >=0.45's 3-D ndarray
+    return shape for multiclass models.
+
+    Pre-v0.4.7: plot_shap_waterfall branched on isinstance(shap_values, list),
+    which handled SHAP <0.45's per-class-list format for multiclass. SHAP
+    0.45+ returns a 3-D ndarray (n_samples, n_features, n_classes) for
+    multiclass, which fell through to the binary/regression else branch and
+    passed a 2-D array to shap.Explanation(values=...), raising.
+
+    Fix: added explicit elif branch for 3-D ndarray case. Also extended
+    base_value resolution to handle 1-D ndarray expected_value.
+    """
+
+    @pytest.mark.slow
+    def test_multiclass_waterfall_does_not_raise(self):
+        """Iterate over all classes of an iris RandomForest + TreeExplainer;
+        each class must plot without raising."""
+        pytest.importorskip("shap", reason="shap not installed")
+        pytest.importorskip("matplotlib", reason="matplotlib not installed")
+        import matplotlib
+
+        matplotlib.use("Agg")  # non-interactive backend for CI
+        import matplotlib.pyplot as plt
+        from sklearn.datasets import load_iris
+        from sklearn.ensemble import RandomForestClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+        from ictonyx.explainers import plot_shap_waterfall
+
+        data = load_iris()
+        model = RandomForestClassifier(n_estimators=20, random_state=42)
+        model.fit(data.data, data.target)
+        wrapper = ScikitLearnModelWrapper(model)
+
+        # Iris has 3 classes. Each must not raise.
+        for class_idx in range(3):
+            try:
+                plot_shap_waterfall(
+                    wrapper,
+                    data.data,
+                    sample_index=0,
+                    feature_names=list(data.feature_names),
+                    class_index=class_idx,
+                )
+            finally:
+                plt.close("all")
+
+    @pytest.mark.slow
+    def test_class_index_out_of_range_raises(self):
+        """class_index beyond n_classes must raise ValueError (both API paths)."""
+        pytest.importorskip("shap", reason="shap not installed")
+        pytest.importorskip("matplotlib", reason="matplotlib not installed")
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from sklearn.datasets import load_iris
+        from sklearn.ensemble import RandomForestClassifier
+
+        from ictonyx.core import ScikitLearnModelWrapper
+        from ictonyx.explainers import plot_shap_waterfall
+
+        data = load_iris()
+        model = RandomForestClassifier(n_estimators=20, random_state=42)
+        model.fit(data.data, data.target)
+        wrapper = ScikitLearnModelWrapper(model)
+
+        with pytest.raises(ValueError, match="class_index"):
+            plot_shap_waterfall(wrapper, data.data, class_index=99)
+        plt.close("all")

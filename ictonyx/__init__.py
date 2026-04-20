@@ -196,6 +196,7 @@ try:
         paired_wilcoxon_test,
         rank_biserial_correlation,
         required_runs,
+        required_runs_paired,
         shapiro_wilk_test,
         validate_sample_sizes,
         wilcoxon_signed_rank_test,
@@ -227,6 +228,7 @@ try:
             "eta_squared",
             "apply_multiple_comparison_correction",
             "required_runs",
+            "required_runs_paired",
             "minimum_detectable_effect",
         ]
     )

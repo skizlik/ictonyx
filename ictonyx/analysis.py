@@ -2485,6 +2485,98 @@ def required_runs(
     return 200
 
 
+def required_runs_paired(
+    effect_size: float,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    n_sim: int = 1000,
+    alternative: str = "two-sided",
+    random_state: Optional[int] = 42,
+) -> int:
+    """Minimum paired runs to detect a given effect size at stated power.
+
+    Paired-comparison counterpart to :func:`required_runs`. Uses
+    simulation-based power calculation for the paired Wilcoxon signed-rank
+    test, which is the library's default paired comparison method.
+
+    Args:
+        effect_size: Expected matched-pairs rank-biserial correlation
+            (0–1). Conventions parallel independent-comparison r:
+            small=0.1, medium=0.3, large=0.5 (Cohen 1988).
+        alpha: Type I error rate. Default 0.05.
+        power: Desired statistical power (0–1). Default 0.80.
+        n_sim: Number of simulations per candidate n. Default 1000.
+        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            Default ``'two-sided'``.
+        random_state: Seed for reproducibility. Default 42.
+
+    Returns:
+        Minimum number of paired observations (e.g., runs per model when
+        both models are run with matched seeds).
+
+    Raises:
+        ValueError: If ``effect_size`` is not in (0, 1) or ``power`` is
+            not in (0, 1).
+
+    Note:
+        The simulation models paired differences directly as
+        Normal(shift, 1.0) with no correlation term — equivalent to the
+        independent-pair case (ρ=0). Users whose paired runs have
+        substantial correlation (same data split, matched seeds, etc.)
+        will achieve the target power with fewer runs than this function
+        estimates. Modeling correlation is planned for a future release;
+        for now, this returns a conservative upper bound under ρ=0.
+
+        The simulation draws from unbounded standard normal differences.
+        For metrics concentrated near 0 or 1 the normal approximation
+        overestimates spread and this function will over-estimate n.
+        Results are most reliable for loss-scale metrics and accuracy
+        values in the 0.4–0.8 range.
+    """
+    if not 0 < effect_size < 1:
+        raise ValueError(f"effect_size must be in (0, 1), got {effect_size}.")
+    if not 0 < power < 1:
+        raise ValueError(f"power must be in (0, 1), got {power}.")
+
+    rng = np.random.default_rng(random_state)
+
+    # Convert matched-pairs rank-biserial r to P(D > 0) where D is the
+    # paired difference: r ≈ 2*P(D > 0) - 1, so P(D > 0) = (r + 1) / 2.
+    # For Normal(μ_d, σ_d=1) this gives μ_d = Φ⁻¹((r + 1) / 2).
+    p_positive = (effect_size + 1.0) / 2.0
+    shift = stats.norm.ppf(p_positive)
+
+    for n in range(6, 201):  # Wilcoxon requires n >= 6 non-zero differences
+        rejections = 0
+        for _ in range(n_sim):
+            # Paired differences: Normal(shift, 1.0). For alternative='greater'
+            # we expect differences > 0; for 'two-sided' either direction.
+            differences = rng.normal(shift, 1.0, n)
+            # Paired Wilcoxon signed-rank test (scipy's wilcoxon on the
+            # differences vector tests whether median(diff) differs from 0)
+            try:
+                _, p = wilcoxon(differences, alternative=alternative, method="auto")
+            except ValueError:
+                # Rare: all differences exactly zero. Power-study simulation
+                # can skip this iteration without affecting the estimator.
+                continue
+            if p < alpha:
+                rejections += 1
+
+        empirical_power = rejections / n_sim
+        if empirical_power >= power:
+            return n
+
+    warnings.warn(
+        f"required_runs_paired(): target power {power} not achieved at n=200 "
+        f"for effect_size={effect_size:.3f}. The effect may be too small to "
+        "detect at this power level. Returning 200 (search ceiling).",
+        UserWarning,
+        stacklevel=2,
+    )
+    return 200
+
+
 def minimum_detectable_effect(
     n_runs: int,
     alpha: float = 0.05,

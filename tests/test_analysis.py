@@ -1918,3 +1918,65 @@ class TestKruskalWallisDualEffectSize:
         assert (
             result.effect_size_secondary > 0.05
         ), f"Expected large secondary effect, got ε²_R = {result.effect_size_secondary}"
+
+
+class TestRequiredRunsPaired:
+    """Tests for required_runs_paired — paired-comparison power analysis
+    added in v0.4.7 (X-19-14b)."""
+
+    def test_returns_integer(self):
+        """Result is an int between the 6-minimum and 200-ceiling."""
+        from ictonyx.analysis import required_runs_paired
+
+        n = required_runs_paired(effect_size=0.3, alpha=0.05, power=0.80, n_sim=200)
+        assert isinstance(n, int)
+        assert 6 <= n <= 200
+
+    def test_monotonic_in_effect_size(self):
+        """Larger effect size → fewer runs needed (monotonic decreasing)."""
+        from ictonyx.analysis import required_runs_paired
+
+        n_small = required_runs_paired(effect_size=0.10, alpha=0.05, power=0.80, n_sim=200)
+        n_medium = required_runs_paired(effect_size=0.30, alpha=0.05, power=0.80, n_sim=200)
+        n_large = required_runs_paired(effect_size=0.50, alpha=0.05, power=0.80, n_sim=200)
+        # Each should need at least as many as the next, allowing tie
+        assert n_small >= n_medium >= n_large
+
+    def test_monotonic_in_power(self):
+        """Higher target power → more runs needed (monotonic increasing)."""
+        from ictonyx.analysis import required_runs_paired
+
+        n_80 = required_runs_paired(effect_size=0.3, alpha=0.05, power=0.80, n_sim=200)
+        n_90 = required_runs_paired(effect_size=0.3, alpha=0.05, power=0.90, n_sim=200)
+        assert n_80 <= n_90
+
+    def test_reproducible_with_seed(self):
+        """Same random_state → same result."""
+        from ictonyx.analysis import required_runs_paired
+
+        n1 = required_runs_paired(effect_size=0.3, n_sim=200, random_state=42)
+        n2 = required_runs_paired(effect_size=0.3, n_sim=200, random_state=42)
+        assert n1 == n2
+
+    def test_invalid_effect_size_raises(self):
+        """effect_size outside (0, 1) raises ValueError."""
+        from ictonyx.analysis import required_runs_paired
+
+        with pytest.raises(ValueError, match="effect_size"):
+            required_runs_paired(effect_size=1.5)
+        with pytest.raises(ValueError, match="effect_size"):
+            required_runs_paired(effect_size=0.0)
+
+    def test_invalid_power_raises(self):
+        """power outside (0, 1) raises ValueError."""
+        from ictonyx.analysis import required_runs_paired
+
+        with pytest.raises(ValueError, match="power"):
+            required_runs_paired(effect_size=0.3, power=1.5)
+
+    def test_ictonyx_namespace_exposes_function(self):
+        """required_runs_paired is importable from top-level ictonyx."""
+        import ictonyx
+
+        assert hasattr(ictonyx, "required_runs_paired")
+        assert "required_runs_paired" in ictonyx.__all__

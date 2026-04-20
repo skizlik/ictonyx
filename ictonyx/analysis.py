@@ -876,14 +876,7 @@ def _wilcoxon_signed_rank_impl(
                 result.effect_size = r
                 result.effect_size_name = "r (effect size)"
                 result.effect_size_interpretation = _interpret_wilcoxon_r(r)
-            elif n > 0 and p_val <= 0:
-                # Perfect separation: all differences same sign. r = 1.0 by convention.
-                # (p_val can also be exactly 0.0 due to floating-point underflow at
-                # large n, though this is unlikely at the small sample sizes typical
-                # of variability studies.)
-                result.effect_size = 1.0
-                result.effect_size_name = "r (effect size)"
-                result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
+
         except Exception as e:
             result.warnings.append(f"Test failed: {str(e)}")
             result.statistic = float("nan")
@@ -1270,7 +1263,8 @@ def paired_wilcoxon_test(
             "significant or trivially not. Returning inconclusive result. "
             "If both models used identical seeds and produced identical "
             "predictions, the paired comparison is undefined; use "
-            "test_above_chance() or inspect per-run values directly.",
+            "VariabilityStudyResults.test_against_null() or inspect per-run "
+            "values directly.",
             UserWarning,
             stacklevel=2,
         )

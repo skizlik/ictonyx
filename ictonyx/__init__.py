@@ -206,7 +206,6 @@ try:
             "ModelComparisonResults",
             "StatisticalTestResult",
             "mann_whitney_test",
-            "wilcoxon_signed_rank_test",
             "paired_wilcoxon_test",
             "anova_test",
             "kruskal_wallis_test",

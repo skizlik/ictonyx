@@ -1511,6 +1511,46 @@ class TestWilcoxonSignedRankDeprecation:
             result = wilcoxon_signed_rank_test(pd.Series([0.85, 0.87, 0.83, 0.86, 0.84, 0.88]))
         assert isinstance(result, StatisticalTestResult)
 
+    def test_not_in_ictonyx_all(self):
+        """X-54: wilcoxon_signed_rank_test must not be in ictonyx.__all__.
+        Remains importable via ictonyx.analysis for legacy callers but
+        is no longer advertised via the top-level namespace, preparing
+        for v0.5.0 hard removal."""
+        import ictonyx
+
+        assert "wilcoxon_signed_rank_test" not in ictonyx.__all__
+
+    def test_still_importable_from_submodule(self):
+        """X-54: the submodule import path must continue to work."""
+        from ictonyx.analysis import wilcoxon_signed_rank_test
+
+        assert wilcoxon_signed_rank_test is not None
+
+
+def test_paired_wilcoxon_warning_references_test_against_null():
+    """X-76: the deterministic-pair warning must reference the existing
+    test_against_null() rather than the not-yet-implemented
+    test_above_chance(). Pre-v0.4.7 the warning pointed users at a
+    phantom API."""
+    import warnings as _warnings
+
+    import pandas as pd
+
+    from ictonyx.analysis import paired_wilcoxon_test
+
+    series_a = pd.Series([0.85] * 20)
+    series_b = pd.Series([0.85] * 20)
+
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        paired_wilcoxon_test(series_a, series_b)
+
+    messages = [str(w.message) for w in caught]
+    matching = [m for m in messages if "test_against_null" in m]
+    assert matching, f"Expected a warning referencing test_against_null. Got: {messages}"
+    phantom = [m for m in messages if "test_above_chance" in m]
+    assert not phantom, f"Warning should no longer reference test_above_chance. Got: {phantom}"
+
 
 def test_paired_wilcoxon_inconclusive_on_identical_pairs():
     """Paired Wilcoxon must return inconclusive, not significant, when

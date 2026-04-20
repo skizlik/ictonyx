@@ -1487,27 +1487,60 @@ def compare_two_models(
             for _k, _v in assumptions_met.items():
                 result.assumptions_met.setdefault(_k, _v)
             result.assumption_details.update(assumption_details)
-        # --- Bootstrap confidence intervals ---
-        if HAS_BOOTSTRAP and not np.isnan(result.p_value):
-            try:
-                if paired:
-                    # Paired comparison: always paired-difference bootstrap.
-                    # ci_target doesn't apply to the paired branch (both mean
-                    # and median differences for paired data would collapse
-                    # to the same conceptual target).
-                    ci_result = bootstrap_paired_difference_ci(
-                        clean1,
-                        clean2,
-                        n_bootstrap=10000,
-                        confidence=1 - alpha,
-                        method="bca",
-                        random_state=random_state,
-                    )
-                elif ci_target == "median_difference":
-                    # Hodges-Lehmann bootstrap. Methodologically correct when
-                    # Mann-Whitney is dispatched; valid (and robust) for
-                    # parametric tests too.
-                    ci_result = bootstrap_hodges_lehmann_ci(
+    # --- Bootstrap confidence intervals ---
+    if HAS_BOOTSTRAP and not np.isnan(result.p_value):
+        try:
+            if paired:
+                # Paired comparison: always paired-difference bootstrap.
+                # ci_target doesn't apply to the paired branch (both mean
+                # and median differences for paired data would collapse
+                # to the same conceptual target).
+                ci_result = bootstrap_paired_difference_ci(
+                    clean1,
+                    clean2,
+                    n_bootstrap=10000,
+                    confidence=1 - alpha,
+                    method="bca",
+                    random_state=random_state,
+                )
+            elif ci_target == "median_difference":
+                # Hodges-Lehmann bootstrap. Methodologically correct when
+                # Mann-Whitney is dispatched; valid (and robust) for
+                # parametric tests too.
+                ci_result = bootstrap_hodges_lehmann_ci(
+                    clean1,
+                    clean2,
+                    n_bootstrap=10000,
+                    confidence=1 - alpha,
+                    method="bca",
+                    random_state=random_state,
+                )
+            else:
+                # ci_target == "mean_difference"
+                ci_result = bootstrap_mean_difference_ci(
+                    clean1,
+                    clean2,
+                    n_bootstrap=10000,
+                    confidence=1 - alpha,
+                    method="bca",
+                    random_state=random_state,
+                )
+            result.confidence_interval = (ci_result.ci_lower, ci_result.ci_upper)
+
+            result.ci_confidence_level = ci_result.confidence_level
+            result.ci_method = ci_result.method
+
+            # Compute CI for the effect size.
+            # Rank-based tests (Mann-Whitney, paired Wilcoxon) have bounded
+            # effect sizes (r <= 1.0) that are incompatible with the Cohen's d
+            # bootstrap below; skip effect-size CI for these. A proper
+            # Wilcoxon-r bootstrap CI is planned for a later release.
+            _skip_ci_effect_size = (
+                "Mann-Whitney" in result.test_name or "Wilcoxon" in result.test_name
+            )
+            if result.effect_size is not None and not _skip_ci_effect_size:
+                if "Welch" in result.test_name:
+                    es_ci = bootstrap_hedges_g_ci(
                         clean1,
                         clean2,
                         n_bootstrap=10000,
@@ -1516,53 +1549,20 @@ def compare_two_models(
                         random_state=random_state,
                     )
                 else:
-                    # ci_target == "mean_difference"
-                    ci_result = bootstrap_mean_difference_ci(
+                    es_ci = bootstrap_effect_size_ci(
                         clean1,
                         clean2,
                         n_bootstrap=10000,
                         confidence=1 - alpha,
                         method="bca",
+                        pooled=True,
                         random_state=random_state,
                     )
-                result.confidence_interval = (ci_result.ci_lower, ci_result.ci_upper)
+                result.ci_effect_size = (es_ci.ci_lower, es_ci.ci_upper)
 
-                result.ci_confidence_level = ci_result.confidence_level
-                result.ci_method = ci_result.method
-
-                # Compute CI for the effect size.
-                # Rank-based tests (Mann-Whitney, paired Wilcoxon) have bounded
-                # effect sizes (r <= 1.0) that are incompatible with the Cohen's d
-                # bootstrap below; skip effect-size CI for these. A proper
-                # Wilcoxon-r bootstrap CI is planned for a later release.
-                _skip_ci_effect_size = (
-                    "Mann-Whitney" in result.test_name or "Wilcoxon" in result.test_name
-                )
-                if result.effect_size is not None and not _skip_ci_effect_size:
-                    if "Welch" in result.test_name:
-                        es_ci = bootstrap_hedges_g_ci(
-                            clean1,
-                            clean2,
-                            n_bootstrap=10000,
-                            confidence=1 - alpha,
-                            method="bca",
-                            random_state=random_state,
-                        )
-                    else:
-                        es_ci = bootstrap_effect_size_ci(
-                            clean1,
-                            clean2,
-                            n_bootstrap=10000,
-                            confidence=1 - alpha,
-                            method="bca",
-                            pooled=True,
-                            random_state=random_state,
-                        )
-                    result.ci_effect_size = (es_ci.ci_lower, es_ci.ci_upper)
-
-            except Exception:
-                # Bootstrap is best-effort — never break an otherwise valid result
-                pass
+        except Exception:
+            # Bootstrap is best-effort — never break an otherwise valid result
+            pass
 
     return result
 

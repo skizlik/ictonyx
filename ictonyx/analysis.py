@@ -803,60 +803,39 @@ def mann_whitney_test(
     return result
 
 
-def wilcoxon_signed_rank_test(
+def _wilcoxon_signed_rank_impl(
     model_metrics: pd.Series,
     null_value: float = 0.5,
     alternative: str = "two-sided",
     alpha: float = 0.05,
 ) -> StatisticalTestResult:
-    """Wilcoxon signed-rank test for a single sample against a null value.
+    """Internal Wilcoxon signed-rank implementation (no deprecation warning).
 
-    Tests whether the median of the sample differs from ``null_value``.
-    Useful for testing whether a model's accuracy is significantly
-    different from chance.
+    Shared between the deprecated public ``wilcoxon_signed_rank_test`` and
+    the current ``VariabilityStudyResults.test_against_null`` method.
+    Callers of ``test_against_null`` should not see a deprecation warning
+    pointing them at the function they just called; the public wrapper is
+    where the deprecation warning lives.
 
-    Args:
-        model_metrics: Metric values for the model.
-        null_value: Hypothesized median to test against. Default 0.5.
-        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
-            Default ``'two-sided'``.
-        alpha: Significance level. Default 0.05.
-
-    Returns:
-        :class:`StatisticalTestResult` with test statistic, p-value,
-        effect size (Wilcoxon r), and interpretation.
+    Args and Returns: see ``wilcoxon_signed_rank_test``.
     """
-
-    warnings.warn(
-        "wilcoxon_signed_rank_test() is deprecated and will be removed in "
-        "v0.5.0. Use compare_results() or test_against_null() instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
     result = StatisticalTestResult(
         test_name="Wilcoxon Signed-Rank Test", statistic=float("nan"), p_value=float("nan")
     )
-
     if not isinstance(model_metrics, pd.Series):
         raise TypeError("Input must be a pandas Series.")
-
     # Clean data and center on null value
     clean_data = model_metrics.dropna()
     centered_data = clean_data - null_value
-
     # Remove zeros (ties at the null hypothesis value)
     non_zero_data = centered_data[centered_data != 0]
-
     result.sample_sizes = {"total": len(clean_data), "non_zero": len(non_zero_data)}
-
     # Sample size validation
     adequate_size, size_warnings = validate_sample_sizes(
         [non_zero_data], 6, "Wilcoxon signed-rank test"
     )
     result.warnings.extend(size_warnings)
     result.assumptions_met["adequate_sample_size"] = adequate_size
-
     # Symmetry assumption check (approximate)
     if len(centered_data) > 0:
         skewness = centered_data.skew()
@@ -865,18 +844,14 @@ def wilcoxon_signed_rank_test(
             result.assumptions_met["symmetry"] = False
         else:
             result.assumptions_met["symmetry"] = True
-
         result.assumption_details["skewness"] = skewness
-
         # Perform test
         try:
             if len(non_zero_data) < 6:
                 raise ValueError("Insufficient non-zero differences for Wilcoxon test")
-
             wilcoxon_result = wilcoxon(non_zero_data, alternative=alternative, method="auto")
             result.statistic = float(wilcoxon_result.statistic)
             result.p_value = float(wilcoxon_result.pvalue)
-
             # Effect size r computed from the W statistic via the asymptotic
             # normal approximation of the Wilcoxon distribution. Valid for both
             # the exact and approximate p-value paths.
@@ -909,18 +884,52 @@ def wilcoxon_signed_rank_test(
                 result.effect_size = 1.0
                 result.effect_size_name = "r (effect size)"
                 result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
-
         except Exception as e:
             result.warnings.append(f"Test failed: {str(e)}")
             result.statistic = float("nan")
             result.p_value = float("nan")
             return result
-
     # Generate interpretation
     result.conclusion = _generate_wilcoxon_conclusion(result, null_value, alpha)
     result.detailed_interpretation = _generate_detailed_interpretation(result, alpha)
-
     return result
+
+
+def wilcoxon_signed_rank_test(
+    model_metrics: pd.Series,
+    null_value: float = 0.5,
+    alternative: str = "two-sided",
+    alpha: float = 0.05,
+) -> StatisticalTestResult:
+    """Wilcoxon signed-rank test for a single sample against a null value.
+
+    Tests whether the median of the sample differs from ``null_value``.
+    Useful for testing whether a model's accuracy is significantly
+    different from chance.
+
+    Args:
+        model_metrics: Metric values for the model.
+        null_value: Hypothesized median to test against. Default 0.5.
+        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            Default ``'two-sided'``.
+        alpha: Significance level. Default 0.05.
+
+    Returns:
+        :class:`StatisticalTestResult` with test statistic, p-value,
+        effect size (Wilcoxon r), and interpretation.
+    """
+    warnings.warn(
+        "wilcoxon_signed_rank_test() is deprecated and will be removed in "
+        "v0.5.0. Use compare_results() or test_against_null() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _wilcoxon_signed_rank_impl(
+        model_metrics,
+        null_value=null_value,
+        alternative=alternative,
+        alpha=alpha,
+    )
 
 
 def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> StatisticalTestResult:

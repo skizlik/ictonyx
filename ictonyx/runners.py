@@ -1281,7 +1281,7 @@ class VariabilityStudyResults:
             reliable inference — consistent with the library-wide minimum
             for Mann-Whitney U tests.
         """
-        from .analysis import wilcoxon_signed_rank_test
+        from .analysis import _wilcoxon_signed_rank_impl
 
         if metric is None:
             metric = self.preferred_metric("accuracy")
@@ -1305,7 +1305,7 @@ class VariabilityStudyResults:
                 raise ValueError(f"Metric '{metric}' not found. Available: {available}")
             values = pd.Series(self.get_metric_values(metric))
 
-        return wilcoxon_signed_rank_test(values, null_value=null_value, alpha=alpha)
+        return _wilcoxon_signed_rank_impl(values, null_value=null_value, alpha=alpha)
 
     def compare_models_statistically(self, *args, **kwargs):
         """Removed in v0.3.10.

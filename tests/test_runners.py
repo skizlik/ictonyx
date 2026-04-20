@@ -424,6 +424,87 @@ class TestTestAgainstNull:
         except AttributeError:
             pytest.fail("test_against_null raised AttributeError — ghost API not resolved")
 
+    def test_no_self_referential_deprecation_warning(self):
+        """X-28: test_against_null() must not emit a DeprecationWarning
+        whose message mentions test_against_null itself. Pre-v0.4.7,
+        test_against_null called the deprecated public wilcoxon_signed_rank_test
+        internally, whose deprecation warning pointed users back at
+        test_against_null — the function they just called."""
+        import warnings as _warnings
+
+        results = self._make_results(
+            [
+                0.80,
+                0.82,
+                0.78,
+                0.85,
+                0.79,
+                0.83,
+                0.81,
+                0.84,
+                0.77,
+                0.86,
+                0.80,
+                0.82,
+                0.78,
+                0.85,
+                0.79,
+                0.83,
+                0.81,
+                0.84,
+                0.77,
+                0.86,
+            ]
+        )
+
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            results.test_against_null(null_value=0.5, metric="val_accuracy")
+
+        offending = [
+            w
+            for w in caught
+            if issubclass(w.category, DeprecationWarning) and "test_against_null" in str(w.message)
+        ]
+        assert not offending, (
+            f"Self-referential deprecation warning leaked: "
+            f"{[str(w.message) for w in offending]}"
+        )
+
+    def test_public_wilcoxon_still_emits_deprecation(self):
+        """X-28 guard: the public wilcoxon_signed_rank_test must still
+        emit its DeprecationWarning. Protects against accidental warning
+        removal during the refactor that extracted _wilcoxon_signed_rank_impl."""
+        from ictonyx.analysis import wilcoxon_signed_rank_test
+
+        values = pd.Series(
+            [
+                0.80,
+                0.82,
+                0.78,
+                0.85,
+                0.79,
+                0.83,
+                0.81,
+                0.84,
+                0.77,
+                0.86,
+                0.80,
+                0.82,
+                0.78,
+                0.85,
+                0.79,
+                0.83,
+                0.81,
+                0.84,
+                0.77,
+                0.86,
+            ]
+        )
+
+        with pytest.warns(DeprecationWarning, match="wilcoxon_signed_rank_test"):
+            wilcoxon_signed_rank_test(values, null_value=0.5)
+
 
 class TestConvenienceFunction:
     """Test run_variability_study convenience function."""

@@ -36,7 +36,7 @@ def test_train_val_test_split():
     y = np.random.randint(0, 2, 100)
 
     X_train, X_val, X_test, y_train, y_val, y_test = train_val_test_split(
-        X, y, test_size=0.2, val_size=0.2, random_state=42
+        X, y, test_size=0.2, val_size=0.2, random_state=42, split_basis="remainder"
     )
 
     # Check sizes
@@ -98,19 +98,6 @@ def test_save_load_dataframe():
         os.unlink(path)
 
 
-def test_train_val_test_split_small_val():
-    """Test split with small val_size."""
-    X = np.random.rand(100, 5)
-    y = np.random.randint(0, 2, 100)
-    X_train, X_val, X_test, y_train, y_val, y_test = train_val_test_split(
-        X, y, test_size=0.2, val_size=0.1, random_state=42
-    )
-    assert len(X_train) + len(X_val) + len(X_test) == 100
-    assert len(y_train) == len(X_train)
-    assert len(y_val) == len(X_val)
-    assert len(y_test) == len(X_test)
-
-
 def test_save_object_creates_file():
     """Test that save creates a file that exists."""
     import tempfile
@@ -166,22 +153,12 @@ def test_train_val_test_split_small_val():
     X = np.random.rand(100, 5)
     y = np.random.randint(0, 2, 100)
     X_train, X_val, X_test, y_train, y_val, y_test = train_val_test_split(
-        X, y, test_size=0.2, val_size=0.1, random_state=42
+        X, y, test_size=0.2, val_size=0.1, random_state=42, split_basis="remainder"
     )
     assert len(X_train) + len(X_val) + len(X_test) == 100
     assert len(y_train) == len(X_train)
     assert len(y_val) == len(X_val)
     assert len(y_test) == len(X_test)
-
-
-def test_train_val_test_split_reproducible():
-    """Test that same random_state gives same split."""
-    X = np.random.rand(50, 3)
-    y = np.random.randint(0, 2, 50)
-    split1 = train_val_test_split(X, y, random_state=42)
-    split2 = train_val_test_split(X, y, random_state=42)
-    np.testing.assert_array_equal(split1[0], split2[0])  # X_train
-    np.testing.assert_array_equal(split1[2], split2[2])  # X_test
 
 
 def test_setup_mlflow_import_error():
@@ -199,8 +176,8 @@ def test_train_val_test_split_reproducible():
     """Test that same random_state gives same split."""
     X = np.random.rand(50, 3)
     y = np.random.randint(0, 2, 50)
-    split1 = train_val_test_split(X, y, random_state=42)
-    split2 = train_val_test_split(X, y, random_state=42)
+    split1 = train_val_test_split(X, y, random_state=42, split_basis="remainder")
+    split2 = train_val_test_split(X, y, random_state=42, split_basis="remainder")
     np.testing.assert_array_equal(split1[0], split2[0])  # X_train
     np.testing.assert_array_equal(split1[2], split2[2])  # X_test
 
@@ -273,20 +250,20 @@ class TestTrainValTestSplitValidation:
     def test_returns_six_elements(self):
         X = np.random.rand(50, 3)
         y = np.random.randint(0, 2, 50)
-        result = train_val_test_split(X, y)
+        result = train_val_test_split(X, y, split_basis="remainder")
         assert len(result) == 6
 
     def test_total_samples_preserved(self):
         X = np.random.rand(100, 4)
         y = np.zeros(100)
-        X_tr, X_v, X_te, y_tr, y_v, y_te = train_val_test_split(X, y)
+        X_tr, X_v, X_te, y_tr, y_v, y_te = train_val_test_split(X, y, split_basis="remainder")
         assert len(X_tr) + len(X_v) + len(X_te) == 100
 
     def test_different_random_states_give_different_splits(self):
         X = np.arange(100).reshape(100, 1).astype(float)
         y = np.zeros(100)
-        _, _, X_te1, _, _, _ = train_val_test_split(X, y, random_state=0)
-        _, _, X_te2, _, _, _ = train_val_test_split(X, y, random_state=99)
+        _, _, X_te1, _, _, _ = train_val_test_split(X, y, random_state=0, split_basis="remainder")
+        _, _, X_te2, _, _, _ = train_val_test_split(X, y, random_state=99, split_basis="remainder")
         assert not np.array_equal(X_te1, X_te2)
 
 
@@ -371,3 +348,85 @@ class TestSetupMlflowMocked:
 
             with pytest.raises((ImportError, TypeError, AttributeError)):
                 sfn("test")
+
+
+class TestSplitSemanticConsistency:
+    """X-44 (v0.4.7): train_val_test_split and ArraysDataHandler.load
+    must produce consistent split sizes for the same numerical arguments.
+
+    Pre-v0.4.7: train_val_test_split(val_size=0.2, test_size=0.2) gave
+    64/16/20 (val_size as fraction of post-test remainder), while
+    ArraysDataHandler(val_split=0.2, test_split=0.2).load() gave
+    60/20/20 (val_split as fraction of original). A user prototyping
+    with one and deploying with the other silently got different
+    training dataset sizes.
+
+    Fix: added split_basis parameter to train_val_test_split with
+    "original" opt-in. Default "auto" preserves legacy "remainder"
+    behavior with a DeprecationWarning. Default flips to "original"
+    in v0.5.0.
+    """
+
+    def test_original_basis_produces_ArraysDataHandler_sizes(self):
+        """split_basis='original' produces the same sizes as ArraysDataHandler."""
+        from ictonyx.data import ArraysDataHandler
+
+        X = np.random.rand(100, 5)
+        y = np.random.randint(0, 2, 100)
+
+        # Utils path with explicit 'original' basis
+        X_train, X_val, X_test, _, _, _ = train_val_test_split(
+            X,
+            y,
+            test_size=0.2,
+            val_size=0.2,
+            random_state=42,
+            split_basis="original",
+        )
+        utils_sizes = (len(X_train), len(X_val), len(X_test))
+
+        # ArraysDataHandler path
+        handler = ArraysDataHandler(X=X, y=y)
+        data_dict = handler.load(val_split=0.2, test_split=0.2, random_state=42)
+        handler_sizes = (
+            len(data_dict["train_data"][0]),
+            len(data_dict["val_data"][0]),
+            len(data_dict["test_data"][0]),
+        )
+
+        assert utils_sizes == handler_sizes, (
+            f"Semantic divergence: utils {utils_sizes} vs handler {handler_sizes}. "
+            f"split_basis='original' should match ArraysDataHandler."
+        )
+
+    def test_original_basis_gives_60_20_20(self):
+        """Explicit size assertion for the 'original' basis."""
+        X = np.random.rand(100, 5)
+        y = np.random.randint(0, 2, 100)
+        X_train, X_val, X_test, _, _, _ = train_val_test_split(
+            X,
+            y,
+            test_size=0.2,
+            val_size=0.2,
+            random_state=42,
+            split_basis="original",
+        )
+        assert len(X_train) == 60
+        assert len(X_val) == 20
+        assert len(X_test) == 20
+
+    def test_auto_basis_emits_deprecation_warning(self):
+        """Default split_basis='auto' must emit a DeprecationWarning."""
+        X = np.random.rand(50, 3)
+        y = np.random.randint(0, 2, 50)
+
+        with pytest.warns(DeprecationWarning, match="split_basis"):
+            train_val_test_split(X, y)  # no split_basis → 'auto' default
+
+    def test_invalid_basis_raises(self):
+        """split_basis must be one of the three valid values."""
+        X = np.random.rand(50, 3)
+        y = np.random.randint(0, 2, 50)
+
+        with pytest.raises(ValueError, match="split_basis must be"):
+            train_val_test_split(X, y, split_basis="invalid")

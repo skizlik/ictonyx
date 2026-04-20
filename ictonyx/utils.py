@@ -2,6 +2,7 @@
 
 import os
 import pickle
+import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -60,6 +61,7 @@ def train_val_test_split(
     test_size: float = 0.2,
     val_size: float = 0.2,
     random_state: int = 42,
+    split_basis: str = "auto",
 ) -> Tuple:
     """Split arrays into training, validation, and test sets.
 
@@ -69,15 +71,29 @@ def train_val_test_split(
     Args:
         X: Feature array or DataFrame.
         y: Label array or Series.
-        test_size: Fraction of data reserved for test. Default 0.2.
-        val_size: Fraction of the *training* remainder reserved for
-            validation. Default 0.2.
+        test_size: Fraction of the original dataset reserved for test.
+            Default 0.2.
+        val_size: Fraction reserved for validation. See ``split_basis``
+            for interpretation. Default 0.2.
         random_state: Seed for reproducibility. Default 42.
+        split_basis: Controls how ``val_size`` is interpreted.
+
+            - ``"original"``: ``val_size`` is a fraction of the original
+              dataset. ``test_size=0.2, val_size=0.2`` produces a
+              60/20/20 train/val/test split. Matches the behavior of
+              :class:`ArraysDataHandler` and :class:`ImageDataHandler`.
+
+            - ``"remainder"``: ``val_size`` is a fraction of the
+              post-test remainder (legacy behavior through v0.4.6).
+              ``test_size=0.2, val_size=0.2`` produces a 64/16/20 split.
+
+            - ``"auto"`` (default in v0.4.7): emit a ``DeprecationWarning``
+              and behave as ``"remainder"`` for backward compatibility.
+              The default changes to ``"original"`` in v0.5.0.
 
     Returns:
         Tuple of ``(X_train, X_val, X_test, y_train, y_val, y_test)``.
     """
-
     try:
         from sklearn.model_selection import train_test_split
     except ImportError:
@@ -86,11 +102,36 @@ def train_val_test_split(
             "Install with: pip install ictonyx[sklearn]"
         )
 
+    if split_basis not in ("original", "remainder", "auto"):
+        raise ValueError(
+            f"split_basis must be 'original', 'remainder', or 'auto'; " f"got {split_basis!r}."
+        )
+
+    if split_basis == "auto":
+        warnings.warn(
+            "train_val_test_split: val_size is currently interpreted as "
+            "a fraction of the post-test remainder, producing different "
+            "split sizes than ArraysDataHandler and ImageDataHandler for "
+            "the same numerical arguments. In v0.5.0, the default will "
+            "change to fraction-of-original to match the data handlers. "
+            "Pass split_basis='original' to opt in now, or "
+            "split_basis='remainder' to preserve legacy behavior silently.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        split_basis = "remainder"
+
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state
     )
+
+    if split_basis == "original":
+        adj_val_size = val_size / (1 - test_size) if test_size < 1 else val_size
+    else:  # split_basis == "remainder"
+        adj_val_size = val_size
+
     X_train, X_val, y_train, y_val = train_test_split(
-        X_train, y_train, test_size=val_size, random_state=random_state
+        X_train, y_train, test_size=adj_val_size, random_state=random_state
     )
     return X_train, X_val, X_test, y_train, y_val, y_test
 

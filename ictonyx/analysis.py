@@ -58,11 +58,17 @@ class StatisticalTestResult:
         test_name: Name of the test performed (e.g. ``'Mann-Whitney U'``).
         statistic: The test statistic value.
         p_value: The raw (uncorrected) p-value.
-        effect_size: Effect size estimate (Cohen's d, rank-biserial, or
-            eta-squared, depending on the test).
-        effect_size_name: Label for the effect size metric.
+        effect_size: Primary effect size estimate (Cohen's d, rank-biserial,
+            eta-squared-H, etc., depending on the test).
+        effect_size_name: Label for the primary effect size metric.
         effect_size_interpretation: Qualitative label (``'small'``,
             ``'medium'``, ``'large'``) per conventional thresholds.
+        effect_size_secondary: Optional secondary effect size for tests
+            that report multiple conventional measures (e.g. Kruskal-Wallis
+            reports both η²_H and ε²_R).
+        effect_size_secondary_name: Label for the secondary metric.
+        effect_size_secondary_interpretation: Qualitative label for the
+            secondary effect size.
         sample_sizes: Dict mapping group names to sample counts.
         assumptions_met: Dict mapping assumption names (e.g.
             ``'normality_group1'``) to boolean pass/fail.
@@ -89,10 +95,17 @@ class StatisticalTestResult:
     statistic: float
     p_value: float
 
-    # Effect size information
+    # Effect size information.
+    # Most tests report a single effect size. Kruskal-Wallis reports two
+    # (η²_H and ε²_R) because methodological conventions differ across
+    # audiences; the primary slot holds the more common choice (η²_H) and
+    # the secondary slot holds the alternate (ε²_R).
     effect_size: Optional[float] = None
     effect_size_name: Optional[str] = None
     effect_size_interpretation: Optional[str] = None
+    effect_size_secondary: Optional[float] = None
+    effect_size_secondary_name: Optional[str] = None
+    effect_size_secondary_interpretation: Optional[str] = None
 
     # Sample and power information
     sample_sizes: Optional[Dict[str, int]] = None
@@ -1063,8 +1076,12 @@ def kruskal_wallis_test(
         alpha: Significance level. Default 0.05.
 
     Returns:
-        :class:`StatisticalTestResult` with H-statistic, p-value,
-        epsilon-squared effect size, and interpretation.
+        :class:`StatisticalTestResult` with H-statistic, p-value, and two
+        effect sizes: η²_H (primary, variance-explained analog) and ε²_R
+        (secondary, rank-correlation analog). Pre-v0.4.7 the library
+        computed η²_H but labeled it "epsilon-squared" — v0.4.7 corrects
+        the labeling and adds the actual ε²_R value as the secondary
+        effect size.
     """
 
     # Validate input
@@ -1127,21 +1144,42 @@ def kruskal_wallis_test(
             except Exception:
                 pass  # Levene check is advisory; never fail the primary test
 
-        # Calculate effect size (epsilon-squared)
-        N = sum(len(group) for group in clean_groups)
-        k = len(clean_groups)
+            # Calculate effect sizes. Kruskal-Wallis reports two conventional
+            # measures that differ across methodological traditions:
+            #
+            #   η²_H = (H - k + 1) / (N - k)   — Tomczak & Tomczak (2014)
+            #          variance-explained analog, bounded [0, 1]
+            #   ε²_R = H / (N - 1)             — Kelley (1935)
+            #          rank-correlation analog, bounded [0, 1]
+            #
+            # Pre-v0.4.7, the library computed η²_H but labeled it
+            # "epsilon-squared" (the formulas are distinct — what was
+            # reported was always η²_H, not ε²_R). v0.4.7 corrects the
+            # labeling and adds ε²_R as the secondary effect size.
+            N = sum(len(group) for group in clean_groups)
+            k = len(clean_groups)
 
-        if N > k:
-            # Epsilon-squared: analogous to eta-squared for Kruskal-Wallis.
-            # Ranges from 0 to 1; interpreted on the same scale as eta-squared.
-            epsilon_sq = (statistic - k + 1) / (N - k)
-            epsilon_sq = max(0.0, min(1.0, epsilon_sq))  # Ensure non-negative
-        else:
-            epsilon_sq = 0
+            if N > k:
+                eta_sq_h = (statistic - k + 1) / (N - k)
+                eta_sq_h = max(0.0, min(1.0, eta_sq_h))
+            else:
+                eta_sq_h = 0.0
 
-        result.effect_size = epsilon_sq
-        result.effect_size_name = "epsilon-squared"
-        result.effect_size_interpretation = _interpret_epsilon_squared(epsilon_sq)
+            if N > 1:
+                epsilon_sq_r = statistic / (N - 1)
+                epsilon_sq_r = max(0.0, min(1.0, epsilon_sq_r))
+            else:
+                epsilon_sq_r = 0.0
+
+            # Primary: η²_H (variance-explained analog, most widely reported).
+            result.effect_size = eta_sq_h
+            result.effect_size_name = "eta-squared-H"
+            result.effect_size_interpretation = _interpret_variance_explained(eta_sq_h)
+
+            # Secondary: ε²_R (rank-correlation analog, Kelley 1935).
+            result.effect_size_secondary = epsilon_sq_r
+            result.effect_size_secondary_name = "epsilon-squared-R"
+            result.effect_size_secondary_interpretation = _interpret_epsilon_squared(epsilon_sq_r)
 
     except Exception as e:
         # Create a failure result object for consistent return type

@@ -1715,3 +1715,96 @@ class TestCompareTwoModelsCITarget:
         assert result.confidence_interval is not None
         lo, hi = result.confidence_interval
         assert lo > 0, f"Expected positive CI for +0.20 shift, got ({lo}, {hi})"
+
+
+class TestKruskalWallisDualEffectSize:
+    """Regression tests for X-12: kruskal_wallis_test must report both
+    η²_H (primary) and ε²_R (secondary) effect sizes with correct labels.
+
+    Pre-v0.4.7: the library computed η²_H = (H - k + 1) / (N - k) but
+    labeled it 'epsilon-squared'. ε²_R = H / (N - 1) (Kelley 1935) was
+    not computed at all.
+
+    Fix: compute both with correct formulas; label primary as
+    'eta-squared-H'; expose ε²_R via new secondary-effect-size fields.
+    """
+
+    def _make_three_groups(self):
+        """Three groups with a clear effect — large group-mean differences."""
+        return {
+            "A": pd.Series([0.70, 0.72, 0.68, 0.71, 0.69, 0.73, 0.70, 0.72]),
+            "B": pd.Series([0.80, 0.82, 0.78, 0.81, 0.79, 0.83, 0.80, 0.82]),
+            "C": pd.Series([0.90, 0.92, 0.88, 0.91, 0.89, 0.93, 0.90, 0.92]),
+        }
+
+    def test_primary_effect_size_is_eta_squared_h(self):
+        """Primary effect size must be labeled η²_H and match the formula."""
+        from ictonyx.analysis import kruskal_wallis_test
+
+        groups = self._make_three_groups()
+        result = kruskal_wallis_test(groups)
+
+        assert result.effect_size_name == "eta-squared-H"
+
+        # Verify formula: (H - k + 1) / (N - k)
+        H = result.statistic
+        k = 3
+        N = 24
+        expected_eta_h = max(0.0, min(1.0, (H - k + 1) / (N - k)))
+        assert abs(result.effect_size - expected_eta_h) < 1e-10
+
+    def test_secondary_effect_size_is_epsilon_squared_r(self):
+        """Secondary effect size must be labeled ε²_R and match the formula."""
+        from ictonyx.analysis import kruskal_wallis_test
+
+        groups = self._make_three_groups()
+        result = kruskal_wallis_test(groups)
+
+        assert result.effect_size_secondary_name == "epsilon-squared-R"
+
+        # Verify formula: H / (N - 1)
+        H = result.statistic
+        N = 24
+        expected_eps_r = max(0.0, min(1.0, H / (N - 1)))
+        assert result.effect_size_secondary is not None
+        assert abs(result.effect_size_secondary - expected_eps_r) < 1e-10
+
+    def test_both_effect_sizes_have_interpretations(self):
+        """Both primary and secondary effect sizes get qualitative labels."""
+        from ictonyx.analysis import kruskal_wallis_test
+
+        groups = self._make_three_groups()
+        result = kruskal_wallis_test(groups)
+
+        assert result.effect_size_interpretation in ("negligible", "small", "medium", "large")
+        assert result.effect_size_secondary_interpretation in (
+            "negligible",
+            "small",
+            "medium",
+            "large",
+        )
+
+    def test_effect_sizes_are_bounded_zero_to_one(self):
+        """Both effect sizes must be clamped to [0, 1]."""
+        from ictonyx.analysis import kruskal_wallis_test
+
+        groups = self._make_three_groups()
+        result = kruskal_wallis_test(groups)
+
+        assert 0.0 <= result.effect_size <= 1.0
+        assert 0.0 <= result.effect_size_secondary <= 1.0
+
+    def test_large_effect_produces_both_large_effect_sizes(self):
+        """Clearly separated groups should yield 'medium' or 'large' for both."""
+        from ictonyx.analysis import kruskal_wallis_test
+
+        groups = self._make_three_groups()
+        result = kruskal_wallis_test(groups)
+
+        # Both should be nonzero and interpretable
+        assert (
+            result.effect_size > 0.05
+        ), f"Expected large primary effect, got η²_H = {result.effect_size}"
+        assert (
+            result.effect_size_secondary > 0.05
+        ), f"Expected large secondary effect, got ε²_R = {result.effect_size_secondary}"

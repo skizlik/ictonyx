@@ -633,3 +633,80 @@ class TestBootstrapHedgesGCi:
 
         with pytest.raises(ValueError, match="at least 2"):
             bootstrap_hedges_g_ci(np.array([0.8]), np.array([0.7, 0.75]))
+
+
+class TestBootstrapHodgesLehmannCI:
+    """Tests for bootstrap_hodges_lehmann_ci — the MW-matching location-shift
+    CI added in v0.4.7 for X-11."""
+
+    def test_point_estimate_is_median_of_pairwise_diffs(self):
+        """Point estimate equals the HL estimator by definition."""
+        from ictonyx.bootstrap import bootstrap_hodges_lehmann_ci
+
+        rng = np.random.default_rng(42)
+        g1 = rng.normal(0.9, 0.02, size=20)
+        g2 = rng.normal(0.85, 0.02, size=20)
+
+        result = bootstrap_hodges_lehmann_ci(g1, g2, n_bootstrap=1000, random_state=42)
+
+        expected = float(np.median(np.subtract.outer(g1, g2).ravel()))
+        assert abs(result.point_estimate - expected) < 1e-10
+
+    def test_ci_contains_point_estimate(self):
+        """The CI must contain the point estimate."""
+        from ictonyx.bootstrap import bootstrap_hodges_lehmann_ci
+
+        rng = np.random.default_rng(42)
+        g1 = rng.normal(0.9, 0.02, size=20)
+        g2 = rng.normal(0.85, 0.02, size=20)
+
+        result = bootstrap_hodges_lehmann_ci(g1, g2, n_bootstrap=1000, random_state=42)
+
+        assert result.ci_lower <= result.point_estimate <= result.ci_upper
+
+    def test_detects_real_shift(self):
+        """Groups with a clear shift should produce a CI excluding zero."""
+        from ictonyx.bootstrap import bootstrap_hodges_lehmann_ci
+
+        rng = np.random.default_rng(42)
+        g1 = rng.normal(0.90, 0.01, size=30)
+        g2 = rng.normal(0.70, 0.01, size=30)
+
+        result = bootstrap_hodges_lehmann_ci(g1, g2, n_bootstrap=2000, random_state=42)
+
+        assert result.ci_lower > 0
+        assert result.ci_upper > 0
+        assert abs(result.point_estimate - 0.20) < 0.05
+
+    def test_no_shift_ci_spans_zero(self):
+        """Groups with no shift should produce a CI that includes zero."""
+        from ictonyx.bootstrap import bootstrap_hodges_lehmann_ci
+
+        rng = np.random.default_rng(42)
+        g1 = rng.normal(0.80, 0.02, size=30)
+        g2 = rng.normal(0.80, 0.02, size=30)
+
+        result = bootstrap_hodges_lehmann_ci(g1, g2, n_bootstrap=2000, random_state=42)
+
+        assert result.ci_lower <= 0 <= result.ci_upper
+
+    def test_reproducible_with_seed(self):
+        """Same random_state must produce the same CI."""
+        from ictonyx.bootstrap import bootstrap_hodges_lehmann_ci
+
+        rng = np.random.default_rng(42)
+        g1 = rng.normal(0.9, 0.02, size=20)
+        g2 = rng.normal(0.85, 0.02, size=20)
+
+        r1 = bootstrap_hodges_lehmann_ci(g1, g2, n_bootstrap=500, random_state=2026)
+        r2 = bootstrap_hodges_lehmann_ci(g1, g2, n_bootstrap=500, random_state=2026)
+
+        assert r1.ci_lower == r2.ci_lower
+        assert r1.ci_upper == r2.ci_upper
+
+    def test_raises_on_tiny_groups(self):
+        """Groups with fewer than 2 observations must raise."""
+        from ictonyx.bootstrap import bootstrap_hodges_lehmann_ci
+
+        with pytest.raises(ValueError, match="at least 2 observations"):
+            bootstrap_hodges_lehmann_ci([0.5], [0.6, 0.7])

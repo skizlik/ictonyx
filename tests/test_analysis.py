@@ -1637,3 +1637,81 @@ def test_ci_effect_size_contains_point_estimate_for_parametric():
         assert lo <= result.effect_size <= hi, (
             f"CI ({lo}, {hi}) does not contain point estimate " f"{result.effect_size}"
         )
+
+
+class TestCompareTwoModelsCITarget:
+    """Regression tests for X-11: compare_two_models' CI target must match
+    the chosen test's inference target. Pre-v0.4.7, the unpaired MWU branch
+    computed a mean-difference bootstrap CI, which doesn't match MW's null
+    (distributional equality / median shift).
+
+    Fix: ci_target parameter with three values:
+    - 'mean_difference' (legacy, still works)
+    - 'median_difference' (new: Hodges-Lehmann bootstrap)
+    - 'auto' (default, emits DeprecationWarning, uses 'mean_difference' for
+      backward compat; default flips to 'median_difference' in v0.5.0)
+    """
+
+    def test_median_difference_uses_hodges_lehmann(self):
+        """ci_target='median_difference' on an MWU-dispatched comparison
+        must produce a Hodges-Lehmann CI whose point estimate equals the
+        median of pairwise differences."""
+        from ictonyx.analysis import compare_two_models
+
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.exponential(1.0, size=20) + 0.5)
+        g2 = pd.Series(rng.exponential(1.0, size=20))
+
+        result = compare_two_models(g1, g2, paired=False, ci_target="median_difference")
+
+        assert result.confidence_interval is not None
+        lo, hi = result.confidence_interval
+        assert isinstance(lo, float) and isinstance(hi, float)
+        assert lo <= hi
+
+    def test_mean_difference_path_still_works(self):
+        """ci_target='mean_difference' preserves v0.4.6 behavior."""
+        from ictonyx.analysis import compare_two_models
+
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.normal(0.9, 0.02, size=20))
+        g2 = pd.Series(rng.normal(0.85, 0.02, size=20))
+
+        result = compare_two_models(g1, g2, paired=False, ci_target="mean_difference")
+        assert result.confidence_interval is not None
+
+    def test_auto_emits_deprecation_warning(self):
+        """Default ci_target='auto' must emit a DeprecationWarning."""
+        from ictonyx.analysis import compare_two_models
+
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.normal(0.9, 0.02, size=20))
+        g2 = pd.Series(rng.normal(0.85, 0.02, size=20))
+
+        with pytest.warns(DeprecationWarning, match="ci_target"):
+            compare_two_models(g1, g2, paired=False)
+
+    def test_invalid_ci_target_raises(self):
+        """Invalid ci_target value must raise ValueError."""
+        from ictonyx.analysis import compare_two_models
+
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.normal(0.9, 0.02, size=20))
+        g2 = pd.Series(rng.normal(0.85, 0.02, size=20))
+
+        with pytest.raises(ValueError, match="ci_target"):
+            compare_two_models(g1, g2, paired=False, ci_target="invalid")
+
+    def test_median_difference_detects_real_shift(self):
+        """With a clear location shift, median_difference CI excludes zero."""
+        from ictonyx.analysis import compare_two_models
+
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.normal(0.90, 0.01, size=30))
+        g2 = pd.Series(rng.normal(0.70, 0.01, size=30))
+
+        result = compare_two_models(g1, g2, paired=False, ci_target="median_difference")
+
+        assert result.confidence_interval is not None
+        lo, hi = result.confidence_interval
+        assert lo > 0, f"Expected positive CI for +0.20 shift, got ({lo}, {hi})"

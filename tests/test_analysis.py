@@ -672,9 +672,18 @@ class TestKruskalWallisTest:
 
 
 class TestKruskalWallisEffectSizeLabel:
-    """Verify epsilon-squared is correctly labelled and interpreted."""
+    """Verify eta-squared-H is correctly labelled and interpreted.
+
+    Pre-v0.4.7 the library labelled the variance-explained effect size
+    'epsilon-squared' even though the formula (H - k + 1) / (N - k)
+    computes eta-squared-H. Commit 13b corrected the label; this class
+    now verifies the corrected label.
+    """
 
     def test_effect_size_name_is_epsilon_squared(self):
+        # Note: method name retained for git blame continuity; the actual
+        # label is 'eta-squared-H' after commit 13b corrected the
+        # mislabel (see class docstring).
         groups = {
             "a": pd.Series([0.7, 0.75, 0.72, 0.74]),
             "b": pd.Series([0.8, 0.82, 0.79, 0.81]),
@@ -682,11 +691,14 @@ class TestKruskalWallisEffectSizeLabel:
         }
         result = kruskal_wallis_test(groups)
         assert (
-            result.effect_size_name == "epsilon-squared"
-        ), f"Expected 'epsilon-squared', got '{result.effect_size_name}'"
+            result.effect_size_name == "eta-squared-H"
+        ), f"Expected 'eta-squared-H', got '{result.effect_size_name}'"
 
     def test_effect_size_interpretation_uses_epsilon_thresholds(self):
-        """Interpretation must come from _interpret_epsilon_squared, not eta."""
+        """Interpretation uses variance-explained thresholds (0.01/0.06/0.14)
+        via _interpret_variance_explained, which shares conventions with
+        eta-squared. Pre-v0.4.7 was routed through _interpret_epsilon_squared,
+        which has identical thresholds but incorrect labelling."""
         groups = {
             "a": pd.Series([0.5, 0.5, 0.5, 0.5]),
             "b": pd.Series([0.9, 0.9, 0.9, 0.9]),
@@ -694,7 +706,7 @@ class TestKruskalWallisEffectSizeLabel:
         }
         result = kruskal_wallis_test(groups)
         assert result.effect_size_interpretation in ("negligible", "small", "medium", "large")
-        assert result.effect_size_name == "epsilon-squared"
+        assert result.effect_size_name == "eta-squared-H"
 
 
 class TestWilcoxonTieCorrection:

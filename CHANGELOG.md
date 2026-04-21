@@ -20,6 +20,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.7] — 2026-04-20
+
+### Fixed
+- `KerasModelWrapper.fit()` now accepts `run_seed` and `verbose` from `fit_kwargs` (previously crashed all Keras-based variability studies on v0.4.7.dev0).
+- `HuggingFaceModelWrapper` per-run seeding actually works (previously fell back to seed=42 on every run, producing identical metrics across runs).
+- `HuggingFaceModelWrapper` respects `verbose=False` (no more 50+ lines of Trainer chatter per run).
+- `BaseModelWrapper.__del__` no longer raises `ImportError` during interpreter shutdown.
+- `GridStudyResults.summarize()` and `.to_dataframe()` no longer crash on dry-run results.
+- `plot_shap_waterfall` handles SHAP 0.45+'s 3-D ndarray return for multiclass models.
+- `VariabilityStudyResults.preferred_metric()` raises a helpful `KeyError` when the requested base metric isn't tracked, instead of silently returning a phantom key.
+- `test_against_null` no longer emits a `DeprecationWarning` pointing at itself.
+- `compare_two_models` bootstrap CI no longer silently skipped for paired and parametric test branches.
+- `kruskal_wallis_test` effect size correctly labelled `eta-squared-H` (was mislabelled `epsilon-squared`); also reports `epsilon-squared-R` as secondary.
+
+### Added
+- `VariabilityStudyResults.test_above_chance()` — one-sided Wilcoxon for "is this model above chance" question.
+- `VariabilityStudyResults.from_json()` — symmetric with existing `to_json()` for round-trip persistence.
+- `compare_two_models(ci_target=...)` — Hodges-Lehmann bootstrap CI for MW-matched inference (deprecation cycle; default flips to `median_difference` in v0.5.0).
+- `compare_two_models(test_method=...)` — explicit test selection replaces data-driven pretest-then-choose (deprecation cycle; default flips to `mann_whitney` in v0.5.0).
+- `friedman_test` — Friedman chi-squared for 3+ paired groups with Kendall's W effect size.
+- `bootstrap_hodges_lehmann_ci` — new primitive for location-shift CI matching Mann-Whitney's null.
+- `required_runs_paired` — power analysis for paired comparisons.
+- `utils.train_val_test_split(split_basis=...)` — unified semantics with data handlers (deprecation cycle; default flips to `original` in v0.5.0).
+
+### Infrastructure
+- Dockerfile updated: TensorFlow 2.16+, mlflow 2.11+, Hugging Face stack (transformers, datasets, accelerate) installed at build time.
+- Module-scope `import sys` in `core.py` (was inline in `__del__`, unreachable during shutdown).
+
+### Deprecations
+- `wilcoxon_signed_rank_test` (public) removed from `ictonyx.__all__`; still importable from `ictonyx.analysis`. Hard removal in v0.5.0.
+- `paired_wilcoxon_test` warning text now references the existing `test_against_null` instead of the not-yet-extant `test_above_chance`.
+
+---
+
 ## [0.4.6] — 2026-04-19
 
 ### Added

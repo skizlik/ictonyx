@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "Ictonyx: A Framework for Variability Analysis in Machine Learning Training"
 type: software
-version: 0.4.6
-date-released: "2026-04-19"
+version: 0.4.7
+date-released: "2026-04-20"
 license: MIT
 url: "https://github.com/skizlik/ictonyx"
 repository-code: "https://github.com/skizlik/ictonyx"

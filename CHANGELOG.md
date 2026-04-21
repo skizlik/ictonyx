@@ -20,6 +20,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.7] — 2026-04-20
+
+### Fixed
+- `KerasModelWrapper.fit()` now accepts `run_seed` and `verbose` from `fit_kwargs` (previously crashed all Keras-based variability studies on v0.4.7.dev0).
+- `HuggingFaceModelWrapper` per-run seeding actually works (previously fell back to seed=42 on every run, producing identical metrics across runs).
+- `HuggingFaceModelWrapper` respects `verbose=False` (no more 50+ lines of Trainer chatter per run).
+- `BaseModelWrapper.__del__` no longer raises `ImportError` during interpreter shutdown.
+- `GridStudyResults.summarize()` and `.to_dataframe()` no longer crash on dry-run results.
+- `plot_shap_waterfall` handles SHAP 0.45+'s 3-D ndarray return for multiclass models.
+- `VariabilityStudyResults.preferred_metric()` raises a helpful `KeyError` when the requested base metric isn't tracked, instead of silently returning a phantom key.
+- `test_against_null` no longer emits a `DeprecationWarning` pointing at itself.
+- `compare_two_models` bootstrap CI no longer silently skipped for paired and parametric test branches.
+- `kruskal_wallis_test` effect size correctly labelled `eta-squared-H` (was mislabelled `epsilon-squared`); also reports `epsilon-squared-R` as secondary.
+
+### Added
+- `VariabilityStudyResults.test_above_chance()` — one-sided Wilcoxon for "is this model above chance" question.
+- `VariabilityStudyResults.from_json()` — symmetric with existing `to_json()` for round-trip persistence.
+- `compare_two_models(ci_target=...)` — Hodges-Lehmann bootstrap CI for MW-matched inference (deprecation cycle; default flips to `median_difference` in v0.5.0).
+- `compare_two_models(test_method=...)` — explicit test selection replaces data-driven pretest-then-choose (deprecation cycle; default flips to `mann_whitney` in v0.5.0).
+- `friedman_test` — Friedman chi-squared for 3+ paired groups with Kendall's W effect size.
+- `bootstrap_hodges_lehmann_ci` — new primitive for location-shift CI matching Mann-Whitney's null.
+- `required_runs_paired` — power analysis for paired comparisons.
+- `utils.train_val_test_split(split_basis=...)` — unified semantics with data handlers (deprecation cycle; default flips to `original` in v0.5.0).
+
+### Infrastructure
+- Dockerfile updated: TensorFlow 2.16+, mlflow 2.11+, Hugging Face stack (transformers, datasets, accelerate) installed at build time.
+- Module-scope `import sys` in `core.py` (was inline in `__del__`, unreachable during shutdown).
+
+### Deprecations
+- `wilcoxon_signed_rank_test` (public) removed from `ictonyx.__all__`; still importable from `ictonyx.analysis`. Hard removal in v0.5.0.
+- `paired_wilcoxon_test` warning text now references the existing `test_against_null` instead of the not-yet-extant `test_above_chance`.
+
+---
+
+## [0.4.6] — 2026-04-19
+
+### Added
+
+- `plot_paired_deltas(results_a, results_b, metric)` — per-run paired
+  differences between two variability studies with a zero reference
+  line, mean line, and optional bootstrap CI band. Shows "winner
+  reverses" cases where the mean difference is positive but individual
+  runs can reverse.
+- `plot_run_independence_diagnostics(results, metric)` — visualizes
+  per-lag autocorrelation of the run-indexed final-metric series with
+  Bonferroni-corrected confidence bands. Wraps the existing
+  `check_independence()` so the plot reflects exactly what the
+  statistical test uses. Replaces the deprecated `plot_averaged_pacf`.
+- `plot_epoch_run_heatmap(results, metric)` — epoch × run heatmap of a
+  per-epoch metric, with NaN padding for ragged run lengths. Reveals
+  which runs train fast, plateau early, or diverge.
+- `plot_sequential_ci(results, metric)` — bootstrap CI width as a
+  function of number of runs. Supports the "how many runs do I need?"
+  methodology argument by showing where additional runs stop
+  meaningfully improving precision.
+- `VariabilityStudyResults.preferred_metric()` now accepts a
+  `context="scalar"|"epoch"` keyword. Epoch context always resolves to
+  `val_*` (matching what per-epoch plotters can actually use); scalar
+  context preserves the prior `test_* when available, else val_*`
+  behavior.
+
+### Fixed
+
+- `plot_training_stability()` now accepts a `VariabilityStudyResults`
+  directly via `results=`, with the stability analysis computed
+  internally. The existing dict form (precomputed stability results)
+  stays as a valid API for users who want multiple views of the same
+  analysis.
+- Per-epoch plotters (`plot_run_trajectories`,
+  `plot_rank_correlation_over_epoch`) now request epoch-context
+  metrics explicitly, which correctly resolves to `val_*` regardless
+  of whether test data is present. Previously, the presence of test
+  metrics could cause these plotters to attempt to resolve `test_*`
+  keys that don't exist in per-epoch history DataFrames.
+- `ExperimentRunner` no longer passes `epochs`, `batch_size`, or
+  `verbose` to `ScikitLearnModelWrapper.fit()`, which had deprecated
+  them. Eliminates three `DeprecationWarning` emissions per sklearn
+  run from library-internal code.
+
+---
+
 ## [0.4.5] — 2026-04-18
 
 ### Fixed

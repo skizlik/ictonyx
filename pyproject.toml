@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "ictonyx"
-version = "0.4.5"
+version = "0.4.7"
 description = "Ictonyx: Iteration Comparison Testing Over N-runs: Yield eXamination"
 authors = ["Stephen Kizlik <stephen.kizlik@gmail.com>"]
 license = "MIT"
@@ -102,3 +102,11 @@ python_files = "test_*.py"
 python_functions = "test_*"
 markers = ["slow: marks tests as slow (skip with '-m not slow')"]
 addopts = "--cov=ictonyx --cov-report=html --cov-report=term --cov-fail-under=60"
+
+[tool.mypy]
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_unused_ignores = false
+warn_redundant_casts = true
+no_implicit_optional = true
+files = ["ictonyx/"]

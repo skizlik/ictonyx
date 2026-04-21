@@ -64,6 +64,188 @@ class BootstrapCIResult:
         )
 
 
+def _two_sample_bootstrap(
+    group1: np.ndarray,
+    group2: np.ndarray,
+    statistic_fn: Callable[[np.ndarray, np.ndarray], float],
+    n_bootstrap: int = 10000,
+    confidence: float = 0.95,
+    method: str = "bca",
+    random_state: Optional[Union[int, np.random.Generator]] = None,
+    return_distribution: bool = False,
+) -> BootstrapCIResult:
+    """Internal engine for two-sample independent bootstrap.
+
+    Resamples each group independently, which preserves the group structure
+    and is correct for independent (unpaired) comparisons.
+    """
+    if not 0 < confidence < 1:
+        raise ValueError(f"confidence must be between 0 and 1 exclusive, got {confidence}.")
+    if n_bootstrap < 100:
+        raise ValueError(f"n_bootstrap must be >= 100, got {n_bootstrap}.")
+    method = method.lower()
+    if method not in ("percentile", "bca"):
+        raise ValueError(f"Unknown method '{method}'. Use 'percentile' or 'bca'.")
+
+    rng = np.random.default_rng(random_state)
+    n1, n2 = len(group1), len(group2)
+
+    if method == "bca" and min(n1, n2) < 15:
+        warnings.warn(
+            f"BCa bootstrap CI with min(n1, n2)={min(n1, n2)} < 15: the jackknife "
+            "acceleration estimate is highly unstable at small sample sizes. "
+            "Consider method='percentile' or collecting more runs.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    if method == "bca" and n1 > 0 and n2 > 0:
+        _ratio = max(n1, n2) / min(n1, n2)
+        if _ratio > 3.0:
+            warnings.warn(
+                f"BCa bootstrap CI with group size ratio {_ratio:.1f}:1 > 3:1: "
+                "unequal group sizes inflate the jackknife leverage estimate for "
+                "the smaller group, potentially producing unstable acceleration. "
+                "Consider method='percentile' for highly unequal group sizes.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+    # Point estimate on original data
+    point_estimate = float(statistic_fn(group1, group2))
+
+    # Generate bootstrap distribution
+    _fn_name = getattr(statistic_fn, "__name__", "")
+    if _fn_name == "_mean_difference":
+        b1 = group1[rng.integers(0, n1, size=(n_bootstrap, n1))]
+        b2 = group2[rng.integers(0, n2, size=(n_bootstrap, n2))]
+        boot_stats = b1.mean(axis=1) - b2.mean(axis=1)
+    else:
+        boot_stats = np.empty(n_bootstrap)
+        for i in range(n_bootstrap):
+            boot1 = group1[rng.integers(0, n1, size=n1)]
+            boot2 = group2[rng.integers(0, n2, size=n2)]
+            try:
+                boot_stats[i] = statistic_fn(boot1, boot2)
+            except Exception:
+                boot_stats[i] = np.nan
+
+    valid_mask = np.isfinite(boot_stats)
+    n_valid = valid_mask.sum()
+
+    if n_valid < 100:
+        raise ValueError(
+            f"Only {n_valid} of {n_bootstrap} bootstrap replicates produced " f"finite values."
+        )
+
+    boot_stats_clean = boot_stats[valid_mask]
+    alpha = 1 - confidence
+
+    if method == "percentile":
+        ci_lower, ci_upper = _percentile_ci(boot_stats_clean, alpha)
+    elif method == "bca":
+        ci_lower, ci_upper = _two_sample_bca_ci(
+            group1, group2, statistic_fn, boot_stats_clean, point_estimate, alpha
+        )
+
+    return BootstrapCIResult(
+        ci_lower=float(ci_lower),
+        ci_upper=float(ci_upper),
+        point_estimate=point_estimate,
+        confidence_level=confidence,
+        method=method,
+        n_bootstrap=n_valid,
+        se_bootstrap=float(np.std(boot_stats_clean, ddof=1)),
+        bootstrap_distribution=boot_stats_clean if return_distribution else None,
+    )
+
+
+def _two_sample_bca_ci(
+    group1: np.ndarray,
+    group2: np.ndarray,
+    statistic_fn: Callable[[np.ndarray, np.ndarray], float],
+    boot_stats: np.ndarray,
+    point_estimate: float,
+    alpha: float,
+) -> Tuple[float, float]:
+    """BCa CI for two-sample statistics using combined jackknife."""
+    n1, n2 = len(group1), len(group2)
+    n_boot = len(boot_stats)
+
+    # --- Bias correction (z0) ---
+    prop_below = np.sum(boot_stats < point_estimate) / n_boot
+    prop_below = np.clip(prop_below, 1 / (n_boot + 1), n_boot / (n_boot + 1))
+    z0 = _ndtri(prop_below)
+
+    # --- Acceleration via combined jackknife ---
+    # Delete-one from each group in turn
+    n_total = n1 + n2
+    jackknife_stats = np.empty(n_total)
+
+    for i in range(n1):
+        jack1 = np.delete(group1, i)
+        try:
+            jackknife_stats[i] = statistic_fn(jack1, group2)
+        except Exception:
+            jackknife_stats[i] = np.nan
+
+    for j in range(n2):
+        jack2 = np.delete(group2, j)
+        try:
+            jackknife_stats[n1 + j] = statistic_fn(group1, jack2)
+        except Exception:
+            jackknife_stats[n1 + j] = np.nan
+
+    valid_jack = jackknife_stats[np.isfinite(jackknife_stats)]
+
+    if len(valid_jack) < 2:
+        return _percentile_ci(boot_stats, alpha)
+
+    jack_mean = np.mean(valid_jack)
+    jack_diff = jack_mean - valid_jack
+    denom = np.sum(jack_diff**2)
+
+    if denom == 0:
+        a = 0.0
+    else:
+        a = np.sum(jack_diff**3) / (6 * denom**1.5)
+
+    # --- Adjusted percentiles ---
+    z_alpha_lower = _ndtri(alpha / 2)
+    z_alpha_upper = _ndtri(1 - alpha / 2)
+
+    def _bca_quantile(z_alpha: float) -> float:
+        numerator = z0 + z_alpha
+        denominator = 1 - a * numerator
+        if abs(denominator) < 1e-10:
+            return _norm.cdf(z_alpha)
+        adjusted_z = z0 + numerator / denominator
+        return _norm.cdf(adjusted_z)
+
+    q_lower = np.clip(_bca_quantile(z_alpha_lower), 0.5 / n_boot, 1 - 0.5 / n_boot)
+    q_upper = np.clip(_bca_quantile(z_alpha_upper), 0.5 / n_boot, 1 - 0.5 / n_boot)
+
+    ci_lower = float(np.percentile(boot_stats, 100 * q_lower))
+    ci_upper = float(np.percentile(boot_stats, 100 * q_upper))
+
+    return ci_lower, ci_upper
+
+
+def _to_clean_array(data: Union[np.ndarray, pd.Series, List[float]]) -> np.ndarray:
+    """Convert input to a clean 1-D numpy float array, dropping NaNs."""
+    if isinstance(data, pd.Series):
+        arr = data.dropna().to_numpy(dtype=np.float64)
+    elif isinstance(data, list):
+        arr = np.array(data, dtype=np.float64)
+        arr = arr[np.isfinite(arr)]
+    elif isinstance(data, np.ndarray):
+        arr = data.astype(np.float64).ravel()
+        arr = arr[np.isfinite(arr)]
+    else:
+        raise TypeError(f"Expected array-like, pd.Series, or list. Got {type(data).__name__}.")
+    return arr
+
+
 # ---------------------------------------------------------------------------
 #  Core bootstrap engine
 # ---------------------------------------------------------------------------
@@ -514,193 +696,64 @@ def bootstrap_paired_difference_ci(
     )
 
 
-# ---------------------------------------------------------------------------
-#  Two-sample bootstrap engine (independent resampling)
-# ---------------------------------------------------------------------------
-
-
-def _two_sample_bootstrap(
-    group1: np.ndarray,
-    group2: np.ndarray,
-    statistic_fn: Callable[[np.ndarray, np.ndarray], float],
+def bootstrap_hodges_lehmann_ci(
+    group1: Union[np.ndarray, pd.Series, List[float]],
+    group2: Union[np.ndarray, pd.Series, List[float]],
     n_bootstrap: int = 10000,
     confidence: float = 0.95,
     method: str = "bca",
-    random_state: Optional[Union[int, np.random.Generator]] = None,
+    random_state: Optional[int] = None,
     return_distribution: bool = False,
 ) -> BootstrapCIResult:
-    """Internal engine for two-sample independent bootstrap.
+    """Bootstrap CI for the Hodges-Lehmann estimator of the location shift
+    between two independent groups (group1 - group2).
 
-    Resamples each group independently, which preserves the group structure
-    and is correct for independent (unpaired) comparisons.
+    The Hodges-Lehmann estimator is the median of all pairwise differences
+    ``{x_i - y_j}`` across the two samples. It is the location-shift
+    estimator that matches the null hypothesis of the Mann-Whitney U test
+    (distributional equality / median difference under a shift model),
+    unlike a bootstrap of the mean difference which is mismatched to MW's
+    inference target.
+
+    Args:
+        group1: Metric values for model 1 (e.g. accuracies from 10 runs).
+        group2: Metric values for model 2.
+        n_bootstrap: Number of bootstrap resamples (default 10 000).
+        confidence: Confidence level (default 0.95).
+        method: 'percentile' or 'bca' (default 'bca').
+        random_state: Seed for reproducibility.
+        return_distribution: If True, store the full bootstrap distribution.
+
+    Returns:
+        BootstrapCIResult. The point_estimate is the Hodges-Lehmann estimator
+        of the location shift: median of all pairwise (g1_i - g2_j).
+
+    Notes:
+        Pairwise difference computation is O(n1 * n2) per bootstrap sample.
+        At n1 = n2 = 50 and n_bootstrap = 10000, this is ~25M floating-point
+        operations — fast (well under 1 second). For very large samples
+        (n > 500) consider reducing n_bootstrap or using the percentile method.
     """
-    if not 0 < confidence < 1:
-        raise ValueError(f"confidence must be between 0 and 1 exclusive, got {confidence}.")
-    if n_bootstrap < 100:
-        raise ValueError(f"n_bootstrap must be >= 100, got {n_bootstrap}.")
-    method = method.lower()
-    if method not in ("percentile", "bca"):
-        raise ValueError(f"Unknown method '{method}'. Use 'percentile' or 'bca'.")
-
-    rng = np.random.default_rng(random_state)
-    n1, n2 = len(group1), len(group2)
-
-    if method == "bca" and min(n1, n2) < 15:
-        warnings.warn(
-            f"BCa bootstrap CI with min(n1, n2)={min(n1, n2)} < 15: the jackknife "
-            "acceleration estimate is highly unstable at small sample sizes. "
-            "Consider method='percentile' or collecting more runs.",
-            UserWarning,
-            stacklevel=2,
-        )
-
-    if method == "bca" and n1 > 0 and n2 > 0:
-        _ratio = max(n1, n2) / min(n1, n2)
-        if _ratio > 3.0:
-            warnings.warn(
-                f"BCa bootstrap CI with group size ratio {_ratio:.1f}:1 > 3:1: "
-                "unequal group sizes inflate the jackknife leverage estimate for "
-                "the smaller group, potentially producing unstable acceleration. "
-                "Consider method='percentile' for highly unequal group sizes.",
-                UserWarning,
-                stacklevel=2,
-            )
-
-    # Point estimate on original data
-    point_estimate = float(statistic_fn(group1, group2))
-
-    # Generate bootstrap distribution
-    _fn_name = getattr(statistic_fn, "__name__", "")
-    if _fn_name == "_mean_difference":
-        b1 = group1[rng.integers(0, n1, size=(n_bootstrap, n1))]
-        b2 = group2[rng.integers(0, n2, size=(n_bootstrap, n2))]
-        boot_stats = b1.mean(axis=1) - b2.mean(axis=1)
-    else:
-        boot_stats = np.empty(n_bootstrap)
-        for i in range(n_bootstrap):
-            boot1 = group1[rng.integers(0, n1, size=n1)]
-            boot2 = group2[rng.integers(0, n2, size=n2)]
-            try:
-                boot_stats[i] = statistic_fn(boot1, boot2)
-            except Exception:
-                boot_stats[i] = np.nan
-
-    valid_mask = np.isfinite(boot_stats)
-    n_valid = valid_mask.sum()
-
-    if n_valid < 100:
+    g1 = _to_clean_array(group1)
+    g2 = _to_clean_array(group2)
+    if len(g1) < 2 or len(g2) < 2:
         raise ValueError(
-            f"Only {n_valid} of {n_bootstrap} bootstrap replicates produced " f"finite values."
+            f"Both groups need at least 2 observations. " f"Got {len(g1)} and {len(g2)}."
         )
 
-    boot_stats_clean = boot_stats[valid_mask]
-    alpha = 1 - confidence
+    def _hodges_lehmann(a: np.ndarray, b: np.ndarray) -> float:
+        # Median of all pairwise differences {a_i - b_j}.
+        # np.subtract.outer(a, b) produces the full pairwise difference matrix.
+        diffs = np.subtract.outer(a, b).ravel()
+        return float(np.median(diffs))
 
-    if method == "percentile":
-        ci_lower, ci_upper = _percentile_ci(boot_stats_clean, alpha)
-    elif method == "bca":
-        ci_lower, ci_upper = _two_sample_bca_ci(
-            group1, group2, statistic_fn, boot_stats_clean, point_estimate, alpha
-        )
-
-    return BootstrapCIResult(
-        ci_lower=float(ci_lower),
-        ci_upper=float(ci_upper),
-        point_estimate=point_estimate,
-        confidence_level=confidence,
+    return _two_sample_bootstrap(
+        g1,
+        g2,
+        statistic_fn=_hodges_lehmann,
+        n_bootstrap=n_bootstrap,
+        confidence=confidence,
         method=method,
-        n_bootstrap=n_valid,
-        se_bootstrap=float(np.std(boot_stats_clean, ddof=1)),
-        bootstrap_distribution=boot_stats_clean if return_distribution else None,
+        random_state=random_state,
+        return_distribution=return_distribution,
     )
-
-
-def _two_sample_bca_ci(
-    group1: np.ndarray,
-    group2: np.ndarray,
-    statistic_fn: Callable[[np.ndarray, np.ndarray], float],
-    boot_stats: np.ndarray,
-    point_estimate: float,
-    alpha: float,
-) -> Tuple[float, float]:
-    """BCa CI for two-sample statistics using combined jackknife."""
-    n1, n2 = len(group1), len(group2)
-    n_boot = len(boot_stats)
-
-    # --- Bias correction (z0) ---
-    prop_below = np.sum(boot_stats < point_estimate) / n_boot
-    prop_below = np.clip(prop_below, 1 / (n_boot + 1), n_boot / (n_boot + 1))
-    z0 = _ndtri(prop_below)
-
-    # --- Acceleration via combined jackknife ---
-    # Delete-one from each group in turn
-    n_total = n1 + n2
-    jackknife_stats = np.empty(n_total)
-
-    for i in range(n1):
-        jack1 = np.delete(group1, i)
-        try:
-            jackknife_stats[i] = statistic_fn(jack1, group2)
-        except Exception:
-            jackknife_stats[i] = np.nan
-
-    for j in range(n2):
-        jack2 = np.delete(group2, j)
-        try:
-            jackknife_stats[n1 + j] = statistic_fn(group1, jack2)
-        except Exception:
-            jackknife_stats[n1 + j] = np.nan
-
-    valid_jack = jackknife_stats[np.isfinite(jackknife_stats)]
-
-    if len(valid_jack) < 2:
-        return _percentile_ci(boot_stats, alpha)
-
-    jack_mean = np.mean(valid_jack)
-    jack_diff = jack_mean - valid_jack
-    denom = np.sum(jack_diff**2)
-
-    if denom == 0:
-        a = 0.0
-    else:
-        a = np.sum(jack_diff**3) / (6 * denom**1.5)
-
-    # --- Adjusted percentiles ---
-    z_alpha_lower = _ndtri(alpha / 2)
-    z_alpha_upper = _ndtri(1 - alpha / 2)
-
-    def _bca_quantile(z_alpha: float) -> float:
-        numerator = z0 + z_alpha
-        denominator = 1 - a * numerator
-        if abs(denominator) < 1e-10:
-            return _norm.cdf(z_alpha)
-        adjusted_z = z0 + numerator / denominator
-        return _norm.cdf(adjusted_z)
-
-    q_lower = np.clip(_bca_quantile(z_alpha_lower), 0.5 / n_boot, 1 - 0.5 / n_boot)
-    q_upper = np.clip(_bca_quantile(z_alpha_upper), 0.5 / n_boot, 1 - 0.5 / n_boot)
-
-    ci_lower = float(np.percentile(boot_stats, 100 * q_lower))
-    ci_upper = float(np.percentile(boot_stats, 100 * q_upper))
-
-    return ci_lower, ci_upper
-
-
-# ---------------------------------------------------------------------------
-#  Utilities
-# ---------------------------------------------------------------------------
-
-
-def _to_clean_array(data: Union[np.ndarray, pd.Series, List[float]]) -> np.ndarray:
-    """Convert input to a clean 1-D numpy float array, dropping NaNs."""
-    if isinstance(data, pd.Series):
-        arr = data.dropna().to_numpy(dtype=np.float64)
-    elif isinstance(data, list):
-        arr = np.array(data, dtype=np.float64)
-        arr = arr[np.isfinite(arr)]
-    elif isinstance(data, np.ndarray):
-        arr = data.astype(np.float64).ravel()
-        arr = arr[np.isfinite(arr)]
-    else:
-        raise TypeError(f"Expected array-like, pd.Series, or list. Got {type(data).__name__}.")
-    return arr

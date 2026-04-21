@@ -558,6 +558,112 @@ class TestCompareResultsPairing:
         assert api.compare_results(ra, rb, seed=0) is not None
 
 
+class TestClassBasedConstructionKwargRouting:
+    """Regression tests for the two-fault fix in class-based construction.
+
+    Pre-v0.4.7 had two related failures:
+
+    1. variability_study(model=Class, model_kwargs={...}) stored the dict
+       as a single ModelConfig key instead of unpacking. The wrapper's
+       __init__ saw one kwarg instead of unpacked arguments, and the
+       required positional parameter raised TypeError.
+
+    2. variability_study(model=Class, flat_kwarg=...) leaked training-loop
+       kwargs (epochs, batch_size, verbose) to model constructors when the
+       class accepts **kwargs. For HuggingFaceModelWrapper, these leaked
+       into from_pretrained() and raised TypeError.
+
+    v0.4.7 fixes:
+    - api.py: unpack model_kwargs=dict before ModelConfig construction.
+    - _build_from_class: filter runner-concern kwargs from construction_kwargs
+      even when the class accepts **kwargs.
+    """
+
+    def test_sklearn_flat_kwargs_no_runner_kwarg_leak(self):
+        """Training-loop kwargs (epochs, batch_size, verbose) must be
+        filtered from the model constructor."""
+        from sklearn.datasets import load_breast_cancer
+        from sklearn.ensemble import RandomForestClassifier
+
+        import ictonyx as ix
+
+        data = load_breast_cancer()
+        results = ix.variability_study(
+            model=RandomForestClassifier,
+            data=(data.data, data.target),
+            n_estimators=20,
+            max_depth=5,
+            runs=2,
+            epochs=1,
+            batch_size=32,
+            seed=2026,
+            verbose=False,
+        )
+        assert len(results.all_runs_metrics) == 2
+
+    @pytest.mark.slow
+    def test_huggingface_dict_pattern_unpacks(self):
+        """model_kwargs=dict must unpack into constructor parameters.
+
+        Pre-fix: wrapper's __init__ saw model_kwargs as a single kwarg and
+        the required positional model_name_or_path was never provided.
+        """
+        pytest.importorskip("transformers", reason="transformers not installed")
+        import ictonyx as ix
+        from ictonyx import HuggingFaceModelWrapper
+
+        train_texts = [f"training text {i}" for i in range(20)]
+        train_labels = [i % 2 for i in range(20)]
+        val_texts = [f"val text {i}" for i in range(10)]
+        val_labels = [i % 2 for i in range(10)]
+
+        results = ix.variability_study(
+            model=HuggingFaceModelWrapper,
+            model_kwargs={
+                "model_name_or_path": "google/bert_uncased_L-2_H-128_A-2",
+                "num_labels": 2,
+            },
+            data=(train_texts, train_labels),
+            validation_data=(val_texts, val_labels),
+            runs=2,
+            epochs=1,
+            batch_size=8,
+            learning_rate=5e-5,
+            seed=2026,
+            verbose=False,  # make True for HF debugging
+        )
+        assert len(results.all_runs_metrics) == 2
+
+    @pytest.mark.slow
+    def test_huggingface_flat_kwargs_no_leak(self):
+        """Flat-kwargs pattern works; training-loop kwargs don't leak to
+        from_pretrained() even though HuggingFaceModelWrapper accepts
+        **kwargs."""
+        pytest.importorskip("transformers", reason="transformers not installed")
+        import ictonyx as ix
+        from ictonyx import HuggingFaceModelWrapper
+
+        train_texts = [f"training text {i}" for i in range(20)]
+        train_labels = [i % 2 for i in range(20)]
+        val_texts = [f"val text {i}" for i in range(10)]
+        val_labels = [i % 2 for i in range(10)]
+
+        results = ix.variability_study(
+            model=HuggingFaceModelWrapper,
+            model_name_or_path="google/bert_uncased_L-2_H-128_A-2",
+            num_labels=2,
+            data=(train_texts, train_labels),
+            validation_data=(val_texts, val_labels),
+            runs=2,
+            epochs=1,
+            batch_size=8,
+            learning_rate=5e-5,
+            seed=2026,
+            verbose=False,
+        )
+        assert len(results.all_runs_metrics) == 2
+
+
 def test_compare_models_model_kwargs_do_not_reach_data_handler():
     """Model hyperparameters must not be forwarded to the DataHandler."""
     from sklearn.datasets import load_wine

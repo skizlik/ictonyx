@@ -325,16 +325,6 @@ class ImageDataHandler(FileDataHandler):
             Dict with 'train_data', 'val_data', 'test_data' as tf.data.Dataset objects
         """
 
-        warnings.warn(
-            "ImageDataHandler: the training shuffle uses a fixed seed across "
-            "all variability study runs in this version. Each run receives "
-            "the same within-epoch data ordering, which may underestimate "
-            "training variability. A full per-run shuffle fix is planned for "
-            "v0.5.0.",
-            UserWarning,
-            stacklevel=2,
-        )
-
         if not HAS_SKLEARN:
             raise ImportError(
                 "scikit-learn is required for data splitting. "
@@ -397,11 +387,35 @@ class ImageDataHandler(FileDataHandler):
             label_ds = tf.data.Dataset.from_tensor_slices(tf.cast(labels, tf.int64))
 
             ds = tf.data.Dataset.zip((path_ds, label_ds))
-            if shuffle:
-                ds = ds.shuffle(buffer_size=len(paths), seed=self.seed)
-
             ds = ds.map(self._preprocess_image, num_parallel_calls=tf.data.AUTOTUNE)
-            ds = ds.batch(self.batch_size).cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+            ds = ds.batch(self.batch_size).cache()
+
+            # fix (v0.4.7): shuffle after cache so that reshuffle_each_iteration
+            # combined with per-run tf.random.set_seed() in ExperimentRunner produces
+            # distinct batch orderings across variability-study runs. Pre-cache
+            # shuffle was effectively frozen by .cache() materializing a single
+            # ordering — every run saw identical batches, silently attenuating
+            # measured variance.
+            #
+            # seed=None is deliberate: with an explicit seed, TF uses it deterministically
+            # and ignores global RNG state changes across iterations, defeating the fix.
+            # seed=None lets tf.random.set_seed(child_seed) in the runner drive
+            # per-run variation. Stratified train/val/test splits still use self.seed
+            # via sklearn above, so split composition remains reproducible across runs.
+            #
+            # Trade-off: shuffling operates at batch granularity (cache is already
+            # batched), not sample granularity. Runs see different sequences of
+            # batches. Finer-grained shuffling requires a more elaborate pipeline
+            # and belongs in v0.5.0.
+            if shuffle:
+                num_batches = (len(paths) + self.batch_size - 1) // self.batch_size
+                ds = ds.shuffle(
+                    buffer_size=num_batches,
+                    seed=None,
+                    reshuffle_each_iteration=True,
+                )
+
+            ds = ds.prefetch(buffer_size=tf.data.AUTOTUNE)
 
             return ds
 

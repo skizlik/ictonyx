@@ -37,18 +37,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir --upgrade pip
 
 # ---- Layer 3: Heavy ML frameworks (changes rarely) ----
-# These are the multi-gigabyte downloads. Isolated so that changes to
-# lighter dependencies or ictonyx code never trigger re-download.
+# Multi-gigabyte downloads. Isolated so that changes to lighter
+# dependencies or ictonyx code never trigger re-download.
 #
-# TensorFlow 2.15.0: last version before the Keras 3 transition.
-# protobuf < 4: required for TF 2.15 + MLflow compatibility.
-# MLflow < 2.11: last version supporting protobuf 3.x.
-# torch: GPU-enabled PyTorch.
+# Version strategy: constraints here must satisfy pyproject.toml's
+# declared dependencies for the [tensorflow], [huggingface], and [ml]
+# extras. Keeping the Dockerfile in sync with pyproject prevents the
+# editable install in Layer 5/6 from downgrading or upgrading these
+# heavy packages.
 RUN pip install --no-cache-dir --default-timeout=120 \
-    "protobuf<4.0.0" \
-    "tensorflow==2.15.0" \
-    "mlflow<2.11.0" \
-    "torch>=2.0.0"
+    "tensorflow>=2.16.0,<3.0.0" \
+    "torch>=2.0.0" \
+    "transformers>=4.35.0" \
+    "datasets>=2.14.0" \
+    "accelerate>=0.24.0" \
+    "mlflow>=2.11.0,<3.0.0"
 
 # ---- Layer 4: Python dependencies (changes occasionally) ----
 # Everything else the project needs. Separated from Layer 3 so that
@@ -79,12 +82,12 @@ RUN pip install --no-cache-dir \
 WORKDIR /home/appuser/projects/ictonyx
 COPY pyproject.toml LICENSE README.md ./
 COPY ictonyx/__init__.py ictonyx/__init__.py
-RUN pip install --no-cache-dir -e ".[sklearn]" \
+RUN pip install --no-cache-dir -e ".[sklearn,tensorflow,huggingface]" \
     && pip check || true
 
 # ---- Layer 6: Ictonyx source code (changes constantly — rebuilds in seconds) ----
 COPY . .
-RUN pip install --no-cache-dir -e ".[sklearn]"
+RUN pip install --no-cache-dir -e ".[sklearn,tensorflow,huggingface]"
 
 # ---- Environment ----
 ENV TF_CPP_MIN_LOG_LEVEL=2

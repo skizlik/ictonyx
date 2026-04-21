@@ -10,7 +10,7 @@ import random
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union, cast
 
 if TYPE_CHECKING:
     from .analysis import StatisticalTestResult
@@ -448,6 +448,7 @@ class ExperimentRunner:
                 fit_kwargs["epochs"] = epochs
                 fit_kwargs["batch_size"] = self.model_config.get("batch_size", 32)
                 fit_kwargs["verbose"] = self.model_config.get("verbose", 0)
+                fit_kwargs["run_seed"] = self.model_config.get("run_seed")
 
             with self._deterministic_cudnn():
                 wrapped_model.fit(**fit_kwargs)
@@ -1038,11 +1039,27 @@ class VariabilityStudyResults:
 
         return pd.DataFrame(rows)
 
-    def preferred_metric(self, base: str = "accuracy") -> str:
+    def preferred_metric(
+        self,
+        base: str = "accuracy",
+        context: Literal["scalar", "epoch"] = "scalar",
+    ) -> str:
         """Return the preferred metric name for this study.
 
-        Returns ``f"test_{base}"`` when test data is present and the base
-        metric was tracked, ``f"val_{base}"`` otherwise.
+        The preferred metric depends on the *context* in which it will be
+        used:
+
+        - **scalar** (default): Terminal metric reporting. Returns
+          ``f"test_{base}"`` when test data is present and the base metric
+          was tracked, ``f"val_{base}"`` otherwise.
+        - **epoch**: Per-epoch plotting and analysis. Always returns
+          ``f"val_{base}"`` because test metrics are scalar (single
+          final value) and per-epoch plotters cannot resolve them.
+
+        Before returning, verifies the resolved key exists in the study's
+        tracked metrics. If neither the primary nor alternate prefix
+        resolves, raises a helpful ``KeyError`` naming the attempted keys,
+        what metrics *are* tracked, and how to pass ``base`` explicitly.
 
         Note:
             ``final_test_metrics`` stores metrics under bare keys (e.g.
@@ -1051,15 +1068,81 @@ class VariabilityStudyResults:
 
         Args:
             base: Base metric name without prefix. Default ``"accuracy"``.
+            context: ``"scalar"`` for terminal reporting (prefers
+                ``test_*`` when available), ``"epoch"`` for per-epoch
+                plotters (always ``val_*``). Default ``"scalar"`` for
+                backward compatibility.
 
         Returns:
             The most appropriate metric key for this study's results.
+
+        Raises:
+            KeyError: If neither the primary candidate nor the alternate
+                prefix resolves to a tracked metric on this study. The
+                error message names the attempted keys, the available
+                val/test metrics, and suggests how to fix the call.
         """
+        # Build the list of candidate prefixed keys to try, in priority order.
+        # Scalar context: prefer test_* when test data present, fall back to val_*.
+        # Epoch context: only val_* makes sense (test metrics are scalar).
+        candidates: list[str] = []
+        if context == "epoch":
+            candidates.append(f"val_{base}")
+        else:
+            # scalar
+            if self.has_test_data:
+                tracked_test_set = {k for m in self.final_test_metrics for k in m if k != "run_id"}
+                if base in tracked_test_set:
+                    # Primary candidate: the bare-key test metric, returned with prefix.
+                    candidates.append(f"test_{base}")
+            candidates.append(f"val_{base}")
+
+        # Try each candidate against self.final_metrics (for val_*) or the
+        # test_metrics tracking (for test_*). A test_* candidate only reaches
+        # here if it was already verified present above, so it's safe to return
+        # directly. For val_*, verify against self.final_metrics.
+        for candidate in candidates:
+            if candidate.startswith("test_"):
+                # Already verified present when the candidate was added.
+                return candidate
+            if candidate in self.final_metrics:
+                return candidate
+
+        # Neither primary nor alternate candidate resolved. Build a helpful
+        # error message naming what was attempted and what's available.
+        tracked_val = sorted(self.final_metrics.keys())
+        tracked_test = (
+            sorted({k for m in self.final_test_metrics for k in m if k != "run_id"})
+            if self.has_test_data
+            else []
+        )
+
+        message_parts = [
+            f"preferred_metric(base={base!r}, context={context!r}) could not "
+            f"resolve a tracked metric.",
+            f"Tried: {candidates}.",
+            f"Available val metrics: {tracked_val}.",
+        ]
         if self.has_test_data:
-            tracked = {k for m in self.final_test_metrics for k in m if k != "run_id"}
-            if base in tracked:  # "accuracy" in {"accuracy"} → correct
-                return f"test_{base}"
-        return f"val_{base}"
+            message_parts.append(f"Available test metrics: {tracked_test}.")
+
+        # Try to suggest a better base: if the user asked for 'accuracy' but
+        # we see something like 'mse' or 'r2', infer they're on a regression
+        # study and offer the first available val metric as a hint.
+        if tracked_val:
+            suggested_base = tracked_val[0].replace("val_", "").replace("test_", "")
+            message_parts.append(
+                f"Did you mean base={suggested_base!r}? "
+                f"Pass base explicitly to preferred_metric(), or pass "
+                f"metric=<name> directly to the plotting or analysis function."
+            )
+        else:
+            message_parts.append(
+                "No val metrics tracked at all — this study may have failed "
+                "to record metrics. Check the runner's metric extraction."
+            )
+
+        raise KeyError(" ".join(message_parts))
 
     def summarize(self) -> str:
         lines = [
@@ -1241,6 +1324,7 @@ class VariabilityStudyResults:
         null_value: float = 0.5,
         metric: Optional[str] = None,
         alpha: float = 0.05,
+        alternative: str = "two-sided",
     ) -> "StatisticalTestResult":
         """Test whether a metric's distribution differs from a null value.
 
@@ -1252,6 +1336,10 @@ class VariabilityStudyResults:
                 binary classification accuracy.
             metric: Metric name. Must be a key in ``final_metrics``.
             alpha: Significance threshold (default 0.05).
+            alternative: ``'two-sided'`` (default), ``'greater'``, or
+                ``'less'``. Use ``'greater'`` for one-sided tests of the
+                form "is metric above the null" — or call
+                :meth:`test_above_chance` which is a shortcut for that.
 
         Returns:
             A StatisticalTestResult with ``is_significant``, ``p_value``,
@@ -1263,7 +1351,7 @@ class VariabilityStudyResults:
             reliable inference — consistent with the library-wide minimum
             for Mann-Whitney U tests.
         """
-        from .analysis import wilcoxon_signed_rank_test
+        from .analysis import _wilcoxon_signed_rank_impl
 
         if metric is None:
             metric = self.preferred_metric("accuracy")
@@ -1287,7 +1375,61 @@ class VariabilityStudyResults:
                 raise ValueError(f"Metric '{metric}' not found. Available: {available}")
             values = pd.Series(self.get_metric_values(metric))
 
-        return wilcoxon_signed_rank_test(values, null_value=null_value, alpha=alpha)
+        return _wilcoxon_signed_rank_impl(
+            values,
+            null_value=null_value,
+            alpha=alpha,
+            alternative=alternative,
+        )
+
+    def test_above_chance(
+        self,
+        metric: Optional[str] = None,
+        alpha: float = 0.05,
+        chance_level: float = 0.5,
+    ) -> "StatisticalTestResult":
+        """Test whether a model performs significantly above chance.
+
+        One-sided variant of :meth:`test_against_null` that tests the
+        specific hypothesis "this model's median performance is greater
+        than chance." Null hypothesis: median = chance_level. Alternative:
+        median > chance_level.
+
+        Uses a one-sided Wilcoxon signed-rank test (equivalent to calling
+        ``test_against_null(null_value=chance_level, alternative='greater')``).
+
+        Args:
+            metric: Metric name. Must be a key in ``final_metrics`` or the
+                bare key in a ``final_test_metrics`` entry. Defaults to the
+                study's preferred accuracy metric.
+            alpha: Significance threshold. Default 0.05.
+            chance_level: The chance-level baseline to test against.
+                Default 0.5 (binary classification with balanced classes).
+                For multi-class tasks with k balanced classes, pass
+                ``chance_level = 1.0 / k``.
+
+        Returns:
+            A StatisticalTestResult with ``is_significant``, ``p_value``,
+            ``statistic``, and ``conclusion``. The test is one-sided, so
+            ``p_value`` reflects P(median <= chance_level | observed data).
+
+        Note:
+            Recommended sample size: ``num_runs >= 20`` for reliable
+            inference, consistent with the library-wide minimum for
+            rank-based tests.
+
+        Example:
+            >>> results = ix.variability_study(model=..., runs=20)
+            >>> outcome = results.test_above_chance()
+            >>> if outcome.is_significant():
+            ...     print(f"Model above chance (p={outcome.p_value:.4f})")
+        """
+        return self.test_against_null(
+            null_value=chance_level,
+            metric=metric,
+            alpha=alpha,
+            alternative="greater",
+        )
 
     def compare_models_statistically(self, *args, **kwargs):
         """Removed in v0.3.10.
@@ -1393,6 +1535,58 @@ class VariabilityStudyResults:
                 "final_test_metrics": self.final_test_metrics,
             },
             indent=2,
+        )
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "VariabilityStudyResults":
+        """Reconstruct a VariabilityStudyResults from a JSON string.
+
+        Symmetric with :meth:`to_json`. Note that ``to_json`` does not
+        serialize ``all_runs_metrics`` (per-epoch DataFrames), so the
+        reconstructed object has an empty ``all_runs_metrics`` and
+        empty ``run_seeds``. Use :meth:`save` / :meth:`load` for full
+        round-trip fidelity including per-epoch history.
+
+        Args:
+            json_str: JSON string produced by :meth:`to_json`.
+
+        Returns:
+            VariabilityStudyResults with ``final_metrics``,
+            ``final_test_metrics``, and ``seed`` populated from the
+            JSON. ``all_runs_metrics`` is empty; ``run_seeds`` is empty.
+
+        Raises:
+            ValueError: If the JSON is malformed or missing required keys.
+
+        Example:
+            >>> serialized = results.to_json()
+            >>> restored = VariabilityStudyResults.from_json(serialized)
+            >>> assert restored.final_metrics == results.final_metrics
+        """
+        import json
+
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Malformed JSON passed to from_json: {e}") from e
+
+        if not isinstance(data, dict):
+            raise ValueError(f"from_json expects a JSON object, got {type(data).__name__}.")
+
+        required = ("final_metrics", "final_test_metrics")
+        missing = [k for k in required if k not in data]
+        if missing:
+            raise ValueError(
+                f"from_json JSON missing required keys: {missing}. "
+                f"Keys present: {sorted(data.keys())}."
+            )
+
+        return cls(
+            all_runs_metrics=[],
+            final_metrics=data["final_metrics"],
+            final_test_metrics=data["final_test_metrics"],
+            seed=data.get("seed"),
+            run_seeds=[],
         )
 
     @classmethod
@@ -1583,16 +1777,75 @@ class GridStudyResults:
             rows.append(row)
 
         df = pd.DataFrame(rows)
+
+        # Empty results (from dry_run=True) produces a DataFrame with no
+        # columns. Sorting by param-grid columns would raise KeyError.
+        # Return a typed empty DataFrame with the expected schema so
+        # downstream consumers (summarize, external code) get a
+        # well-formed result.
+        if df.empty:
+            schema_cols = list(self.param_grid.keys()) + [
+                "mean",
+                "sd",
+                "se",
+                "min",
+                "max",
+                "n",
+            ]
+            return pd.DataFrame(columns=schema_cols)
+
         sort_cols = list(self.param_grid.keys())
         return df.sort_values(sort_cols).reset_index(drop=True)
 
     def summarize(self, metric: Optional[str] = None) -> str:
         """Generate text summary of grid study results.
 
+        For executed studies, returns a summary of configurations and
+        their metric statistics. For dry-run results (empty
+        ``self.results``), returns a preview showing the parameter grid
+        and the planned configurations that would be executed.
+
         Args:
             metric: Metric to summarize. Defaults to self.metric.
         """
         metric = metric or self.metric
+
+        # Dry-run path: no results to summarize, but self.param_grid
+        # lets us preview what would have been run. Runs-per-config
+        # is not preserved on a dry-run result in v0.4.7, so this
+        # preview reports the planned configurations without a run
+        # count. The architectural fix to carry num_runs through to
+        # the dry-run result object is scheduled for v0.5.0.
+        if not self.results:
+            import itertools
+
+            param_names = list(self.param_grid.keys())
+            param_value_lists = [self.param_grid[k] for k in param_names]
+            combinations = list(itertools.product(*param_value_lists))
+            n_planned_configs = len(combinations)
+
+            lines = [
+                "Grid Study Results (Dry Run — not yet executed)",
+                "=" * 40,
+                "Parameter grid:",
+            ]
+            for name, param_values in self.param_grid.items():
+                lines.append(f"  {name}: {param_values}")
+            lines.extend(
+                [
+                    "",
+                    f"Planned configurations: {n_planned_configs}",
+                    f"Metric:                 {metric}",
+                    "",
+                    "Configurations to run:",
+                ]
+            )
+            for i, combo in enumerate(combinations, 1):
+                combo_dict = dict(zip(param_names, combo))
+                lines.append(f"  {i:>3}. {combo_dict}")
+            return "\n".join(lines)
+
+        # Normal path: study was executed, report statistics.
         df = self.to_dataframe(metric)
         lines = [
             "Grid Study Results",

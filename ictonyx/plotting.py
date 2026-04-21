@@ -693,7 +693,7 @@ def plot_run_trajectories(
     """
     _check_plotting()
     if metric is None:
-        metric = results.preferred_metric()
+        metric = results.preferred_metric(context="epoch")
     if ax is None:
         fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
     else:
@@ -920,7 +920,7 @@ def plot_rank_correlation_over_epoch(
             f"15 seeds to use this plot."
         )
 
-    resolved = metric or results.preferred_metric()
+    resolved = metric or results.preferred_metric(context="epoch")
     run_dfs = results.all_runs_metrics
     if not run_dfs:
         settings.logger.warning("plot_rank_correlation_over_epoch: no run data available.")
@@ -1488,7 +1488,11 @@ def plot_grid_study_heatmap(
 
 
 def plot_training_stability(
-    stability_results: Dict[str, Any],
+    stability_results: Optional[Dict[str, Any]] = None,
+    *,
+    results: Optional["VariabilityStudyResults"] = None,
+    metric: str = "loss",
+    window_size: int = 10,
     figsize: Tuple[int, int] = (12, 8),
     show: Optional[bool] = None,
 ) -> Optional["Figure"]:
@@ -1497,20 +1501,61 @@ def plot_training_stability(
     Creates a multi-panel figure showing convergence behavior, loss
     distributions, and coefficient of variation across runs.
 
+    Two ways to call this function:
+
+    1. **Direct**: pass a :class:`VariabilityStudyResults` via ``results=``
+       and the stability analysis will be computed for you::
+
+           ix.plot_training_stability(results=my_results)
+
+    2. **Precomputed**: pass a stability dict (useful when you want
+       multiple views of the same analysis)::
+
+           stability = ix.assess_training_stability(
+               [df['loss'] for df in my_results.all_runs_metrics]
+           )
+           ix.plot_training_stability(stability)
+
     Args:
-        stability_results: Dict produced by a stability analysis function,
-            containing keys such as ``'n_runs'``, ``'common_length'``,
+        stability_results: Dict produced by
+            :func:`~ictonyx.analysis.assess_training_stability`, containing
+            keys such as ``'n_runs'``, ``'common_length'``,
             ``'final_loss_mean'``, ``'final_loss_std'``, ``'final_loss_cv'``,
             ``'stability_assessment'``, ``'converged_runs'``, and
-            ``'final_losses_list'``.
+            ``'final_losses_list'``. Mutually exclusive with ``results``.
+        results: A :class:`VariabilityStudyResults` object. When provided,
+            the stability analysis is computed internally using the
+            specified ``metric`` column from each run's history. Mutually
+            exclusive with ``stability_results``.
+        metric: Name of the column in each run's history DataFrame to
+            analyze. Default ``"loss"``. Only used when ``results`` is
+            provided.
+        window_size: Number of recent epochs for convergence statistics.
+            Default ``10``. Only used when ``results`` is provided.
         figsize: Figure dimensions in inches. Default ``(12, 8)``.
         show: Display behavior. See :func:`plot_confusion_matrix`.
 
     Returns:
-        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
+        The ``matplotlib.figure.Figure``, or ``None`` if display is
+        enabled.
+
+    Raises:
+        ValueError: If both ``stability_results`` and ``results`` are
+            provided, or if neither is.
+        KeyError: If ``metric`` is not found in a run's history.
     """
     _check_plotting()
+    if results is not None:
+        if stability_results is not None:
+            raise ValueError("Pass either `results` or `stability_results`, not both.")
+        from .analysis import assess_training_stability
 
+        loss_histories = [pd.Series(run_df[metric]) for run_df in results.all_runs_metrics]
+        stability_results = assess_training_stability(loss_histories, window_size=window_size)
+    elif stability_results is None:
+        raise ValueError(
+            "plot_training_stability requires either `results` or `stability_results`."
+        )
     if "error" in stability_results:
         settings.logger.error(f"Cannot plot training stability: {stability_results['error']}")
         return None
@@ -1827,6 +1872,541 @@ def plot_averaged_pacf(
 
     ax.set_title(title)
     ax.legend()
+    _apply_style(ax)
+
+    return _finalize_plot(fig, show)
+
+
+def plot_paired_deltas(
+    results_a: "VariabilityStudyResults",
+    results_b: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    *,
+    name_a: str = "Model A",
+    name_b: str = "Model B",
+    show_ci: bool = True,
+    ci_confidence: float = 0.95,
+    ax: Optional["Axes"] = None,
+    figsize: Tuple[float, float] = (8, 6),
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Per-run paired differences between two model studies.
+
+    Shows each run's ``metric_a[i] - metric_b[i]`` as a point on a strip,
+    with a horizontal zero line separating "Model A wins" (above) from
+    "Model B wins" (below). When points appear on both sides of zero,
+    the winner *reverses* depending on which seeds you picked — a
+    phenomenon invisible from mean comparisons alone.
+
+    Requires equal run counts in both studies (paired comparison is
+    undefined otherwise).
+
+    Args:
+        results_a: First model's variability study.
+        results_b: Second model's variability study.
+        metric: Metric key to compare. If ``None``, resolved from
+            ``results_a.preferred_metric(context="scalar")``.
+        name_a: Label for model A in the legend and axes. Default
+            ``"Model A"``.
+        name_b: Label for model B. Default ``"Model B"``.
+        show_ci: Whether to overlay a bootstrap CI band on the mean
+            delta. Default ``True``.
+        ci_confidence: Confidence level for the mean-delta CI.
+            Default ``0.95``.
+        ax: Optional existing Axes. Creates a new figure if ``None``.
+        figsize: Figure dimensions when ``ax`` is ``None``.
+            Default ``(8, 6)``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is
+        enabled.
+
+    Raises:
+        ValueError: If the two studies have different run counts.
+    """
+    _check_plotting()
+
+    if metric is None:
+        metric = results_a.preferred_metric(context="scalar")
+
+    # Dispatch to the correct accessor based on metric scope
+    def _fetch(res, m: str) -> np.ndarray:
+        if m.startswith("test_"):
+            # test_* metrics live in final_test_metrics; strip the prefix
+            return np.asarray(res.get_test_metric_values(m[len("test_") :]), dtype=float)
+        return np.asarray(res.get_metric_values(m), dtype=float)
+
+    values_a = _fetch(results_a, metric)
+    values_b = _fetch(results_b, metric)
+
+    if len(values_a) != len(values_b):
+        raise ValueError(
+            f"Paired delta requires equal run counts; got "
+            f"{len(values_a)} (A) and {len(values_b)} (B). "
+            f"Use an unpaired comparison for unequal runs."
+        )
+
+    deltas = values_a - values_b
+    n = len(deltas)
+    mean_delta = float(np.mean(deltas))
+
+    ci_lo, ci_hi = None, None
+    if show_ci and n >= 3:
+        from .bootstrap import bootstrap_ci
+
+        try:
+            ci = bootstrap_ci(deltas, np.mean, confidence=ci_confidence, method="bca")
+            ci_lo, ci_hi = ci.ci_lower, ci.ci_upper
+        except Exception:
+            ci_lo, ci_hi = None, None
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure  # type: ignore[assignment]
+
+    run_indices = np.arange(1, n + 1)
+    colors = [
+        settings.THEME.get("significant", "C0") if d >= 0 else settings.THEME.get("val", "C1")
+        for d in deltas
+    ]
+    ax.scatter(
+        run_indices,
+        deltas,
+        c=colors,
+        s=60,
+        zorder=3,
+        edgecolor="black",
+        linewidth=0.5,
+    )
+
+    ax.axhline(0, color="black", linestyle="-", linewidth=1, alpha=0.6, zorder=1)
+
+    ax.axhline(
+        mean_delta,
+        color=settings.THEME.get("significant", "C0"),
+        linestyle="--",
+        linewidth=1.2,
+        label=f"Mean Δ = {mean_delta:.4f}",
+        zorder=2,
+    )
+
+    if ci_lo is not None and ci_hi is not None:
+        ax.axhspan(
+            ci_lo,
+            ci_hi,
+            color=settings.THEME.get("significant", "C0"),
+            alpha=0.15,
+            label=f"{int(ci_confidence * 100)}% CI: [{ci_lo:.4f}, {ci_hi:.4f}]",
+            zorder=0,
+        )
+
+    ax.set_xlabel("Run")
+    ax.set_ylabel(f"{name_a} − {name_b}  ({metric})")
+    ax.set_title(f"Paired Run Differences: {name_a} vs {name_b}")
+    ax.set_xticks(run_indices)
+    ax.legend(loc="best", fontsize=9)
+    ax.grid(True, alpha=0.3, zorder=0)
+
+    n_above = int(np.sum(deltas > 0))
+    n_below = int(np.sum(deltas < 0))
+    if n_above > 0 and n_below > 0:
+        ax.text(
+            0.02,
+            0.02,
+            f"Winner reverses: {n_above} favor {name_a}, {n_below} favor {name_b}",
+            transform=ax.transAxes,
+            fontsize=9,
+            style="italic",
+            verticalalignment="bottom",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+        )
+
+    return _finalize_plot(fig, show)
+
+
+def plot_run_independence_diagnostics(
+    results: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    max_lag: int = 5,
+    *,
+    alpha: float = 0.05,
+    ax: Optional["Axes"] = None,
+    figsize: Tuple[float, float] = (8, 5),
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Autocorrelation diagnostic for run-level independence.
+
+    Runs from :func:`variability_study` should be IID by
+    ``SeedSequence.spawn()`` construction. This plot helps detect
+    violations — e.g. GPU state, wall-clock ordering, or caching leaking
+    between runs — by showing autocorrelation at lags ``1..max_lag`` of
+    the run-indexed final-metric series.
+
+    Uses :func:`~ictonyx.analysis.check_independence` internally, which
+    applies a Bonferroni correction across the tested lags to control
+    the familywise false-positive rate at ``alpha``.
+
+    **At small N the test has low power.** With ``n=10`` runs and
+    ``max_lag=5``, the plot bands are wide; absence of a flagged lag is
+    not strong evidence of independence. Consider ``runs >= 20``
+    before reading too much into a clean diagnostic.
+
+    Args:
+        results: A completed :class:`VariabilityStudyResults`.
+        metric: Metric key to diagnose. If ``None``, resolved via
+            ``results.preferred_metric(context="scalar")``.
+        max_lag: Maximum lag to test. Default ``5``. Effective lag may
+            be reduced if the run count is small.
+        alpha: Familywise significance level. Default ``0.05``.
+        ax: Optional existing Axes. Creates a new figure if ``None``.
+        figsize: Figure dimensions when ``ax`` is ``None``.
+            Default ``(8, 5)``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is
+        enabled.
+    """
+    _check_plotting()
+    from .analysis import check_independence
+
+    if metric is None:
+        metric = results.preferred_metric(context="scalar")
+
+    # Fetch run-indexed series (reusing the dispatch logic from paired deltas)
+    if metric.startswith("test_"):
+        values = np.asarray(results.get_test_metric_values(metric[len("test_") :]), dtype=float)
+    else:
+        values = np.asarray(results.get_metric_values(metric), dtype=float)
+
+    series = pd.Series(values)
+    is_independent, details = check_independence(series, max_lag=max_lag, alpha=alpha)
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure  # type: ignore[assignment]
+
+    # Handle untestable case (series too short)
+    if is_independent is None:
+        ax.text(
+            0.5,
+            0.5,
+            details.get("error", "Series too short to assess independence."),
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            fontsize=10,
+            wrap=True,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title("Run Independence Diagnostic (untestable)")
+
+        return _finalize_plot(fig, show)
+
+        # Extract pre-computed per-lag ACFs and thresholds from check_independence
+    autocorrs = details["autocorrelations"]  # dict "lag_1" -> float
+    thresholds = details["thresholds"]  # dict "lag_1" -> float (±threshold)
+    significant_lags = set(details["significant_lags"])
+
+    lags = sorted(int(k.split("_")[1]) for k in autocorrs.keys())
+    acfs = [autocorrs[f"lag_{k}"] for k in lags]
+    thrs = [thresholds[f"lag_{k}"] for k in lags]
+
+    # Stem plot: one vertical line per lag from 0 to ACF value
+    color_sig = settings.THEME.get("significant", "C3")
+    color_ok = settings.THEME.get("val", "C0")
+    bar_colors = [color_sig if lag in significant_lags else color_ok for lag in lags]
+
+    ax.vlines(lags, 0, acfs, colors=bar_colors, linewidth=2.5)
+    ax.scatter(lags, acfs, c=bar_colors, s=60, zorder=3, edgecolor="black", linewidth=0.5)
+
+    # Zero line
+    ax.axhline(0, color="black", linewidth=0.8, alpha=0.5, zorder=1)
+
+    # Per-lag Bonferroni-adjusted critical value bands (stepped, not flat)
+    ax.plot(
+        lags,
+        thrs,
+        color="gray",
+        linestyle="--",
+        linewidth=1,
+        label=f"Bonferroni α={alpha} threshold",
+        alpha=0.7,
+    )
+    ax.plot(lags, [-t for t in thrs], color="gray", linestyle="--", linewidth=1, alpha=0.7)
+
+    # Labels
+    ax.set_xlabel("Lag")
+    ax.set_ylabel(f"Autocorrelation ({metric})")
+    ax.set_xticks(lags)
+
+    # Title reflects the result
+    n = details.get("n", len(values))
+    if is_independent:
+        title = f"Run Independence: OK  (n={n}, no lags exceed threshold)"
+    else:
+        flagged = sorted(significant_lags)
+        title = (
+            f"Run Independence: FLAGGED  (n={n}, "
+            f"lag{'s' if len(flagged) > 1 else ''} "
+            f"{', '.join(str(l) for l in flagged)} exceed threshold)"
+        )
+    ax.set_title(title, fontsize=10)
+    ax.legend(loc="best", fontsize=9)
+    ax.grid(True, alpha=0.3, zorder=0)
+
+    return _finalize_plot(fig, show)
+
+
+def plot_epoch_run_heatmap(
+    results: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    *,
+    cmap: str = "viridis",
+    ax: Optional["Axes"] = None,
+    figsize: Optional[Tuple[float, float]] = None,
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Epoch × run heatmap of a per-epoch metric.
+
+    Rows are runs in run order (top = run 1). Columns are epochs. Cells
+    are the metric value, colored by the supplied ``cmap``. Reveals at
+    a glance which runs train fast, which plateau early, which diverge,
+    and how run-to-run consistency evolves over training.
+
+    Runs with fewer recorded epochs (early stopping, crashes, varied
+    grid configs) have trailing NaN cells, which render as background.
+    This is intentional — padding with zero or extrapolating would
+    mislead.
+
+    Uses the epoch-context metric (:func:`preferred_metric` with
+    ``context="epoch"``) because per-epoch plotters show training
+    dynamics, and test-set metrics are single scalars not captured
+    across epochs.
+
+    Args:
+        results: A completed :class:`VariabilityStudyResults`.
+        metric: Metric to plot. If ``None``, resolved via
+            ``results.preferred_metric(context="epoch")``.
+        cmap: Matplotlib colormap name. Default ``"viridis"``.
+        ax: Optional existing Axes. Creates a new figure if ``None``.
+        figsize: Figure dimensions. If ``None``, auto-sized from the
+            matrix shape.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if the metric is
+        not found in any run or display is enabled.
+    """
+    _check_plotting()
+
+    if metric is None:
+        metric = results.preferred_metric(context="epoch")
+
+    run_dfs = results.all_runs_metrics
+    if not run_dfs:
+        settings.logger.warning("plot_epoch_run_heatmap: no run data available.")
+        return None
+
+    # Resolve column using the standard helper; prefer val over train
+    train_col, val_col = _find_metric_columns(run_dfs[0], metric)
+    col = val_col or train_col
+    if col is None:
+        settings.logger.warning(f"plot_epoch_run_heatmap: metric '{metric}' not found in run data.")
+        return None
+
+    # Collect per-run value arrays, skipping runs missing the column
+    per_run_values: List[np.ndarray] = []
+    for run_df in run_dfs:
+        if col not in run_df.columns:
+            continue
+        per_run_values.append(np.asarray(run_df[col].values, dtype=float))
+
+    if not per_run_values:
+        settings.logger.warning(f"plot_epoch_run_heatmap: metric '{metric}' found in no run.")
+        return None
+
+    # Build a (n_runs, max_epochs) matrix padded with NaN for ragged runs
+    n_runs = len(per_run_values)
+    max_epochs = max(len(v) for v in per_run_values)
+    matrix = np.full((n_runs, max_epochs), np.nan, dtype=float)
+    for i, vals in enumerate(per_run_values):
+        matrix[i, : len(vals)] = vals
+
+    # Auto-figsize if not provided
+    if figsize is None:
+        figsize = (
+            max(6.0, min(16.0, max_epochs * 0.25)),
+            max(4.0, min(12.0, n_runs * 0.3)),
+        )
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure  # type: ignore[assignment]
+
+    # Render via seaborn; mask NaNs so trailing cells in short runs render
+    # as background rather than color-scale extreme
+    sns.heatmap(
+        matrix,
+        ax=ax,
+        cmap=cmap,
+        cbar_kws={"label": col},
+        mask=np.isnan(matrix),
+        linewidths=0,
+    )
+
+    # Sparsify epoch tick labels when epoch count is large
+    epoch_step = max(1, max_epochs // 20)
+    epoch_ticks = np.arange(0, max_epochs, epoch_step)
+    ax.set_xticks(epoch_ticks + 0.5)
+    ax.set_xticklabels([str(e + 1) for e in epoch_ticks], rotation=0)
+
+    # Y-tick labels: Run 1..N, but sparsify when run count is large
+    run_step = max(1, n_runs // 20)
+    run_ticks = np.arange(0, n_runs, run_step)
+    ax.set_yticks(run_ticks + 0.5)
+    ax.set_yticklabels([f"Run {r + 1}" for r in run_ticks], rotation=0)
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Run")
+    ax.set_title(f"Per-Epoch {col} Across {n_runs} Runs")
+
+    return _finalize_plot(fig, show)
+
+
+def plot_sequential_ci(
+    results: "VariabilityStudyResults",
+    metric: Optional[str] = None,
+    *,
+    min_n: int = 3,
+    method: str = "bca",
+    confidence: float = 0.95,
+    ax: Optional["Axes"] = None,
+    figsize: Tuple[float, float] = (8, 5),
+    show: Optional[bool] = None,
+) -> Optional["Figure"]:
+    """Bootstrap CI width as a function of number of runs.
+
+    For each ``n`` in ``[min_n, N]``, computes a bootstrap CI for the
+    mean of the first ``n`` runs and plots the upper/lower bounds along
+    with the running mean. The narrowing band illustrates how quickly
+    additional runs reduce uncertainty and where returns diminish.
+
+    Useful for the "how many runs do I need?" methodology argument.
+    Look for the point where the band stops meaningfully narrowing —
+    additional runs past that point buy little precision.
+
+    Args:
+        results: A completed :class:`VariabilityStudyResults`.
+        metric: Metric key. If ``None``, resolved via
+            ``results.preferred_metric(context="scalar")``.
+        min_n: Smallest N at which to compute a CI. Floored at 3 because
+            bootstrap CIs are meaningless with fewer observations.
+            Default ``3``.
+        method: Bootstrap CI method. ``"bca"`` (default) or
+            ``"percentile"``.
+        confidence: Confidence level in (0, 1). Default ``0.95``.
+        ax: Optional existing Axes. Creates a new figure if ``None``.
+        figsize: Figure dimensions when ``ax`` is ``None``.
+            Default ``(8, 5)``.
+        show: Display behavior. See :func:`plot_confusion_matrix`.
+
+    Returns:
+        The ``matplotlib.figure.Figure``, or ``None`` if display is
+        enabled or fewer than ``min_n`` runs are available.
+
+    Raises:
+        ValueError: If ``min_n < 3`` or if the study has fewer than
+            ``min_n`` runs.
+    """
+    _check_plotting()
+    from .bootstrap import bootstrap_ci
+
+    if min_n < 3:
+        raise ValueError(f"min_n must be >= 3 for meaningful bootstrap CIs; got {min_n}")
+
+    if metric is None:
+        metric = results.preferred_metric(context="scalar")
+
+    # Fetch the scalar run-indexed series (same dispatch as plot_paired_deltas)
+    if metric.startswith("test_"):
+        values = np.asarray(results.get_test_metric_values(metric[len("test_") :]), dtype=float)
+    else:
+        values = np.asarray(results.get_metric_values(metric), dtype=float)
+
+    n_total = len(values)
+    if n_total < min_n:
+        raise ValueError(f"Sequential CI requires at least min_n={min_n} runs; " f"got {n_total}.")
+
+    # Compute running CI at each N
+    ns: List[int] = []
+    means: List[float] = []
+    lowers: List[float] = []
+    uppers: List[float] = []
+    for n in range(min_n, n_total + 1):
+        subset = values[:n]
+        try:
+            ci = bootstrap_ci(subset, np.mean, confidence=confidence, method=method)
+            ns.append(n)
+            means.append(float(np.mean(subset)))
+            lowers.append(ci.ci_lower)
+            uppers.append(ci.ci_upper)
+        except Exception:
+            # Catastrophic bootstrap failure at this N — record a gap
+            ns.append(n)
+            means.append(float(np.mean(subset)))
+            lowers.append(np.nan)
+            uppers.append(np.nan)
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure  # type: ignore[assignment]
+
+    color_mean = settings.THEME.get("val", "C0")
+    color_band = settings.THEME.get("significant", "C1")
+
+    # Shaded CI band
+    ax.fill_between(
+        ns,
+        lowers,
+        uppers,
+        color=color_band,
+        alpha=0.2,
+        label=f"{int(confidence * 100)}% CI ({method})",
+    )
+
+    # CI bound lines (thin, for emphasis at edges)
+    ax.plot(ns, lowers, color=color_band, linewidth=0.8, alpha=0.6)
+    ax.plot(ns, uppers, color=color_band, linewidth=0.8, alpha=0.6)
+
+    # Running mean line
+    ax.plot(ns, means, color=color_mean, linewidth=2, label="Running mean")
+
+    # Annotate final CI width
+    final_width = uppers[-1] - lowers[-1] if not np.isnan(uppers[-1]) else np.nan
+    if not np.isnan(final_width):
+        ax.text(
+            0.98,
+            0.02,
+            f"CI width at N={n_total}: {final_width:.4f}",
+            transform=ax.transAxes,
+            fontsize=9,
+            horizontalalignment="right",
+            verticalalignment="bottom",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+        )
+
+    ax.set_xlabel("Number of runs (N)")
+    ax.set_ylabel(metric)
+    ax.set_title(f"Sequential Bootstrap CI: {metric}")
+    ax.set_xticks(ns if len(ns) <= 20 else ns[:: max(1, len(ns) // 20)])
+    ax.legend(loc="best", fontsize=9)
     _apply_style(ax)
 
     return _finalize_plot(fig, show)

@@ -2,6 +2,7 @@
 
 # Imports
 
+from typing import List
 from unittest.mock import MagicMock, patch
 
 import matplotlib
@@ -219,6 +220,53 @@ class TestStatisticalPlots:
         }
         fig = plot_training_stability(results)
         assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_plot_training_stability_accepts_results_object(self, mock_show):
+        """Passing results=... computes stability analysis internally."""
+        from sklearn.datasets import make_classification
+        from sklearn.linear_model import LogisticRegression
+
+        import ictonyx as ix
+
+        X, y = make_classification(n_samples=100, random_state=0)
+        # PyTorch wrapper would give real loss curves; for sklearn we
+        # just need *some* per-epoch data. Use a minimal fixture:
+        results = ix.variability_study(model=LogisticRegression, data=(X, y), runs=5, seed=42)
+        # sklearn wrappers create a 1-epoch mock history with "loss" key
+        # if available; skip this test if not present
+        if "loss" not in results.all_runs_metrics[0].columns:
+            pytest.skip("sklearn mock history does not contain 'loss' key")
+        fig = plot_training_stability(results=results)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_plot_training_stability_both_inputs_raises(self, mock_show):
+        """Passing both stability_results and results raises ValueError."""
+        stability_dict = {
+            "n_runs": 5,
+            "common_length": 10,
+            "final_loss_mean": 0.5,
+            "final_loss_std": 0.1,
+            "final_loss_cv": 0.2,
+            "stability_assessment": "moderate",
+            "convergence_rate": 0.8,
+            "converged_runs": 4,
+            "final_losses_list": [0.4, 0.5, 0.6, 0.5, 0.5],
+        }
+        # Make a minimal results-like object via Mock
+        from unittest.mock import MagicMock
+
+        fake_results = MagicMock()
+        fake_results.all_runs_metrics = [pd.DataFrame({"loss": [0.5, 0.4, 0.3]})]
+        with pytest.raises(ValueError, match="either"):
+            plot_training_stability(stability_results=stability_dict, results=fake_results)
+
+    @patch("matplotlib.pyplot.show")
+    def test_plot_training_stability_neither_input_raises(self, mock_show):
+        """Passing nothing raises ValueError."""
+        with pytest.raises(ValueError, match="requires either"):
+            plot_training_stability()
 
     @patch("matplotlib.pyplot.show")
     def test_plot_comparison_boxplots(self, mock_show, mock_comparison_results):
@@ -919,4 +967,311 @@ class TestRankCorrelationPlot:
     def test_custom_threshold(self, large_results):
         matplotlib.use("Agg")
         fig = plot_rank_correlation_over_epoch(large_results, threshold=0.5, show=False)
+        assert fig is not None
+
+
+class TestPlotPairedDeltas:
+    """plot_paired_deltas — per-run paired differences."""
+
+    def _make_results_with_values(self, values: list, metric_key: str = "test_accuracy"):
+        """Minimal results-shaped mock for plot_paired_deltas tests."""
+        from unittest.mock import MagicMock
+
+        fake = MagicMock()
+        fake.get_metric_values = MagicMock(return_value=list(values))
+        fake.get_test_metric_values = MagicMock(return_value=list(values))
+        fake.preferred_metric = MagicMock(return_value=metric_key)
+        return fake
+
+    @patch("matplotlib.pyplot.show")
+    def test_returns_figure(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.85, 0.87, 0.86, 0.88, 0.84])
+        b = self._make_results_with_values([0.83, 0.86, 0.85, 0.84, 0.82])
+        fig = plot_paired_deltas(a, b, metric="test_accuracy", show=False)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_unequal_run_counts_raises(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.85, 0.87, 0.86, 0.88, 0.84])
+        b = self._make_results_with_values([0.83, 0.86, 0.85])
+        with pytest.raises(ValueError, match="equal run counts"):
+            plot_paired_deltas(a, b, metric="test_accuracy", show=False)
+
+    @patch("matplotlib.pyplot.show")
+    def test_metric_auto_resolved_when_none(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.85, 0.87, 0.86, 0.88, 0.84])
+        b = self._make_results_with_values([0.83, 0.86, 0.85, 0.84, 0.82])
+        fig = plot_paired_deltas(a, b, show=False)
+        a.preferred_metric.assert_called_with(context="scalar")
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_accepts_ax_parameter(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.85, 0.87, 0.86])
+        b = self._make_results_with_values([0.83, 0.86, 0.85])
+        fig, ax = plt.subplots()
+        result = plot_paired_deltas(a, b, metric="test_accuracy", ax=ax, show=False)
+        assert result is fig
+
+    @patch("matplotlib.pyplot.show")
+    def test_no_reversal_case_does_not_annotate(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.90, 0.91, 0.92, 0.93, 0.94])
+        b = self._make_results_with_values([0.80, 0.81, 0.82, 0.83, 0.84])
+        fig = plot_paired_deltas(a, b, metric="test_accuracy", show=False)
+        ax = fig.axes[0]
+        texts = [t.get_text() for t in ax.texts]
+        assert not any("Winner reverses" in t for t in texts)
+
+    @patch("matplotlib.pyplot.show")
+    def test_reversal_case_does_annotate(self, mock_show):
+        from ictonyx.plotting import plot_paired_deltas
+
+        a = self._make_results_with_values([0.90, 0.80, 0.88, 0.82, 0.85])
+        b = self._make_results_with_values([0.85, 0.82, 0.86, 0.84, 0.83])
+        fig = plot_paired_deltas(a, b, metric="test_accuracy", show=False)
+        ax = fig.axes[0]
+        texts = [t.get_text() for t in ax.texts]
+        assert any("Winner reverses" in t for t in texts)
+
+
+class TestPlotRunIndependenceDiagnostics:
+    """plot_run_independence_diagnostics — run-level autocorrelation plot."""
+
+    def _make_results_with_values(self, values: list, metric_key: str = "test_accuracy"):
+        """Minimal results-shaped mock."""
+        from unittest.mock import MagicMock
+
+        fake = MagicMock()
+        fake.get_metric_values = MagicMock(return_value=list(values))
+        fake.get_test_metric_values = MagicMock(return_value=list(values))
+        fake.preferred_metric = MagicMock(return_value=metric_key)
+        return fake
+
+    @patch("matplotlib.pyplot.show")
+    def test_returns_figure_for_adequate_n(self, mock_show):
+        from ictonyx.plotting import plot_run_independence_diagnostics
+
+        # 20 values, enough for max_lag=5 (need max_lag + 2 = 7 minimum)
+        values = [0.85 + 0.01 * (-1) ** i for i in range(20)]
+        r = self._make_results_with_values(values)
+        fig = plot_run_independence_diagnostics(r, metric="test_accuracy", show=False)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_untestable_series_renders_notice(self, mock_show):
+        from ictonyx.plotting import plot_run_independence_diagnostics
+
+        # Only 3 values, too few for max_lag=5
+        values = [0.85, 0.86, 0.87]
+        r = self._make_results_with_values(values)
+        fig = plot_run_independence_diagnostics(r, metric="test_accuracy", show=False)
+        # Should render something (not crash), with an annotation about
+        # insufficient data
+        assert fig is not None
+        ax = fig.axes[0]
+        texts = [t.get_text() for t in ax.texts]
+        assert (
+            any("too short" in t.lower() or "untestable" in t.lower() for t in texts)
+            or "untestable" in ax.get_title().lower()
+        )
+
+    @patch("matplotlib.pyplot.show")
+    def test_metric_auto_resolved_when_none(self, mock_show):
+        from ictonyx.plotting import plot_run_independence_diagnostics
+
+        values = [0.85 + 0.01 * (-1) ** i for i in range(20)]
+        r = self._make_results_with_values(values)
+        fig = plot_run_independence_diagnostics(r, show=False)
+        r.preferred_metric.assert_called_with(context="scalar")
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_accepts_ax_parameter(self, mock_show):
+        from ictonyx.plotting import plot_run_independence_diagnostics
+
+        values = [0.85 + 0.01 * (-1) ** i for i in range(20)]
+        r = self._make_results_with_values(values)
+        fig, ax = plt.subplots()
+        result = plot_run_independence_diagnostics(r, metric="test_accuracy", ax=ax, show=False)
+        assert result is fig
+
+    @patch("matplotlib.pyplot.show")
+    def test_custom_max_lag(self, mock_show):
+        from ictonyx.plotting import plot_run_independence_diagnostics
+
+        values = [0.85 + 0.01 * (-1) ** i for i in range(30)]
+        r = self._make_results_with_values(values)
+        fig = plot_run_independence_diagnostics(r, metric="test_accuracy", max_lag=10, show=False)
+        assert fig is not None
+
+
+class TestPlotEpochRunHeatmap:
+    """plot_epoch_run_heatmap — epoch × run matrix of per-epoch metric."""
+
+    def _make_results_with_histories(
+        self,
+        histories: list[pd.DataFrame],
+        metric_key: str = "val_accuracy",
+    ):
+        """Mock results with explicit per-run histories."""
+        from unittest.mock import MagicMock
+
+        fake = MagicMock()
+        fake.all_runs_metrics = histories
+        fake.preferred_metric = MagicMock(return_value=metric_key)
+        return fake
+
+    @patch("matplotlib.pyplot.show")
+    def test_returns_figure_uniform_runs(self, mock_show):
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        histories = [
+            pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88, 0.89, 0.90]}),
+            pd.DataFrame({"val_accuracy": [0.78, 0.83, 0.87, 0.88, 0.89]}),
+            pd.DataFrame({"val_accuracy": [0.79, 0.84, 0.88, 0.89, 0.90]}),
+        ]
+        r = self._make_results_with_histories(histories)
+        fig = plot_epoch_run_heatmap(r, metric="val_accuracy", show=False)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_handles_ragged_runs(self, mock_show):
+        """Unequal epoch counts should render without crashing."""
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        histories = [
+            pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88, 0.89, 0.90]}),
+            pd.DataFrame({"val_accuracy": [0.78, 0.83, 0.87]}),  # early stop
+            pd.DataFrame({"val_accuracy": [0.79, 0.84, 0.88, 0.89]}),
+        ]
+        r = self._make_results_with_histories(histories)
+        fig = plot_epoch_run_heatmap(r, metric="val_accuracy", show=False)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_empty_runs_returns_none(self, mock_show):
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        r = self._make_results_with_histories([])
+        result = plot_epoch_run_heatmap(r, metric="val_accuracy", show=False)
+        assert result is None
+
+    @patch("matplotlib.pyplot.show")
+    def test_missing_metric_returns_none(self, mock_show):
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        histories = [
+            pd.DataFrame({"val_loss": [0.5, 0.4, 0.3]}),  # no accuracy column
+        ]
+        r = self._make_results_with_histories(histories)
+        result = plot_epoch_run_heatmap(r, metric="val_accuracy", show=False)
+        assert result is None
+
+    @patch("matplotlib.pyplot.show")
+    def test_metric_auto_resolved_when_none(self, mock_show):
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        histories = [
+            pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88]}),
+        ]
+        r = self._make_results_with_histories(histories)
+        fig = plot_epoch_run_heatmap(r, show=False)
+        r.preferred_metric.assert_called_with(context="epoch")
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_accepts_ax_parameter(self, mock_show):
+        from ictonyx.plotting import plot_epoch_run_heatmap
+
+        histories = [
+            pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88]}),
+        ]
+        r = self._make_results_with_histories(histories)
+        fig, ax = plt.subplots()
+        result = plot_epoch_run_heatmap(r, metric="val_accuracy", ax=ax, show=False)
+        assert result is fig
+
+
+class TestPlotSequentialCi:
+    """plot_sequential_ci — CI width as a function of N runs."""
+
+    def _make_results_with_values(self, values: list, metric_key: str = "test_accuracy"):
+        """Minimal results-shaped mock."""
+        from unittest.mock import MagicMock
+
+        fake = MagicMock()
+        fake.get_metric_values = MagicMock(return_value=list(values))
+        fake.get_test_metric_values = MagicMock(return_value=list(values))
+        fake.preferred_metric = MagicMock(return_value=metric_key)
+        return fake
+
+    @patch("matplotlib.pyplot.show")
+    def test_returns_figure(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        # 15 values with real variance so bootstrap produces a non-zero CI
+        rng = np.random.default_rng(42)
+        values = list(0.85 + 0.02 * rng.standard_normal(15))
+        r = self._make_results_with_values(values)
+        fig = plot_sequential_ci(r, metric="test_accuracy", show=False)
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_metric_auto_resolved_when_none(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        rng = np.random.default_rng(42)
+        values = list(0.85 + 0.02 * rng.standard_normal(15))
+        r = self._make_results_with_values(values)
+        fig = plot_sequential_ci(r, show=False)
+        r.preferred_metric.assert_called_with(context="scalar")
+        assert fig is not None
+
+    @patch("matplotlib.pyplot.show")
+    def test_min_n_below_3_raises(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        values = [0.85, 0.87, 0.86, 0.88, 0.84]
+        r = self._make_results_with_values(values)
+        with pytest.raises(ValueError, match=">= 3"):
+            plot_sequential_ci(r, metric="test_accuracy", min_n=2, show=False)
+
+    @patch("matplotlib.pyplot.show")
+    def test_insufficient_runs_raises(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        values = [0.85, 0.87]  # only 2 runs
+        r = self._make_results_with_values(values)
+        with pytest.raises(ValueError, match="at least min_n"):
+            plot_sequential_ci(r, metric="test_accuracy", min_n=3, show=False)
+
+    @patch("matplotlib.pyplot.show")
+    def test_accepts_ax_parameter(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        rng = np.random.default_rng(42)
+        values = list(0.85 + 0.02 * rng.standard_normal(10))
+        r = self._make_results_with_values(values)
+        fig, ax = plt.subplots()
+        result = plot_sequential_ci(r, metric="test_accuracy", ax=ax, show=False)
+        assert result is fig
+
+    @patch("matplotlib.pyplot.show")
+    def test_custom_min_n(self, mock_show):
+        from ictonyx.plotting import plot_sequential_ci
+
+        rng = np.random.default_rng(42)
+        values = list(0.85 + 0.02 * rng.standard_normal(20))
+        r = self._make_results_with_values(values)
+        fig = plot_sequential_ci(r, metric="test_accuracy", min_n=5, show=False)
         assert fig is not None

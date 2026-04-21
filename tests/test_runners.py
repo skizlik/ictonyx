@@ -424,6 +424,176 @@ class TestTestAgainstNull:
         except AttributeError:
             pytest.fail("test_against_null raised AttributeError — ghost API not resolved")
 
+    def test_no_self_referential_deprecation_warning(self):
+        """X-28: test_against_null() must not emit a DeprecationWarning
+        whose message mentions test_against_null itself. Pre-v0.4.7,
+        test_against_null called the deprecated public wilcoxon_signed_rank_test
+        internally, whose deprecation warning pointed users back at
+        test_against_null — the function they just called."""
+        import warnings as _warnings
+
+        results = self._make_results(
+            [
+                0.80,
+                0.82,
+                0.78,
+                0.85,
+                0.79,
+                0.83,
+                0.81,
+                0.84,
+                0.77,
+                0.86,
+                0.80,
+                0.82,
+                0.78,
+                0.85,
+                0.79,
+                0.83,
+                0.81,
+                0.84,
+                0.77,
+                0.86,
+            ]
+        )
+
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            results.test_against_null(null_value=0.5, metric="val_accuracy")
+
+        offending = [
+            w
+            for w in caught
+            if issubclass(w.category, DeprecationWarning) and "test_against_null" in str(w.message)
+        ]
+        assert not offending, (
+            f"Self-referential deprecation warning leaked: "
+            f"{[str(w.message) for w in offending]}"
+        )
+
+    def test_public_wilcoxon_still_emits_deprecation(self):
+        """X-28 guard: the public wilcoxon_signed_rank_test must still
+        emit its DeprecationWarning. Protects against accidental warning
+        removal during the refactor that extracted _wilcoxon_signed_rank_impl."""
+        from ictonyx.analysis import wilcoxon_signed_rank_test
+
+        values = pd.Series(
+            [
+                0.80,
+                0.82,
+                0.78,
+                0.85,
+                0.79,
+                0.83,
+                0.81,
+                0.84,
+                0.77,
+                0.86,
+                0.80,
+                0.82,
+                0.78,
+                0.85,
+                0.79,
+                0.83,
+                0.81,
+                0.84,
+                0.77,
+                0.86,
+            ]
+        )
+
+        with pytest.warns(DeprecationWarning, match="wilcoxon_signed_rank_test"):
+            wilcoxon_signed_rank_test(values, null_value=0.5)
+
+    def test_alternative_parameter_greater(self):
+        """X-28 extension: alternative='greater' is one-sided."""
+        results = self._make_results([0.85, 0.87, 0.83, 0.88, 0.86, 0.84, 0.89, 0.85, 0.87, 0.86])
+        two_sided = results.test_against_null(null_value=0.5, alternative="two-sided")
+        one_sided = results.test_against_null(null_value=0.5, alternative="greater")
+        # For data clearly above null, one-sided p-value should be ~half the two-sided.
+        assert one_sided.p_value <= two_sided.p_value
+
+    def test_alternative_parameter_less(self):
+        """alternative='less' is the opposite one-sided."""
+        # Data clearly below 0.5 — alternative='less' should be significant
+        results = self._make_results([0.3, 0.32, 0.28, 0.35, 0.29, 0.33, 0.31, 0.34, 0.27, 0.36])
+        less = results.test_against_null(null_value=0.5, alternative="less")
+        greater = results.test_against_null(null_value=0.5, alternative="greater")
+        assert less.p_value < greater.p_value
+
+
+class TestTestAboveChance:
+    """Tests for VariabilityStudyResults.test_above_chance() (X-19-14a, v0.4.7).
+
+    Convenience wrapper around test_against_null for the common
+    'model is better than chance' one-sided test.
+    """
+
+    def _make_results(self, values, metric="val_accuracy"):
+        return VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={metric: values},
+            final_test_metrics=[],
+            seed=42,
+        )
+
+    def test_detects_above_chance_performance(self):
+        """Values clearly above 0.5 should be significant."""
+        results = self._make_results([0.85, 0.87, 0.83, 0.88, 0.86, 0.84, 0.89, 0.85, 0.87, 0.86])
+        result = results.test_above_chance()
+        assert result.is_significant(alpha=0.05)
+        assert result.p_value < 0.05
+
+    def test_not_significant_at_chance(self):
+        """Values near 0.5 should not be significantly above chance."""
+        results = self._make_results([0.49, 0.52, 0.48, 0.51, 0.50, 0.49, 0.52, 0.50, 0.51, 0.48])
+        result = results.test_above_chance()
+        assert not result.is_significant(alpha=0.05)
+
+    def test_below_chance_not_significant_one_sided(self):
+        """Values BELOW chance must produce high p-value (one-sided, greater).
+
+        This is the key difference from two-sided test_against_null: a model
+        substantially worse than chance correctly yields p close to 1 for
+        the one-sided 'above chance' test.
+        """
+        results = self._make_results([0.30, 0.32, 0.28, 0.35, 0.29, 0.33, 0.31, 0.34, 0.27, 0.36])
+        result = results.test_above_chance()
+        # One-sided 'greater' on data below null should give p close to 1
+        assert result.p_value > 0.5
+
+    def test_custom_chance_level(self):
+        """chance_level parameter lets users specify multi-class chance rate."""
+        # 4-class balanced → chance = 0.25; data at ~0.40 is above chance
+        results = self._make_results([0.38, 0.42, 0.39, 0.41, 0.40, 0.43, 0.37, 0.42, 0.40, 0.39])
+        result = results.test_above_chance(chance_level=0.25)
+        assert result.is_significant(alpha=0.05)
+
+    def test_explicit_metric_argument(self):
+        """metric parameter can be passed explicitly."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={
+                "val_accuracy": [0.85, 0.87, 0.83, 0.88, 0.86, 0.84, 0.89, 0.85, 0.87, 0.86],
+                "val_loss": [1.0] * 10,
+            },
+            final_test_metrics=[],
+            seed=42,
+        )
+        result = results.test_above_chance(metric="val_accuracy")
+        assert result.is_significant(alpha=0.05)
+
+    def test_returns_statistical_test_result(self):
+        """Return type is StatisticalTestResult with expected attributes."""
+        from ictonyx.analysis import StatisticalTestResult
+
+        results = self._make_results([0.85, 0.87, 0.83, 0.88, 0.86, 0.84, 0.89, 0.85, 0.87, 0.86])
+        result = results.test_above_chance()
+        assert isinstance(result, StatisticalTestResult)
+        assert hasattr(result, "p_value")
+        assert hasattr(result, "is_significant")
+        assert hasattr(result, "conclusion")
+
 
 class TestConvenienceFunction:
     """Test run_variability_study convenience function."""
@@ -955,151 +1125,6 @@ class TestFinalValAccuraciesProperty:
         assert len(results.final_metrics["val_loss"]) == 3
 
 
-class TestGridStudyResults:
-    """Tests for GridStudyResults dataclass and methods."""
-
-    def _make_mock_variability_result(self, mean, sd, n=12):
-        """Helper: construct a minimal VariabilityStudyResults with controlled values."""
-        np.random.seed(42)
-        values = np.random.normal(mean, sd, n).tolist()
-        df = pd.DataFrame(
-            {
-                "train_accuracy": np.linspace(0.3, mean, 10),
-                "val_accuracy": np.linspace(0.2, mean, 10),
-                "train_loss": np.linspace(1.5, 0.5, 10),
-                "val_loss": np.linspace(1.6, 0.6, 10),
-            }
-        )
-        return VariabilityStudyResults(
-            all_runs_metrics=[df] * n,
-            final_metrics={"val_accuracy": values, "train_accuracy": values},
-            final_test_metrics=[{}] * n,
-            seed=42,
-        )
-
-    def _make_grid_results(self):
-        """Helper: construct a minimal GridStudyResults for testing."""
-        param_grid = {"learning_rate": [0.001, 0.0001, 0.00001]}
-        base_config = ModelConfig(
-            {
-                "input_shape": (131, 131, 1),
-                "num_classes": 9,
-                "epochs": 12,
-                "batch_size": 8,
-                "learning_rate": 0.001,
-                "verbose": 0,
-            }
-        )
-        results = {}
-        for lr in param_grid["learning_rate"]:
-            key = GridStudyResults._config_key({"learning_rate": lr})
-            results[key] = self._make_mock_variability_result(mean=0.3 + lr * 100, sd=0.02)
-        return GridStudyResults(
-            results=results, param_grid=param_grid, base_config=base_config, metric="val_accuracy"
-        )
-
-    def test_n_configurations(self):
-        gr = self._make_grid_results()
-        assert gr.n_configurations == 3
-
-    def test_n_runs_per_config(self):
-        gr = self._make_grid_results()
-        assert gr.n_runs_per_config == 12
-
-    def test_config_key_is_sorted(self):
-        key1 = GridStudyResults._config_key({"batch_size": 8, "learning_rate": 0.001})
-        key2 = GridStudyResults._config_key({"learning_rate": 0.001, "batch_size": 8})
-        assert key1 == key2
-
-    def test_get_results_for_config(self):
-        gr = self._make_grid_results()
-        result = gr.get_results_for_config({"learning_rate": 0.001})
-        assert isinstance(result, VariabilityStudyResults)
-        assert result.n_runs == 12
-
-    def test_get_results_for_config_missing_raises(self):
-        gr = self._make_grid_results()
-        with pytest.raises(KeyError):
-            gr.get_results_for_config({"learning_rate": 99.0})
-
-    def test_list_configurations(self):
-        gr = self._make_grid_results()
-        configs = gr.list_configurations()
-        assert len(configs) == 3
-        assert all("learning_rate" in c for c in configs)
-
-    def test_to_dataframe_shape(self):
-        gr = self._make_grid_results()
-        df = gr.to_dataframe()
-        assert len(df) == 3
-        assert "learning_rate" in df.columns
-        assert all(col in df.columns for col in ["mean", "sd", "se", "min", "max", "n"])
-
-    def test_to_dataframe_sorted(self):
-        gr = self._make_grid_results()
-        df = gr.to_dataframe()
-        assert df["learning_rate"].is_monotonic_increasing
-
-    def test_to_dataframe_sample_sd(self):
-        """Verify SD is sample SD (N-1), not population SD (N)."""
-        gr = self._make_grid_results()
-        df = gr.to_dataframe()
-        result = gr.get_results_for_config({"learning_rate": 0.001})
-        values = pd.Series(result.get_metric_values("val_accuracy"))
-        assert df.loc[df["learning_rate"] == 0.001, "sd"].iloc[0] == pytest.approx(values.std())
-
-    def test_summarize_returns_string(self):
-        gr = self._make_grid_results()
-        s = gr.summarize()
-        assert isinstance(s, str)
-        assert "Grid Study Results" in s
-        assert "3" in s  # n_configurations
-
-    def test_run_grid_study_warns_below_20_runs(self):
-        from sklearn.linear_model import LogisticRegression
-
-        from ictonyx.config import ModelConfig
-        from ictonyx.core import ScikitLearnModelWrapper
-        from ictonyx.data import ArraysDataHandler
-
-        X = np.random.rand(60, 4).astype(np.float32)
-        y = np.random.randint(0, 2, 60)
-        with pytest.warns(UserWarning, match="num_runs=5"):
-            run_grid_study(
-                model_builder=lambda cfg: ScikitLearnModelWrapper(LogisticRegression()),
-                data_handler=ArraysDataHandler(X, y),
-                base_config=ModelConfig({}),
-                param_grid={"C": [1.0]},
-                num_runs=5,
-                use_process_isolation=False,
-                verbose=False,
-            )
-
-    def test_run_grid_study_no_warn_at_20_runs(self):
-        import warnings
-
-        from sklearn.linear_model import LogisticRegression
-
-        from ictonyx.config import ModelConfig
-        from ictonyx.core import ScikitLearnModelWrapper
-        from ictonyx.data import ArraysDataHandler
-
-        X = np.random.rand(60, 4).astype(np.float32)
-        y = np.random.randint(0, 2, 60)
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", UserWarning)
-            run_grid_study(
-                model_builder=lambda cfg: ScikitLearnModelWrapper(LogisticRegression()),
-                data_handler=ArraysDataHandler(X, y),
-                base_config=ModelConfig({}),
-                param_grid={"C": [1.0]},
-                num_runs=20,
-                use_process_isolation=False,
-                dry_run=True,
-                verbose=False,
-            )
-
-
 class TestRunGridStudy:
     """Tests for run_grid_study function."""
 
@@ -1231,6 +1256,273 @@ class TestRunGridStudy:
         assert set(called_lrs) == {0.001, 0.0001}
 
 
+class TestGridStudyResults:
+    """Tests for GridStudyResults dataclass and methods."""
+
+    def _make_mock_variability_result(self, mean, sd, n=12):
+        """Helper: construct a minimal VariabilityStudyResults with controlled values."""
+        np.random.seed(42)
+        values = np.random.normal(mean, sd, n).tolist()
+        df = pd.DataFrame(
+            {
+                "train_accuracy": np.linspace(0.3, mean, 10),
+                "val_accuracy": np.linspace(0.2, mean, 10),
+                "train_loss": np.linspace(1.5, 0.5, 10),
+                "val_loss": np.linspace(1.6, 0.6, 10),
+            }
+        )
+        return VariabilityStudyResults(
+            all_runs_metrics=[df] * n,
+            final_metrics={"val_accuracy": values, "train_accuracy": values},
+            final_test_metrics=[{}] * n,
+            seed=42,
+        )
+
+    def _make_grid_results(self):
+        """Helper: construct a minimal GridStudyResults for testing."""
+        param_grid = {"learning_rate": [0.001, 0.0001, 0.00001]}
+        base_config = ModelConfig(
+            {
+                "input_shape": (131, 131, 1),
+                "num_classes": 9,
+                "epochs": 12,
+                "batch_size": 8,
+                "learning_rate": 0.001,
+                "verbose": 0,
+            }
+        )
+        results = {}
+        for lr in param_grid["learning_rate"]:
+            key = GridStudyResults._config_key({"learning_rate": lr})
+            results[key] = self._make_mock_variability_result(mean=0.3 + lr * 100, sd=0.02)
+        return GridStudyResults(
+            results=results, param_grid=param_grid, base_config=base_config, metric="val_accuracy"
+        )
+
+    def _make_empty_grid_result(self):
+        """Helper: construct a GridStudyResults with empty results, as
+        dry_run=True produces."""
+        param_grid = {"learning_rate": [0.001, 0.01], "batch_size": [8, 16]}
+        base_config = ModelConfig(
+            {
+                "epochs": 1,
+                "batch_size": 8,
+                "learning_rate": 0.001,
+                "verbose": 0,
+            }
+        )
+        return GridStudyResults(
+            results={},
+            param_grid=param_grid,
+            base_config=base_config,
+            metric="val_accuracy",
+        )
+
+    def test_n_configurations(self):
+        gr = self._make_grid_results()
+        assert gr.n_configurations == 3
+
+    def test_n_runs_per_config(self):
+        gr = self._make_grid_results()
+        assert gr.n_runs_per_config == 12
+
+    def test_config_key_is_sorted(self):
+        key1 = GridStudyResults._config_key({"batch_size": 8, "learning_rate": 0.001})
+        key2 = GridStudyResults._config_key({"learning_rate": 0.001, "batch_size": 8})
+        assert key1 == key2
+
+    def test_get_results_for_config(self):
+        gr = self._make_grid_results()
+        result = gr.get_results_for_config({"learning_rate": 0.001})
+        assert isinstance(result, VariabilityStudyResults)
+        assert result.n_runs == 12
+
+    def test_get_results_for_config_missing_raises(self):
+        gr = self._make_grid_results()
+        with pytest.raises(KeyError):
+            gr.get_results_for_config({"learning_rate": 99.0})
+
+    def test_list_configurations(self):
+        gr = self._make_grid_results()
+        configs = gr.list_configurations()
+        assert len(configs) == 3
+        assert all("learning_rate" in c for c in configs)
+
+    def test_to_dataframe_shape(self):
+        gr = self._make_grid_results()
+        df = gr.to_dataframe()
+        assert len(df) == 3
+        assert "learning_rate" in df.columns
+        assert all(col in df.columns for col in ["mean", "sd", "se", "min", "max", "n"])
+
+    def test_to_dataframe_sorted(self):
+        gr = self._make_grid_results()
+        df = gr.to_dataframe()
+        assert df["learning_rate"].is_monotonic_increasing
+
+    def test_to_dataframe_sample_sd(self):
+        """Verify SD is sample SD (N-1), not population SD (N)."""
+        gr = self._make_grid_results()
+        df = gr.to_dataframe()
+        result = gr.get_results_for_config({"learning_rate": 0.001})
+        values = pd.Series(result.get_metric_values("val_accuracy"))
+        assert df.loc[df["learning_rate"] == 0.001, "sd"].iloc[0] == pytest.approx(values.std())
+
+    def test_summarize_returns_string(self):
+        gr = self._make_grid_results()
+        s = gr.summarize()
+        assert isinstance(s, str)
+        assert "Grid Study Results" in s
+        assert "3" in s  # n_configurations
+
+    def test_run_grid_study_warns_below_20_runs(self):
+        from sklearn.linear_model import LogisticRegression
+
+        from ictonyx.config import ModelConfig
+        from ictonyx.core import ScikitLearnModelWrapper
+        from ictonyx.data import ArraysDataHandler
+
+        X = np.random.rand(60, 4).astype(np.float32)
+        y = np.random.randint(0, 2, 60)
+        with pytest.warns(UserWarning, match="num_runs=5"):
+            run_grid_study(
+                model_builder=lambda cfg: ScikitLearnModelWrapper(LogisticRegression()),
+                data_handler=ArraysDataHandler(X, y),
+                base_config=ModelConfig({}),
+                param_grid={"C": [1.0]},
+                num_runs=5,
+                use_process_isolation=False,
+                verbose=False,
+            )
+
+    def test_run_grid_study_no_warn_at_20_runs(self):
+        import warnings
+
+        from sklearn.linear_model import LogisticRegression
+
+        from ictonyx.config import ModelConfig
+        from ictonyx.core import ScikitLearnModelWrapper
+        from ictonyx.data import ArraysDataHandler
+
+        X = np.random.rand(60, 4).astype(np.float32)
+        y = np.random.randint(0, 2, 60)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            run_grid_study(
+                model_builder=lambda cfg: ScikitLearnModelWrapper(LogisticRegression()),
+                data_handler=ArraysDataHandler(X, y),
+                base_config=ModelConfig({}),
+                param_grid={"C": [1.0]},
+                num_runs=20,
+                use_process_isolation=False,
+                dry_run=True,
+                verbose=False,
+            )
+
+    def test_to_dataframe_on_empty_results_does_not_raise(self):
+        """X-43: to_dataframe() returns an empty typed DataFrame, not KeyError."""
+        gr = self._make_empty_grid_result()
+        df = gr.to_dataframe()
+        assert len(df) == 0
+        for col in ["learning_rate", "batch_size", "mean", "sd", "se", "min", "max", "n"]:
+            assert col in df.columns, f"Missing column '{col}' in empty to_dataframe output"
+
+    def test_to_dataframe_with_explicit_metric_on_empty_results(self):
+        """X-43: to_dataframe() with explicit metric argument handles empty results."""
+        gr = self._make_empty_grid_result()
+        df = gr.to_dataframe(metric="val_loss")
+        assert len(df) == 0
+        assert "learning_rate" in df.columns
+
+    def test_summarize_on_empty_results_does_not_raise(self):
+        """X-43: summarize() returns a readable dry-run preview string, not KeyError."""
+        gr = self._make_empty_grid_result()
+        text = gr.summarize()
+        assert isinstance(text, str)
+        assert "Dry Run" in text
+        assert "Parameter grid" in text
+
+    def test_summarize_dry_run_lists_all_planned_configurations(self):
+        """X-43: dry-run summary enumerates the full Cartesian product of the param grid."""
+        gr = self._make_empty_grid_result()
+        text = gr.summarize()
+        # Grid is 2 learning_rates × 2 batch_sizes = 4 combos
+        assert "Planned configurations: 4" in text
+        # All four specific parameter values should appear in the preview
+        assert "'learning_rate': 0.001" in text
+        assert "'learning_rate': 0.01" in text
+        assert "'batch_size': 8" in text
+        assert "'batch_size': 16" in text
+
+
+class TestGridStudySeedStrategy:
+    """SeedSequence used in grid study, not seed+i."""
+
+    def test_grid_study_seeds_are_not_arithmetic_offsets(self):
+        """Seeds passed to run_variability_study must not be seed+i pattern."""
+        captured_seeds = []
+
+        def capturing_run(*args, **kwargs):
+            captured_seeds.append(kwargs.get("seed"))
+            return MagicMock(get_metric_values=lambda m: [0.8, 0.82, 0.81])
+
+        with patch("ictonyx.runners.run_variability_study", capturing_run):
+            run_grid_study(
+                model_builder=lambda c: MagicMock(),
+                data_handler=MagicMock(),
+                base_config=ModelConfig({"epochs": 1}),
+                param_grid={"lr": [0.001, 0.01, 0.1]},
+                num_runs=3,
+                seed=42,
+                verbose=False,
+            )
+        # seed+i pattern would give [43, 44, 45]
+        arithmetic = [42 + i for i in range(1, len(captured_seeds) + 1)]
+        assert captured_seeds != arithmetic, (
+            "Grid study is using seed+i instead of SeedSequence — statistical "
+            "independence not guaranteed."
+        )
+
+    def test_grid_study_with_seed_is_reproducible(self):
+        """Same seed must produce identical per-configuration seeds."""
+        seeds_run1 = []
+        seeds_run2 = []
+        base_config = ModelConfig({"epochs": 1})
+        param_grid = {"lr": [0.001, 0.01, 0.1]}
+
+        def capture_1(*args, **kwargs):
+            seeds_run1.append(kwargs.get("seed"))
+            return MagicMock(get_metric_values=lambda m: [0.8])
+
+        def capture_2(*args, **kwargs):
+            seeds_run2.append(kwargs.get("seed"))
+            return MagicMock(get_metric_values=lambda m: [0.8])
+
+        with patch("ictonyx.runners.run_variability_study", capture_1):
+            run_grid_study(
+                model_builder=lambda c: MagicMock(),
+                data_handler=MagicMock(),
+                base_config=base_config,
+                param_grid=param_grid,
+                num_runs=3,
+                seed=42,
+                verbose=False,
+            )
+
+        with patch("ictonyx.runners.run_variability_study", capture_2):
+            run_grid_study(
+                model_builder=lambda c: MagicMock(),
+                data_handler=MagicMock(),
+                base_config=base_config,
+                param_grid=param_grid,
+                num_runs=3,
+                seed=42,
+                verbose=False,
+            )
+
+        assert seeds_run1 == seeds_run2
+
+
 class TestDdof1:
     def test_summarize_uses_sample_std(self):
         values = [0.80, 0.85, 0.82, 0.79, 0.88, 0.83, 0.81, 0.86, 0.84, 0.87]
@@ -1325,74 +1617,6 @@ class TestGetEpochStatisticsCI:
         row = df.iloc[0]
         np.testing.assert_allclose(row["ci_lower"], expected_lower, rtol=1e-3)
         np.testing.assert_allclose(row["ci_upper"], expected_upper, rtol=1e-3)
-
-
-class TestGridStudySeedStrategy:
-    """SeedSequence used in grid study, not seed+i."""
-
-    def test_grid_study_seeds_are_not_arithmetic_offsets(self):
-        """Seeds passed to run_variability_study must not be seed+i pattern."""
-        captured_seeds = []
-
-        def capturing_run(*args, **kwargs):
-            captured_seeds.append(kwargs.get("seed"))
-            return MagicMock(get_metric_values=lambda m: [0.8, 0.82, 0.81])
-
-        with patch("ictonyx.runners.run_variability_study", capturing_run):
-            run_grid_study(
-                model_builder=lambda c: MagicMock(),
-                data_handler=MagicMock(),
-                base_config=ModelConfig({"epochs": 1}),
-                param_grid={"lr": [0.001, 0.01, 0.1]},
-                num_runs=3,
-                seed=42,
-                verbose=False,
-            )
-        # seed+i pattern would give [43, 44, 45]
-        arithmetic = [42 + i for i in range(1, len(captured_seeds) + 1)]
-        assert captured_seeds != arithmetic, (
-            "Grid study is using seed+i instead of SeedSequence — statistical "
-            "independence not guaranteed."
-        )
-
-    def test_grid_study_with_seed_is_reproducible(self):
-        """Same seed must produce identical per-configuration seeds."""
-        seeds_run1 = []
-        seeds_run2 = []
-        base_config = ModelConfig({"epochs": 1})
-        param_grid = {"lr": [0.001, 0.01, 0.1]}
-
-        def capture_1(*args, **kwargs):
-            seeds_run1.append(kwargs.get("seed"))
-            return MagicMock(get_metric_values=lambda m: [0.8])
-
-        def capture_2(*args, **kwargs):
-            seeds_run2.append(kwargs.get("seed"))
-            return MagicMock(get_metric_values=lambda m: [0.8])
-
-        with patch("ictonyx.runners.run_variability_study", capture_1):
-            run_grid_study(
-                model_builder=lambda c: MagicMock(),
-                data_handler=MagicMock(),
-                base_config=base_config,
-                param_grid=param_grid,
-                num_runs=3,
-                seed=42,
-                verbose=False,
-            )
-
-        with patch("ictonyx.runners.run_variability_study", capture_2):
-            run_grid_study(
-                model_builder=lambda c: MagicMock(),
-                data_handler=MagicMock(),
-                base_config=base_config,
-                param_grid=param_grid,
-                num_runs=3,
-                seed=42,
-                verbose=False,
-            )
-
-        assert seeds_run1 == seeds_run2
 
 
 class TestNRunsWarning:
@@ -1628,6 +1852,53 @@ class TestDeterministicCudnn:
         ), "cudnn.benchmark was not restored after exception."
 
 
+class TestPreferredMetricContext:
+    """Context parameter on preferred_metric: scalar vs epoch resolution."""
+
+    def _make_results_with_test_data(self):
+        """Minimal results with both val and test metrics tracked."""
+        return VariabilityStudyResults(
+            all_runs_metrics=[
+                pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88], "val_loss": [0.5, 0.3, 0.2]}),
+            ],
+            final_metrics={"val_accuracy": [0.88], "val_loss": [0.2]},
+            final_test_metrics=[{"accuracy": 0.87, "run_id": 0}],
+            seed=42,
+        )
+
+    def _make_results_no_test_data(self):
+        return VariabilityStudyResults(
+            all_runs_metrics=[
+                pd.DataFrame({"val_accuracy": [0.80, 0.85, 0.88]}),
+            ],
+            final_metrics={"val_accuracy": [0.88]},
+            final_test_metrics=[],
+            seed=42,
+        )
+
+    def test_scalar_context_prefers_test_when_present(self):
+        results = self._make_results_with_test_data()
+        assert results.preferred_metric("accuracy", context="scalar") == "test_accuracy"
+
+    def test_scalar_context_falls_back_to_val_when_no_test_data(self):
+        results = self._make_results_no_test_data()
+        assert results.preferred_metric("accuracy", context="scalar") == "val_accuracy"
+
+    def test_epoch_context_always_returns_val(self):
+        results = self._make_results_with_test_data()
+        assert results.preferred_metric("accuracy", context="epoch") == "val_accuracy"
+
+    def test_epoch_context_returns_val_even_without_test_data(self):
+        results = self._make_results_no_test_data()
+        assert results.preferred_metric("accuracy", context="epoch") == "val_accuracy"
+
+    def test_default_context_is_scalar(self):
+        """Backward compatibility: calling preferred_metric() with no context
+        argument behaves identically to the pre-v0.4.6 implementation."""
+        results = self._make_results_with_test_data()
+        assert results.preferred_metric("accuracy") == "test_accuracy"
+
+
 class TestVariabilityStudyResultsTestMetrics:
     """Tests for test-metric surfacing: has_test_data, preferred_metric,
     get_test_metric_values, summarize, and test_against_null auto-resolution.
@@ -1690,20 +1961,37 @@ class TestVariabilityStudyResultsTestMetrics:
         assert results.preferred_metric("accuracy") == "test_accuracy"
 
     def test_preferred_metric_falls_back_to_val_when_test_key_not_tracked(self):
-        """Test data present but doesn't contain the requested base metric."""
+        """Test data present but doesn't contain the requested base metric.
+        Val tracks the metric, so preferred_metric should fall back to val."""
         results = VariabilityStudyResults(
             all_runs_metrics=[],
-            final_metrics={"val_loss": [0.3, 0.28, 0.31]},
+            # Val tracks both loss and accuracy; test only tracks loss.
+            final_metrics={"val_loss": [0.3, 0.28, 0.31], "val_accuracy": [0.80, 0.82, 0.81]},
             final_test_metrics=[{"run_id": 1, "test_loss": 0.32}],
             seed=42,
         )
-        # test_accuracy not tracked — should fall back to val_accuracy
+        # test_accuracy not tracked, but val_accuracy is — falls back to val.
         assert results.preferred_metric("accuracy") == "val_accuracy"
 
     def test_preferred_metric_different_bases(self):
-        results = self._make_results_with_test()
+        """Multiple bases resolve correctly when both val and test track them."""
+        results = VariabilityStudyResults(
+            all_runs_metrics=[],
+            # Val tracks both; test tracks only accuracy.
+            final_metrics={
+                "val_accuracy": [0.80, 0.82, 0.81],
+                "val_loss": [0.30, 0.28, 0.31],
+            },
+            final_test_metrics=[
+                {"run_id": 1, "accuracy": 0.78},
+                {"run_id": 2, "accuracy": 0.80},
+                {"run_id": 3, "accuracy": 0.79},
+            ],
+            seed=42,
+        )
+        # accuracy is tracked in both val and test — scalar context prefers test.
         assert results.preferred_metric("accuracy") == "test_accuracy"
-        # loss not in test metrics — falls back
+        # loss is not tracked in test — falls back to val_loss.
         assert results.preferred_metric("loss") == "val_loss"
 
     # --- get_test_metric_values ---
@@ -1931,6 +2219,82 @@ class TestVariabilityStudyResultsPersistence:
         results = self._make_results()
         data = json.loads(results.to_json())
         assert "all_runs_metrics" not in data
+
+        # --- from_json (X-19, v0.4.7) -------------------------------------------
+
+        def test_from_json_round_trip_preserves_final_metrics(self):
+            """to_json -> from_json preserves final_metrics exactly."""
+            original = self._make_results()
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.final_metrics == original.final_metrics
+
+        def test_from_json_round_trip_preserves_final_test_metrics(self):
+            """to_json -> from_json preserves final_test_metrics exactly."""
+            original = self._make_results()
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.final_test_metrics == original.final_test_metrics
+
+        def test_from_json_round_trip_preserves_seed(self):
+            """to_json -> from_json preserves seed exactly."""
+            original = self._make_results()
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.seed == original.seed
+
+        def test_from_json_all_runs_metrics_is_empty(self):
+            """from_json produces empty all_runs_metrics since to_json drops it."""
+            original = self._make_results()
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.all_runs_metrics == []
+            assert restored.n_runs == 0
+
+        def test_from_json_run_seeds_is_empty(self):
+            """from_json produces empty run_seeds since to_json doesn't serialize it."""
+            original = self._make_results()
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.run_seeds == []
+
+        def test_from_json_without_test_data(self):
+            """from_json handles empty final_test_metrics correctly."""
+            original = VariabilityStudyResults(
+                all_runs_metrics=[],
+                final_metrics={"val_accuracy": [0.80, 0.82, 0.81]},
+                final_test_metrics=[],
+                seed=42,
+            )
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.final_test_metrics == []
+            assert restored.has_test_data is False
+
+        def test_from_json_raises_on_malformed_json(self):
+            """from_json raises ValueError on unparseable JSON."""
+            with pytest.raises(ValueError, match="Malformed JSON"):
+                VariabilityStudyResults.from_json("not valid json {{{")
+
+        def test_from_json_raises_on_missing_required_keys(self):
+            """from_json raises ValueError when JSON lacks required keys."""
+            import json
+
+            bad = json.dumps({"seed": 42})
+            with pytest.raises(ValueError, match="missing required keys"):
+                VariabilityStudyResults.from_json(bad)
+
+        def test_from_json_raises_on_non_object(self):
+            """from_json raises ValueError on JSON that isn't a top-level object."""
+            import json
+
+            with pytest.raises(ValueError, match="expects a JSON object"):
+                VariabilityStudyResults.from_json(json.dumps([1, 2, 3]))
+
+        def test_from_json_seed_none_round_trips(self):
+            """seed=None survives the round trip."""
+            original = VariabilityStudyResults(
+                all_runs_metrics=[],
+                final_metrics={"val_accuracy": [0.8, 0.82, 0.81]},
+                final_test_metrics=[],
+                seed=None,
+            )
+            restored = VariabilityStudyResults.from_json(original.to_json())
+            assert restored.seed is None
 
 
 class TestVariabilityStudyResultsRepr:
@@ -2215,6 +2579,102 @@ class TestParallelExecution:
         assert len(results_seq.final_metrics["val_accuracy"]) == len(
             results_par.final_metrics["val_accuracy"]
         )
+
+
+class TestPreferredMetricHelpfulError:
+    """Regression test for X-37: preferred_metric() must raise a helpful
+    KeyError when the requested base metric isn't tracked, not return a
+    phantom key that downstream get_metric_values() blows up on.
+
+    Pre-v0.4.7: preferred_metric(base='accuracy') on a regression study
+    returned 'val_accuracy' without checking self.final_metrics. The
+    subsequent get_metric_values('val_accuracy') raised a cryptic
+    KeyError from deep in the library.
+
+    Fix: preferred_metric introspects self.final_metrics and raises
+    KeyError with a message naming the attempted keys, available
+    metrics, and a suggested base.
+    """
+
+    def _make_regression_results(self):
+        """Helper: a VariabilityStudyResults as would be produced by a
+        regression study — tracks mse/mae/r2, not accuracy."""
+        values = [0.12, 0.14, 0.11, 0.13, 0.15, 0.10, 0.12, 0.14, 0.11, 0.13]
+        df = pd.DataFrame(
+            {
+                "val_mse": np.linspace(0.30, 0.12, 10),
+                "val_r2": np.linspace(0.20, 0.85, 10),
+                "train_loss": np.linspace(0.40, 0.10, 10),
+            }
+        )
+        return VariabilityStudyResults(
+            all_runs_metrics=[df] * 10,
+            final_metrics={"val_mse": values, "val_r2": values},
+            final_test_metrics=[],
+            seed=42,
+        )
+
+    def test_regression_study_accuracy_raises_helpful_error(self):
+        """preferred_metric(base='accuracy') on a regression study must
+        raise KeyError, not return a phantom 'val_accuracy'."""
+        results = self._make_regression_results()
+        with pytest.raises(KeyError, match="preferred_metric.*could not resolve"):
+            results.preferred_metric(base="accuracy")
+
+    def test_error_message_names_available_metrics(self):
+        """Error message must list the metrics that ARE tracked so users
+        can see what to pass explicitly."""
+        results = self._make_regression_results()
+        try:
+            results.preferred_metric(base="accuracy")
+        except KeyError as e:
+            msg = str(e)
+            assert "val_mse" in msg
+            assert "val_r2" in msg
+        else:
+            pytest.fail("Expected KeyError, got none")
+
+    def test_error_message_suggests_alternate_base(self):
+        """Error message must suggest a base that would work."""
+        results = self._make_regression_results()
+        try:
+            results.preferred_metric(base="accuracy")
+        except KeyError as e:
+            msg = str(e)
+            assert "Did you mean" in msg
+        else:
+            pytest.fail("Expected KeyError, got none")
+
+    def test_classification_study_accuracy_resolves_normally(self):
+        """Sanity check: preferred_metric(base='accuracy') on a normal
+        classification study still returns val_accuracy without raising."""
+        values = [0.80, 0.82, 0.78, 0.85, 0.79, 0.83, 0.81, 0.84, 0.77, 0.86]
+        df = pd.DataFrame(
+            {
+                "val_accuracy": np.linspace(0.5, 0.85, 10),
+                "val_loss": np.linspace(1.0, 0.4, 10),
+            }
+        )
+        results = VariabilityStudyResults(
+            all_runs_metrics=[df] * 10,
+            final_metrics={"val_accuracy": values},
+            final_test_metrics=[],
+            seed=42,
+        )
+        assert results.preferred_metric(base="accuracy") == "val_accuracy"
+
+    def test_epoch_context_regression_also_raises(self):
+        """Epoch context on a regression study should raise with the same
+        shape — val_accuracy is phantom there too."""
+        results = self._make_regression_results()
+        with pytest.raises(KeyError, match="preferred_metric.*could not resolve"):
+            results.preferred_metric(base="accuracy", context="epoch")
+
+    def test_explicit_correct_base_resolves(self):
+        """Passing the right base for a regression study works."""
+        results = self._make_regression_results()
+        # val_mse is tracked, so base='mse' should resolve
+        assert results.preferred_metric(base="mse") == "val_mse"
 
 
 class TestPreferredMetricKeyResolution:

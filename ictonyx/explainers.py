@@ -246,26 +246,47 @@ def plot_shap_waterfall(
     sample_data = X_data[sample_index : sample_index + 1]
     shap_values = explainer.shap_values(sample_data)
 
-    # Handle multi-class vs single output
+    # Handle multi-class vs single output across SHAP API versions.
+    # - SHAP < 0.45 multiclass:  list of per-class 2-D arrays, each (1, n_features)
+    # - SHAP >= 0.45 multiclass: 3-D ndarray (1, n_features, n_classes)
+    # - Binary classifier or regression: 2-D ndarray (1, n_features)
     if isinstance(shap_values, list):
+        # SHAP < 0.45 multiclass path
         if class_index >= len(shap_values):
             raise ValueError(
-                f"class_index {class_index} is out of range for model with {len(shap_values)} classes"
+                f"class_index {class_index} is out of range for model with "
+                f"{len(shap_values)} classes"
             )
-        shap_values_to_plot = shap_values[class_index][0]  # Get first (and only) sample
+        shap_values_to_plot = shap_values[class_index][0]
+    elif isinstance(shap_values, np.ndarray) and shap_values.ndim == 3:
+        # SHAP >= 0.45 multiclass path — 3-D: (n_samples, n_features, n_classes)
+        n_classes = shap_values.shape[2]
+        if class_index >= n_classes:
+            raise ValueError(
+                f"class_index {class_index} is out of range for model with " f"{n_classes} classes"
+            )
+        shap_values_to_plot = shap_values[0, :, class_index]
     else:
-        shap_values_to_plot = shap_values[0]  # Get first (and only) sample
+        # Binary classifier or regression — 2-D: (n_samples, n_features)
+        shap_values_to_plot = shap_values[0]
 
     # Create explanation object for waterfall plot
     if hasattr(shap, "Explanation"):
-        # Newer SHAP versions
+        # expected_value shape across SHAP API versions:
+        # - list of scalars (one per class): SHAP < 0.45 multiclass
+        # - 1-D ndarray of scalars: SHAP >= 0.45 multiclass
+        # - scalar: binary or regression
+        expected_value = explainer.expected_value
+        if isinstance(expected_value, list):
+            base_value = expected_value[class_index]
+        elif isinstance(expected_value, np.ndarray) and expected_value.ndim >= 1:
+            base_value = float(expected_value[class_index])
+        else:
+            base_value = expected_value
+
         explanation = shap.Explanation(
             values=shap_values_to_plot,
-            base_values=(
-                explainer.expected_value[class_index]
-                if isinstance(explainer.expected_value, list)
-                else explainer.expected_value
-            ),
+            base_values=base_value,
             data=sample_data[0],
             feature_names=feature_names,
         )
@@ -273,11 +294,14 @@ def plot_shap_waterfall(
     else:
         # Older SHAP versions - use force plot as fallback
         logger.info("Waterfall plot not available in this SHAP version. Using force plot instead.")
-        base_value = (
-            explainer.expected_value[class_index]
-            if isinstance(explainer.expected_value, list)
-            else explainer.expected_value
-        )
+        # Same expected_value handling as the Explanation branch above.
+        expected_value = explainer.expected_value
+        if isinstance(expected_value, list):
+            base_value = expected_value[class_index]
+        elif isinstance(expected_value, np.ndarray) and expected_value.ndim >= 1:
+            base_value = float(expected_value[class_index])
+        else:
+            base_value = expected_value
         shap.force_plot(
             base_value, shap_values_to_plot, sample_data[0], feature_names=feature_names
         )

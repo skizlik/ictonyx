@@ -11,6 +11,7 @@ try:
         BootstrapCIResult,
         bootstrap_effect_size_ci,
         bootstrap_hedges_g_ci,
+        bootstrap_hodges_lehmann_ci,
         bootstrap_mean_difference_ci,
         bootstrap_paired_difference_ci,
     )
@@ -24,6 +25,7 @@ from scipy import stats
 from scipy.stats import (
     beta,
     f_oneway,
+    friedmanchisquare,
     jarque_bera,
     kruskal,
     levene,
@@ -57,11 +59,17 @@ class StatisticalTestResult:
         test_name: Name of the test performed (e.g. ``'Mann-Whitney U'``).
         statistic: The test statistic value.
         p_value: The raw (uncorrected) p-value.
-        effect_size: Effect size estimate (Cohen's d, rank-biserial, or
-            eta-squared, depending on the test).
-        effect_size_name: Label for the effect size metric.
+        effect_size: Primary effect size estimate (Cohen's d, rank-biserial,
+            eta-squared-H, etc., depending on the test).
+        effect_size_name: Label for the primary effect size metric.
         effect_size_interpretation: Qualitative label (``'small'``,
             ``'medium'``, ``'large'``) per conventional thresholds.
+        effect_size_secondary: Optional secondary effect size for tests
+            that report multiple conventional measures (e.g. Kruskal-Wallis
+            reports both η²_H and ε²_R).
+        effect_size_secondary_name: Label for the secondary metric.
+        effect_size_secondary_interpretation: Qualitative label for the
+            secondary effect size.
         sample_sizes: Dict mapping group names to sample counts.
         assumptions_met: Dict mapping assumption names (e.g.
             ``'normality_group1'``) to boolean pass/fail.
@@ -88,10 +96,17 @@ class StatisticalTestResult:
     statistic: float
     p_value: float
 
-    # Effect size information
+    # Effect size information.
+    # Most tests report a single effect size. Kruskal-Wallis reports two
+    # (η²_H and ε²_R) because methodological conventions differ across
+    # audiences; the primary slot holds the more common choice (η²_H) and
+    # the secondary slot holds the alternate (ε²_R).
     effect_size: Optional[float] = None
     effect_size_name: Optional[str] = None
     effect_size_interpretation: Optional[str] = None
+    effect_size_secondary: Optional[float] = None
+    effect_size_secondary_name: Optional[str] = None
+    effect_size_secondary_interpretation: Optional[str] = None
 
     # Sample and power information
     sample_sizes: Optional[Dict[str, int]] = None
@@ -633,6 +648,29 @@ def _interpret_epsilon_squared(eps_sq: float) -> str:
         return "large"
 
 
+def _interpret_kendalls_w(w: float) -> str:
+    """Interpret Kendall's W (coefficient of concordance) for the Friedman test.
+
+    Kendall's W measures the degree of agreement among related groups in
+    a Friedman-style repeated-measures design. Bounded [0, 1]. Conventional
+    thresholds match the broader variance-explained convention.
+
+    Args:
+        w: Kendall's W value in range [0, 1].
+
+    Returns:
+        One of ``'negligible'``, ``'small'``, ``'medium'``, ``'large'``.
+    """
+    if w < 0.1:
+        return "negligible"
+    elif w < 0.3:
+        return "small"
+    elif w < 0.5:
+        return "medium"
+    else:
+        return "large"
+
+
 # MULTIPLE COMPARISON CORRECTIONS
 
 
@@ -803,60 +841,39 @@ def mann_whitney_test(
     return result
 
 
-def wilcoxon_signed_rank_test(
+def _wilcoxon_signed_rank_impl(
     model_metrics: pd.Series,
     null_value: float = 0.5,
     alternative: str = "two-sided",
     alpha: float = 0.05,
 ) -> StatisticalTestResult:
-    """Wilcoxon signed-rank test for a single sample against a null value.
+    """Internal Wilcoxon signed-rank implementation (no deprecation warning).
 
-    Tests whether the median of the sample differs from ``null_value``.
-    Useful for testing whether a model's accuracy is significantly
-    different from chance.
+    Shared between the deprecated public ``wilcoxon_signed_rank_test`` and
+    the current ``VariabilityStudyResults.test_against_null`` method.
+    Callers of ``test_against_null`` should not see a deprecation warning
+    pointing them at the function they just called; the public wrapper is
+    where the deprecation warning lives.
 
-    Args:
-        model_metrics: Metric values for the model.
-        null_value: Hypothesized median to test against. Default 0.5.
-        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
-            Default ``'two-sided'``.
-        alpha: Significance level. Default 0.05.
-
-    Returns:
-        :class:`StatisticalTestResult` with test statistic, p-value,
-        effect size (Wilcoxon r), and interpretation.
+    Args and Returns: see ``wilcoxon_signed_rank_test``.
     """
-
-    warnings.warn(
-        "wilcoxon_signed_rank_test() is deprecated and will be removed in "
-        "v0.5.0. Use compare_results() or test_against_null() instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
     result = StatisticalTestResult(
         test_name="Wilcoxon Signed-Rank Test", statistic=float("nan"), p_value=float("nan")
     )
-
     if not isinstance(model_metrics, pd.Series):
         raise TypeError("Input must be a pandas Series.")
-
     # Clean data and center on null value
     clean_data = model_metrics.dropna()
     centered_data = clean_data - null_value
-
     # Remove zeros (ties at the null hypothesis value)
     non_zero_data = centered_data[centered_data != 0]
-
     result.sample_sizes = {"total": len(clean_data), "non_zero": len(non_zero_data)}
-
     # Sample size validation
     adequate_size, size_warnings = validate_sample_sizes(
         [non_zero_data], 6, "Wilcoxon signed-rank test"
     )
     result.warnings.extend(size_warnings)
     result.assumptions_met["adequate_sample_size"] = adequate_size
-
     # Symmetry assumption check (approximate)
     if len(centered_data) > 0:
         skewness = centered_data.skew()
@@ -865,18 +882,14 @@ def wilcoxon_signed_rank_test(
             result.assumptions_met["symmetry"] = False
         else:
             result.assumptions_met["symmetry"] = True
-
         result.assumption_details["skewness"] = skewness
-
         # Perform test
         try:
             if len(non_zero_data) < 6:
                 raise ValueError("Insufficient non-zero differences for Wilcoxon test")
-
             wilcoxon_result = wilcoxon(non_zero_data, alternative=alternative, method="auto")
             result.statistic = float(wilcoxon_result.statistic)
             result.p_value = float(wilcoxon_result.pvalue)
-
             # Effect size r computed from the W statistic via the asymptotic
             # normal approximation of the Wilcoxon distribution. Valid for both
             # the exact and approximate p-value paths.
@@ -901,26 +914,53 @@ def wilcoxon_signed_rank_test(
                 result.effect_size = r
                 result.effect_size_name = "r (effect size)"
                 result.effect_size_interpretation = _interpret_wilcoxon_r(r)
-            elif n > 0 and p_val <= 0:
-                # Perfect separation: all differences same sign. r = 1.0 by convention.
-                # (p_val can also be exactly 0.0 due to floating-point underflow at
-                # large n, though this is unlikely at the small sample sizes typical
-                # of variability studies.)
-                result.effect_size = 1.0
-                result.effect_size_name = "r (effect size)"
-                result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
 
         except Exception as e:
             result.warnings.append(f"Test failed: {str(e)}")
             result.statistic = float("nan")
             result.p_value = float("nan")
             return result
-
     # Generate interpretation
     result.conclusion = _generate_wilcoxon_conclusion(result, null_value, alpha)
     result.detailed_interpretation = _generate_detailed_interpretation(result, alpha)
-
     return result
+
+
+def wilcoxon_signed_rank_test(
+    model_metrics: pd.Series,
+    null_value: float = 0.5,
+    alternative: str = "two-sided",
+    alpha: float = 0.05,
+) -> StatisticalTestResult:
+    """Wilcoxon signed-rank test for a single sample against a null value.
+
+    Tests whether the median of the sample differs from ``null_value``.
+    Useful for testing whether a model's accuracy is significantly
+    different from chance.
+
+    Args:
+        model_metrics: Metric values for the model.
+        null_value: Hypothesized median to test against. Default 0.5.
+        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            Default ``'two-sided'``.
+        alpha: Significance level. Default 0.05.
+
+    Returns:
+        :class:`StatisticalTestResult` with test statistic, p-value,
+        effect size (Wilcoxon r), and interpretation.
+    """
+    warnings.warn(
+        "wilcoxon_signed_rank_test() is deprecated and will be removed in "
+        "v0.5.0. Use compare_results() or test_against_null() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _wilcoxon_signed_rank_impl(
+        model_metrics,
+        null_value=null_value,
+        alternative=alternative,
+        alpha=alpha,
+    )
 
 
 def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> StatisticalTestResult:
@@ -1060,8 +1100,12 @@ def kruskal_wallis_test(
         alpha: Significance level. Default 0.05.
 
     Returns:
-        :class:`StatisticalTestResult` with H-statistic, p-value,
-        epsilon-squared effect size, and interpretation.
+        :class:`StatisticalTestResult` with H-statistic, p-value, and two
+        effect sizes: η²_H (primary, variance-explained analog) and ε²_R
+        (secondary, rank-correlation analog). Pre-v0.4.7 the library
+        computed η²_H but labeled it "epsilon-squared" — v0.4.7 corrects
+        the labeling and adds the actual ε²_R value as the secondary
+        effect size.
     """
 
     # Validate input
@@ -1124,21 +1168,42 @@ def kruskal_wallis_test(
             except Exception:
                 pass  # Levene check is advisory; never fail the primary test
 
-        # Calculate effect size (epsilon-squared)
-        N = sum(len(group) for group in clean_groups)
-        k = len(clean_groups)
+            # Calculate effect sizes. Kruskal-Wallis reports two conventional
+            # measures that differ across methodological traditions:
+            #
+            #   η²_H = (H - k + 1) / (N - k)   — Tomczak & Tomczak (2014)
+            #          variance-explained analog, bounded [0, 1]
+            #   ε²_R = H / (N - 1)             — Kelley (1935)
+            #          rank-correlation analog, bounded [0, 1]
+            #
+            # Pre-v0.4.7, the library computed η²_H but labeled it
+            # "epsilon-squared" (the formulas are distinct — what was
+            # reported was always η²_H, not ε²_R). v0.4.7 corrects the
+            # labeling and adds ε²_R as the secondary effect size.
+            N = sum(len(group) for group in clean_groups)
+            k = len(clean_groups)
 
-        if N > k:
-            # Epsilon-squared: analogous to eta-squared for Kruskal-Wallis.
-            # Ranges from 0 to 1; interpreted on the same scale as eta-squared.
-            epsilon_sq = (statistic - k + 1) / (N - k)
-            epsilon_sq = max(0.0, min(1.0, epsilon_sq))  # Ensure non-negative
-        else:
-            epsilon_sq = 0
+            if N > k:
+                eta_sq_h = (statistic - k + 1) / (N - k)
+                eta_sq_h = max(0.0, min(1.0, eta_sq_h))
+            else:
+                eta_sq_h = 0.0
 
-        result.effect_size = epsilon_sq
-        result.effect_size_name = "epsilon-squared"
-        result.effect_size_interpretation = _interpret_epsilon_squared(epsilon_sq)
+            if N > 1:
+                epsilon_sq_r = statistic / (N - 1)
+                epsilon_sq_r = max(0.0, min(1.0, epsilon_sq_r))
+            else:
+                epsilon_sq_r = 0.0
+
+            # Primary: η²_H (variance-explained analog, most widely reported).
+            result.effect_size = eta_sq_h
+            result.effect_size_name = "eta-squared-H"
+            result.effect_size_interpretation = _interpret_variance_explained(eta_sq_h)
+
+            # Secondary: ε²_R (rank-correlation analog, Kelley 1935).
+            result.effect_size_secondary = epsilon_sq_r
+            result.effect_size_secondary_name = "epsilon-squared-R"
+            result.effect_size_secondary_interpretation = _interpret_epsilon_squared(epsilon_sq_r)
 
     except Exception as e:
         # Create a failure result object for consistent return type
@@ -1151,6 +1216,149 @@ def kruskal_wallis_test(
 
     # Generate interpretation
     result.conclusion = _generate_kruskal_wallis_conclusion(result, alpha)
+    result.detailed_interpretation = _generate_detailed_interpretation(result, alpha)
+
+    return result
+
+
+def friedman_test(
+    model_metrics: Dict[str, pd.Series], alpha: float = 0.05
+) -> StatisticalTestResult:
+    """Friedman chi-squared test for three or more related (paired) groups.
+
+    Non-parametric analog of repeated-measures ANOVA. Use when comparing
+    3+ models evaluated on the same runs (same seeds, same folds) — each
+    "subject" is a run and each "condition" is a model.
+
+    The Friedman test ranks values within each subject (row), then tests
+    whether the rank distributions across groups (columns) differ
+    significantly. Paired counterpart to :func:`kruskal_wallis_test`.
+
+    All groups must have the same number of observations, matched by
+    index (implicit pairing). Mismatched lengths are a methodological
+    error and raise ValueError.
+
+    Args:
+        model_metrics: Dict mapping model names to ``pd.Series`` of metric
+            values. All Series must have the same length (matched pairs).
+        alpha: Significance level. Default 0.05.
+
+    Returns:
+        :class:`StatisticalTestResult` with chi-squared statistic,
+        p-value, Kendall's W effect size, and interpretation.
+
+    Raises:
+        ValueError: If fewer than 3 groups are provided (use
+            :func:`compare_two_models` for 2 groups), or if groups have
+            mismatched lengths.
+
+    Note:
+        Recommended n (runs per model) >= 10 for reliable inference.
+        At n < 6, exact Friedman null distributions from tables should
+        be preferred over the chi-squared approximation; scipy's
+        implementation uses the chi-squared approximation throughout.
+
+    Example:
+        >>> metrics = {
+        ...     "BERT":      pd.Series([0.85, 0.86, 0.84, ...]),
+        ...     "RoBERTa":   pd.Series([0.87, 0.88, 0.86, ...]),
+        ...     "DeBERTa":   pd.Series([0.89, 0.90, 0.88, ...]),
+        ... }
+        >>> result = friedman_test(metrics)
+        >>> if result.is_significant(alpha=0.05):
+        ...     print(f"Models differ (W = {result.effect_size:.3f})")
+    """
+    # Validate input
+    if len(model_metrics) < 3:
+        raise ValueError(
+            f"Friedman test requires at least three groups (got {len(model_metrics)}). "
+            "Use compare_two_models() for paired two-group comparisons."
+        )
+
+    # Clean data and validate matched lengths
+    clean_groups: List[pd.Series] = []
+    group_names: List[str] = []
+    for name, series in model_metrics.items():
+        clean_data = series.dropna()
+        if len(clean_data) > 0:
+            clean_groups.append(clean_data)
+            group_names.append(name)
+
+    if len(clean_groups) < 3:
+        raise ValueError(
+            "Insufficient data after cleaning. Friedman test requires at "
+            "least three non-empty groups."
+        )
+
+    # All groups must have the same length — Friedman requires matched pairs.
+    lengths = [len(g) for g in clean_groups]
+    if len(set(lengths)) > 1:
+        raise ValueError(
+            f"Friedman test requires matched pairs: all groups must have the "
+            f"same length. Got lengths {dict(zip(group_names, lengths))}. "
+            f"If your data is unpaired or has mismatched n, use "
+            f"kruskal_wallis_test() instead."
+        )
+
+    n = lengths[0]  # Number of subjects / rows / runs
+    k = len(clean_groups)  # Number of groups / conditions / models
+
+    # Sample size validation
+    adequate_size = n >= 10
+
+    try:
+        statistic, p_value = friedmanchisquare(*clean_groups)
+
+        result = StatisticalTestResult(
+            test_name="Friedman Chi-Squared Test",
+            statistic=float(statistic),
+            p_value=float(p_value),
+        )
+
+        # Sample size information
+        result.sample_sizes = {name: n for name in group_names}
+        result.assumptions_met["adequate_sample_size"] = adequate_size
+        if not adequate_size:
+            result.warnings.append(
+                f"n={n} per group; Friedman test is more reliable at n >= 10. "
+                "For small n, the chi-squared approximation may be inaccurate; "
+                "consider exact Friedman tables."
+            )
+
+        # Kendall's W (coefficient of concordance): χ² / (n * (k - 1))
+        # Bounded [0, 1]. Conventional thresholds: 0.1/0.3/0.5 (small/medium/large).
+        if n > 0 and k > 1:
+            w = statistic / (n * (k - 1))
+            w = max(0.0, min(1.0, w))  # Clamp to valid range
+        else:
+            w = 0.0
+
+        result.effect_size = w
+        result.effect_size_name = "Kendall's W"
+        result.effect_size_interpretation = _interpret_kendalls_w(w)
+
+    except Exception as e:
+        result = StatisticalTestResult(
+            test_name="Friedman Chi-Squared Test",
+            statistic=float("nan"),
+            p_value=float("nan"),
+        )
+        result.warnings.append(f"Friedman test failed: {str(e)}")
+        result.sample_sizes = {name: n for name in group_names}
+        return result
+
+    # Generate conclusion
+    if result.is_significant(alpha=alpha):
+        result.conclusion = (
+            f"Significant differences among {k} models across paired runs "
+            f"(χ²={statistic:.3f}, p={p_value:.4f}, W={w:.3f} "
+            f"[{result.effect_size_interpretation}])."
+        )
+    else:
+        result.conclusion = (
+            f"No significant difference among {k} models detected "
+            f"(χ²={statistic:.3f}, p={p_value:.4f}, n={n})."
+        )
     result.detailed_interpretation = _generate_detailed_interpretation(result, alpha)
 
     return result
@@ -1261,7 +1469,8 @@ def paired_wilcoxon_test(
             "significant or trivially not. Returning inconclusive result. "
             "If both models used identical seeds and produced identical "
             "predictions, the paired comparison is undefined; use "
-            "test_above_chance() or inspect per-run values directly.",
+            "VariabilityStudyResults.test_against_null() or inspect per-run "
+            "values directly.",
             UserWarning,
             stacklevel=2,
         )
@@ -1342,6 +1551,8 @@ def compare_two_models(
     paired: bool = False,
     alpha: float = 0.05,
     random_state: Optional[int] = None,
+    ci_target: str = "auto",
+    test_method: str = "auto",
 ) -> StatisticalTestResult:
     """
     Compares two models using intelligent, assumption-driven test selection.
@@ -1350,12 +1561,10 @@ def compare_two_models(
     on the data's properties and whether the samples are paired.
 
     - If `paired=True`, performs a Wilcoxon signed-rank test on the differences.
-    - If `paired=False`, it performs an "intelligent independent test":
-        1. Checks for normality in both groups (using `check_normality`).
-        2. If both are normal, checks for equal variance (using `check_equal_variances`).
-        3.  - Normal + Equal Variance: Runs a Student's t-test.
-        4.  - Normal + Unequal Variance: Runs a Welch's t-test.
-        5.  - Not Normal: Runs a Mann-Whitney U test.
+    - If `paired=False`, the test is selected by ``test_method``. The
+      default is ``"auto"`` which applies data-driven selection (deprecated
+      — see test_method parameter); v0.5.0 will default to
+      ``"mann_whitney"``.
 
     Args:
         model1_results (pd.Series): A Series of metric results for model 1.
@@ -1364,6 +1573,42 @@ def compare_two_models(
             results from the same k-folds). Defaults to False.
         alpha (float, optional): Significance level used for assumption checks
             (normality, variance). Defaults to 0.05.
+        ci_target (str, optional): Which quantity the bootstrap CI should
+            be computed on. Relevant only for unpaired comparisons; paired
+            comparisons always use paired-difference bootstrap.
+
+            - ``"mean_difference"`` (legacy): bootstrap CI on the mean
+              difference. Mismatched to the Mann-Whitney null hypothesis
+              when MW is dispatched but preserved for backward compatibility.
+            - ``"median_difference"``: bootstrap CI on the Hodges-Lehmann
+              estimator (median of pairwise differences). Matches the
+              Mann-Whitney null and is the methodologically correct CI
+              when MW is dispatched. Also valid for parametric tests,
+              where it is a robust alternative to the mean-difference CI.
+            - ``"auto"`` (default in v0.4.7): emits a DeprecationWarning
+              and uses ``"mean_difference"`` for backward compatibility.
+              The default changes to ``"median_difference"`` in v0.5.0.
+        test_method (str, optional): Which test to use for the unpaired
+            comparison. Ignored when ``paired=True`` (paired comparisons
+            always use paired Wilcoxon).
+
+            - ``"mann_whitney"``: Mann-Whitney U test. The non-parametric
+              default, methodologically appropriate for small-n variability
+              studies where distributional assumptions are fragile.
+            - ``"student_t"``: Student's t-test (assumes normality + equal
+              variances).
+            - ``"welch_t"``: Welch's t-test (assumes normality; does not
+              assume equal variances).
+            - ``"parametric"``: auto-choose between Student's and Welch's
+              based on an equal-variance pre-test. Does not pre-test
+              normality; caller is asserting normality holds.
+            - ``"auto"`` (default in v0.4.7): emits a DeprecationWarning
+              and applies data-driven test selection (pre-tests normality
+              via Shapiro-Wilk, then equal variances via Levene, then
+              dispatches to Student/Welch/Mann-Whitney accordingly).
+              This pre-test-then-choose pattern inflates Type I error
+              rates and is methodologically criticized. The default
+              changes to ``"mann_whitney"`` in v0.5.0.
 
     Returns:
         StatisticalTestResult: A rich object containing the test name,
@@ -1378,7 +1623,41 @@ def compare_two_models(
         when calling it directly from ``ictonyx.analysis``.
     """
 
-    # Clean data first
+    # Validate and resolve ci_target
+    if ci_target not in ("auto", "mean_difference", "median_difference"):
+        raise ValueError(
+            f"ci_target must be 'auto', 'mean_difference', or 'median_difference'; "
+            f"got {ci_target!r}."
+        )
+    if ci_target == "auto":
+        warnings.warn(
+            "compare_two_models: ci_target defaults to 'mean_difference' in "
+            "v0.4.7 for backward compatibility. In v0.5.0 the default changes "
+            "to 'median_difference' (Hodges-Lehmann), which matches the "
+            "Mann-Whitney U null hypothesis. Pass ci_target explicitly to "
+            "silence this warning.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        ci_target = "mean_difference"
+    # Validate and resolve test_method
+    _valid_test_methods = ("auto", "mann_whitney", "student_t", "welch_t", "parametric")
+    if test_method not in _valid_test_methods:
+        raise ValueError(
+            f"test_method must be one of {_valid_test_methods}; " f"got {test_method!r}."
+        )
+    if test_method == "auto":
+        warnings.warn(
+            "compare_two_models: test_method defaults to 'auto' (data-driven "
+            "pre-test-then-choose) in v0.4.7 for backward compatibility. This "
+            "pattern inflates Type I error rates and is methodologically "
+            "criticized. The default changes to 'mann_whitney' in v0.5.0. "
+            "Pass test_method explicitly to silence this warning.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+    # Clean data
     if paired:
         # For paired data, remove rows where either value is missing
         combined = pd.DataFrame({"model1": model1_results, "model2": model2_results})
@@ -1403,49 +1682,83 @@ def compare_two_models(
     if paired:
         result = paired_wilcoxon_test(clean1, clean2, alpha=alpha)
     else:
-        # For independent comparisons, use intelligent test selection
-
-        # 1. Check assumptions
-        is_normal1, norm_details1 = check_normality(clean1, alpha=alpha, require_all_tests=True)
-        is_normal2, norm_details2 = check_normality(clean2, alpha=alpha, require_all_tests=True)
-
-        assumptions_met = {"normality_group1": is_normal1, "normality_group2": is_normal2}
-        assumption_details = {"normality_group1": norm_details1, "normality_group2": norm_details2}
-
-        if is_normal1 and is_normal2:
-            # 2. Both are normal: Check variances
-            equal_vars, var_details = check_equal_variances(clean1, clean2, alpha=alpha)
-            assumptions_met["equal_variances"] = equal_vars
-            assumption_details["variance_test"] = var_details
-
-            if equal_vars:
-                # 3a. Normal + Equal Variance = Student's t-test
-                test_name = "Independent Comparison (Student's t-test)"
-                statistic, p_value = ttest_ind(clean1, clean2, equal_var=True)
-                effect_size, es_interp = cohens_d(clean1, clean2, pooled=True)
-                es_name = "Cohen's d"
-            else:
-                # 3b. Normal + Unequal Variance = Welch's t-test
-                test_name = "Independent Comparison (Welch's t-test)"
-                statistic, p_value = ttest_ind(clean1, clean2, equal_var=False)
-                effect_size, es_interp = _hedges_g(clean1, clean2)
-                es_name = "Hedges' g"
-
-            result = StatisticalTestResult(
-                test_name=test_name,
-                statistic=statistic,
-                p_value=p_value,
+        # Dispatch based on test_method. Helper closure to avoid repeating
+        # the Student/Welch construction in two places.
+        def _run_student_t(clean1: pd.Series, clean2: pd.Series) -> StatisticalTestResult:
+            statistic, p_value = ttest_ind(clean1, clean2, equal_var=True)
+            effect_size, es_interp = cohens_d(clean1, clean2, pooled=True)
+            return StatisticalTestResult(
+                test_name="Independent Comparison (Student's t-test)",
+                statistic=float(statistic),
+                p_value=float(p_value),
                 effect_size=effect_size,
-                effect_size_name=es_name,
+                effect_size_name="Cohen's d",
                 effect_size_interpretation=es_interp,
             )
 
-        else:
-            # 4. Not normal: Use Mann-Whitney U test
+        def _run_welch_t(clean1: pd.Series, clean2: pd.Series) -> StatisticalTestResult:
+            statistic, p_value = ttest_ind(clean1, clean2, equal_var=False)
+            effect_size, es_interp = _hedges_g(clean1, clean2)
+            return StatisticalTestResult(
+                test_name="Independent Comparison (Welch's t-test)",
+                statistic=float(statistic),
+                p_value=float(p_value),
+                effect_size=effect_size,
+                effect_size_name="Hedges' g",
+                effect_size_interpretation=es_interp,
+            )
+
+        if test_method == "mann_whitney":
             result = mann_whitney_test(clean1, clean2, alpha=alpha)
             result.test_name = "Independent Comparison (Mann-Whitney U)"
 
-            # Add assumption info without overwriting keys already set by the chosen test.
+        elif test_method == "student_t":
+            result = _run_student_t(clean1, clean2)
+
+        elif test_method == "welch_t":
+            result = _run_welch_t(clean1, clean2)
+
+        elif test_method == "parametric":
+            # Analyst asserts normality; we only choose between Student
+            # and Welch based on variance equality.
+            equal_vars, var_details = check_equal_variances(clean1, clean2, alpha=alpha)
+            if equal_vars:
+                result = _run_student_t(clean1, clean2)
+            else:
+                result = _run_welch_t(clean1, clean2)
+            result.assumptions_met["equal_variances"] = equal_vars
+            result.assumption_details["variance_test"] = var_details
+
+        else:
+            # test_method == "auto" — legacy data-driven path.
+            # Pre-test normality via Shapiro-Wilk, then equal variances
+            # via Levene (if both groups normal), then dispatch to
+            # Student/Welch/Mann-Whitney accordingly. This pattern is
+            # methodologically criticized and deprecated; the default
+            # flips to "mann_whitney" in v0.5.0.
+            is_normal1, norm_details1 = check_normality(clean1, alpha=alpha, require_all_tests=True)
+            is_normal2, norm_details2 = check_normality(clean2, alpha=alpha, require_all_tests=True)
+            assumptions_met = {
+                "normality_group1": is_normal1,
+                "normality_group2": is_normal2,
+            }
+            assumption_details = {
+                "normality_group1": norm_details1,
+                "normality_group2": norm_details2,
+            }
+            if is_normal1 and is_normal2:
+                equal_vars, var_details = check_equal_variances(clean1, clean2, alpha=alpha)
+                assumptions_met["equal_variances"] = equal_vars
+                assumption_details["variance_test"] = var_details
+                if equal_vars:
+                    result = _run_student_t(clean1, clean2)
+                else:
+                    result = _run_welch_t(clean1, clean2)
+            else:
+                result = mann_whitney_test(clean1, clean2, alpha=alpha)
+                result.test_name = "Independent Comparison (Mann-Whitney U)"
+
+            # Attach assumption info without overwriting keys set by the chosen test.
             for _k, _v in assumptions_met.items():
                 result.assumptions_met.setdefault(_k, _v)
             result.assumption_details.update(assumption_details)
@@ -1454,6 +1767,10 @@ def compare_two_models(
     if HAS_BOOTSTRAP and not np.isnan(result.p_value):
         try:
             if paired:
+                # Paired comparison: always paired-difference bootstrap.
+                # ci_target doesn't apply to the paired branch (both mean
+                # and median differences for paired data would collapse
+                # to the same conceptual target).
                 ci_result = bootstrap_paired_difference_ci(
                     clean1,
                     clean2,
@@ -1462,7 +1779,20 @@ def compare_two_models(
                     method="bca",
                     random_state=random_state,
                 )
+            elif ci_target == "median_difference":
+                # Hodges-Lehmann bootstrap. Methodologically correct when
+                # Mann-Whitney is dispatched; valid (and robust) for
+                # parametric tests too.
+                ci_result = bootstrap_hodges_lehmann_ci(
+                    clean1,
+                    clean2,
+                    n_bootstrap=10000,
+                    confidence=1 - alpha,
+                    method="bca",
+                    random_state=random_state,
+                )
             else:
+                # ci_target == "mean_difference"
                 ci_result = bootstrap_mean_difference_ci(
                     clean1,
                     clean2,
@@ -1471,8 +1801,8 @@ def compare_two_models(
                     method="bca",
                     random_state=random_state,
                 )
-
             result.confidence_interval = (ci_result.ci_lower, ci_result.ci_upper)
+
             result.ci_confidence_level = ci_result.confidence_level
             result.ci_method = ci_result.method
 
@@ -2316,6 +2646,98 @@ def required_runs(
         f"required_runs(): target power {power} not achieved at n=200 for "
         f"effect_size={effect_size:.3f}. The effect may be too small to detect "
         "at this power level. Returning 200 (search ceiling).",
+        UserWarning,
+        stacklevel=2,
+    )
+    return 200
+
+
+def required_runs_paired(
+    effect_size: float,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    n_sim: int = 1000,
+    alternative: str = "two-sided",
+    random_state: Optional[int] = 42,
+) -> int:
+    """Minimum paired runs to detect a given effect size at stated power.
+
+    Paired-comparison counterpart to :func:`required_runs`. Uses
+    simulation-based power calculation for the paired Wilcoxon signed-rank
+    test, which is the library's default paired comparison method.
+
+    Args:
+        effect_size: Expected matched-pairs rank-biserial correlation
+            (0–1). Conventions parallel independent-comparison r:
+            small=0.1, medium=0.3, large=0.5 (Cohen 1988).
+        alpha: Type I error rate. Default 0.05.
+        power: Desired statistical power (0–1). Default 0.80.
+        n_sim: Number of simulations per candidate n. Default 1000.
+        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            Default ``'two-sided'``.
+        random_state: Seed for reproducibility. Default 42.
+
+    Returns:
+        Minimum number of paired observations (e.g., runs per model when
+        both models are run with matched seeds).
+
+    Raises:
+        ValueError: If ``effect_size`` is not in (0, 1) or ``power`` is
+            not in (0, 1).
+
+    Note:
+        The simulation models paired differences directly as
+        Normal(shift, 1.0) with no correlation term — equivalent to the
+        independent-pair case (ρ=0). Users whose paired runs have
+        substantial correlation (same data split, matched seeds, etc.)
+        will achieve the target power with fewer runs than this function
+        estimates. Modeling correlation is planned for a future release;
+        for now, this returns a conservative upper bound under ρ=0.
+
+        The simulation draws from unbounded standard normal differences.
+        For metrics concentrated near 0 or 1 the normal approximation
+        overestimates spread and this function will over-estimate n.
+        Results are most reliable for loss-scale metrics and accuracy
+        values in the 0.4–0.8 range.
+    """
+    if not 0 < effect_size < 1:
+        raise ValueError(f"effect_size must be in (0, 1), got {effect_size}.")
+    if not 0 < power < 1:
+        raise ValueError(f"power must be in (0, 1), got {power}.")
+
+    rng = np.random.default_rng(random_state)
+
+    # Convert matched-pairs rank-biserial r to P(D > 0) where D is the
+    # paired difference: r ≈ 2*P(D > 0) - 1, so P(D > 0) = (r + 1) / 2.
+    # For Normal(μ_d, σ_d=1) this gives μ_d = Φ⁻¹((r + 1) / 2).
+    p_positive = (effect_size + 1.0) / 2.0
+    shift = stats.norm.ppf(p_positive)
+
+    for n in range(6, 201):  # Wilcoxon requires n >= 6 non-zero differences
+        rejections = 0
+        for _ in range(n_sim):
+            # Paired differences: Normal(shift, 1.0). For alternative='greater'
+            # we expect differences > 0; for 'two-sided' either direction.
+            differences = rng.normal(shift, 1.0, n)
+            # Paired Wilcoxon signed-rank test (scipy's wilcoxon on the
+            # differences vector tests whether median(diff) differs from 0)
+            try:
+                _, p = wilcoxon(differences, alternative=alternative, method="auto")
+            except ValueError:
+                # Rare: all differences exactly zero. Power-study simulation
+                # can skip this iteration without affecting the estimator.
+                continue
+            if p < alpha:
+                rejections += 1
+
+        empirical_power = rejections / n_sim
+        if empirical_power >= power:
+            return n
+
+    warnings.warn(
+        f"required_runs_paired(): target power {power} not achieved at n=200 "
+        f"for effect_size={effect_size:.3f}. The effect may be too small to "
+        "detect at this power level. Returning 200 (search ceiling).",
         UserWarning,
         stacklevel=2,
     )

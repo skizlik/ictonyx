@@ -1,5 +1,5 @@
 # ictonyx/__init__.py
-# v0.4.5
+# v0.4.7
 
 """
 Ictonyx: A Machine Learning Framework for Variability and Reproducibility Analysis
@@ -188,6 +188,7 @@ try:
         compare_two_models,
         create_results_dataframe,
         eta_squared,
+        friedman_test,
         generate_statistical_summary,
         get_confusion_matrix_df,
         kruskal_wallis_test,
@@ -196,6 +197,7 @@ try:
         paired_wilcoxon_test,
         rank_biserial_correlation,
         required_runs,
+        required_runs_paired,
         shapiro_wilk_test,
         validate_sample_sizes,
         wilcoxon_signed_rank_test,
@@ -206,7 +208,6 @@ try:
             "ModelComparisonResults",
             "StatisticalTestResult",
             "mann_whitney_test",
-            "wilcoxon_signed_rank_test",
             "paired_wilcoxon_test",
             "anova_test",
             "kruskal_wallis_test",
@@ -226,8 +227,10 @@ try:
             "cohens_d",
             "rank_biserial_correlation",
             "eta_squared",
+            "friedman_test",
             "apply_multiple_comparison_correction",
             "required_runs",
+            "required_runs_paired",
             "minimum_detectable_effect",
         ]
     )
@@ -269,15 +272,19 @@ try:
         plot_comparison_boxplots,
         plot_comparison_forest,
         plot_confusion_matrix,
+        plot_epoch_run_heatmap,
         plot_grid_study_heatmap,
         plot_pacf_vs_lag,
+        plot_paired_deltas,
         plot_pairwise_comparison_matrix,
         plot_precision_recall_curve,
         plot_rank_correlation_over_epoch,
         plot_roc_curve,
         plot_run_distribution,
+        plot_run_independence_diagnostics,
         plot_run_strip,
         plot_run_trajectories,
+        plot_sequential_ci,
         plot_training_history,
         plot_training_stability,
         plot_variability_summary,
@@ -297,12 +304,16 @@ try:
             "plot_averaged_autocorr",
             "plot_pacf_vs_lag",
             "plot_averaged_pacf",
+            "plot_run_independence_diagnostics",
             "plot_pairwise_comparison_matrix",
             "plot_training_stability",
             "plot_rank_correlation_over_epoch",
             "plot_comparison_boxplots",
             "plot_comparison_forest",
+            "plot_paired_deltas",
             "plot_grid_study_heatmap",
+            "plot_epoch_run_heatmap",
+            "plot_sequential_ci",
         ]
     )
     _has_plotting_functions = True

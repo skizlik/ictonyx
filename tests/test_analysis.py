@@ -672,9 +672,18 @@ class TestKruskalWallisTest:
 
 
 class TestKruskalWallisEffectSizeLabel:
-    """Verify epsilon-squared is correctly labelled and interpreted."""
+    """Verify eta-squared-H is correctly labelled and interpreted.
+
+    Pre-v0.4.7 the library labelled the variance-explained effect size
+    'epsilon-squared' even though the formula (H - k + 1) / (N - k)
+    computes eta-squared-H. Commit 13b corrected the label; this class
+    now verifies the corrected label.
+    """
 
     def test_effect_size_name_is_epsilon_squared(self):
+        # Note: method name retained for git blame continuity; the actual
+        # label is 'eta-squared-H' after commit 13b corrected the
+        # mislabel (see class docstring).
         groups = {
             "a": pd.Series([0.7, 0.75, 0.72, 0.74]),
             "b": pd.Series([0.8, 0.82, 0.79, 0.81]),
@@ -682,11 +691,14 @@ class TestKruskalWallisEffectSizeLabel:
         }
         result = kruskal_wallis_test(groups)
         assert (
-            result.effect_size_name == "epsilon-squared"
-        ), f"Expected 'epsilon-squared', got '{result.effect_size_name}'"
+            result.effect_size_name == "eta-squared-H"
+        ), f"Expected 'eta-squared-H', got '{result.effect_size_name}'"
 
     def test_effect_size_interpretation_uses_epsilon_thresholds(self):
-        """Interpretation must come from _interpret_epsilon_squared, not eta."""
+        """Interpretation uses variance-explained thresholds (0.01/0.06/0.14)
+        via _interpret_variance_explained, which shares conventions with
+        eta-squared. Pre-v0.4.7 was routed through _interpret_epsilon_squared,
+        which has identical thresholds but incorrect labelling."""
         groups = {
             "a": pd.Series([0.5, 0.5, 0.5, 0.5]),
             "b": pd.Series([0.9, 0.9, 0.9, 0.9]),
@@ -694,7 +706,7 @@ class TestKruskalWallisEffectSizeLabel:
         }
         result = kruskal_wallis_test(groups)
         assert result.effect_size_interpretation in ("negligible", "small", "medium", "large")
-        assert result.effect_size_name == "epsilon-squared"
+        assert result.effect_size_name == "eta-squared-H"
 
 
 class TestWilcoxonTieCorrection:
@@ -1127,6 +1139,116 @@ class TestAssessTrainingStability:
         assert np.isnan(result["final_loss_cv"])
 
 
+class TestCompareTwoModelsTestMethod:
+    """Regression tests for X-15: compare_two_models' test_method parameter
+    lets users choose test upfront rather than data-driven pre-test-then-choose.
+    The 'auto' default preserves v0.4.6 behavior but emits a DeprecationWarning.
+
+    Pre-v0.4.7: paired=False always triggered Shapiro-Wilk + Levene then
+    dispatched to Student/Welch/Mann-Whitney. This pre-test-then-choose
+    pattern inflates Type I error rates and is methodologically criticized.
+    """
+
+    def _make_normal_groups(self):
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.normal(0.9, 0.02, size=20))
+        g2 = pd.Series(rng.normal(0.85, 0.02, size=20))
+        return g1, g2
+
+    def test_mann_whitney_explicit(self):
+        """test_method='mann_whitney' dispatches to MW regardless of normality."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        result = compare_two_models(
+            g1,
+            g2,
+            paired=False,
+            test_method="mann_whitney",
+            ci_target="mean_difference",
+        )
+        assert "Mann-Whitney" in result.test_name
+
+    def test_student_t_explicit(self):
+        """test_method='student_t' always uses Student's t."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        result = compare_two_models(
+            g1,
+            g2,
+            paired=False,
+            test_method="student_t",
+            ci_target="mean_difference",
+        )
+        assert "Student" in result.test_name
+
+    def test_welch_t_explicit(self):
+        """test_method='welch_t' always uses Welch's t."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        result = compare_two_models(
+            g1,
+            g2,
+            paired=False,
+            test_method="welch_t",
+            ci_target="mean_difference",
+        )
+        assert "Welch" in result.test_name
+
+    def test_parametric_auto_chooses_student_or_welch(self):
+        """test_method='parametric' dispatches between Student and Welch."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        result = compare_two_models(
+            g1,
+            g2,
+            paired=False,
+            test_method="parametric",
+            ci_target="mean_difference",
+        )
+        assert "Student" in result.test_name or "Welch" in result.test_name
+
+    def test_auto_emits_deprecation_warning(self):
+        """test_method='auto' (default) must emit a DeprecationWarning."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        with pytest.warns(DeprecationWarning, match="test_method"):
+            compare_two_models(g1, g2, paired=False, ci_target="mean_difference")
+
+    def test_invalid_test_method_raises(self):
+        """Invalid test_method value raises ValueError."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        with pytest.raises(ValueError, match="test_method"):
+            compare_two_models(
+                g1,
+                g2,
+                paired=False,
+                test_method="invalid",
+                ci_target="mean_difference",
+            )
+
+    def test_paired_ignores_test_method(self):
+        """When paired=True, test_method is ignored (paired Wilcoxon always)."""
+        from ictonyx.analysis import compare_two_models
+
+        g1, g2 = self._make_normal_groups()
+        # Should not raise even with nonsensical test_method for paired path
+        result = compare_two_models(
+            g1,
+            g2,
+            paired=True,
+            test_method="student_t",
+            ci_target="mean_difference",
+        )
+        assert "Wilcoxon" in result.test_name
+
+
 # ===================================================================
 #  Confusion Matrix
 # ===================================================================
@@ -1511,6 +1633,46 @@ class TestWilcoxonSignedRankDeprecation:
             result = wilcoxon_signed_rank_test(pd.Series([0.85, 0.87, 0.83, 0.86, 0.84, 0.88]))
         assert isinstance(result, StatisticalTestResult)
 
+    def test_not_in_ictonyx_all(self):
+        """X-54: wilcoxon_signed_rank_test must not be in ictonyx.__all__.
+        Remains importable via ictonyx.analysis for legacy callers but
+        is no longer advertised via the top-level namespace, preparing
+        for v0.5.0 hard removal."""
+        import ictonyx
+
+        assert "wilcoxon_signed_rank_test" not in ictonyx.__all__
+
+    def test_still_importable_from_submodule(self):
+        """X-54: the submodule import path must continue to work."""
+        from ictonyx.analysis import wilcoxon_signed_rank_test
+
+        assert wilcoxon_signed_rank_test is not None
+
+
+def test_paired_wilcoxon_warning_references_test_against_null():
+    """X-76: the deterministic-pair warning must reference the existing
+    test_against_null() rather than the not-yet-implemented
+    test_above_chance(). Pre-v0.4.7 the warning pointed users at a
+    phantom API."""
+    import warnings as _warnings
+
+    import pandas as pd
+
+    from ictonyx.analysis import paired_wilcoxon_test
+
+    series_a = pd.Series([0.85] * 20)
+    series_b = pd.Series([0.85] * 20)
+
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        paired_wilcoxon_test(series_a, series_b)
+
+    messages = [str(w.message) for w in caught]
+    matching = [m for m in messages if "test_against_null" in m]
+    assert matching, f"Expected a warning referencing test_against_null. Got: {messages}"
+    phantom = [m for m in messages if "test_above_chance" in m]
+    assert not phantom, f"Warning should no longer reference test_above_chance. Got: {phantom}"
+
 
 def test_paired_wilcoxon_inconclusive_on_identical_pairs():
     """Paired Wilcoxon must return inconclusive, not significant, when
@@ -1597,3 +1759,364 @@ def test_ci_effect_size_contains_point_estimate_for_parametric():
         assert lo <= result.effect_size <= hi, (
             f"CI ({lo}, {hi}) does not contain point estimate " f"{result.effect_size}"
         )
+
+
+class TestCompareTwoModelsCITarget:
+    """Regression tests for X-11: compare_two_models' CI target must match
+    the chosen test's inference target. Pre-v0.4.7, the unpaired MWU branch
+    computed a mean-difference bootstrap CI, which doesn't match MW's null
+    (distributional equality / median shift).
+
+    Fix: ci_target parameter with three values:
+    - 'mean_difference' (legacy, still works)
+    - 'median_difference' (new: Hodges-Lehmann bootstrap)
+    - 'auto' (default, emits DeprecationWarning, uses 'mean_difference' for
+      backward compat; default flips to 'median_difference' in v0.5.0)
+    """
+
+    def test_median_difference_uses_hodges_lehmann(self):
+        """ci_target='median_difference' on an MWU-dispatched comparison
+        must produce a Hodges-Lehmann CI whose point estimate equals the
+        median of pairwise differences."""
+        from ictonyx.analysis import compare_two_models
+
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.exponential(1.0, size=20) + 0.5)
+        g2 = pd.Series(rng.exponential(1.0, size=20))
+
+        result = compare_two_models(g1, g2, paired=False, ci_target="median_difference")
+
+        assert result.confidence_interval is not None
+        lo, hi = result.confidence_interval
+        assert isinstance(lo, float) and isinstance(hi, float)
+        assert lo <= hi
+
+    def test_mean_difference_path_still_works(self):
+        """ci_target='mean_difference' preserves v0.4.6 behavior."""
+        from ictonyx.analysis import compare_two_models
+
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.normal(0.9, 0.02, size=20))
+        g2 = pd.Series(rng.normal(0.85, 0.02, size=20))
+
+        result = compare_two_models(g1, g2, paired=False, ci_target="mean_difference")
+        assert result.confidence_interval is not None
+
+    def test_auto_emits_deprecation_warning(self):
+        """Default ci_target='auto' must emit a DeprecationWarning."""
+        from ictonyx.analysis import compare_two_models
+
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.normal(0.9, 0.02, size=20))
+        g2 = pd.Series(rng.normal(0.85, 0.02, size=20))
+
+        with pytest.warns(DeprecationWarning, match="ci_target"):
+            compare_two_models(g1, g2, paired=False)
+
+    def test_invalid_ci_target_raises(self):
+        """Invalid ci_target value must raise ValueError."""
+        from ictonyx.analysis import compare_two_models
+
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.normal(0.9, 0.02, size=20))
+        g2 = pd.Series(rng.normal(0.85, 0.02, size=20))
+
+        with pytest.raises(ValueError, match="ci_target"):
+            compare_two_models(g1, g2, paired=False, ci_target="invalid")
+
+    def test_median_difference_detects_real_shift(self):
+        """With a clear location shift, median_difference CI excludes zero."""
+        from ictonyx.analysis import compare_two_models
+
+        rng = np.random.default_rng(0)
+        g1 = pd.Series(rng.normal(0.90, 0.01, size=30))
+        g2 = pd.Series(rng.normal(0.70, 0.01, size=30))
+
+        result = compare_two_models(g1, g2, paired=False, ci_target="median_difference")
+
+        assert result.confidence_interval is not None
+        lo, hi = result.confidence_interval
+        assert lo > 0, f"Expected positive CI for +0.20 shift, got ({lo}, {hi})"
+
+
+class TestKruskalWallisDualEffectSize:
+    """Regression tests for X-12: kruskal_wallis_test must report both
+    η²_H (primary) and ε²_R (secondary) effect sizes with correct labels.
+
+    Pre-v0.4.7: the library computed η²_H = (H - k + 1) / (N - k) but
+    labeled it 'epsilon-squared'. ε²_R = H / (N - 1) (Kelley 1935) was
+    not computed at all.
+
+    Fix: compute both with correct formulas; label primary as
+    'eta-squared-H'; expose ε²_R via new secondary-effect-size fields.
+    """
+
+    def _make_three_groups(self):
+        """Three groups with a clear effect — large group-mean differences."""
+        return {
+            "A": pd.Series([0.70, 0.72, 0.68, 0.71, 0.69, 0.73, 0.70, 0.72]),
+            "B": pd.Series([0.80, 0.82, 0.78, 0.81, 0.79, 0.83, 0.80, 0.82]),
+            "C": pd.Series([0.90, 0.92, 0.88, 0.91, 0.89, 0.93, 0.90, 0.92]),
+        }
+
+    def test_primary_effect_size_is_eta_squared_h(self):
+        """Primary effect size must be labeled η²_H and match the formula."""
+        from ictonyx.analysis import kruskal_wallis_test
+
+        groups = self._make_three_groups()
+        result = kruskal_wallis_test(groups)
+
+        assert result.effect_size_name == "eta-squared-H"
+
+        # Verify formula: (H - k + 1) / (N - k)
+        H = result.statistic
+        k = 3
+        N = 24
+        expected_eta_h = max(0.0, min(1.0, (H - k + 1) / (N - k)))
+        assert abs(result.effect_size - expected_eta_h) < 1e-10
+
+    def test_secondary_effect_size_is_epsilon_squared_r(self):
+        """Secondary effect size must be labeled ε²_R and match the formula."""
+        from ictonyx.analysis import kruskal_wallis_test
+
+        groups = self._make_three_groups()
+        result = kruskal_wallis_test(groups)
+
+        assert result.effect_size_secondary_name == "epsilon-squared-R"
+
+        # Verify formula: H / (N - 1)
+        H = result.statistic
+        N = 24
+        expected_eps_r = max(0.0, min(1.0, H / (N - 1)))
+        assert result.effect_size_secondary is not None
+        assert abs(result.effect_size_secondary - expected_eps_r) < 1e-10
+
+    def test_both_effect_sizes_have_interpretations(self):
+        """Both primary and secondary effect sizes get qualitative labels."""
+        from ictonyx.analysis import kruskal_wallis_test
+
+        groups = self._make_three_groups()
+        result = kruskal_wallis_test(groups)
+
+        assert result.effect_size_interpretation in ("negligible", "small", "medium", "large")
+        assert result.effect_size_secondary_interpretation in (
+            "negligible",
+            "small",
+            "medium",
+            "large",
+        )
+
+    def test_effect_sizes_are_bounded_zero_to_one(self):
+        """Both effect sizes must be clamped to [0, 1]."""
+        from ictonyx.analysis import kruskal_wallis_test
+
+        groups = self._make_three_groups()
+        result = kruskal_wallis_test(groups)
+
+        assert 0.0 <= result.effect_size <= 1.0
+        assert 0.0 <= result.effect_size_secondary <= 1.0
+
+    def test_large_effect_produces_both_large_effect_sizes(self):
+        """Clearly separated groups should yield 'medium' or 'large' for both."""
+        from ictonyx.analysis import kruskal_wallis_test
+
+        groups = self._make_three_groups()
+        result = kruskal_wallis_test(groups)
+
+        # Both should be nonzero and interpretable
+        assert (
+            result.effect_size > 0.05
+        ), f"Expected large primary effect, got η²_H = {result.effect_size}"
+        assert (
+            result.effect_size_secondary > 0.05
+        ), f"Expected large secondary effect, got ε²_R = {result.effect_size_secondary}"
+
+
+class TestRequiredRunsPaired:
+    """Tests for required_runs_paired — paired-comparison power analysis
+    added in v0.4.7 (X-19-14b)."""
+
+    def test_returns_integer(self):
+        """Result is an int between the 6-minimum and 200-ceiling."""
+        from ictonyx.analysis import required_runs_paired
+
+        n = required_runs_paired(effect_size=0.3, alpha=0.05, power=0.80, n_sim=200)
+        assert isinstance(n, int)
+        assert 6 <= n <= 200
+
+    def test_monotonic_in_effect_size(self):
+        """Larger effect size → fewer runs needed (monotonic decreasing)."""
+        from ictonyx.analysis import required_runs_paired
+
+        n_small = required_runs_paired(effect_size=0.10, alpha=0.05, power=0.80, n_sim=200)
+        n_medium = required_runs_paired(effect_size=0.30, alpha=0.05, power=0.80, n_sim=200)
+        n_large = required_runs_paired(effect_size=0.50, alpha=0.05, power=0.80, n_sim=200)
+        # Each should need at least as many as the next, allowing tie
+        assert n_small >= n_medium >= n_large
+
+    def test_monotonic_in_power(self):
+        """Higher target power → more runs needed (monotonic increasing)."""
+        from ictonyx.analysis import required_runs_paired
+
+        n_80 = required_runs_paired(effect_size=0.3, alpha=0.05, power=0.80, n_sim=200)
+        n_90 = required_runs_paired(effect_size=0.3, alpha=0.05, power=0.90, n_sim=200)
+        assert n_80 <= n_90
+
+    def test_reproducible_with_seed(self):
+        """Same random_state → same result."""
+        from ictonyx.analysis import required_runs_paired
+
+        n1 = required_runs_paired(effect_size=0.3, n_sim=200, random_state=42)
+        n2 = required_runs_paired(effect_size=0.3, n_sim=200, random_state=42)
+        assert n1 == n2
+
+    def test_invalid_effect_size_raises(self):
+        """effect_size outside (0, 1) raises ValueError."""
+        from ictonyx.analysis import required_runs_paired
+
+        with pytest.raises(ValueError, match="effect_size"):
+            required_runs_paired(effect_size=1.5)
+        with pytest.raises(ValueError, match="effect_size"):
+            required_runs_paired(effect_size=0.0)
+
+    def test_invalid_power_raises(self):
+        """power outside (0, 1) raises ValueError."""
+        from ictonyx.analysis import required_runs_paired
+
+        with pytest.raises(ValueError, match="power"):
+            required_runs_paired(effect_size=0.3, power=1.5)
+
+    def test_ictonyx_namespace_exposes_function(self):
+        """required_runs_paired is importable from top-level ictonyx."""
+        import ictonyx
+
+        assert hasattr(ictonyx, "required_runs_paired")
+        assert "required_runs_paired" in ictonyx.__all__
+
+
+class TestFriedmanTest:
+    """Tests for friedman_test — Friedman chi-squared test for 3+ paired
+    groups (X-19-14c, v0.4.7). Non-parametric analog of repeated-measures
+    ANOVA; paired counterpart to kruskal_wallis_test."""
+
+    def _make_significant_groups(self):
+        """Three models with clearly different paired performance."""
+        # Use matched seeds so pairing is meaningful
+        rng = np.random.default_rng(42)
+        base = rng.normal(0.85, 0.02, size=15)
+        return {
+            "ModelA": pd.Series(base - 0.10),  # ~0.75
+            "ModelB": pd.Series(base),  # ~0.85
+            "ModelC": pd.Series(base + 0.05),  # ~0.90
+        }
+
+    def _make_similar_groups(self):
+        """Three models with paired performance from the same distribution."""
+        rng = np.random.default_rng(42)
+        return {
+            "ModelA": pd.Series(rng.normal(0.85, 0.02, size=15)),
+            "ModelB": pd.Series(rng.normal(0.85, 0.02, size=15)),
+            "ModelC": pd.Series(rng.normal(0.85, 0.02, size=15)),
+        }
+
+    def test_returns_statistical_test_result(self):
+        """Returns a StatisticalTestResult with standard fields populated."""
+        from ictonyx.analysis import StatisticalTestResult, friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert isinstance(result, StatisticalTestResult)
+        assert result.test_name == "Friedman Chi-Squared Test"
+        assert result.p_value is not None
+        assert result.statistic is not None
+
+    def test_detects_real_difference(self):
+        """Clearly different paired groups produce a significant result."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert result.p_value < 0.05
+
+    def test_no_false_positive_on_similar_groups(self):
+        """Identical distributions should not be flagged as significantly different."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_similar_groups()
+        result = friedman_test(groups)
+        assert result.p_value > 0.05
+
+    def test_effect_size_is_kendalls_w(self):
+        """Effect size is Kendall's W, bounded [0, 1]."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert result.effect_size_name == "Kendall's W"
+        assert 0.0 <= result.effect_size <= 1.0
+
+    def test_effect_size_interpretation_present(self):
+        """Effect size has a qualitative interpretation label."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert result.effect_size_interpretation in ("negligible", "small", "medium", "large")
+
+    def test_raises_on_fewer_than_three_groups(self):
+        """Fewer than 3 groups raises ValueError."""
+        from ictonyx.analysis import friedman_test
+
+        with pytest.raises(ValueError, match="at least three groups"):
+            friedman_test({"A": pd.Series([1, 2, 3]), "B": pd.Series([4, 5, 6])})
+
+    def test_raises_on_mismatched_lengths(self):
+        """Mismatched group lengths raise ValueError (pairing broken)."""
+        from ictonyx.analysis import friedman_test
+
+        with pytest.raises(ValueError, match="matched pairs"):
+            friedman_test(
+                {
+                    "A": pd.Series([0.80, 0.82, 0.79]),
+                    "B": pd.Series([0.75, 0.78]),  # different length
+                    "C": pd.Series([0.90, 0.88, 0.91]),
+                }
+            )
+
+    def test_sample_size_warning_at_small_n(self):
+        """n < 10 triggers a sample-size warning."""
+        from ictonyx.analysis import friedman_test
+
+        # Only 5 observations per group
+        groups = {
+            "A": pd.Series([0.75, 0.77, 0.73, 0.76, 0.74]),
+            "B": pd.Series([0.85, 0.87, 0.83, 0.86, 0.84]),
+            "C": pd.Series([0.90, 0.92, 0.88, 0.91, 0.89]),
+        }
+        result = friedman_test(groups)
+        # At n=5, we expect the small-sample warning
+        small_n_warnings = [w for w in result.warnings if "n >= 10" in w or "n=5" in w]
+        assert small_n_warnings, f"Expected small-n warning, got: {result.warnings}"
+
+    def test_top_level_namespace_export(self):
+        """friedman_test is importable from top-level ictonyx."""
+        import ictonyx
+
+        assert hasattr(ictonyx, "friedman_test")
+        assert "friedman_test" in ictonyx.__all__
+
+    def test_conclusion_mentions_model_count(self):
+        """Conclusion text references the number of models compared."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert "3 models" in result.conclusion
+
+    def test_sample_sizes_populated(self):
+        """sample_sizes dict is populated with group names and n."""
+        from ictonyx.analysis import friedman_test
+
+        groups = self._make_significant_groups()
+        result = friedman_test(groups)
+        assert result.sample_sizes == {"ModelA": 15, "ModelB": 15, "ModelC": 15}

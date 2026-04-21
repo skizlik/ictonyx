@@ -3,6 +3,7 @@
 import gc
 import os
 import pickle
+import sys
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -168,7 +169,6 @@ class BaseModelWrapper(ABC):
         Calling framework teardown (e.g. ``tf.keras.backend.clear_session()``)
         in that state can trigger out-of-order shutdown sequences.
         """
-        import sys
 
         if sys.is_finalizing():
             return
@@ -484,7 +484,36 @@ if TENSORFLOW_AVAILABLE:
             Raises:
                 TypeError: If `train_data` is not in one of the three
                     supported formats.
+
+            Note:
+                The runner threads ``run_seed`` and ``verbose`` into
+                ``fit_kwargs`` for non-sklearn wrappers (v0.4.7+). This
+                method pops both from ``kwargs`` before forwarding to
+                ``model.fit()``, because Keras does not accept them.
+                ``run_seed`` is applied via ``tf.keras.utils.set_random_seed()``
+                for per-run determinism; ``verbose`` is translated to Keras's
+                ``verbose`` kwarg (0 = silent, 1 = progress bar, 2 = one
+                line per epoch).
             """
+            # Per-run seed control: the runner generates a per-run seed via
+            # SeedSequence.spawn() and threads it through fit_kwargs. Pop
+            # and apply it here so Keras/TF initialization and training are
+            # deterministic per run. Keras's model.fit() does not accept
+            # 'run_seed', so the kwarg must be consumed before forwarding.
+            run_seed = kwargs.pop("run_seed", None)
+            if run_seed is not None:
+                import tensorflow as tf
+
+                tf.keras.utils.set_random_seed(int(run_seed))
+
+            # Verbose routing: the runner threads 'verbose' as an int (0/1).
+            # Keras's model.fit() accepts 'verbose' natively, but runners pass
+            # it as part of the shared fit_kwargs protocol. Pop-and-re-inject
+            # to make the intent explicit and match HF wrapper's pattern.
+            if "verbose" in kwargs:
+                verbose = kwargs.pop("verbose")
+                kwargs["verbose"] = int(bool(verbose)) if not isinstance(verbose, int) else verbose
+
             if self.clear_session:
                 try:
                     import tensorflow as tf
@@ -1717,15 +1746,30 @@ if HUGGINGFACE_AVAILABLE:
         into :class:`~ictonyx.runners.TrainingResult` in the format expected
         by :class:`~ictonyx.runners.ExperimentRunner`.
 
-        Seeding is controlled via ``transformers.set_seed()`` at the start of
-        ``fit()`` and via ``TrainingArguments(seed=..., data_seed=...)`` so
-        that weight initialisation, batch ordering, and dropout are all
-        deterministic per run.
+        Per-run seeding (v0.4.7+): the runner threads a ``run_seed`` through
+        ``fit_kwargs`` generated via ``SeedSequence.spawn()``. Each call to
+        ``fit()`` pops ``run_seed`` from ``kwargs`` and applies it via
+        ``transformers.set_seed()`` plus ``TrainingArguments(seed=run_seed,
+        data_seed=run_seed)`` so that weight initialisation, batch ordering,
+        and dropout are all deterministic per run. Pre-v0.4.7, the wrapper
+        read from ``self.model_config`` (never populated) and silently fell
+        back to 42 on every run, causing variability studies to produce
+        identical metrics across all runs.
 
         .. note::
             ``load_best_model_at_end`` is always ``False``. Setting it to
             ``True`` causes Trainer to silently replace the final model weights
             with an earlier checkpoint, invalidating run-to-run comparison.
+
+        .. note::
+            The wrapper does not override ``lr_scheduler_type``, so it inherits
+            the HF default of ``'linear'`` — a linear decay from the peak
+            learning rate (``learning_rate``) to zero over the course of
+            training, with an initial warmup controlled by ``warmup_ratio``.
+            This is the standard behavior for transformer fine-tuning; to use
+            a different schedule (e.g., cosine), subclass
+            ``HuggingFaceModelWrapper`` and override the ``fit()`` method
+            with a custom ``TrainingArguments`` call.
 
         Args:
             model_name_or_path: HuggingFace Hub model identifier or local path.
@@ -1744,6 +1788,9 @@ if HUGGINGFACE_AVAILABLE:
 
         Example::
 
+            # model_kwargs is forwarded to the wrapper's __init__; additional
+            # kwargs in model_kwargs beyond the wrapper's init signature
+            # are forwarded to from_pretrained() via **model_kwargs.
             results = ix.variability_study(
                 model=ix.HuggingFaceModelWrapper,
                 model_kwargs={
@@ -1753,7 +1800,11 @@ if HUGGINGFACE_AVAILABLE:
                 data=(texts_train, labels_train),
                 validation_data=(texts_val, labels_val),
                 runs=20,
+                epochs=3,
+                batch_size=16,
+                learning_rate=2e-5,
                 seed=42,
+                verbose=False,  # disables Trainer mid-epoch log chatter
             )
         """
 
@@ -1863,12 +1914,37 @@ if HUGGINGFACE_AVAILABLE:
             import tempfile
 
             # ── Seed control ─────────────────────────────────────────────
-            run_seed = None
-            if hasattr(self, "model_config") and self.model_config is not None:
-                run_seed = self.model_config.get("run_seed")
+            # Per-run seed is threaded via fit_kwargs by the runner (X-40 fix,
+            # v0.4.7). The prior implementation read from self.model_config,
+            # which is never populated on the wrapper — so every run used the
+            # fallback 42, producing bit-for-bit identical metrics across all
+            # runs in a variability study.
+            run_seed = kwargs.pop("run_seed", None)
             if run_seed is None:
                 run_seed = 42
+                warnings.warn(
+                    "HuggingFaceModelWrapper.fit() received no run_seed; "
+                    "using default 42. All runs will produce identical results. "
+                    "This indicates a runner-wrapper integration bug.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             _hf_set_seed(run_seed)
+
+            # ── Verbose control ──────────────────────────────────────────
+            # Threaded via fit_kwargs by the runner (same pattern as run_seed).
+            # Translates to disable_tqdm in TrainingArguments + transformers
+            # global logging level. Prior to v0.4.7, verbose=False in
+            # variability_study produced 50+ lines of stdout per run.
+            verbose_flag = bool(kwargs.pop("verbose", True))
+            if not verbose_flag:
+                # Quiet the transformers library root logger for this run.
+                try:
+                    from transformers import logging as _hf_logging
+
+                    _hf_logging.set_verbosity_error()
+                except ImportError:
+                    pass
 
             # ── Tokenizer + data ─────────────────────────────────────────
             self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name_or_path)
@@ -1912,6 +1988,8 @@ if HUGGINGFACE_AVAILABLE:
                 gradient_accumulation_steps=gradient_accumulation_steps,
                 fp16=fp16,
                 logging_steps=logging_steps,
+                disable_tqdm=not verbose_flag,
+                log_level="error" if not verbose_flag else "passive",
                 eval_strategy="epoch" if eval_dataset is not None else "no",
                 save_strategy="no",
                 load_best_model_at_end=False,  # MUST be False — see class docstring

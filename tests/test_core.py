@@ -2214,3 +2214,110 @@ class TestDelShutdownRace:
         assert (
             "sys.meta_path is None" not in result.stderr
         ), f"sys.meta_path error detected. stderr:\n{result.stderr}"
+
+
+class TestKerasWrapperAcceptsRunSeed:
+    """Regression test for the KerasModelWrapper run_seed bug (v0.4.7).
+
+    Pre-v0.4.7 (and during v0.4.7 development before this fix),
+    KerasModelWrapper.fit() forwarded **kwargs straight to model.fit().
+    The runner threads 'run_seed' into fit_kwargs for non-sklearn
+    wrappers (commit 1 / X-40), which Keras rejects because
+    TensorFlowTrainer.fit() doesn't accept that kwarg. The result: every
+    Keras-based variability study had 0/N successful runs until fixed.
+
+    Fix: KerasModelWrapper.fit() now pops run_seed from kwargs and
+    applies it via tf.keras.utils.set_random_seed() before forwarding
+    to model.fit(). Same pattern as HuggingFaceModelWrapper.
+    """
+
+    def test_keras_wrapper_accepts_run_seed_from_runner(self):
+        """variability_study with a Keras wrapper produces non-zero
+        successful runs."""
+        pytest.importorskip("tensorflow", reason="tensorflow not installed")
+
+        import numpy as np
+        import tensorflow as tf
+        from sklearn.datasets import load_wine
+        from sklearn.preprocessing import StandardScaler
+
+        import ictonyx as ix
+
+        data = load_wine()
+        X = StandardScaler().fit_transform(data.data).astype(np.float32)
+        y = data.target
+
+        def build_model(config):
+            model = tf.keras.Sequential(
+                [
+                    tf.keras.layers.Dense(8, activation="relu", input_shape=(13,)),
+                    tf.keras.layers.Dense(3, activation="softmax"),
+                ]
+            )
+            model.compile(
+                optimizer="adam",
+                loss="sparse_categorical_crossentropy",
+                metrics=["accuracy"],
+            )
+            return ix.KerasModelWrapper(model)
+
+        results = ix.variability_study(
+            model=build_model,
+            data=(X, y),
+            runs=2,
+            epochs=2,
+            seed=42,
+            verbose=False,
+        )
+
+        # The bug: 0/2 successful runs with cryptic "unexpected kwarg 'run_seed'"
+        # Fix: 2/2 successful runs with val_accuracy populated
+        assert results.n_runs == 2, (
+            f"Expected 2/2 successful runs, got {results.n_runs}. "
+            f"Possible KerasModelWrapper run_seed regression."
+        )
+        assert "val_accuracy" in results.final_metrics
+        assert len(results.final_metrics["val_accuracy"]) == 2
+
+    def test_keras_wrapper_run_seed_produces_determinism(self):
+        """Same run_seed → same training history. Verifies
+        tf.keras.utils.set_random_seed() is actually applied."""
+        pytest.importorskip("tensorflow", reason="tensorflow not installed")
+
+        import numpy as np
+        import tensorflow as tf
+        from sklearn.datasets import load_wine
+        from sklearn.preprocessing import StandardScaler
+
+        import ictonyx as ix
+
+        data = load_wine()
+        X = StandardScaler().fit_transform(data.data).astype(np.float32)
+        y = data.target
+
+        def build_model(config):
+            model = tf.keras.Sequential(
+                [
+                    tf.keras.layers.Dense(8, activation="relu", input_shape=(13,)),
+                    tf.keras.layers.Dense(3, activation="softmax"),
+                ]
+            )
+            model.compile(
+                optimizer="adam",
+                loss="sparse_categorical_crossentropy",
+                metrics=["accuracy"],
+            )
+            return ix.KerasModelWrapper(model)
+
+        # Same seed → same first-run val_accuracy (determinism check)
+        r1 = ix.variability_study(
+            model=build_model, data=(X, y), runs=3, epochs=2, seed=42, verbose=False
+        )
+        r2 = ix.variability_study(
+            model=build_model, data=(X, y), runs=3, epochs=2, seed=42, verbose=False
+        )
+        v1 = r1.final_metrics["val_accuracy"][0]
+        v2 = r2.final_metrics["val_accuracy"][0]
+        assert abs(v1 - v2) < 1e-6, (
+            f"Same seed → different val_accuracy. run_seed not applied? " f"r1={v1}, r2={v2}"
+        )

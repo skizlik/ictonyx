@@ -484,7 +484,36 @@ if TENSORFLOW_AVAILABLE:
             Raises:
                 TypeError: If `train_data` is not in one of the three
                     supported formats.
+
+            Note:
+                The runner threads ``run_seed`` and ``verbose`` into
+                ``fit_kwargs`` for non-sklearn wrappers (v0.4.7+). This
+                method pops both from ``kwargs`` before forwarding to
+                ``model.fit()``, because Keras does not accept them.
+                ``run_seed`` is applied via ``tf.keras.utils.set_random_seed()``
+                for per-run determinism; ``verbose`` is translated to Keras's
+                ``verbose`` kwarg (0 = silent, 1 = progress bar, 2 = one
+                line per epoch).
             """
+            # Per-run seed control: the runner generates a per-run seed via
+            # SeedSequence.spawn() and threads it through fit_kwargs. Pop
+            # and apply it here so Keras/TF initialization and training are
+            # deterministic per run. Keras's model.fit() does not accept
+            # 'run_seed', so the kwarg must be consumed before forwarding.
+            run_seed = kwargs.pop("run_seed", None)
+            if run_seed is not None:
+                import tensorflow as tf
+
+                tf.keras.utils.set_random_seed(int(run_seed))
+
+            # Verbose routing: the runner threads 'verbose' as an int (0/1).
+            # Keras's model.fit() accepts 'verbose' natively, but runners pass
+            # it as part of the shared fit_kwargs protocol. Pop-and-re-inject
+            # to make the intent explicit and match HF wrapper's pattern.
+            if "verbose" in kwargs:
+                verbose = kwargs.pop("verbose")
+                kwargs["verbose"] = int(bool(verbose)) if not isinstance(verbose, int) else verbose
+
             if self.clear_session:
                 try:
                     import tensorflow as tf

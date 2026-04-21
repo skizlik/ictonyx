@@ -1,8 +1,6 @@
 # Ictonyx
 
-**Iteration Comparison Testing Over N-runs: Yield eXamination**
-
-A Python framework for studying machine learning model variability and performing rigorous statistical comparisons.
+A Python framework for evaluating machine learning training variability and performing rigorous statistical comparisons.
 
 [![CI/CD](https://github.com/skizlik/ictonyx/actions/workflows/test.yml/badge.svg)](https://github.com/skizlik/ictonyx/actions/workflows/test.yml)
 [![PyPI](https://img.shields.io/pypi/v/ictonyx)](https://pypi.org/project/ictonyx/)
@@ -16,7 +14,7 @@ A Python framework for studying machine learning model variability and performin
 
 Training a machine learning model involves stochastic factors: random weight initialisation, data shuffling, dropout. Train the same architecture on the same dataset twice and you will get different weights, different predictions, and different evaluation metrics.
 
-This means a model's performance is a random variable, not a constant — and treating it as a constant, as most practitioners do, leads to conclusions that cannot be replicated or trusted. Reporting a single accuracy from a single training run is not a measurement; it is a sample of size one.
+This means a model's performance metrics are random variables, not constants — and treating them as constants, as is often done in practice, undermines the robustness and validity of our conclusions. Reporting accuracy from a single training run is not an adequate assessment; it is a sample of size one.
 
 Ictonyx trains a model N times under independent random seeds, collects the full distribution of outcomes, and provides the statistical machinery to reason about that distribution rigorously.
 
@@ -34,6 +32,7 @@ pip install ictonyx
 | `sklearn` | scikit-learn, joblib | `pip install ictonyx[sklearn]` |
 | `tensorflow` | TensorFlow, Keras | `pip install ictonyx[tensorflow]` |
 | `torch` | PyTorch | `pip install ictonyx[torch]` |
+| `huggingface` | Transformers, datasets, accelerate | `pip install ictonyx[huggingface]` |
 | `mlflow` | MLflow tracking | `pip install ictonyx[mlflow]` |
 | `explain` | SHAP explainability | `pip install ictonyx[explain]` |
 | `tuning` | Optuna hyperparameter tuning | `pip install ictonyx[tuning]` |
@@ -50,27 +49,34 @@ Requires Python 3.10+. Current release: **0.4.7** — [changelog](CHANGELOG.md) 
 
 ---
 
-## What variability does Ictonyx measure?
+### Documentation
 
-Ictonyx characterizes **training-stochastic variance** under a fixed data
-split. The reported uncertainty is the variance of your metric across
-different seeds — initialization, batch order, augmentation, dropout —
-holding the train/val/test split constant. This answers the question:
-*"How stable is this training procedure?"*
+[Ictonyx documentation](https://ictonyx.readthedocs.io/en/latest/) is hosted on Read the Docs.
 
-Ictonyx does **not** currently measure **sampling variance** — the
-uncertainty that comes from which examples landed in train vs. validation
-vs. test. If you change the split, you get a different answer about model
-quality, and that difference is its own source of uncertainty, distinct
-from seed stochasticity.
+### Docker environment
 
-For sampling-variance analysis today, pair Ictonyx with an outer k-fold
-loop. In a later release, Ictonyx will ship `ResamplingPolicy` for
-nested (data × seed) designs with corrected comparison tests
-(Nadeau-Bengio, Bouckaert, Dietterich 5×2).
+A GPU-enabled container with TensorFlow, PyTorch, and the HuggingFace
+stack pre-installed. Files created inside the container are owned by
+your host user, not root.  Requires Docker.
 
-Reference: Bouthillier et al. (2021), *Accounting for Variance in
-Machine Learning Benchmarks*, MLSys.
+```bash
+./build-gpu.sh           # build the image
+./test-gpu.sh            # verify the Docker build
+./run-gpu.sh             # launch Jupyter on port 8888
+./run-gpu.sh bash        # interactive shell
+```
+
+The NVIDIA Container Toolkit is required for GPU acceleration.
+CPU-only for macOS and non-NVIDIA systems.
+
+---
+
+
+## What does Ictonyx measure?
+
+Ictonyx characterizes **training-derived randomness** under a fixed data split. Metrics are assessed across different seeds — isolating the random effects in initialization, batch order, augmentation, and dropout — while holding the train/val/test split constant. Repeated runs of the same model on the same data allow for a variety of plotting and analysis functions.
+
+Ictonyx does **not** currently measure **sampling variability** — which is caused by the random nature of a train-validation-test split. Different splits produce different results.  At present, this can be addressed by using Ictonyx within an outer k-fold loop. In a later release, Ictonyx will ship ResamplingPolicy for nested (data × seed) designs with corrected comparison tests (Nadeau-Bengio, Bouckaert, Dietterich 5×2).
 
 ---
 
@@ -155,7 +161,7 @@ val_loss:
   Max:              0.7476
 ```
 
-On a 178-sample dataset, the same architecture achieves anywhere from 72% to 100% validation accuracy depending solely on the random seed — a 28-point range that a single-run evaluation would never reveal.  Ictonyx also allows plotting of training histories:
+On a 178-sample dataset, the same architecture produces models with validation accuracy ranging from 72% to 100% depending solely on the random seed.  Ictonyx also provides for plotting of training histories:
 
 ```python
 ix.plot_variability_summary(results=results, metric='accuracy')
@@ -167,13 +173,9 @@ ix.plot_variability_summary(results=results, metric='accuracy')
 
 ## Comparing two models
 
-A routine question in applied ML: does one model actually outperform another,
-or did it just draw a better random seed? A single run of each tells you nothing
-— the difference could be real, or it could be noise. Ictonyx answers this by
-running both models the same number of times and applying a statistical test to
-the resulting distributions.
+Because of training variability, a single run is generally inadequate to make valid comparisons between models with respect to a particular metric.  Ictonyx facilitates more statistically sound model comparison with its compare_models() function, which runs multiple models the same number of times, and applies an appropriate hypothesis test to the results.
 
-Ictonyx works equally well with sklearn estimators — pass a class or configured instance directly, no wrapper required.
+Ictonyx also supports sklearn estimators — pass a class or configured instance directly, No wrapper is required.
 
 ```python
 from sklearn.neural_network import MLPClassifier
@@ -210,17 +212,17 @@ Significant pairs: MLPClassifier_vs_RandomForestClassifier
 ![Comparison boxplots for model comparison](images/comparison_boxplots.png)
 
 
-Both models received identical per-run seeds, so each MLP run is directly paired with the corresponding Random Forest run. The Wilcoxon signed-rank test exploits this pairing to remove noise common to both models.
+Each model receives the same seed per run: each MLP run is directly paired with the corresponding Random Forest run.  This allows us to use the non-parametric paired Wilcoxon signed-rank test.
 
-The MLP outperformed the Random Forest with an effect size of r=0.815 (p=0.0005). That is not a marginal result that might reverse on a different seed.
+Here, MLP outperformed Random Forest with an effect size of r=0.815 (p=0.0005).  We can confirm with strong statistical significance that it's the more accurate model.
 
-The 'none correction' label indicates that with only two models there is a single pair to test, so no multiple-comparison correction is applied
+The 'none correction' label is present because with only two models, no multiple-comparison correction is applied.
 
 ---
 
 ## Process isolation for GPU runs
 
-Keras models accumulate GPU memory across training runs in a loop. For studies with many runs or large models, run each training session in a subprocess:
+Keras models accumulate GPU memory across training runs. For studies with many runs or large models, use_process_isolation allows each training session to be run in an isolated subprocess:
 
 ```python
 results = ix.variability_study(
@@ -240,11 +242,13 @@ Each run executes in a child process and exits cleanly, releasing all GPU memory
 
 ## PyTorch
 
+Ictonyx also supports PyTorch models:
+
 ```python
 import torch
 import torch.nn as nn
 import ictonyx as ix
-from ictonyx import PyTorchModelWrapper, ArraysDataHandler
+from ictonyx import PyTorchModelWrapper, ArraysDataHandler, ModelConfig
 
 def build_net(config: ModelConfig) -> PyTorchModelWrapper:
     model = nn.Sequential(
@@ -275,7 +279,6 @@ results = ix.variability_study(
 )
 
 ix.plot_variability_summary(results=results, metric='accuracy')
-
 
 ```
 ![Variability summary for PyTorch classifier across 20 runs](images/pytorch_variability.png)
@@ -312,7 +315,9 @@ The `examples/` directory contains Jupyter notebooks:
 - `04_pytorch_classification.ipynb` — PyTorch classification variability study with epoch-level diagnostics
 - `05_pytorch_regression.ipynb` — PyTorch regression variability study with known ground truth
 - `06_sklearn_models.ipynb` — sklearn classification and regression: single-model variability and multi-model comparison
-
+- `07_run_independence.ipynb` — verifying the IID assumption: autocorrelation diagnostics on real and synthetic run sequences
+- `08_sample_size.ipynb` — how many seeds you need: sequential CI narrowing, 1/√N scaling, and practical recommendations
+- `09_huggingface_text_classification.ipynb` — HuggingFace transformer variability: fine-tuning variance, paired model comparison, and winner-reversal on real text data
 ---
 
 ## License
@@ -323,9 +328,7 @@ MIT. See [LICENSE](LICENSE).
 
 ## Citation
 
-If you use Ictonyx in published work, please cite it using the metadata in
-[`CITATION.cff`](CITATION.cff), or use the **Cite this repository** button
-on the GitHub repository page.
+If you use Ictonyx in published work, please cite it using the metadata in [`CITATION.cff`](CITATION.cff), or use the **Cite this repository** button on the GitHub repository page.
 
 ```bibtex
 @software{kizlik_ictonyx,
@@ -336,3 +339,5 @@ on the GitHub repository page.
   license = {MIT},
 }
 ```
+
+**Iteration Comparison Testing Over N-runs: Yield eXamination**

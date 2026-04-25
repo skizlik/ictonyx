@@ -501,10 +501,6 @@ if TENSORFLOW_AVAILABLE:
             # deterministic per run. Keras's model.fit() does not accept
             # 'run_seed', so the kwarg must be consumed before forwarding.
             run_seed = kwargs.pop("run_seed", None)
-            if run_seed is not None:
-                import tensorflow as tf
-
-                tf.keras.utils.set_random_seed(int(run_seed))
 
             # Verbose routing: the runner threads 'verbose' as an int (0/1).
             # Keras's model.fit() accepts 'verbose' natively, but runners pass
@@ -514,6 +510,9 @@ if TENSORFLOW_AVAILABLE:
                 verbose = kwargs.pop("verbose")
                 kwargs["verbose"] = int(bool(verbose)) if not isinstance(verbose, int) else verbose
 
+            # BUG-048-5: clear_session() MUST run BEFORE set_random_seed().
+            # In TF 2.16+, clear_session() resets the global random state,
+            # nullifying any seed set before it.
             if self.clear_session:
                 try:
                     import tensorflow as tf
@@ -521,6 +520,11 @@ if TENSORFLOW_AVAILABLE:
                     tf.keras.backend.clear_session()
                 except Exception:
                     pass
+
+            if run_seed is not None:
+                import tensorflow as tf
+
+                tf.keras.utils.set_random_seed(int(run_seed))
 
             if isinstance(train_data, (tf.data.Dataset, Sequence)):
                 keras_history = self.model.fit(

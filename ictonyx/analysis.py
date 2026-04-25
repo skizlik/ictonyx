@@ -347,7 +347,6 @@ def check_independence(
             ``norm.ppf(1 - alpha/2) / sqrt(n)``.
 
     Note:
-        Note:
         At n ≤ 10 this test has very low power to detect autocorrelation.
         Absence of a warning is not a strong independence guarantee at
         typical variability study sizes (n = 20 runs).
@@ -370,9 +369,6 @@ def check_independence(
 
     autocorr_results = {}
     significant_lags = []
-
-    # Derive critical value from alpha
-    critical_value = stats.norm.ppf(1 - alpha / 2)
 
     n = len(data.dropna())
     if n < max_lag + 2:
@@ -1468,7 +1464,7 @@ def paired_wilcoxon_test(
     differences = aligned["a"] - aligned["b"]
     nonzero = differences[differences != 0]
 
-    if np.std(differences) < deterministic_tol:
+    if np.std(differences, ddof=1) < deterministic_tol:
         warnings.warn(
             "All paired differences are effectively constant "
             f"(std < {deterministic_tol}). A paired test on deterministic "

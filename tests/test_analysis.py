@@ -1467,11 +1467,10 @@ class TestPairedWilcoxonTest:
         )
 
     def test_effect_size_uses_w_statistic_formula(self):
-        """Regression for BUG-3: paired_wilcoxon_test() derived r via norm.ppf(p/2),
+        """Bug regression: paired_wilcoxon_test() derived r via norm.ppf(p/2),
         which is invalid when wilcoxon(method='auto') uses the exact distribution.
-        After the fix, r is derived from the W statistic directly.
-
-        We verify by independently computing r from W and checking it matches."""
+        After the fix, r is derived from the W statistic directly, with
+        tie-corrected variance (BUG-048-3)."""
         from scipy.stats import wilcoxon as scipy_wilcoxon
 
         from ictonyx.analysis import paired_wilcoxon_test
@@ -1479,22 +1478,23 @@ class TestPairedWilcoxonTest:
         a = pd.Series([0.85, 0.87, 0.86, 0.88, 0.84, 0.89])
         b = pd.Series([0.70, 0.73, 0.71, 0.72, 0.68, 0.75])
         result = paired_wilcoxon_test(a, b)
-
         assert result.effect_size is not None
         assert 0.0 <= result.effect_size <= 1.0, f"effect_size={result.effect_size} out of [0, 1]"
-
-        # Independently compute r using the W-statistic formula
+        # Independently compute r using the W-statistic formula with tie correction
         differences = (a - b).values
         nonzero = differences[differences != 0]
         n_eff = len(nonzero)
         W, _ = scipy_wilcoxon(nonzero, method="auto")
         mu_w = n_eff * (n_eff + 1) / 4.0
-        sigma_w = np.sqrt(n_eff * (n_eff + 1) * (2 * n_eff + 1) / 24.0)
-        expected_r = min(abs((W - mu_w) / sigma_w) / np.sqrt(n_eff), 1.0)
-
+        sigma_w_sq = n_eff * (n_eff + 1) * (2 * n_eff + 1) / 24.0
+        # Tie correction (BUG-048-3)
+        _, tie_counts = np.unique(np.abs(nonzero), return_counts=True)
+        sigma_w_sq -= np.sum(tie_counts**3 - tie_counts) / 48.0
+        sigma_w = np.sqrt(max(sigma_w_sq, 0.0))
+        expected_r = min(abs((W - mu_w) / sigma_w) / np.sqrt(n_eff), 1.0) if sigma_w > 0 else 0.0
         assert abs(result.effect_size - expected_r) < 1e-9, (
             f"effect_size={result.effect_size:.8f} does not match W-statistic "
-            f"formula={expected_r:.8f}. The norm.ppf(p/2) path may still be active."
+            f"formula={expected_r:.8f}."
         )
 
 

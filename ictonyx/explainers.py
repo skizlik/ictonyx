@@ -232,10 +232,6 @@ def plot_shap_waterfall(
         _warn_if_deep_explainer_deprecated()
         explainer = shap.DeepExplainer(model_wrapper.model, background)
     else:
-        if hasattr(model_wrapper.model, "predict_proba"):
-            predict_fn = model_wrapper.predict_proba
-        else:
-            predict_fn = model_wrapper.predict
         predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
         background_size = min(50, len(X_data))
         _bg_rng = np.random.default_rng(42)
@@ -360,20 +356,12 @@ def plot_shap_dependence(
                 _warn_if_deep_explainer_deprecated()
                 explainer = shap.DeepExplainer(model_wrapper.model, background)
             except Exception:
-                if hasattr(model_wrapper.model, "predict_proba"):
-                    predict_fn = model_wrapper.predict_proba
-                else:
-                    predict_fn = model_wrapper.predict
                 predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
                 background_size = min(50, len(X_data))
                 _bg_rng = np.random.default_rng(42)
                 _bg_idx = _bg_rng.choice(len(X_data), size=background_size, replace=False)
                 explainer = shap.KernelExplainer(predict_fn, X_data[_bg_idx])
         else:
-            if hasattr(model_wrapper.model, "predict_proba"):
-                predict_fn = model_wrapper.predict_proba
-            else:
-                predict_fn = model_wrapper.predict
             predict_fn = getattr(model_wrapper, "predict_proba", model_wrapper.predict)
             background_size = min(50, len(X_data))
             _bg_rng = np.random.default_rng(42)

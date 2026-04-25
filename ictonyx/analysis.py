@@ -1026,7 +1026,7 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
     for i, (name, group) in enumerate(zip(group_names, clean_groups)):
         is_normal, norm_details = check_normality(group, require_all_tests=True)
         normality_results[name] = norm_details
-        if not is_normal:
+        if is_normal is False:
             all_normal = False
 
     result.assumptions_met["normality"] = all_normal

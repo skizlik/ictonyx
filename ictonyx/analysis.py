@@ -908,7 +908,14 @@ def _wilcoxon_signed_rank_impl(
                 # exact test for small n (the common case), making that conversion wrong.
                 W = float(wilcoxon_result.statistic)
                 mu_w = n * (n + 1) / 4.0
-                sigma_w = np.sqrt(n * (n + 1) * (2 * n + 1) / 24.0)
+                # Tie-corrected variance. The uncorrected formula
+                # overestimates sigma_w when tied absolute differences exist,
+                # systematically underestimating effect size r.
+                sigma_w_sq = n * (n + 1) * (2 * n + 1) / 24.0
+                abs_vals = np.abs(non_zero_data.values)
+                _, tie_counts = np.unique(abs_vals, return_counts=True)
+                sigma_w_sq -= np.sum(tie_counts**3 - tie_counts) / 48.0
+                sigma_w = np.sqrt(max(sigma_w_sq, 0.0))
                 z_approx = (W - mu_w) / sigma_w if sigma_w > 0 else 0.0
                 r = min(abs(z_approx) / np.sqrt(n), 1.0)
                 result.effect_size = r
@@ -1518,11 +1525,17 @@ def paired_wilcoxon_test(
         n_eff = len(nonzero)
         W = float(stat)
         mu_w = n_eff * (n_eff + 1) / 4.0
-        sigma_w = np.sqrt(n_eff * (n_eff + 1) * (2 * n_eff + 1) / 24.0)
+        # BUG-048-3: tie-corrected variance
+        sigma_w_sq = n_eff * (n_eff + 1) * (2 * n_eff + 1) / 24.0
+        abs_nonzero = np.abs(nonzero.values) if hasattr(nonzero, "values") else np.abs(nonzero)
+        _, tie_counts = np.unique(abs_nonzero, return_counts=True)
+        sigma_w_sq -= np.sum(tie_counts**3 - tie_counts) / 48.0
+        sigma_w = np.sqrt(max(sigma_w_sq, 0.0))
         if sigma_w > 0:
             z_approx = (W - mu_w) / sigma_w
             r = min(abs(z_approx) / np.sqrt(n_eff), 1.0)
         else:
+            r = 0.0
             r = 0.0
         result.effect_size = r
         result.effect_size_name = "r (effect size)"

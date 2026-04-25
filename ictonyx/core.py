@@ -1408,10 +1408,15 @@ if PYTORCH_AVAILABLE:
                 # --- Validation phase ---
                 if val_loader is not None:
                     val_loss, val_metric = self._evaluate_loader(val_loader)
-                    history["val_loss"].append(val_loss)
                     if self.task == "classification":
+                        history["val_loss"].append(val_loss)
                         history["val_accuracy"].append(val_metric)
                     else:
+                        # BUG-048-1: Do NOT append val_loss here.
+                        # _compute_epoch_regression_metrics() already returns
+                        # {"val_loss": ..., "val_mse": ..., ...}. Appending
+                        # val_loss both here and via that dict gave 2N entries
+                        # vs N for other metrics, crashing pd.DataFrame().
                         reg_metrics = self._compute_epoch_regression_metrics(val_loader)
                         for k, v in reg_metrics.items():
                             history.setdefault(k, []).append(v)

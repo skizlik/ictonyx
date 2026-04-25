@@ -36,18 +36,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ---- Layer 2: pip upgrade (changes almost never) ----
 RUN pip install --no-cache-dir --upgrade pip
 
-# ---- Layer 3: Heavy ML frameworks (changes rarely) ----
-# Multi-gigabyte downloads. Isolated so that changes to lighter
-# dependencies or ictonyx code never trigger re-download.
-#
-# Version strategy: constraints here must satisfy pyproject.toml's
-# declared dependencies for the [tensorflow], [huggingface], and [ml]
-# extras. Keeping the Dockerfile in sync with pyproject prevents the
-# editable install in Layer 5/6 from downgrading or upgrading these
-# heavy packages.
+# ---- Layer 3a: PyTorch (picks up cu130 from PyPI, matches base image) ----
+RUN pip install --no-cache-dir --default-timeout=120 \
+    "torch>=2.0.0" "torchvision" --index-url https://download.pytorch.org/whl/cu129
+
+# ---- Layer 3b: Other heavy ML frameworks from PyPI ----
 RUN pip install --no-cache-dir --default-timeout=120 \
     "tensorflow>=2.16.0,<3.0.0" \
-    "torch>=2.0.0" \
     "transformers>=4.35.0" \
     "datasets>=2.14.0" \
     "accelerate>=0.24.0" \
@@ -63,6 +58,9 @@ RUN pip install --no-cache-dir \
     matplotlib \
     seaborn \
     scikit-learn \
+    xgboost \
+    lightgbm \
+    ucimlrepo \
     joblib \
     pillow \
     tqdm \

@@ -356,7 +356,19 @@ def compare_models(
 
     # --- Resolve metric now that all studies are complete ---
     if metric is None:
-        metric = "val_accuracy"
+        # BUG-048-4: was hardcoded to "val_accuracy", breaking regression.
+        # Auto-resolve from available metrics.
+        first_study = next(iter(studies.values()))
+        available = first_study.get_available_metrics()
+        for candidate in ("val_accuracy", "val_r2", "val_loss"):
+            if candidate in available:
+                metric = candidate
+                break
+        else:
+            val_metrics = [m for m in available if m.startswith("val_")]
+            metric = (
+                val_metrics[0] if val_metrics else (available[0] if available else "val_accuracy")
+            )
 
     # --- Loop 2: extract metric values now that metric is a concrete string ---
     results_store = {}

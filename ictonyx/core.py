@@ -1316,7 +1316,12 @@ if PYTORCH_AVAILABLE:
         ) -> "DataLoader":
             """Create a DataLoader from numpy arrays."""
             X_t = self._to_tensor(X, dtype=torch.float32)
-            if self.task == "classification":
+            # BUG-048-7: BCEWithLogitsLoss and BCELoss require float targets
+            # even for binary classification. Check criterion type to avoid
+            # dtype mismatch in _evaluate_loader() during test evaluation.
+            if self.task == "classification" and not isinstance(
+                self.criterion, (nn.BCEWithLogitsLoss, nn.BCELoss)
+            ):
                 y_t = self._to_tensor(y, dtype=torch.long)
             else:
                 y_t = self._to_tensor(y, dtype=torch.float32)
@@ -1477,7 +1482,10 @@ if PYTORCH_AVAILABLE:
                 for X_batch, y_batch in loader:
                     outputs = self.model(X_batch)
 
-                    if self.task == "regression" and outputs.dim() > 1 and outputs.shape[-1] == 1:
+                    # Squeeze single-output models: regression OR BCE binary
+                    # classification. BCEWithLogitsLoss requires input and
+                    # target to have the same shape. (BUG-048-7)
+                    if outputs.dim() > 1 and outputs.shape[-1] == 1:
                         outputs = outputs.squeeze(-1)
 
                     loss = self.criterion(outputs, y_batch)
@@ -1485,7 +1493,11 @@ if PYTORCH_AVAILABLE:
                     total += X_batch.size(0)
 
                     if self.task == "classification":
-                        _, predicted = torch.max(outputs, 1)
+                        if isinstance(self.criterion, (nn.BCEWithLogitsLoss, nn.BCELoss)):
+                            # Binary: threshold at 0 (logits) or 0.5 (probs)
+                            predicted = (outputs > 0).long()
+                        else:
+                            _, predicted = torch.max(outputs, 1)
                         correct += (predicted == y_batch).sum().item()
 
             avg_loss = running_loss / total

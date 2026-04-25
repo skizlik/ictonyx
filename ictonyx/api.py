@@ -527,7 +527,7 @@ def _get_model_builder(model: Any) -> Callable:
                 and (accepts_var_keyword or k in accepted)
             }
 
-            if "random_state" in accepted:
+            if "random_state" in accepted or accepts_var_keyword:
                 try:
                     return _ensure_wrapper(
                         _model_class(

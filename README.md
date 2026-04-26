@@ -45,7 +45,7 @@ Extras can be combined:
 pip install "ictonyx[tensorflow,isolation]"
 ```
 
-Requires Python 3.10+. Current release: **0.4.7** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
+Requires Python 3.10+. Current release: **0.4.8** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
 
 ---
 
@@ -334,7 +334,7 @@ If you use Ictonyx in published work, please cite it using the metadata in [`CIT
 @software{kizlik_ictonyx,
   author  = {Kizlik, Stephen},
   title   = {Ictonyx: A Framework for Variability Analysis in Machine Learning Training},
-  version = {0.4.7},
+  version = {0.4.8},
   url     = {https://github.com/skizlik/ictonyx},
   license = {MIT},
 }

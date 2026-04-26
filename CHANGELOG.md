@@ -20,6 +20,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v0.4.8 — 2026-04-26
+
+**Critical:**
+- Fix PyTorch regression `val_loss` appended twice per epoch, crashing
+  `pd.DataFrame()` in the runner when validation data is provided.
+- Fix `_build_from_class()` not injecting `random_state` for classes
+  using `**kwargs` (e.g. XGBoost >=2.0). All runs received the default
+  seed, producing identical models. `BaseModelWrapper` subclasses are
+  excluded, as they handle seeding internally via `run_seed` in `fit()`.
+
+**Moderate:**
+- Wilcoxon effect size now uses tie-corrected variance. The uncorrected
+  formula overestimated sigma_W when tied ranks existed, systematically
+  underestimating effect size r. P-values were unaffected.
+- `compare_models(metric=None)` auto-resolves from available metrics
+  instead of hardcoding `val_accuracy`, which caused `KeyError` for
+  regression models.
+- Keras `clear_session()` now runs before `set_random_seed()`. In
+  TF 2.16+, the previous ordering partially reset the random state.
+- `anova_test` treats `None` normality (untestable, n < 3) as
+  untestable rather than as a violation.
+
+**Other:**
+- `_make_dataloader()` uses `torch.float` labels for
+  `BCEWithLogitsLoss`/`BCELoss`, fixing test evaluation dtype mismatch.
+- `np.std` ddof=0 changed to ddof=1 in deterministic-difference check.
+- Dead code removed in `explainers.py` (3 locations) and
+  `check_independence()`.
+- Duplicate docstring heading removed in `check_independence()`.
+
+**Tests:**
+- New integration test suite: `variability_study()` end-to-end for
+  sklearn classification, regression, and `**kwargs` classes; PyTorch
+  classification and regression.
+- Existing tests updated to match corrected effect size formula,
+  `random_state` injection behavior, and metric auto-resolution.
+
+---
+
 ## [0.4.7] — 2026-04-20
 
 ### Fixed

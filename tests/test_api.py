@@ -201,6 +201,7 @@ def test_compare_models_insufficient_data(mock_var_study, sample_df):
     empty_results.has_test_data = False
     empty_results.get_final_metrics.return_value = {}
     empty_results.get_metric_values.return_value = []
+    empty_results.get_available_metrics.return_value = []
     mock_var_study.return_value = empty_results
 
     # Act / Assert — compare_models now raises ValueError instead of returning error dict
@@ -783,7 +784,8 @@ def test_build_from_class_filters_unknown_kwargs_for_fixed_signature():
 
 def test_build_from_class_passes_all_kwargs_when_var_keyword():
     """X-3: for a constructor WITH **kwargs, all non-infra ModelConfig
-    keys are forwarded (minus run_seed and random_state)."""
+    keys are forwarded. run_seed excluded; random_state injected from
+    run_seed."""
     import ictonyx.api as api_mod
     from ictonyx.api import _get_model_builder
     from ictonyx.config import ModelConfig
@@ -807,7 +809,8 @@ def test_build_from_class_passes_all_kwargs_when_var_keyword():
         assert instance.kwargs["model_name_or_path"] == "distilbert-base-uncased"
         assert instance.kwargs["num_labels"] == 4
         assert "run_seed" not in instance.kwargs
-        assert "random_state" not in instance.kwargs
+        assert "random_state" in instance.kwargs
+        assert instance.kwargs["random_state"] == 42  # injected from run_seed
     finally:
         api_mod._ensure_wrapper = original_ensure
 

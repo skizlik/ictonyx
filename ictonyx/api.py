@@ -539,7 +539,9 @@ def _get_model_builder(model: Any) -> Callable:
                 and (accepts_var_keyword or k in accepted)
             }
 
-            if "random_state" in accepted or accepts_var_keyword:
+            if ("random_state" in accepted or accepts_var_keyword) and not issubclass(
+                _model_class, BaseModelWrapper
+            ):
                 try:
                     return _ensure_wrapper(
                         _model_class(

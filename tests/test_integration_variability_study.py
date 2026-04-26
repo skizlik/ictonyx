@@ -39,12 +39,16 @@ def _assert_study_valid(results, expected_runs=3, metric="val_accuracy", check_v
         assert (
             len(set(round(v, 8) for v in vals)) > 1
         ), f"All {expected_runs} runs identical — seed not reaching model"
+    # Save/load round-trip
     with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
-        results.save(f.name)
-        loaded = VariabilityStudyResults.load(f.name)
+        tmp_path = f.name
+    try:
+        results.save(tmp_path)
+        loaded = VariabilityStudyResults.load(tmp_path)
         assert loaded.n_runs == expected_runs
         assert loaded.get_metric_values(metric) == vals
-        os.unlink(f.name)
+    finally:
+        os.unlink(tmp_path)
 
 
 class TestSklearn:

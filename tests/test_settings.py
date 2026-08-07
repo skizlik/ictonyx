@@ -63,7 +63,10 @@ class TestHandlersAndLoggers:
         """Library must not add a handler if one already exists."""
         import ictonyx.settings as s
 
-        assert len(s.logger.handlers) <= 1
+        own_handlers = [
+            h for h in s.logger.handlers if not type(h).__module__.startswith("_pytest")
+        ]
+        assert len(own_handlers) <= 1
 
     def test_propagate_false(self):
         """Logger should not propagate to root to avoid duplicate output."""

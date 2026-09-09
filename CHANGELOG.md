@@ -7,16 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
-- `VariabilityStudyResults.report()` for self-contained HTML/markdown summaries
+### Planned for v0.5.0
+- Deprecated API removal (Master Development Guide v5 §3, Phase 1)
+- `metric_fns` for `PyTorchModelWrapper`
+- Explicit `XGBoostModelWrapper` / `LightGBMModelWrapper`
+- `probability_of_superiority`, `reversal_rate`, `practical_significance_filter`
+- `ResamplingPolicy` / split-perturbation studies
+- Module split (`core/`, `runners/`, `analysis/`, `plotting/`, `data/`)
+- `VariabilityStudyResults.report()`
 - `VariabilityStudyResults.bootstrap_ci()` convenience method
-- Infrastructure sweep
-- `PyTorchDataHandler`
-- Paired/blocked experimental designs for model comparison
-- `plot_run_independence_diagnostics`, `plot_paired_deltas`,
-  `plot_epoch_run_heatmap`, `plot_sequential_ci`, `plot_stability_pareto`,
-  `plot_run_metric_correlations`
-- Migration Guide (prerequisite for v0.5.0 deprecated API removal)
+- Beta classifier
 
 ---
 

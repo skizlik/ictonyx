@@ -378,8 +378,13 @@ class ExperimentRunner:
                         self.final_metrics[col].append(final_value)
                         self.tracker.log_metric(f"final_{col}", final_value, step=run_id)
 
-                # Store test metrics
-                test_metrics = result["result"].get("test_metrics")
+                # Store test metrics — on failure warn and append nothing (same as standard mode)
+                test_eval_error = result["result"].get("test_eval_error")
+                if test_eval_error:
+                    self._run_log(
+                        f"   Warning: Test evaluation failed: {test_eval_error}", level="warning"
+                    )
+                test_metrics = result["result"].get("test_metrics") or {}
                 if test_metrics:
                     self.final_test_metrics.append({"run_id": run_id, **test_metrics})
                     for key, value in test_metrics.items():
@@ -890,18 +895,20 @@ def _isolated_training_function(
     if model.training_result is not None:
         history = dict(model.training_result.history)
 
-    # Evaluate on test data if available
-    test_metrics = {}
+    # Evaluate on test data if available. On failure, report the error
+    # out-of-band so it never lands in final_test_metrics as a string.
+    test_metrics: Dict[str, Any] = {}
+    test_eval_error: Optional[str] = None
     if test_data is not None:
         try:
-            test_metrics = model.evaluate(data=test_data)
-            if isinstance(test_metrics, dict):
+            raw = model.evaluate(data=test_data)
+            if isinstance(raw, dict):
                 test_metrics = {
                     k: float(v) if isinstance(v, (np.floating, np.integer)) else v
-                    for k, v in test_metrics.items()
+                    for k, v in raw.items()
                 }
         except Exception as e:
-            test_metrics = {"error": str(e)}
+            test_eval_error = f"{type(e).__name__}: {e}"
 
     # Cleanup before returning
     if hasattr(model, "cleanup"):
@@ -909,7 +916,12 @@ def _isolated_training_function(
     del model
     gc.collect()
 
-    return {"history": history, "test_metrics": test_metrics, "run_id": run_id}
+    return {
+        "history": history,
+        "test_metrics": test_metrics,
+        "test_eval_error": test_eval_error,
+        "run_id": run_id,
+    }
 
 
 @dataclass

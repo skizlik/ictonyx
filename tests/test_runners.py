@@ -1682,7 +1682,6 @@ class TestNRunsWarning:
 
 
 class TestProcessIsolationValidation:
-
     def test_validation_accepts_picklable_function(self):
         """A plain function must pass validation."""
         from unittest.mock import MagicMock
@@ -1730,7 +1729,6 @@ class TestProcessIsolationValidation:
 
 
 class TestRunSeedInjection:
-
     def test_run_seed_present_in_config_during_standard_mode(self):
         """Standard mode must inject run_seed into model_config before model build."""
         import numpy as np
@@ -2821,3 +2819,34 @@ class TestSummarizeNAndSE:
         )
         summary = results.summarize()
         assert "SE:" in summary
+
+
+# ---------------------------------------------------------------------------
+# v0.4.9 / C1 — isolated-mode evaluate() failure must not poison results
+# ---------------------------------------------------------------------------
+
+import importlib.util
+
+from _spy_wrappers import build_eval_raises_spy
+
+import ictonyx as ix
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("cloudpickle") is None, reason="needs the [isolation] extra"
+)
+def test_isolated_eval_failure_does_not_poison_summary():
+    """2.10: evaluate() raising in the subprocess must not put a string into final_test_metrics."""
+    X = np.random.RandomState(0).randn(40, 3)
+    y = (X[:, 0] > 0).astype(int)
+    results = ix.variability_study(
+        model=build_eval_raises_spy,
+        data=(X, y),
+        runs=2,
+        epochs=1,
+        verbose=False,
+        use_process_isolation=True,
+    )
+    assert results.n_runs == 2
+    assert results.final_test_metrics == []
+    results.summarize()  # raised TypeError before the fix

@@ -62,3 +62,21 @@ def build_recording_spy(cfg):
 
 def build_eval_raises_spy(cfg):
     return EvalRaisesSpy(None)
+
+
+FAIL_SEED = None  # set by tests; FailsOnRunSpy raises when run_seed == FAIL_SEED
+
+
+class FailsOnRunSpy(RecordingSpy):
+    """Raises in fit() for one specific run, to exercise failed_runs bookkeeping."""
+
+    def fit(self, train_data, validation_data=None, **kw):
+        import _spy_wrappers as m
+
+        if kw.get("run_seed") == m.FAIL_SEED:
+            raise RuntimeError("planned failure")
+        super().fit(train_data, validation_data, **kw)
+
+
+def build_fails_on_run(cfg):
+    return FailsOnRunSpy(None)

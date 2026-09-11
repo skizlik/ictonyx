@@ -2850,3 +2850,44 @@ def test_isolated_eval_failure_does_not_poison_summary():
     assert results.n_runs == 2
     assert results.final_test_metrics == []
     results.summarize()  # raised TypeError before the fix
+
+
+# ---------------------------------------------------------------------------
+# v0.4.9 / C2 — failed_runs, run_ids, n_requested, get_run_seed
+# ---------------------------------------------------------------------------
+
+import _spy_wrappers
+from _spy_wrappers import build_fails_on_run
+
+
+def _study_with_run_2_failing():
+    # Same derivation as ExperimentRunner: child seeds are
+    # int(child.generate_state(1)[0]) for SeedSequence(seed).spawn(n).
+    _spy_wrappers.FAIL_SEED = int(np.random.SeedSequence(11).spawn(4)[1].generate_state(1)[0])
+    X = np.random.RandomState(0).randn(40, 3)
+    y = (X[:, 0] > 0).astype(int)
+    return ix.variability_study(
+        model=build_fails_on_run, data=(X, y), runs=4, epochs=1, seed=11, verbose=False
+    )
+
+
+def test_results_run_ids_and_failed_runs():
+    r = _study_with_run_2_failing()
+    assert r.failed_runs == [2]
+    assert r.run_ids == [1, 3, 4]
+    assert r.n_requested == 4 == len(r.run_seeds)
+    assert r.get_run_seed(3) == r.run_seeds[2]
+    assert r.get_run_seed(0) is None and r.get_run_seed(5) is None
+    ids, vals = r.get_metric_values("val_accuracy", with_run_ids=True)
+    assert ids == [1, 3, 4] and len(vals) == 3
+    assert "Failed runs: [2]" in r.summarize()
+
+
+def test_results_failed_runs_round_trip(tmp_path):
+    r = _study_with_run_2_failing()
+    p = tmp_path / "r.pkl"
+    r.save(str(p))
+    loaded = VariabilityStudyResults.load(str(p))
+    assert loaded.failed_runs == [2] and loaded.run_ids == [1, 3, 4]
+    from_json = VariabilityStudyResults.from_json(r.to_json())
+    assert from_json.failed_runs == [2]

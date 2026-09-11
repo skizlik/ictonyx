@@ -804,6 +804,7 @@ class ExperimentRunner:
             final_test_metrics=self.final_test_metrics,
             seed=self.seed,
             run_seeds=list(self._child_seeds),
+            failed_runs=sorted(self.failed_runs),
         )
 
         if hasattr(self.tracker, "log_study_summary"):
@@ -946,6 +947,9 @@ class VariabilityStudyResults:
         run_seeds: List of per-run child seeds generated from the base
             seed via ``SeedSequence.spawn()``. Empty when results are
             reconstructed from MLflow or loaded from JSON.
+        failed_runs: Ids of runs that raised or produced no history, indexed
+            from 1 as in the ``run_num`` column. Empty when every run
+            succeeded.
     """
 
     all_runs_metrics: List[pd.DataFrame]
@@ -953,11 +957,43 @@ class VariabilityStudyResults:
     final_test_metrics: List[Dict[str, Any]]
     seed: Optional[int] = None
     run_seeds: List[int] = field(default_factory=list)
+    failed_runs: List[int] = field(default_factory=list)
 
     @property
     def n_runs(self) -> int:
         """Number of successful runs."""
         return len(self.all_runs_metrics)
+
+    @property
+    def n_requested(self) -> int:
+        """Runs requested: successful plus failed. Equals ``len(run_seeds)`` for seeded studies."""
+        return self.n_runs + len(self.failed_runs)
+
+    @property
+    def run_ids(self) -> List[int]:
+        """Ids of the successful runs, indexed from 1 as in the ``run_num`` column.
+
+        Position ``i`` of ``final_metrics[m]`` and of ``all_runs_metrics``
+        belongs to run ``run_ids[i]``; that run's child seed is
+        ``run_seeds[run_ids[i] - 1]``. Falls back to ``1..n_runs`` when the
+        per-run DataFrames are absent (results from JSON or MLflow).
+        """
+        if not self.all_runs_metrics:
+            n = len(next(iter(self.final_metrics.values()), []))
+            return list(range(1, n + 1))
+        ids: List[int] = []
+        for i, df in enumerate(self.all_runs_metrics):
+            if "run_num" in df.columns and len(df):
+                ids.append(int(df["run_num"].iloc[0]))
+            else:
+                ids.append(i + 1)
+        return ids
+
+    def get_run_seed(self, run_id: int) -> Optional[int]:
+        """Child seed for a run id (indexed from 1); None if unseeded or out of range."""
+        if not self.run_seeds or not (1 <= run_id <= len(self.run_seeds)):
+            return None
+        return int(self.run_seeds[run_id - 1])
 
     def __repr__(self) -> str:
         metrics = list(self.final_metrics.keys())
@@ -969,6 +1005,7 @@ class VariabilityStudyResults:
             f"VariabilityStudyResults("
             f"n_runs={self.n_runs}, "
             f"seed={self.seed}, "
+            f"failed_runs={self.failed_runs}, "
             f"metrics={metrics}"
             f"{test_part})"
         )
@@ -978,11 +1015,13 @@ class VariabilityStudyResults:
         """True if at least one run produced test-set metrics."""
         return bool(self.final_test_metrics)
 
-    def get_metric_values(self, metric_name: str) -> List[float]:
+    def get_metric_values(self, metric_name: str, with_run_ids: bool = False):
         """Get collected final values for a specific metric.
 
         Args:
             metric_name: Metric key, e.g. 'val_accuracy', 'train_loss', 'val_f1'
+            with_run_ids: If True, return ``(run_ids, values)`` instead of
+                ``values``. ``run_ids`` are indexed from 1 as in ``run_num``.
 
         Returns:
             List of final-epoch values, one per run.
@@ -993,7 +1032,10 @@ class VariabilityStudyResults:
         if metric_name not in self.final_metrics:
             available = sorted(self.final_metrics.keys())
             raise KeyError(f"Metric '{metric_name}' not found. Available: {available}")
-        return self.final_metrics[metric_name]
+        values = self.final_metrics[metric_name]
+        if with_run_ids:
+            return self.run_ids[: len(values)], values
+        return values
 
     def get_final_metrics(self, metric_name: str = "val_accuracy") -> Dict[str, float]:
         """Extract final metric values for each run (labeled run_1, run_2, ...).
@@ -1163,6 +1205,9 @@ class VariabilityStudyResults:
             f"Successful runs: {self.n_runs}",
             f"Seed: {self.seed}",
         ]
+
+        if self.failed_runs:
+            lines.insert(3, f"Failed runs: {self.failed_runs}")
 
         def _format_metric_block(metric_name: str, values: list) -> list:
             n = len(values)
@@ -1484,6 +1529,7 @@ class VariabilityStudyResults:
             "final_test_metrics": self.final_test_metrics,
             "seed": self.seed,
             "run_seeds": list(self.run_seeds),
+            "failed_runs": list(self.failed_runs),
         }
         with open(path, "wb") as f:
             pickle.dump(data, f)
@@ -1491,6 +1537,9 @@ class VariabilityStudyResults:
     @classmethod
     def load(cls, path: str) -> "VariabilityStudyResults":
         """Restore results previously saved with :meth:`save`.
+
+        Files written before v0.4.9 contain no ``failed_runs``; it loads as
+        an empty list, which is correct only if that study had no failures.
 
         Args:
             path: File path written by :meth:`save`.
@@ -1525,6 +1574,7 @@ class VariabilityStudyResults:
             final_test_metrics=data["final_test_metrics"],
             seed=data.get("seed"),
             run_seeds=list(data.get("run_seeds", [])),
+            failed_runs=list(data.get("failed_runs", [])),
         )
 
     def to_json(self) -> str:
@@ -1535,7 +1585,7 @@ class VariabilityStudyResults:
 
         Returns:
             JSON string containing ``final_metrics``, ``final_test_metrics``,
-            ``seed``, and ``n_runs``.
+            ``seed``, ``n_runs``, ``failed_runs``, and ``run_ids``.
         """
         import json
 
@@ -1543,6 +1593,8 @@ class VariabilityStudyResults:
             {
                 "n_runs": self.n_runs,
                 "seed": self.seed,
+                "failed_runs": self.failed_runs,
+                "run_ids": self.run_ids,
                 "final_metrics": self.final_metrics,
                 "final_test_metrics": self.final_test_metrics,
             },
@@ -1566,6 +1618,7 @@ class VariabilityStudyResults:
             VariabilityStudyResults with ``final_metrics``,
             ``final_test_metrics``, and ``seed`` populated from the
             JSON. ``all_runs_metrics`` is empty; ``run_seeds`` is empty.
+            ``failed_runs`` is restored when present.
 
         Raises:
             ValueError: If the JSON is malformed or missing required keys.
@@ -1599,6 +1652,7 @@ class VariabilityStudyResults:
             final_test_metrics=data["final_test_metrics"],
             seed=data.get("seed"),
             run_seeds=[],
+            failed_runs=list(data.get("failed_runs", [])),
         )
 
     @classmethod

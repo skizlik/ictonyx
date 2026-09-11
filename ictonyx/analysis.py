@@ -1,6 +1,6 @@
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -37,6 +37,9 @@ from scipy.stats import (
     ttest_rel,
     wilcoxon,
 )
+
+if TYPE_CHECKING:  # import for annotations only; avoids a runtime import cycle
+    from .runners import VariabilityStudyResults
 
 # Optional sklearn import (only for confusion matrix)
 try:

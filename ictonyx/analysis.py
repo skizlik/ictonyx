@@ -1436,6 +1436,81 @@ def shapiro_wilk_test(model_metrics: pd.Series, alpha: float = 0.05) -> Statisti
 # HIGH-LEVEL COMPARISON FUNCTIONS
 
 
+def align_paired(
+    results_a: "VariabilityStudyResults",
+    results_b: "VariabilityStudyResults",
+    metric: str,
+    *,
+    force: bool = False,
+) -> Tuple[List[int], List[float], List[float]]:
+    """Align two studies' final-epoch values on shared run ids.
+
+    A paired test requires that position ``i`` in both value lists come
+    from the same child seed. That holds only if both studies used the
+    same ``seed`` and neither lost a run. This function checks both and
+    returns values aligned on the intersection of run ids (indexed from 1
+    as in the ``run_num`` column).
+
+    Args:
+        results_a: First study.
+        results_b: Second study.
+        metric: Metric name. ``test_*`` names are read from
+            ``final_test_metrics``; all others from ``final_metrics``.
+        force: If True, skip the seed check. Use when you know the runs
+            are paired despite a missing or differing ``seed``.
+
+    Returns:
+        ``(run_ids, values_a, values_b)``, all of equal length.
+
+    Raises:
+        ValueError: If the seeds differ and ``force`` is False, or if the
+            two studies share no run ids for ``metric``.
+
+    Warns:
+        UserWarning: If either seed is None (pairing cannot be verified),
+            or if any run ids were dropped from either side.
+    """
+    if not force:
+        if results_a.seed is None or results_b.seed is None:
+            warnings.warn(
+                "align_paired: one or both studies have seed=None, so pairing cannot be "
+                "verified. Pass force=True if you know the runs are paired.",
+                UserWarning,
+                stacklevel=2,
+            )
+        elif results_a.seed != results_b.seed:
+            raise ValueError(
+                f"studies have different seeds ({results_a.seed} vs {results_b.seed}); "
+                "their runs are not paired. Use an unpaired test, or force=True."
+            )
+
+    def _by_run_id(res: "VariabilityStudyResults") -> Dict[int, float]:
+        if metric.startswith("test_"):
+            base = metric[len("test_") :]
+            return {
+                int(m["run_id"]): float(m[base])
+                for m in res.final_test_metrics
+                if base in m and "run_id" in m
+            }
+        ids, vals = res.get_metric_values(metric, with_run_ids=True)
+        return {int(i): float(v) for i, v in zip(ids, vals)}
+
+    by_a, by_b = _by_run_id(results_a), _by_run_id(results_b)
+    common = sorted(set(by_a) & set(by_b))
+    if not common:
+        raise ValueError(f"no common run ids for metric '{metric}'.")
+    dropped_a = sorted(set(by_a) - set(common))
+    dropped_b = sorted(set(by_b) - set(common))
+    if dropped_a or dropped_b:
+        warnings.warn(
+            f"align_paired: pairing on {len(common)} common runs; dropped "
+            f"{dropped_a or 'none'} from results_a and {dropped_b or 'none'} from results_b.",
+            UserWarning,
+            stacklevel=2,
+        )
+    return common, [by_a[i] for i in common], [by_b[i] for i in common]
+
+
 def paired_wilcoxon_test(
     series_a: pd.Series,
     series_b: pd.Series,

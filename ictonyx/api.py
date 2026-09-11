@@ -413,18 +413,13 @@ def compare_models(
         )
 
     if paired and len(results_store) == 2:
-        from .analysis import compare_two_models
+        from .analysis import align_paired, compare_two_models
 
         names = list(results_store.keys())
-        series_a = results_store[names[0]]
-        series_b = results_store[names[1]]
-        if len(series_a) != len(series_b):
-            raise ValueError(
-                f"compare_models(paired=True) requires equal run counts. "
-                f"'{names[0]}' has {len(series_a)} runs but "
-                f"'{names[1]}' has {len(series_b)} runs. "
-                "Use paired=False for independent comparison."
-            )
+        # All models ran under one seed, so pairing is valid; align on run id in
+        # case either study lost a run.
+        _, va, vb = align_paired(studies[names[0]], studies[names[1]], metric)
+        series_a, series_b = pd.Series(va), pd.Series(vb)
         paired_result = compare_two_models(series_a, series_b, paired=True, random_state=seed)
         return ModelComparisonResults(
             overall_test=paired_result,
@@ -716,6 +711,7 @@ def compare_results(
     metric: Optional[str] = None,
     paired: bool = True,
     seed: Optional[int] = None,
+    force_paired: bool = False,
 ) -> "ModelComparisonResults":
     """Compare two pre-computed VariabilityStudyResults without re-running training.
 
@@ -733,9 +729,14 @@ def compare_results(
         results_b: Second model's results.
         metric: Metric to compare. If ``None``, resolves via
             ``results_a.preferred_metric()``.
-        paired: If ``True`` (default) and run counts are equal, use the
-            paired Wilcoxon signed-rank test. Falls back to Mann-Whitney U
-            with a ``UserWarning`` when run counts differ.
+        paired: If ``True`` (default), align the two studies on run id via
+            :func:`~ictonyx.analysis.align_paired` and use the paired Wilcoxon
+            signed-rank test. Runs missing from either side are dropped with a
+            ``UserWarning``. If the studies have different ``seed`` values (so
+            their runs are not paired), falls back to Mann-Whitney U with a
+            ``UserWarning``.
+        force_paired: Skip the seed check in ``align_paired``. Use only when you
+            know the runs are paired despite differing or missing seeds.
         seed: Random state for bootstrap CI computation. Defaults to ``None``
             (non-deterministic CIs).
 
@@ -745,37 +746,34 @@ def compare_results(
     Raises:
         KeyError: If the resolved metric is not present in both results.
     """
-    from .analysis import mann_whitney_test, paired_wilcoxon_test
+    from .analysis import align_paired, compare_two_models
 
     resolved = metric if metric is not None else results_a.preferred_metric("accuracy")
-
-    if resolved.startswith("test_"):
-        values_a = pd.Series(results_a.get_test_metric_values(resolved))
-        values_b = pd.Series(results_b.get_test_metric_values(resolved))
-    else:
-        values_a = pd.Series(results_a.get_metric_values(resolved))
-        values_b = pd.Series(results_b.get_metric_values(resolved))
-
     pair_key = "results_a_vs_results_b"
 
-    from .analysis import compare_two_models
-
     if paired:
-        if len(values_a) == len(values_b):
-            test_result = compare_two_models(values_a, values_b, paired=True, random_state=seed)
-        else:
+        try:
+            _, va, vb = align_paired(results_a, results_b, resolved, force=force_paired)
+        except ValueError as e:
             warnings.warn(
-                f"compare_results(paired=True) requires equal run counts. "
-                f"results_a has {len(values_a)} runs, results_b has {len(values_b)}. "
-                "Falling back to unpaired comparison. "
-                "Pass paired=False to suppress this warning.",
+                f"compare_results(paired=True): {e} Falling back to an unpaired "
+                "Mann-Whitney U test. Pass paired=False to suppress this warning.",
                 UserWarning,
                 stacklevel=2,
             )
-            test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
-    else:
-        test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
+            paired = False
+        else:
+            values_a, values_b = pd.Series(va), pd.Series(vb)
+            test_result = compare_two_models(values_a, values_b, paired=True, random_state=seed)
 
+    if not paired:
+        if resolved.startswith("test_"):
+            values_a = pd.Series(results_a.get_test_metric_values(resolved))
+            values_b = pd.Series(results_b.get_test_metric_values(resolved))
+        else:
+            values_a = pd.Series(results_a.get_metric_values(resolved))
+            values_b = pd.Series(results_b.get_metric_values(resolved))
+        test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
     return ModelComparisonResults(
         overall_test=test_result,
         raw_data={"results_a": values_a, "results_b": values_b},

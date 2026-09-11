@@ -541,17 +541,28 @@ class TestCompareResultsPairing:
             or "Mann-Whitney" in result.overall_test.test_name
         )
 
-    def test_unequal_runs_warns_and_falls_back(self):
+    def test_different_seeds_warns_and_falls_back(self):
+        # studies with different seeds are not paired; fall back to unpaired.
         ra = self._make_results(seed=42, n=10)
         rb = self._make_results(seed=99, n=8)
-        with pytest.warns(UserWarning, match="equal run counts"):
+        with pytest.warns(UserWarning, match="Falling back"):
             result = api.compare_results(ra, rb, paired=True)
-        # Unequal run counts fall back to unpaired comparison via compare_two_models,
-        # which dispatches to Student/Welch/Mann-Whitney based on normality.
+        # compare_two_models(paired=False) dispatches to Student/Welch/Mann-Whitney
+        # based on normality; all three are valid independent comparisons.
         assert (
             "Independent Comparison" in result.overall_test.test_name
             or "Mann-Whitney" in result.overall_test.test_name
         )
+
+    def test_same_seed_unequal_runs_pairs_on_common_runs(self):
+        # same seed, unequal counts -> pair on the common run ids and warn.
+        ra = self._make_results(seed=42, n=10)
+        rb = self._make_results(seed=42, n=8)
+        with pytest.warns(UserWarning, match="dropped"):
+            result = api.compare_results(ra, rb, paired=True)
+        assert "Wilcoxon" in result.overall_test.test_name
+        assert len(result.raw_data["results_a"]) == 8
+        assert len(result.raw_data["results_b"]) == 8
 
     def test_seed_parameter_accepted(self):
         ra = self._make_results(seed=42)
@@ -897,3 +908,55 @@ def test_compare_results_paired_carries_ci():
     result = ix.compare_results(results_a, results_b, paired=True, metric="val_accuracy")
     pair = next(iter(result.pairwise_comparisons.values()))
     assert pair.confidence_interval is not None
+
+
+# ---------------------------------------------------------------------------
+# compare_results pairs on run id
+# ---------------------------------------------------------------------------
+
+from ictonyx.analysis import align_paired as _align_paired
+from ictonyx.runners import VariabilityStudyResults
+
+
+def _seeded_results(run_ids, values, seed=7):
+    dfs = [
+        pd.DataFrame({"epoch": [1], "run_num": [r], "val_accuracy": [v]})
+        for r, v in zip(run_ids, values)
+    ]
+    return VariabilityStudyResults(
+        all_runs_metrics=dfs,
+        final_metrics={"val_accuracy": list(values)},
+        final_test_metrics=[],
+        seed=seed,
+        run_seeds=list(range(30)),
+        failed_runs=[i for i in range(1, 31) if i not in run_ids],
+    )
+
+
+def test_compare_results_paired_after_failures_matches_manual_alignment():
+    rng = np.random.RandomState(0)
+    base = rng.normal(0.8, 0.02, 30)
+    ids_a = [i for i in range(1, 31) if i != 3]
+    ids_b = [i for i in range(1, 31) if i != 9]
+    a = _seeded_results(ids_a, [base[i - 1] for i in ids_a])
+    b = _seeded_results(ids_b, [base[i - 1] + 0.01 for i in ids_b])
+    with pytest.warns(UserWarning, match="dropped"):
+        res = api.compare_results(a, b, metric="val_accuracy", paired=True, seed=0)
+    _, va, vb = _align_paired(a, b, "val_accuracy")
+    assert len(va) == 28
+    assert list(res.raw_data["results_a"]) == pytest.approx(va)
+    assert list(res.raw_data["results_b"]) == pytest.approx(vb)
+
+
+def test_compare_results_seed_mismatch_falls_back_unpaired():
+    a = _seeded_results(list(range(1, 11)), list(np.linspace(0.7, 0.8, 10)), seed=1)
+    b = _seeded_results(list(range(1, 11)), list(np.linspace(0.75, 0.85, 10)), seed=2)
+    with pytest.warns(UserWarning, match="Falling back"):
+        res = api.compare_results(a, b, metric="val_accuracy", paired=True)
+    # Unpaired path dispatches to Student/Welch/Mann-Whitney based on normality
+    # (test_method="auto" default until v0.5.0); any of them proves the fallback happened.
+    assert (
+        "Independent Comparison" in res.overall_test.test_name
+        or "Mann-Whitney" in res.overall_test.test_name
+    )
+    assert "Wilcoxon" not in res.overall_test.test_name

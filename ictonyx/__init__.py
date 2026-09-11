@@ -175,6 +175,7 @@ try:
     from .analysis import (
         ModelComparisonResults,
         StatisticalTestResult,
+        align_paired,
         anova_test,
         apply_multiple_comparison_correction,
         assess_training_stability,
@@ -209,6 +210,7 @@ try:
             "StatisticalTestResult",
             "mann_whitney_test",
             "paired_wilcoxon_test",
+            "align_paired",
             "anova_test",
             "kruskal_wallis_test",
             "shapiro_wilk_test",

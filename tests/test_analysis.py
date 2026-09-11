@@ -2120,3 +2120,67 @@ class TestFriedmanTest:
         groups = self._make_significant_groups()
         result = friedman_test(groups)
         assert result.sample_sizes == {"ModelA": 15, "ModelB": 15, "ModelC": 15}
+
+
+# ---------------------------------------------------------------------------
+# align_paired
+# ---------------------------------------------------------------------------
+
+import pandas as pd
+
+from ictonyx.analysis import align_paired
+from ictonyx.runners import VariabilityStudyResults
+
+
+def _results(run_ids, values, seed=42, metric="val_accuracy"):
+    dfs = [
+        pd.DataFrame({"epoch": [1], "run_num": [rid], metric: [v]})
+        for rid, v in zip(run_ids, values)
+    ]
+    return VariabilityStudyResults(
+        all_runs_metrics=dfs,
+        final_metrics={metric: list(values)},
+        final_test_metrics=[{"run_id": rid, "accuracy": v} for rid, v in zip(run_ids, values)],
+        seed=seed,
+        run_seeds=list(range(100, 100 + max(run_ids))),
+        failed_runs=[i for i in range(1, max(run_ids) + 1) if i not in run_ids],
+    )
+
+
+def test_align_paired_intersects_on_run_ids_and_warns():
+    a = _results([1, 2, 4, 5], [0.1, 0.2, 0.4, 0.5])  # lost run 3
+    b = _results([1, 2, 3, 4], [1.1, 1.2, 1.3, 1.4])  # lost run 5
+    with pytest.warns(UserWarning, match="dropped"):
+        ids, va, vb = align_paired(a, b, "val_accuracy")
+    assert ids == [1, 2, 4]
+    assert va == [0.1, 0.2, 0.4] and vb == [1.1, 1.2, 1.4]
+
+
+def test_align_paired_seed_mismatch_raises_unless_forced():
+    a = _results([1, 2], [0.1, 0.2], seed=1)
+    b = _results([1, 2], [0.3, 0.4], seed=2)
+    with pytest.raises(ValueError, match="different seeds"):
+        align_paired(a, b, "val_accuracy")
+    ids, _, _ = align_paired(a, b, "val_accuracy", force=True)
+    assert ids == [1, 2]
+
+
+def test_align_paired_none_seed_warns():
+    a = _results([1, 2], [0.1, 0.2], seed=None)
+    b = _results([1, 2], [0.3, 0.4], seed=None)
+    with pytest.warns(UserWarning, match="cannot be verified"):
+        align_paired(a, b, "val_accuracy")
+
+
+def test_align_paired_test_metric_reads_final_test_metrics():
+    a = _results([1, 3], [0.1, 0.3])
+    b = _results([1, 3], [0.5, 0.7])
+    ids, va, vb = align_paired(a, b, "test_accuracy")
+    assert ids == [1, 3] and va == [0.1, 0.3] and vb == [0.5, 0.7]
+
+
+def test_align_paired_no_common_runs_raises():
+    a = _results([1, 2], [0.1, 0.2])
+    b = _results([3, 4], [0.3, 0.4])
+    with pytest.raises(ValueError, match="no common run ids"):
+        align_paired(a, b, "val_accuracy")

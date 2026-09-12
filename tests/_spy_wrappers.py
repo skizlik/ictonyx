@@ -80,3 +80,20 @@ class FailsOnRunSpy(RecordingSpy):
 
 def build_fails_on_run(cfg):
     return FailsOnRunSpy(None)
+
+
+class NamedLRSpy(_Base):
+    """fit() names learning_rate explicitly, so build_fit_kwargs forwards it."""
+
+    def fit(self, train_data, validation_data=None, learning_rate=None, **kw):
+        self.training_result = TrainingResult(
+            history={
+                "val_lr_seen": [float(learning_rate if learning_rate is not None else -1)],
+                "val_accuracy": [0.5],
+            },
+            params={},
+        )
+
+
+def build_named_lr_spy(cfg):
+    return NamedLRSpy(None)

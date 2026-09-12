@@ -5,12 +5,26 @@ Supports both standard and process-isolated execution modes.
 """
 
 import gc
+import inspect
 import itertools
 import random
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    FrozenSet,
+    List,
+    Literal,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
 if TYPE_CHECKING:
     from .analysis import StatisticalTestResult
@@ -48,6 +62,102 @@ except ImportError:
 
 # version for _schema validation
 from ._version import __version__ as _ICTONYX_VERSION
+
+# Keys in ModelConfig that are training-loop / trainer-argument concerns.
+# build_fit_kwargs() forwards them to wrapper.fit(); api._build_from_class
+# imports this set to keep them away from model constructors.
+FIT_KWARG_KEYS: FrozenSet[str] = frozenset(
+    {
+        "learning_rate",
+        "weight_decay",
+        "warmup_steps",
+        "warmup_ratio",
+        "logging_steps",
+        "gradient_accumulation_steps",
+        "max_grad_norm",
+        "lr_scheduler_type",
+        "fp16",
+    }
+)
+
+# (wrapper class name, rejected keys) pairs already warned about this process.
+_WARNED_FIT_KWARGS: Set[Tuple[str, Tuple[str, ...]]] = set()
+
+
+def _fit_accepts(wrapper: BaseModelWrapper) -> Optional[Set[str]]:
+    """Parameter names ``wrapper.fit()`` accepts, or None if it opts in to all FIT_KWARG_KEYS.
+
+    Opt-in is the class attribute ``_ACCEPTS_FIT_KWARGS = True``, for wrappers
+    whose ``**kwargs`` is genuinely forwarded to a trainer. A ``**kwargs``
+    parameter alone is NOT an opt-in: KerasModelWrapper.fit() forwards unknown
+    kwargs to keras.Model.fit(), which rejects ``learning_rate``;
+    PyTorchModelWrapper.fit() and HuggingFaceModelWrapper.fit() ignore unknown
+    kwargs silently. All are worse than a warning. No built-in wrapper opts in
+    as of v0.4.9.
+    """
+    if getattr(type(wrapper), "_ACCEPTS_FIT_KWARGS", False):
+        return None
+    try:
+        sig = inspect.signature(wrapper.fit)
+    except (TypeError, ValueError):
+        return set()
+    return {
+        name
+        for name, p in sig.parameters.items()
+        if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
+    }
+
+
+def build_fit_kwargs(
+    config: ModelConfig,
+    epochs: int,
+    run_seed: Optional[int],
+    wrapper: BaseModelWrapper,
+    train_data: Any,
+    val_data: Any,
+) -> Dict[str, Any]:
+    """Assemble the keyword arguments for ``wrapper.fit()``.
+
+    Single source of truth for every execution path (standard,
+    process-isolated, parallel). Rules:
+
+    * sklearn wrappers receive only ``train_data`` / ``validation_data``.
+    * Every other wrapper receives ``epochs``, ``batch_size``, ``verbose``,
+      ``run_seed``.
+    * A key in ``FIT_KWARG_KEYS`` present in ``config`` is forwarded only if
+      ``fit()`` names it (or the class opts in). Otherwise a ``UserWarning``
+      names the key and the wrapper, so nothing is dropped silently.
+    """
+    kw: Dict[str, Any] = {"train_data": train_data, "validation_data": val_data}
+    if isinstance(wrapper, ScikitLearnModelWrapper):
+        return kw
+    kw["epochs"] = epochs
+    kw["batch_size"] = config.get("batch_size", 32)
+    kw["verbose"] = config.get("verbose", 0)
+    kw["run_seed"] = run_seed
+
+    present = [k for k in sorted(FIT_KWARG_KEYS) if k in config]
+    if not present:
+        return kw
+    accepted = _fit_accepts(wrapper)
+    rejected: List[str] = []
+    for k in present:
+        if accepted is None or k in accepted:
+            kw[k] = config.get(k)
+        else:
+            rejected.append(k)
+    if rejected:
+        key = (type(wrapper).__name__, tuple(rejected))
+        if key not in _WARNED_FIT_KWARGS:
+            _WARNED_FIT_KWARGS.add(key)
+            warnings.warn(
+                f"{type(wrapper).__name__}.fit() does not accept {rejected}; these config values "
+                "were NOT applied. Pass them at construction time via a builder function "
+                "(e.g. optimizer_params={'lr': config.get('learning_rate')}).",
+                UserWarning,
+                stacklevel=3,
+            )
+    return kw
 
 
 class ExperimentRunner:
@@ -446,19 +556,16 @@ class ExperimentRunner:
             # Build model
             wrapped_model = self.model_builder(self.model_config)
 
-            # Train — use deterministic cudnn for reproducibility, restore after
-            # Build kwargs conditionally: sklearn wrappers ignore training-loop
-            # kwargs and emit DeprecationWarning when they're passed. Only forward
-            # epochs/batch_size/verbose to wrappers that use them.
-            fit_kwargs = {
-                "train_data": self.train_data,
-                "validation_data": self.val_data,
-            }
-            if not isinstance(wrapped_model, ScikitLearnModelWrapper):
-                fit_kwargs["epochs"] = epochs
-                fit_kwargs["batch_size"] = self.model_config.get("batch_size", 32)
-                fit_kwargs["verbose"] = self.model_config.get("verbose", 0)
-                fit_kwargs["run_seed"] = self.model_config.get("run_seed")
+            # Train — use deterministic cudnn for reproducibility, restore after.
+            # fit() kwargs come from the single contract in build_fit_kwargs().
+            fit_kwargs = build_fit_kwargs(
+                self.model_config,
+                epochs,
+                self.model_config.get("run_seed"),
+                wrapped_model,
+                self.train_data,
+                self.val_data,
+            )
 
             with self._deterministic_cudnn():
                 wrapped_model.fit(**fit_kwargs)
@@ -887,14 +994,9 @@ def _isolated_training_function(
         config.set("run_seed", run_seed)
     model = model_builder(config)
 
-    # Train model
-    model.fit(
-        train_data=train_data,
-        validation_data=val_data,
-        epochs=epochs,
-        batch_size=config.get("batch_size", 32),
-        verbose=config.get("verbose", 0),
-    )
+    # Train model — same contract as standard mode. (0.3: run_seed was missing here,
+    # so HF runs all used seed 42 and Keras runs were not reproducible.)
+    model.fit(**build_fit_kwargs(config, epochs, run_seed, model, train_data, val_data))
 
     # Extract history
     history = {}

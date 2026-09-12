@@ -22,7 +22,7 @@ from .core import PYTORCH_AVAILABLE, SKLEARN_AVAILABLE, TENSORFLOW_AVAILABLE, Ba
 from .data import DataHandler, auto_resolve_handler
 from .exceptions import ConfigurationError
 from .loggers import BaseLogger
-from .runners import VariabilityStudyResults
+from .runners import FIT_KWARG_KEYS, VariabilityStudyResults
 from .runners import run_variability_study as _run_study
 
 # Resolve torch.nn once at import time so isinstance checks below are reliable
@@ -505,39 +505,10 @@ def _build_from_class(conf: ModelConfig, _model_class: Type[Any]) -> BaseModelWr
         p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
     )
 
-    # Runner-concern kwargs that must not reach model constructors,
-    # even when the constructor accepts **kwargs. Wrappers that need
-    # these values read them from fit_kwargs at fit() time instead.
-
-    # These are training-loop or training-args concerns, not model-constructor
-    # concerns. Exclude even when the class accepts **kwargs. Wrappers that
-    # need these values (HuggingFaceModelWrapper uses learning_rate for
-    # TrainingArguments, for example) read them from fit_kwargs at fit() time.
-    #
-    # This list is intentionally conservative — it covers the kwargs that
-    # commonly leak in practice, specifically those used by
-    # HuggingFaceModelWrapper and the Keras wrapper. An architectural fix
-    # that introspects the underlying model's signature (not just the
-    # wrapper's) is scheduled for v0.5.0.
-    _RUNNER_ONLY_KWARGS = {
-        # Training-loop kwargs
-        "epochs",
-        "batch_size",
-        "verbose",
-        # Data-pipeline kwargs (same conceptual layer as 'data' but routed via **kwargs)
-        # this is a serious code flaw that MUST be addressed in near future versions
-        "validation_data",
-        # HuggingFace TrainingArguments kwargs commonly passed to variability_study
-        "learning_rate",
-        "weight_decay",
-        "warmup_steps",
-        "warmup_ratio",
-        "logging_steps",
-        "gradient_accumulation_steps",
-        "max_grad_norm",
-        # to be added in near-term commits
-        "lr_scheduler_type",
-    }
+    # Runner concerns, never a constructor's. Training-loop keys and
+    # validation_data are consumed by the runner; FIT_KWARG_KEYS are forwarded
+    # to fit() by runners.build_fit_kwargs, the single owner of that contract.
+    _RUNNER_ONLY_KWARGS = {"epochs", "batch_size", "verbose", "validation_data"} | FIT_KWARG_KEYS
 
     construction_kwargs = {
         k: v

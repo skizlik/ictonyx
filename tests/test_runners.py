@@ -2920,3 +2920,78 @@ def test_builders_pickle_without_cloudpickle(monkeypatch):
     pickle.dumps(api._get_model_builder(build_recording_spy))  # function -> _EnsureWrapperBuilder
     pickle.dumps(api._get_model_builder(LogisticRegression))  # class -> _ClassBuilder
     pickle.dumps(api._get_model_builder(LogisticRegression()))  # instance -> _CloneBuilder
+
+
+# ---------------------------------------------------------------------------
+# build_fit_kwargs contract
+# ---------------------------------------------------------------------------
+
+from _spy_wrappers import RecordingSpy, _Base, build_recording_spy
+
+from ictonyx.runners import FIT_KWARG_KEYS, _isolated_training_function, build_fit_kwargs
+
+
+class _NamedLR(_Base):
+    def fit(self, train_data, validation_data=None, learning_rate=None, **kw):
+        self.training_result = TrainingResult(history={"val_lr": [learning_rate]}, params={})
+
+
+class _OptIn(_Base):
+    _ACCEPTS_FIT_KWARGS = True
+
+    def fit(self, train_data, validation_data=None, **kw):
+        self.training_result = TrainingResult(history={"val_n": [len(kw)]}, params={})
+
+
+class TestBuildFitKwargs:
+    def test_sklearn_gets_only_data(self):
+        from sklearn.linear_model import LogisticRegression
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        w = ScikitLearnModelWrapper(LogisticRegression())
+        kw = build_fit_kwargs(ModelConfig({"learning_rate": 0.1}), 3, 7, w, "T", "V")
+        assert kw == {"train_data": "T", "validation_data": "V"}
+
+    def test_core_keys_for_non_sklearn(self):
+        kw = build_fit_kwargs(ModelConfig({"batch_size": 8}), 3, 7, RecordingSpy(None), "T", "V")
+        assert kw == {
+            "train_data": "T",
+            "validation_data": "V",
+            "epochs": 3,
+            "batch_size": 8,
+            "verbose": 0,
+            "run_seed": 7,
+        }
+
+    def test_named_param_forwarded(self):
+        kw = build_fit_kwargs(ModelConfig({"learning_rate": 0.5}), 1, 1, _NamedLR(None), "T", "V")
+        assert kw["learning_rate"] == 0.5
+
+    def test_var_kwargs_without_opt_in_warns_and_drops(self):
+        with pytest.warns(UserWarning, match="learning_rate"):
+            kw = build_fit_kwargs(
+                ModelConfig({"learning_rate": 0.5}), 1, 1, RecordingSpy(None), "T", "V"
+            )
+        assert "learning_rate" not in kw
+
+    def test_opt_in_forwards_everything_present(self):
+        cfg = ModelConfig({k: 1 for k in FIT_KWARG_KEYS})
+        kw = build_fit_kwargs(cfg, 1, 1, _OptIn(None), "T", "V")
+        assert FIT_KWARG_KEYS <= set(kw)
+
+
+def test_isolated_training_function_forwards_run_seed():
+    X = np.random.RandomState(0).randn(30, 3)
+    y = (X[:, 0] > 0).astype(int)
+    out = _isolated_training_function(
+        model_builder=build_recording_spy,
+        config=ModelConfig({}),
+        train_data=(X, y),
+        val_data=(X, y),
+        test_data=None,
+        epochs=1,
+        run_id=1,
+        run_seed=12345,
+    )
+    assert out["history"]["val_seed_seen"][0] == 12345.0

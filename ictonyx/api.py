@@ -7,6 +7,7 @@ and model comparisons. It abstracts away the complexity of DataHandlers,
 ModelConfigs, and ExperimentRunners into single function calls.
 """
 import dataclasses
+import inspect
 import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -452,6 +453,127 @@ def compare_models(
 # --- Clean Helpers ---
 
 
+class _EnsureWrapperBuilder:
+    """Picklable builder: call a user function, coerce the result to a BaseModelWrapper.
+
+    Replaces the former ``lambda conf: _ensure_wrapper(model(conf))``, which
+    stdlib pickle cannot serialise (1.14). Looks up ``_ensure_wrapper`` as a
+    module global at call time so tests can monkeypatch it.
+    """
+
+    def __init__(self, fn: Callable):
+        self.fn = fn
+
+    def __call__(self, conf: ModelConfig) -> BaseModelWrapper:
+        return _ensure_wrapper(self.fn(conf))
+
+    def __repr__(self) -> str:
+        return f"_EnsureWrapperBuilder({getattr(self.fn, '__name__', repr(self.fn))})"
+
+
+class _CloneBuilder:
+    """Picklable builder: ``sklearn.base.clone(model)`` per run."""
+
+    def __init__(self, model: Any):
+        self.model = model
+
+    def __call__(self, conf: ModelConfig) -> BaseModelWrapper:
+        from sklearn.base import clone
+
+        return _ensure_wrapper(clone(self.model))
+
+
+class _ClassBuilder:
+    """Picklable builder: instantiate ``model_class`` per run from a ModelConfig."""
+
+    def __init__(self, model_class: type):
+        self.model_class = model_class
+
+    def __call__(self, conf: ModelConfig) -> BaseModelWrapper:
+        return _build_from_class(conf, self.model_class)
+
+
+def _build_from_class(conf: ModelConfig, _model_class: type) -> BaseModelWrapper:
+    """Instantiate ``_model_class`` per run from ``conf``. Module-level so it pickles."""
+    sig = inspect.signature(_model_class)
+    # Extract kwargs from the ModelConfig that the wrapper's constructor
+    # actually accepts. Filter out infra keys the constructor doesn't know
+    # about (e.g. run_seed), and `random_state` which we pass explicitly
+    # below when the signature supports it.
+    accepted = set(sig.parameters.keys())
+    accepts_var_keyword = any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+
+    # Runner-concern kwargs that must not reach model constructors,
+    # even when the constructor accepts **kwargs. Wrappers that need
+    # these values read them from fit_kwargs at fit() time instead.
+
+    # These are training-loop or training-args concerns, not model-constructor
+    # concerns. Exclude even when the class accepts **kwargs. Wrappers that
+    # need these values (HuggingFaceModelWrapper uses learning_rate for
+    # TrainingArguments, for example) read them from fit_kwargs at fit() time.
+    #
+    # This list is intentionally conservative — it covers the kwargs that
+    # commonly leak in practice, specifically those used by
+    # HuggingFaceModelWrapper and the Keras wrapper. An architectural fix
+    # that introspects the underlying model's signature (not just the
+    # wrapper's) is scheduled for v0.5.0.
+    _RUNNER_ONLY_KWARGS = {
+        # Training-loop kwargs
+        "epochs",
+        "batch_size",
+        "verbose",
+        # Data-pipeline kwargs (same conceptual layer as 'data' but routed via **kwargs)
+        # this is a serious code flaw that MUST be addressed in near future versions
+        "validation_data",
+        # HuggingFace TrainingArguments kwargs commonly passed to variability_study
+        "learning_rate",
+        "weight_decay",
+        "warmup_steps",
+        "warmup_ratio",
+        "logging_steps",
+        "gradient_accumulation_steps",
+        "max_grad_norm",
+        # to be added in near-term commits
+        "lr_scheduler_type",
+    }
+
+    construction_kwargs = {
+        k: v
+        for k, v in conf.items()
+        if k != "run_seed"
+        and k != "random_state"
+        and k not in _RUNNER_ONLY_KWARGS
+        and (accepts_var_keyword or k in accepted)
+    }
+
+    if ("random_state" in accepted or accepts_var_keyword) and not issubclass(
+        _model_class, BaseModelWrapper
+    ):
+        try:
+            return _ensure_wrapper(
+                _model_class(
+                    random_state=conf.get("run_seed"),
+                    **construction_kwargs,
+                )
+            )
+        except TypeError as e:
+            if "random_state" in str(e) or "unexpected keyword" in str(e):
+                warnings.warn(
+                    f"Could not pass random_state to {_model_class.__name__}. "
+                    f"Reproducibility not guaranteed. Original error: {e}",
+                    UserWarning,
+                    stacklevel=3,
+                )
+                return _ensure_wrapper(_model_class(**construction_kwargs))
+            raise ValueError(
+                f"Failed to construct {_model_class.__name__}: {e}. "
+                "Check that the class accepts the arguments in your ModelConfig."
+            ) from e
+    return _ensure_wrapper(_model_class(**construction_kwargs))
+
+
 def _get_model_builder(model: Any) -> Callable:
     """Normalize diverse model inputs into a consistent factory function.
 
@@ -473,93 +595,12 @@ def _get_model_builder(model: Any) -> Callable:
 
     # If it's already a function, trust it.
     if callable(model) and not isinstance(model, type):
-        return lambda conf: _ensure_wrapper(model(conf))
+        return _EnsureWrapperBuilder(model)
 
     # If it's a class (like RandomForestClassifier), instantiate it per run.
     if isinstance(model, type):
 
-        def _build_from_class(conf, _model_class=model):
-            import inspect
-
-            sig = inspect.signature(_model_class)
-            # Extract kwargs from the ModelConfig that the wrapper's constructor
-            # actually accepts. Filter out infra keys the constructor doesn't know
-            # about (e.g. run_seed), and `random_state` which we pass explicitly
-            # below when the signature supports it.
-            accepted = set(sig.parameters.keys())
-            accepts_var_keyword = any(
-                p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-            )
-
-            # Runner-concern kwargs that must not reach model constructors,
-            # even when the constructor accepts **kwargs. Wrappers that need
-            # these values read them from fit_kwargs at fit() time instead.
-
-            # These are training-loop or training-args concerns, not model-constructor
-            # concerns. Exclude even when the class accepts **kwargs. Wrappers that
-            # need these values (HuggingFaceModelWrapper uses learning_rate for
-            # TrainingArguments, for example) read them from fit_kwargs at fit() time.
-            #
-            # This list is intentionally conservative — it covers the kwargs that
-            # commonly leak in practice, specifically those used by
-            # HuggingFaceModelWrapper and the Keras wrapper. An architectural fix
-            # that introspects the underlying model's signature (not just the
-            # wrapper's) is scheduled for v0.5.0.
-            _RUNNER_ONLY_KWARGS = {
-                # Training-loop kwargs
-                "epochs",
-                "batch_size",
-                "verbose",
-                # Data-pipeline kwargs (same conceptual layer as 'data' but routed via **kwargs)
-                # this is a serious code flaw that MUST be addressed in near future versions
-                "validation_data",
-                # HuggingFace TrainingArguments kwargs commonly passed to variability_study
-                "learning_rate",
-                "weight_decay",
-                "warmup_steps",
-                "warmup_ratio",
-                "logging_steps",
-                "gradient_accumulation_steps",
-                "max_grad_norm",
-                # to be added in near-term commits
-                "lr_scheduler_type",
-            }
-
-            construction_kwargs = {
-                k: v
-                for k, v in conf.items()
-                if k != "run_seed"
-                and k != "random_state"
-                and k not in _RUNNER_ONLY_KWARGS
-                and (accepts_var_keyword or k in accepted)
-            }
-
-            if ("random_state" in accepted or accepts_var_keyword) and not issubclass(
-                _model_class, BaseModelWrapper
-            ):
-                try:
-                    return _ensure_wrapper(
-                        _model_class(
-                            random_state=conf.get("run_seed"),
-                            **construction_kwargs,
-                        )
-                    )
-                except TypeError as e:
-                    if "random_state" in str(e) or "unexpected keyword" in str(e):
-                        warnings.warn(
-                            f"Could not pass random_state to {_model_class.__name__}. "
-                            f"Reproducibility not guaranteed. Original error: {e}",
-                            UserWarning,
-                            stacklevel=3,
-                        )
-                        return _ensure_wrapper(_model_class(**construction_kwargs))
-                    raise ValueError(
-                        f"Failed to construct {_model_class.__name__}: {e}. "
-                        "Check that the class accepts the arguments in your ModelConfig."
-                    ) from e
-            return _ensure_wrapper(_model_class(**construction_kwargs))
-
-        return _build_from_class
+        return _ClassBuilder(model)
 
     # If it's an instance, we need to clone it per run for independence.
     if hasattr(model, "fit"):
@@ -589,7 +630,7 @@ def _build_instance_cloner(model: Any) -> Callable:
             settings.logger.info(
                 f"Cloning {type(model).__name__} instance per run for independence."
             )
-            return lambda conf: _ensure_wrapper(clone(model))
+            return _CloneBuilder(model)
         except Exception as e:
             raise ValueError(
                 f"Cannot clone sklearn model instance: {e}. "

@@ -2891,3 +2891,32 @@ def test_results_failed_runs_round_trip(tmp_path):
     assert loaded.failed_runs == [2] and loaded.run_ids == [1, 3, 4]
     from_json = VariabilityStudyResults.from_json(r.to_json())
     assert from_json.failed_runs == [2]
+
+
+# ---------------------------------------------------------------------------
+# builders from _get_model_builder pickle without cloudpickle
+# ---------------------------------------------------------------------------
+
+
+def test_builders_pickle_without_cloudpickle(monkeypatch):
+    """1.14: stdlib pickle must serialise every builder kind _get_model_builder returns."""
+    import builtins
+    import pickle
+
+    from _spy_wrappers import build_recording_spy
+    from sklearn.linear_model import LogisticRegression
+
+    from ictonyx import api
+
+    real_import = builtins.__import__
+
+    def _block_cloudpickle(name, *args, **kwargs):
+        if name == "cloudpickle":
+            raise ImportError("blocked for test")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _block_cloudpickle)
+
+    pickle.dumps(api._get_model_builder(build_recording_spy))  # function -> _EnsureWrapperBuilder
+    pickle.dumps(api._get_model_builder(LogisticRegression))  # class -> _ClassBuilder
+    pickle.dumps(api._get_model_builder(LogisticRegression()))  # instance -> _CloneBuilder

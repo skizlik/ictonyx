@@ -197,13 +197,18 @@ class ExperimentRunner:
             _serializer.dumps(self.model_builder)
         except Exception as e:
             serializer_name = getattr(_serializer, "__name__", "pickle")
-            raise ValueError(
-                f"model_builder could not be serialised with {serializer_name} "
-                f"for process isolation: {e}\n"
-                "Ensure your model builder is a picklable function, class, or lambda. "
-                "Notebook cells that reference closed-over variables may fail "
-                "with standard pickle; install cloudpickle for broader support."
+            _mod = type(self.model_builder).__module__ or ""
+            origin = (
+                "an ictonyx builder wrapper" if _mod.startswith("ictonyx") else "your model builder"
             )
+            raise ValueError(
+                f"model_builder could not be serialised with {serializer_name} for process "
+                f"isolation ({origin}): {e}\n"
+                "Without cloudpickle, builders must be module-level functions or classes, "
+                "not lambdas or closures defined inside a function or notebook cell. "
+                "`pip install ictonyx[isolation]` adds cloudpickle, which also handles "
+                "notebook-defined functions."
+            ) from e
 
         # Check data size and serialisability
         import sys

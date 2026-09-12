@@ -9,7 +9,7 @@ ModelConfigs, and ExperimentRunners into single function calls.
 import dataclasses
 import inspect
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
@@ -486,14 +486,14 @@ class _CloneBuilder:
 class _ClassBuilder:
     """Picklable builder: instantiate ``model_class`` per run from a ModelConfig."""
 
-    def __init__(self, model_class: type):
+    def __init__(self, model_class: Type[Any]):
         self.model_class = model_class
 
     def __call__(self, conf: ModelConfig) -> BaseModelWrapper:
         return _build_from_class(conf, self.model_class)
 
 
-def _build_from_class(conf: ModelConfig, _model_class: type) -> BaseModelWrapper:
+def _build_from_class(conf: ModelConfig, _model_class: Type[Any]) -> BaseModelWrapper:
     """Instantiate ``_model_class`` per run from ``conf``. Module-level so it pickles."""
     sig = inspect.signature(_model_class)
     # Extract kwargs from the ModelConfig that the wrapper's constructor

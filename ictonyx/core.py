@@ -1249,6 +1249,8 @@ if PYTORCH_AVAILABLE:
         Args:
             model: A PyTorch nn.Module instance.
             criterion: A PyTorch loss function instance (e.g., nn.CrossEntropyLoss()).
+            eval_batch_size: batch size for predict, predict_proba and evaluate. Lower
+                it for large inputs (images) that OOM at the default.
             optimizer_class: Optimizer class (e.g., torch.optim.Adam). Default: Adam.
             optimizer_params: Dict of optimizer kwargs (e.g., {'lr': 0.001}).
                 Default: {'lr': 0.001}.
@@ -1277,8 +1279,10 @@ if PYTORCH_AVAILABLE:
             device: str = "auto",
             task: str = "classification",
             model_id: str = "",
+            eval_batch_size: int = 256,
         ):
             super().__init__(model, model_id)
+            self.eval_batch_size = int(eval_batch_size)
             self.criterion = criterion or nn.CrossEntropyLoss()
             self.optimizer_class = optimizer_class or torch.optim.Adam
             self.optimizer_params = optimizer_params or {"lr": 0.001}
@@ -1310,6 +1314,23 @@ if PYTORCH_AVAILABLE:
                 # Float for features, long for classification labels, float for regression labels
                 dtype = torch.float32
             return torch.tensor(data, dtype=dtype).to(self.device)
+
+        def _forward_batched(
+            self, data: np.ndarray, batch_size: Optional[int] = None
+        ) -> "torch.Tensor":
+            """Eval-mode forward over ``data`` in batches; concatenated outputs on CPU.
+
+            Slices the numpy array *before* ``_to_tensor`` so only one batch is
+            ever resident on the device (1.16).
+            """
+            bs = int(batch_size or self.eval_batch_size)
+            self.model.eval()
+            outs = []
+            with torch.no_grad():
+                for i in range(0, len(data), bs):
+                    xb = self._to_tensor(data[i : i + bs], dtype=torch.float32)
+                    outs.append(self.model(xb).detach().cpu())
+            return torch.cat(outs, dim=0) if outs else torch.empty(0)
 
         def _make_dataloader(
             self, X: np.ndarray, y: np.ndarray, batch_size: int, shuffle: bool = True
@@ -1521,11 +1542,8 @@ if PYTORCH_AVAILABLE:
             Returns:
                 np.ndarray: Predictions.
             """
-            self.model.eval()
-            X_t = self._to_tensor(data, dtype=torch.float32)
 
-            with torch.no_grad():
-                outputs = self.model(X_t)
+            outputs = self._forward_batched(data, kwargs.get("batch_size"))
 
             if torch.any(torch.isnan(outputs)):
                 raise ValueError(
@@ -1578,22 +1596,14 @@ if PYTORCH_AVAILABLE:
                     stacklevel=2,
                 )
 
-            self.model.eval()
-            X_t = self._to_tensor(data, dtype=torch.float32)
-
-            with torch.no_grad():
-                outputs = self.model(X_t)
-
-                # Single-output sigmoid: binary classifier with one output neuron.
-                # softmax on (n, 1) produces all-ones rather than probabilities.
-                if outputs.dim() > 1 and outputs.shape[-1] == 1:
-                    p_pos = torch.sigmoid(outputs).squeeze(-1).cpu().numpy()
-                    return np.column_stack([1.0 - p_pos, p_pos])
-
-                # Multi-output softmax (standard multi-class case).
-                probabilities = torch.softmax(outputs, dim=1)
-
-            return probabilities.cpu().numpy()
+            outputs = self._forward_batched(data, kwargs.get("batch_size"))
+            # Single-output sigmoid: binary classifier with one output neuron.
+            # softmax on (n, 1) produces all-ones rather than probabilities.
+            if outputs.dim() > 1 and outputs.shape[-1] == 1:
+                p_pos = torch.sigmoid(outputs).squeeze(-1).numpy()
+                return np.column_stack([1.0 - p_pos, p_pos])
+            # Multi-output softmax (standard multi-class case).
+            return torch.softmax(outputs, dim=1).numpy()
 
         def evaluate(self, data: Any, **kwargs) -> Dict[str, Any]:
             """
@@ -1611,7 +1621,12 @@ if PYTORCH_AVAILABLE:
                 loader = data
             elif isinstance(data, tuple) and len(data) == 2:
                 X_test, y_test = data
-                loader = self._make_dataloader(X_test, y_test, batch_size=256, shuffle=False)
+                loader = self._make_dataloader(
+                    X_test,
+                    y_test,
+                    batch_size=int(kwargs.get("batch_size") or self.eval_batch_size),
+                    shuffle=False,
+                )
             else:
                 raise TypeError("Evaluation data must be a tuple of (X, y) or a DataLoader.")
 

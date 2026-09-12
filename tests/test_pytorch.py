@@ -328,3 +328,52 @@ class TestRegressorPredict:
         assert result is not None
         assert result.shape == (1,)
         assert np.issubdtype(result.dtype, np.floating)
+
+
+# ---------------------------------------------------------------------------
+# v0.4.9 / batched inference
+# ---------------------------------------------------------------------------
+
+
+def _tiny_wrapper(n_in=4, n_out=3, eval_batch_size=7):
+    import torch
+
+    from ictonyx.core import PyTorchModelWrapper
+
+    torch.manual_seed(0)
+    model = torch.nn.Sequential(
+        torch.nn.Linear(n_in, 8), torch.nn.ReLU(), torch.nn.Linear(8, n_out)
+    )
+    return PyTorchModelWrapper(
+        model, criterion=torch.nn.CrossEntropyLoss(), device="cpu", eval_batch_size=eval_batch_size
+    )
+
+
+def test_predict_batched_matches_unbatched():
+    X = np.random.RandomState(0).randn(100, 4).astype(np.float32)
+    a = _tiny_wrapper(eval_batch_size=7).predict(X)
+    b = _tiny_wrapper(eval_batch_size=1000).predict(X)
+    np.testing.assert_array_equal(a, b)
+
+
+def test_predict_proba_batched_matches_unbatched():
+    X = np.random.RandomState(0).randn(100, 4).astype(np.float32)
+    a = _tiny_wrapper(eval_batch_size=7).predict_proba(X)
+    b = _tiny_wrapper(eval_batch_size=1000).predict_proba(X)
+    np.testing.assert_allclose(a, b, atol=1e-6)
+
+
+def test_evaluate_batch_size_kwarg_reaches_dataloader(monkeypatch):
+    w = _tiny_wrapper()
+    seen = {}
+    real = w._make_dataloader
+
+    def spy(X, y, batch_size, shuffle=True):
+        seen["bs"] = batch_size
+        return real(X, y, batch_size, shuffle)
+
+    monkeypatch.setattr(w, "_make_dataloader", spy)
+    X = np.random.RandomState(0).randn(20, 4).astype(np.float32)
+    y = np.random.RandomState(1).randint(0, 3, 20)
+    w.evaluate((X, y), batch_size=8)
+    assert seen["bs"] == 8

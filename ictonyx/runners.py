@@ -592,7 +592,10 @@ class ExperimentRunner:
             if self.test_data is not None:
                 try:
                     with self._deterministic_cudnn():
-                        test_metrics = wrapped_model.evaluate(data=self.test_data)
+                        _eb = self.model_config.get("eval_batch_size")
+                        test_metrics = wrapped_model.evaluate(
+                            data=self.test_data, **({"batch_size": _eb} if _eb else {})
+                        )
                         self.final_test_metrics.append({"run_id": run_id, **test_metrics})
                         for key, value in test_metrics.items():
                             self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
@@ -1013,7 +1016,8 @@ def _isolated_training_function(
     test_eval_error: Optional[str] = None
     if test_data is not None:
         try:
-            raw = model.evaluate(data=test_data)
+            _eb = config.get("eval_batch_size")
+            raw = model.evaluate(data=test_data, **({"batch_size": _eb} if _eb else {}))
             if isinstance(raw, dict):
                 test_metrics = {
                     k: float(v) if isinstance(v, (np.floating, np.integer)) else v

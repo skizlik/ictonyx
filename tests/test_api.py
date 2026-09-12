@@ -964,6 +964,8 @@ def test_compare_results_seed_mismatch_falls_back_unpaired():
 
 def test_variability_study_tuple_test_split_honoured(monkeypatch):
     """1.13: test_split= passed to variability_study reaches ArraysDataHandler."""
+    from sklearn.linear_model import LogisticRegression
+
     from ictonyx import data as data_mod
 
     seen = {}
@@ -980,3 +982,71 @@ def test_variability_study_tuple_test_split_honoured(monkeypatch):
         model=LogisticRegression, data=(X, y), runs=2, test_split=0.5, verbose=False
     )
     assert seen.get("test_split") == 0.5
+
+
+# ---------------------------------------------------------------------------
+# v0.4.9 / validation_data routing
+# ---------------------------------------------------------------------------
+
+from _spy_wrappers import _Base
+
+
+class _ValSpy(_Base):
+    def fit(self, train_data, validation_data=None, **kw):
+        from ictonyx import TrainingResult
+
+        marker = float(validation_data[0][0, 0]) if validation_data is not None else -1.0
+        self.training_result = TrainingResult(
+            history={"val_marker": [marker], "val_accuracy": [0.5]}, params={}
+        )
+
+
+def _build_val_spy(cfg):
+    return _ValSpy(None)
+
+
+def test_variability_study_validation_data_is_used():
+    X = np.random.RandomState(0).randn(60, 4)
+    y = (X[:, 0] > 0).astype(int)
+    Xv = np.full((20, 4), 7.0)
+    yv = np.ones(20, dtype=int)
+    r = api.variability_study(
+        model=_build_val_spy,
+        data=(X, y),
+        runs=2,
+        epochs=1,
+        verbose=False,
+        validation_data=(Xv, yv),
+    )
+    assert r.get_metric_values("val_marker") == [7.0, 7.0]
+
+
+def test_validation_data_with_handler_raises():
+    from ictonyx.data import ArraysDataHandler
+    from ictonyx.exceptions import ConfigurationError
+
+    X = np.zeros((10, 2))
+    y = np.zeros(10, dtype=int)
+    with pytest.raises(ConfigurationError, match="X_val="):
+        api.variability_study(
+            model=_build_val_spy,
+            data=ArraysDataHandler(X, y),
+            runs=1,
+            validation_data=(X, y),
+            verbose=False,
+        )
+
+
+def test_validation_data_with_dataframe_raises():
+    from ictonyx.exceptions import ConfigurationError
+
+    df = pd.DataFrame({"a": range(10), "t": [0, 1] * 5})
+    with pytest.raises(ConfigurationError, match="tuple"):
+        api.variability_study(
+            model=_build_val_spy,
+            data=df,
+            target_column="t",
+            runs=1,
+            validation_data=(df[["a"]].values, df["t"].values),
+            verbose=False,
+        )

@@ -33,6 +33,43 @@ else:
     _torch_nn = None  # type: ignore[assignment]
 
 
+# Data-pipeline kwargs: routed to the DataHandler (or the runner), never into ModelConfig.
+_INFRA_KWARGS = frozenset(
+    {
+        "image_size",
+        "test_split",
+        "val_split",
+        "gpu_memory_limit",
+        "color_mode",
+        "validation_data",
+        "stratify",
+    }
+)
+
+
+def _resolve_handler(
+    data: Any, target_column: Optional[str], infra_kwargs: Dict[str, Any]
+) -> DataHandler:
+    """Route infra kwargs to the right DataHandler; reject silent drops."""
+    infra = dict(infra_kwargs)
+    infra.pop("gpu_memory_limit", None)  # runner concern; read separately via kwargs.get
+    validation_data = infra.pop("validation_data", None)
+    if validation_data is not None:
+        if isinstance(data, DataHandler):
+            raise ConfigurationError(
+                "validation_data= cannot be combined with a DataHandler instance; "
+                "construct the handler with X_val=/y_val= instead."
+            )
+        if not (isinstance(data, tuple) and len(data) == 2):
+            raise ConfigurationError(
+                "validation_data= is only supported when data is an (X, y) tuple."
+            )
+        if not (isinstance(validation_data, tuple) and len(validation_data) == 2):
+            raise ConfigurationError("validation_data must be an (X_val, y_val) tuple.")
+        infra["X_val"], infra["y_val"] = validation_data
+    return auto_resolve_handler(data, target_column=target_column, **infra)
+
+
 def variability_study(
     model: Any,
     data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray]],
@@ -93,6 +130,10 @@ def variability_study(
             derived via ``np.random.SeedSequence.spawn()``, guaranteeing
             statistically uncorrelated RNG streams. If ``None``, a random
             seed is generated and stored in the results.
+        stratify: Passed to ``ArraysDataHandler`` for tuple data.
+        validation_data: ``(X_val, y_val)`` to use as the validation set
+            instead of carving one from ``data``. Only with ``(X, y)`` tuple
+            data. Raises ``ConfigurationError`` otherwise.
         verbose: If ``False``, suppress all training output. Default ``True``.
         use_parallel: If ``True``, fan training runs across multiple
             processes using ``joblib``. Safe for sklearn models. Not
@@ -126,13 +167,6 @@ def variability_study(
     # Separate infrastructure kwargs (forwarded to the data handler) from
     # model kwargs (forwarded to ModelConfig). Add new DataHandler constructor
     # parameters to _INFRA_KWARGS to prevent them from appearing in ModelConfig.
-    _INFRA_KWARGS = {
-        "image_size",
-        "test_split",
-        "val_split",
-        "gpu_memory_limit",
-        "color_mode",
-    }
 
     model_kwargs = {k: v for k, v in kwargs.items() if k not in _INFRA_KWARGS}
     infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
@@ -163,7 +197,7 @@ def variability_study(
         )
 
     # 1. Prepare Data
-    handler = auto_resolve_handler(data, target_column=target_column, **infra_kwargs)
+    handler = _resolve_handler(data, target_column, infra_kwargs)
 
     # 2. Prepare Model Builder
     # If the user passes a class (e.g. RandomForestClassifier), we instantiate it per run.
@@ -326,9 +360,8 @@ def compare_models(
     # Apply the same infra/model kwargs separation used in variability_study().
     # Without this split, model hyperparameters like learning_rate reach
     # auto_resolve_handler() and raise TypeError.
-    _INFRA_KWARGS = {"image_size", "test_split", "val_split", "gpu_memory_limit", "color_mode"}
     infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
-    handler = auto_resolve_handler(data, target_column=target_column, **infra_kwargs)
+    handler = _resolve_handler(data, target_column, infra_kwargs)
 
     settings.logger.info(f"--- Starting Comparison of {len(models)} Models (seed={seed}) ---")
 

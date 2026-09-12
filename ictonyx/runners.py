@@ -784,6 +784,10 @@ class ExperimentRunner:
                 "seed": self.seed,
             }
         )
+
+        # Invariant (v0.4.9): every key logged here was either passed to a
+        # constructor, forwarded to fit() by build_fit_kwargs, or warned about.
+        # Infra kwargs (validation_data, splits) never reach ModelConfig.
         self.tracker.log_params(self.model_config.params)
 
         # Print study configuration (System Logger)

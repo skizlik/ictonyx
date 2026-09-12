@@ -960,3 +960,23 @@ def test_compare_results_seed_mismatch_falls_back_unpaired():
         or "Mann-Whitney" in res.overall_test.test_name
     )
     assert "Wilcoxon" not in res.overall_test.test_name
+
+
+def test_variability_study_tuple_test_split_honoured(monkeypatch):
+    """1.13: test_split= passed to variability_study reaches ArraysDataHandler."""
+    from ictonyx import data as data_mod
+
+    seen = {}
+    real_init = data_mod.ArraysDataHandler.__init__
+
+    def spy_init(self, X, y, *a, **kw):
+        seen.update(kw)
+        real_init(self, X, y, *a, **kw)
+
+    monkeypatch.setattr(data_mod.ArraysDataHandler, "__init__", spy_init)
+    X = np.random.RandomState(0).randn(60, 4)
+    y = (X[:, 0] > 0).astype(int)
+    api.variability_study(
+        model=LogisticRegression, data=(X, y), runs=2, test_split=0.5, verbose=False
+    )
+    assert seen.get("test_split") == 0.5

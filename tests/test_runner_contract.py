@@ -60,9 +60,8 @@ def test_named_fit_kwarg_is_forwarded(path):
     assert r.get_metric_values("val_lr_seen") == pytest.approx([0.123, 0.123])
 
 
-@pytest.mark.parametrize("path", [p for p in PATHS if p.id != "isolated"])
-def test_unaccepted_fit_kwarg_warns_and_is_not_forwarded(path):
-    # Isolated excluded: the warning is raised in the subprocess and does not propagate.
+def test_unaccepted_fit_kwarg_warns_and_is_not_forwarded_standard():
+    # Standard mode only: build_fit_kwargs runs in-process, so the warning is observable.
     with pytest.warns(UserWarning, match="learning_rate"):
         r = ix.variability_study(
             model=build_recording_spy,
@@ -72,13 +71,14 @@ def test_unaccepted_fit_kwarg_warns_and_is_not_forwarded(path):
             seed=11,
             verbose=False,
             learning_rate=0.123,
-            **path,
         )
     assert r.get_metric_values("val_n_kwargs") == [4.0, 4.0]
 
 
-@pytest.mark.skipif(not _has("cloudpickle"), reason="needs [isolation]")
-def test_isolated_unaccepted_fit_kwarg_is_not_forwarded():
+@pytest.mark.parametrize("path", [p for p in PATHS if p.id != "standard"])
+def test_unaccepted_fit_kwarg_is_not_forwarded_worker_paths(path):
+    # Isolated and parallel run fit() in a child process; the warning is raised
+    # there and does not propagate. Assert only the contract: nothing forwarded.
     r = ix.variability_study(
         model=build_recording_spy,
         data=(X, y),
@@ -87,7 +87,7 @@ def test_isolated_unaccepted_fit_kwarg_is_not_forwarded():
         seed=11,
         verbose=False,
         learning_rate=0.123,
-        use_process_isolation=True,
+        **path,
     )
     assert r.get_metric_values("val_n_kwargs") == [4.0, 4.0]
 

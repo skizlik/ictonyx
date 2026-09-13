@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## v0.4.9 — 2026-09-12
+## v0.4.9 — 2026-09-13
 
 Execution-path unification and paired-inference integrity hotfix.
 Twelve defects fixed; two of them critical and silent.

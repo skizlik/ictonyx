@@ -124,3 +124,28 @@ class TestHuggingFaceVerboseHandling:
             f"Expected fewer than 30 nontrivial stdout lines with verbose=False, "
             f"got {len(nontrivial_lines)}. Output:\n{combined}"
         )
+
+
+# ---------------------------------------------------------------------------
+# v0.4.9 / batched inference
+# ---------------------------------------------------------------------------
+
+
+def test_hf_predict_batched_matches_unbatched():
+    """1.8: batching must not change predictions."""
+    from ictonyx.core import HuggingFaceModelWrapper
+
+    texts = ["good movie", "terrible film", "fine", "not bad at all", "awful"] * 3
+    labels = [0, 1, 0, 1, 1] * 3
+    w = HuggingFaceModelWrapper(
+        "hf-internal-testing/tiny-random-distilbert",
+        num_labels=2,
+        max_length=16,
+        device="cpu",
+        eval_batch_size=1,
+    )
+    w.fit((texts, labels), epochs=1, batch_size=4, run_seed=0, verbose=False)
+    a = w.predict_proba(texts, batch_size=1)
+    b = w.predict_proba(texts, batch_size=len(texts))
+    np.testing.assert_allclose(a, b, atol=1e-5)
+    np.testing.assert_array_equal(w.predict(texts, batch_size=2), w.predict(texts, batch_size=15))

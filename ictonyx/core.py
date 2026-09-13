@@ -7,7 +7,7 @@ import sys
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -1249,6 +1249,8 @@ if PYTORCH_AVAILABLE:
         Args:
             model: A PyTorch nn.Module instance.
             criterion: A PyTorch loss function instance (e.g., nn.CrossEntropyLoss()).
+            eval_batch_size: batch size for predict, predict_proba and evaluate. Lower
+                it for large inputs (images) that OOM at the default.
             optimizer_class: Optimizer class (e.g., torch.optim.Adam). Default: Adam.
             optimizer_params: Dict of optimizer kwargs (e.g., {'lr': 0.001}).
                 Default: {'lr': 0.001}.
@@ -1277,8 +1279,10 @@ if PYTORCH_AVAILABLE:
             device: str = "auto",
             task: str = "classification",
             model_id: str = "",
+            eval_batch_size: int = 256,
         ):
             super().__init__(model, model_id)
+            self.eval_batch_size = int(eval_batch_size)
             self.criterion = criterion or nn.CrossEntropyLoss()
             self.optimizer_class = optimizer_class or torch.optim.Adam
             self.optimizer_params = optimizer_params or {"lr": 0.001}
@@ -1310,6 +1314,23 @@ if PYTORCH_AVAILABLE:
                 # Float for features, long for classification labels, float for regression labels
                 dtype = torch.float32
             return torch.tensor(data, dtype=dtype).to(self.device)
+
+        def _forward_batched(
+            self, data: np.ndarray, batch_size: Optional[int] = None
+        ) -> "torch.Tensor":
+            """Eval-mode forward over ``data`` in batches; concatenated outputs on CPU.
+
+            Slices the numpy array *before* ``_to_tensor`` so only one batch is
+            ever resident on the device (1.16).
+            """
+            bs = int(batch_size or self.eval_batch_size)
+            self.model.eval()
+            outs = []
+            with torch.no_grad():
+                for i in range(0, len(data), bs):
+                    xb = self._to_tensor(data[i : i + bs], dtype=torch.float32)
+                    outs.append(self.model(xb).detach().cpu())
+            return torch.cat(outs, dim=0) if outs else torch.empty(0)
 
         def _make_dataloader(
             self, X: np.ndarray, y: np.ndarray, batch_size: int, shuffle: bool = True
@@ -1521,11 +1542,8 @@ if PYTORCH_AVAILABLE:
             Returns:
                 np.ndarray: Predictions.
             """
-            self.model.eval()
-            X_t = self._to_tensor(data, dtype=torch.float32)
 
-            with torch.no_grad():
-                outputs = self.model(X_t)
+            outputs = self._forward_batched(data, kwargs.get("batch_size"))
 
             if torch.any(torch.isnan(outputs)):
                 raise ValueError(
@@ -1578,22 +1596,14 @@ if PYTORCH_AVAILABLE:
                     stacklevel=2,
                 )
 
-            self.model.eval()
-            X_t = self._to_tensor(data, dtype=torch.float32)
-
-            with torch.no_grad():
-                outputs = self.model(X_t)
-
-                # Single-output sigmoid: binary classifier with one output neuron.
-                # softmax on (n, 1) produces all-ones rather than probabilities.
-                if outputs.dim() > 1 and outputs.shape[-1] == 1:
-                    p_pos = torch.sigmoid(outputs).squeeze(-1).cpu().numpy()
-                    return np.column_stack([1.0 - p_pos, p_pos])
-
-                # Multi-output softmax (standard multi-class case).
-                probabilities = torch.softmax(outputs, dim=1)
-
-            return probabilities.cpu().numpy()
+            outputs = self._forward_batched(data, kwargs.get("batch_size"))
+            # Single-output sigmoid: binary classifier with one output neuron.
+            # softmax on (n, 1) produces all-ones rather than probabilities.
+            if outputs.dim() > 1 and outputs.shape[-1] == 1:
+                p_pos = torch.sigmoid(outputs).squeeze(-1).numpy()
+                return np.column_stack([1.0 - p_pos, p_pos])
+            # Multi-output softmax (standard multi-class case).
+            return torch.softmax(outputs, dim=1).numpy()
 
         def evaluate(self, data: Any, **kwargs) -> Dict[str, Any]:
             """
@@ -1611,7 +1621,12 @@ if PYTORCH_AVAILABLE:
                 loader = data
             elif isinstance(data, tuple) and len(data) == 2:
                 X_test, y_test = data
-                loader = self._make_dataloader(X_test, y_test, batch_size=256, shuffle=False)
+                loader = self._make_dataloader(
+                    X_test,
+                    y_test,
+                    batch_size=int(kwargs.get("batch_size") or self.eval_batch_size),
+                    shuffle=False,
+                )
             else:
                 raise TypeError("Evaluation data must be a tuple of (X, y) or a DataLoader.")
 
@@ -1805,6 +1820,10 @@ if HUGGINGFACE_AVAILABLE:
             device: ``'auto'``, ``'cpu'``, ``'cuda'``, or ``'cuda:0'``.
                 ``'auto'`` selects CUDA > MPS > CPU.
             model_id: Optional label for logging.
+            eval_batch_size: Batch size for ``predict``, ``predict_proba`` and
+                ``evaluate``. Default 32. Each batch is padded only to its own
+                longest sequence, so peak memory scales with this, not with
+                the size of the input.
             **model_kwargs: Forwarded to ``from_pretrained()``.
 
         Example::
@@ -1838,6 +1857,7 @@ if HUGGINGFACE_AVAILABLE:
             max_length: int = 128,
             device: str = "auto",
             model_id: str = "",
+            eval_batch_size: int = 32,
             **model_kwargs,
         ):
             super().__init__(model=None, model_id=model_id)
@@ -1846,6 +1866,7 @@ if HUGGINGFACE_AVAILABLE:
             self.num_labels = num_labels
             self.tokenizer_name_or_path = tokenizer_name_or_path or model_name_or_path
             self.max_length = max_length
+            self.eval_batch_size = int(eval_batch_size)
             self._model_kwargs = model_kwargs
             self.tokenizer: Optional[Any] = None
             self._tmp_dir: Optional[str] = None
@@ -2061,6 +2082,35 @@ if HUGGINGFACE_AVAILABLE:
                 },
             )
 
+        def _logits_batched(self, texts: List[str], batch_size: Optional[int] = None) -> np.ndarray:
+            """Tokenize and run ``texts`` in batches; concatenated logits as a numpy array.
+
+            ``padding=True`` pads to the longest sequence *in each batch*, so peak
+            memory scales with ``batch_size`` rather than with ``len(texts)`` (1.8).
+            """
+            import torch as _torch
+
+            if self.model is None or self.tokenizer is None:
+                raise RuntimeError("HuggingFaceModelWrapper: call fit() before predict().")
+            bs = int(batch_size or self.eval_batch_size)
+            self.model.to(self._device_str)
+            self.model.eval()
+            chunks = []
+            with _torch.no_grad():
+                for i in range(0, len(texts), bs):
+                    enc = self.tokenizer(
+                        texts[i : i + bs],
+                        truncation=True,
+                        padding=True,
+                        max_length=self.max_length,
+                        return_tensors="pt",
+                    )
+                    enc = {k: v.to(self._device_str) for k, v in enc.items()}
+                    chunks.append(self.model(**enc).logits.detach().cpu())
+            if not chunks:
+                return np.empty((0, self.num_labels or 0), dtype=np.float32)
+            return _torch.cat(chunks, dim=0).numpy()
+
         def predict(self, data, **kwargs) -> np.ndarray:
             """Generate class predictions.
 
@@ -2074,30 +2124,14 @@ if HUGGINGFACE_AVAILABLE:
             Raises:
                 RuntimeError: If called before ``fit()``.
             """
-            import torch as _torch
-
-            if self.model is None or self.tokenizer is None:
-                raise RuntimeError("HuggingFaceModelWrapper.predict() called before fit().")
             if isinstance(data, tuple):
                 texts = list(data[0])
             elif isinstance(data, list):
                 texts = data
             else:
                 texts = list(data)
-
-            encoding = self.tokenizer(
-                texts,
-                truncation=True,
-                padding=True,
-                max_length=self.max_length,
-                return_tensors="pt",
-            )
-            encoding = {k: v.to(self._device_str) for k, v in encoding.items()}
-            self.model.to(self._device_str)
-            self.model.eval()
-            with _torch.no_grad():
-                outputs = self.model(**encoding)
-            self.predictions = np.argmax(outputs.logits.cpu().numpy(), axis=-1).astype(int)
+            logits = self._logits_batched(texts, kwargs.get("batch_size"))
+            self.predictions = np.argmax(logits, axis=-1).astype(int)
             return self.predictions  # type: ignore[return-value]
 
         def predict_proba(self, data, **kwargs) -> np.ndarray:
@@ -2110,23 +2144,8 @@ if HUGGINGFACE_AVAILABLE:
                 texts = data
             else:
                 texts = list(data)
-
-            if self.tokenizer is None:
-                raise RuntimeError("Tokenizer not initialized. Call fit() first.")
-
-            encoding = self.tokenizer(
-                texts,
-                truncation=True,
-                padding=True,
-                max_length=self.max_length,
-                return_tensors="pt",
-            )
-            encoding = {k: v.to(self._device_str) for k, v in encoding.items()}
-            self.model.to(self._device_str)
-            self.model.eval()
-            with _torch.no_grad():
-                outputs = self.model(**encoding)
-            return _torch.softmax(outputs.logits, dim=-1).cpu().numpy()
+            logits = self._logits_batched(texts, kwargs.get("batch_size"))
+            return _torch.softmax(_torch.from_numpy(logits), dim=-1).numpy()
 
         def evaluate(self, data, **kwargs) -> dict:
             """Evaluate on labeled data.
@@ -2140,7 +2159,7 @@ if HUGGINGFACE_AVAILABLE:
             if not (isinstance(data, tuple) and len(data) == 2):
                 raise TypeError("HuggingFaceModelWrapper.evaluate() expects (texts, labels).")
             texts, labels = data
-            preds = self.predict(list(texts))
+            preds = self.predict(list(texts), batch_size=kwargs.get("batch_size"))
             return {"accuracy": float(accuracy_score(np.array(list(labels)), preds))}
 
         def assess(self, true_labels: np.ndarray) -> dict:

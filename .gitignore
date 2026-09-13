@@ -36,6 +36,15 @@ build/
 *.egg-info/
 *.egg
 
+# Sphinx output: build with `make -C docs html`; never commit
+docs/_build/
+docs/_autosummary/
+
+# Experiment outputs written by notebooks
+results/
+fig*_*.pdf
+fig*_*.png
+
 # Development and debugging files
 _dev/
 codebase.py

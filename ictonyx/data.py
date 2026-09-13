@@ -1068,6 +1068,9 @@ class ArraysDataHandler(DataHandler):
         y_test: Optional[Union[np.ndarray, List, Any]] = None,
         val_split: float = 0.1,
         test_split: float = 0.2,
+        X_val: Optional[Union[np.ndarray, List, Any]] = None,
+        y_val: Optional[Union[np.ndarray, List, Any]] = None,
+        stratify: Optional[bool] = None,
     ):
         """Data handler for pre-loaded in-memory arrays.
 
@@ -1084,9 +1087,16 @@ class ArraysDataHandler(DataHandler):
             y_test: Optional pre-held-out test labels. Required if
                 ``X_test`` is provided.
             val_split: Default validation fraction passed to ``load()``
-            when not overridden there. Default ``0.1``.
+                when not overridden there. Default ``0.1``.
             test_split: Default test fraction passed to ``load()``
-            when not overridden there. Default ``0.2``.
+                when not overridden there. Default ``0.2``.
+            X_val: Optional pre-held-out validation features. If provided,
+                ``load()`` performs no validation split and ``val_split`` is ignored.
+            y_val: Optional pre-held-out validation labels. Required if ``X_val`` is provided.
+            stratify: ``True`` passes ``stratify=y`` to every internal
+                ``train_test_split``. ``None`` (default) never stratifies in
+                v0.4.9; v0.5.0 will auto-detect classification targets. ``False``
+                never stratifies.
 
         Raises:
             ValueError: If ``X`` and ``y`` have different lengths.
@@ -1098,6 +1108,9 @@ class ArraysDataHandler(DataHandler):
         self.y = np.array(y)
         self.X_test_provided = np.array(X_test) if X_test is not None else None
         self.y_test_provided = np.array(y_test) if y_test is not None else None
+        self.X_val_provided = np.array(X_val) if X_val is not None else None
+        self.y_val_provided = np.array(y_val) if y_val is not None else None
+        self._stratify = stratify
         self._default_val_split = val_split
         self._default_test_split = test_split
 
@@ -1120,6 +1133,22 @@ class ArraysDataHandler(DataHandler):
                     f"y_test has {len(self.y_test_provided)}"
                 )
 
+        # Validate validation set symmetry: both or neither must be provided.
+        if (X_val is None) != (y_val is None):
+            provided = "X_val" if X_val is not None else "y_val"
+            missing = "y_val" if X_val is not None else "X_val"
+            raise ValueError(
+                f"ArraysDataHandler requires both X_val and y_val, or neither. "
+                f"Got {provided} but not {missing}."
+            )
+
+        if self.X_val_provided is not None and self.y_val_provided is not None:
+            if len(self.X_val_provided) != len(self.y_val_provided):
+                raise ValueError(
+                    f"Validation set length mismatch: X_val has {len(self.X_val_provided)}, "
+                    f"y_val has {len(self.y_val_provided)}"
+                )
+
     def load(
         self,
         test_split: Optional[float] = None,
@@ -1132,6 +1161,9 @@ class ArraysDataHandler(DataHandler):
         If X_test and y_test were provided at construction, they are used
         as the test set directly and only a train/val split is performed.
         Otherwise, test_split is carved out of the provided arrays first.
+
+        If X_val/y_val were provided at construction, they are used as the
+        validation set directly.
 
         Args:
             test_split: Fraction to reserve for test. Defaults to the
@@ -1152,53 +1184,85 @@ class ArraysDataHandler(DataHandler):
         if _test_split + _val_split >= 1.0:
             raise ValueError("Sum of splits must be < 1.0")
 
-            # --- Path 1: Pre-held-out test set provided ---
+        strat_full = self.y if self._stratify else None
+        self._provenance: Dict[str, Any] = {
+            "random_state": random_state,
+            "stratified": bool(self._stratify),
+            "test": (
+                "provided"
+                if self.X_test_provided is not None
+                else ("split" if _test_split > 0 else "none")
+            ),
+            "val": (
+                "provided"
+                if self.X_val_provided is not None
+                else ("split" if _val_split > 0 else "none")
+            ),
+        }
+
+        # --- Test set ---
         if self.X_test_provided is not None:
-            if _val_split > 0 and len(self.X) > 1:
-                X_train, X_val, y_train, y_val = train_test_split(
-                    self.X, self.y, test_size=_val_split, random_state=random_state
-                )
-            else:
-                X_train, y_train = self.X, self.y
-                X_val, y_val = None, None
-
-            logger.info(
-                f"Array splits - Train: {len(X_train)}, "
-                f"Val: {len(X_val) if X_val is not None else 0}, "
-                f"Test: {len(self.X_test_provided)} (pre-provided)"
-            )
-            return {
-                "train_data": (X_train, y_train),
-                "val_data": (X_val, y_val) if X_val is not None else None,
-                "test_data": (self.X_test_provided, self.y_test_provided),
-            }
-
-            # --- Path 2: Internal split ---
-        if _test_split > 0:
-            X_train, X_test, y_train, y_test = train_test_split(
-                self.X, self.y, test_size=_test_split, random_state=random_state
+            X_pool, y_pool = self.X, self.y
+            X_test, y_test = self.X_test_provided, self.y_test_provided
+        elif _test_split > 0:
+            X_pool, X_test, y_pool, y_test = train_test_split(
+                self.X,
+                self.y,
+                test_size=_test_split,
+                random_state=random_state,
+                stratify=strat_full,
             )
         else:
-            X_train, X_test, y_train, y_test = self.X, None, self.y, None
+            X_pool, y_pool, X_test, y_test = self.X, self.y, None, None
 
-        X_val, y_val = None, None
-        if _val_split > 0 and len(X_train) > 1:
-            adj_val_split = _val_split / (1 - _test_split) if _test_split > 0 else _val_split
-            if adj_val_split < 1.0:
+        # --- Validation set ---
+        if self.X_val_provided is not None:
+            X_train, y_train = X_pool, y_pool
+            X_val, y_val = self.X_val_provided, self.y_val_provided
+        elif _val_split > 0 and len(X_pool) > 1:
+            internal_test = self.X_test_provided is None and _test_split > 0
+            adj = _val_split / (1 - _test_split) if internal_test else _val_split
+            if adj < 1.0:
                 X_train, X_val, y_train, y_val = train_test_split(
-                    X_train, y_train, test_size=adj_val_split, random_state=random_state
+                    X_pool,
+                    y_pool,
+                    test_size=adj,
+                    random_state=random_state,
+                    stratify=(y_pool if self._stratify else None),
                 )
+            else:
+                X_train, y_train, X_val, y_val = X_pool, y_pool, None, None
+        else:
+            X_train, y_train, X_val, y_val = X_pool, y_pool, None, None
 
+        self._provenance.update(
+            n_train=len(X_train),
+            n_val=len(X_val) if X_val is not None else 0,
+            n_test=len(X_test) if X_test is not None else 0,
+        )
         logger.info(
             f"Array splits - Train: {len(X_train)}, "
-            f"Val: {len(X_val) if X_val is not None else 0}, "
-            f"Test: {len(X_test) if X_test is not None else 0}"
+            f"Val: {self._provenance['n_val']} ({self._provenance['val']}), "
+            f"Test: {self._provenance['n_test']} ({self._provenance['test']})"
+            + (", stratified" if self._stratify else "")
         )
         return {
             "train_data": (X_train, y_train),
             "val_data": (X_val, y_val) if X_val is not None else None,
             "test_data": (X_test, y_test) if X_test is not None else None,
         }
+
+    def get_data_info(self) -> Dict[str, Any]:
+        info = super().get_data_info()
+        info.update(
+            n_samples=int(len(self.X)),
+            n_features=int(self.X.shape[1]) if self.X.ndim > 1 else 1,
+            test_provided=self.X_test_provided is not None,
+            val_provided=self.X_val_provided is not None,
+            stratify=self._stratify,
+            split_provenance=getattr(self, "_provenance", None),
+        )
+        return info
 
 
 def auto_resolve_handler(
@@ -1234,7 +1298,10 @@ def auto_resolve_handler(
     if isinstance(data, tuple) and len(data) == 2:
         # Simple heuristic: check if elements have shape or length
         if hasattr(data[0], "shape") or hasattr(data[0], "__len__"):
-            return ArraysDataHandler(data[0], data[1])
+            _ok = {"val_split", "test_split", "X_val", "y_val", "stratify"}
+            return ArraysDataHandler(
+                data[0], data[1], **{k: v for k, v in kwargs.items() if k in _ok}
+            )
 
     # 2. Handle Pandas DataFrame -> Tabular
     if isinstance(data, pd.DataFrame):

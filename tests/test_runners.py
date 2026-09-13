@@ -1682,7 +1682,6 @@ class TestNRunsWarning:
 
 
 class TestProcessIsolationValidation:
-
     def test_validation_accepts_picklable_function(self):
         """A plain function must pass validation."""
         from unittest.mock import MagicMock
@@ -1730,7 +1729,6 @@ class TestProcessIsolationValidation:
 
 
 class TestRunSeedInjection:
-
     def test_run_seed_present_in_config_during_standard_mode(self):
         """Standard mode must inject run_seed into model_config before model build."""
         import numpy as np
@@ -2821,3 +2819,179 @@ class TestSummarizeNAndSE:
         )
         summary = results.summarize()
         assert "SE:" in summary
+
+
+# ---------------------------------------------------------------------------
+# v0.4.9 / C1 — isolated-mode evaluate() failure must not poison results
+# ---------------------------------------------------------------------------
+
+import importlib.util
+
+from _spy_wrappers import build_eval_raises_spy
+
+import ictonyx as ix
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("cloudpickle") is None, reason="needs the [isolation] extra"
+)
+def test_isolated_eval_failure_does_not_poison_summary():
+    """2.10: evaluate() raising in the subprocess must not put a string into final_test_metrics."""
+    X = np.random.RandomState(0).randn(40, 3)
+    y = (X[:, 0] > 0).astype(int)
+    results = ix.variability_study(
+        model=build_eval_raises_spy,
+        data=(X, y),
+        runs=2,
+        epochs=1,
+        verbose=False,
+        use_process_isolation=True,
+    )
+    assert results.n_runs == 2
+    assert results.final_test_metrics == []
+    results.summarize()  # raised TypeError before the fix
+
+
+# ---------------------------------------------------------------------------
+# v0.4.9 / C2 — failed_runs, run_ids, n_requested, get_run_seed
+# ---------------------------------------------------------------------------
+
+import _spy_wrappers
+from _spy_wrappers import build_fails_on_run
+
+
+def _study_with_run_2_failing():
+    # Same derivation as ExperimentRunner: child seeds are
+    # int(child.generate_state(1)[0]) for SeedSequence(seed).spawn(n).
+    _spy_wrappers.FAIL_SEED = int(np.random.SeedSequence(11).spawn(4)[1].generate_state(1)[0])
+    X = np.random.RandomState(0).randn(40, 3)
+    y = (X[:, 0] > 0).astype(int)
+    return ix.variability_study(
+        model=build_fails_on_run, data=(X, y), runs=4, epochs=1, seed=11, verbose=False
+    )
+
+
+def test_results_run_ids_and_failed_runs():
+    r = _study_with_run_2_failing()
+    assert r.failed_runs == [2]
+    assert r.run_ids == [1, 3, 4]
+    assert r.n_requested == 4 == len(r.run_seeds)
+    assert r.get_run_seed(3) == r.run_seeds[2]
+    assert r.get_run_seed(0) is None and r.get_run_seed(5) is None
+    ids, vals = r.get_metric_values("val_accuracy", with_run_ids=True)
+    assert ids == [1, 3, 4] and len(vals) == 3
+    assert "Failed runs: [2]" in r.summarize()
+
+
+def test_results_failed_runs_round_trip(tmp_path):
+    r = _study_with_run_2_failing()
+    p = tmp_path / "r.pkl"
+    r.save(str(p))
+    loaded = VariabilityStudyResults.load(str(p))
+    assert loaded.failed_runs == [2] and loaded.run_ids == [1, 3, 4]
+    from_json = VariabilityStudyResults.from_json(r.to_json())
+    assert from_json.failed_runs == [2]
+
+
+# ---------------------------------------------------------------------------
+# builders from _get_model_builder pickle without cloudpickle
+# ---------------------------------------------------------------------------
+
+
+def test_builders_pickle_without_cloudpickle(monkeypatch):
+    """1.14: stdlib pickle must serialise every builder kind _get_model_builder returns."""
+    import builtins
+    import pickle
+
+    from _spy_wrappers import build_recording_spy
+    from sklearn.linear_model import LogisticRegression
+
+    from ictonyx import api
+
+    real_import = builtins.__import__
+
+    def _block_cloudpickle(name, *args, **kwargs):
+        if name == "cloudpickle":
+            raise ImportError("blocked for test")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _block_cloudpickle)
+
+    pickle.dumps(api._get_model_builder(build_recording_spy))  # function -> _EnsureWrapperBuilder
+    pickle.dumps(api._get_model_builder(LogisticRegression))  # class -> _ClassBuilder
+    pickle.dumps(api._get_model_builder(LogisticRegression()))  # instance -> _CloneBuilder
+
+
+# ---------------------------------------------------------------------------
+# build_fit_kwargs contract
+# ---------------------------------------------------------------------------
+
+from _spy_wrappers import RecordingSpy, _Base, build_recording_spy
+
+from ictonyx.runners import FIT_KWARG_KEYS, _isolated_training_function, build_fit_kwargs
+
+
+class _NamedLR(_Base):
+    def fit(self, train_data, validation_data=None, learning_rate=None, **kw):
+        self.training_result = TrainingResult(history={"val_lr": [learning_rate]}, params={})
+
+
+class _OptIn(_Base):
+    _ACCEPTS_FIT_KWARGS = True
+
+    def fit(self, train_data, validation_data=None, **kw):
+        self.training_result = TrainingResult(history={"val_n": [len(kw)]}, params={})
+
+
+class TestBuildFitKwargs:
+    def test_sklearn_gets_only_data(self):
+        from sklearn.linear_model import LogisticRegression
+
+        from ictonyx.core import ScikitLearnModelWrapper
+
+        w = ScikitLearnModelWrapper(LogisticRegression())
+        kw = build_fit_kwargs(ModelConfig({"learning_rate": 0.1}), 3, 7, w, "T", "V")
+        assert kw == {"train_data": "T", "validation_data": "V"}
+
+    def test_core_keys_for_non_sklearn(self):
+        kw = build_fit_kwargs(ModelConfig({"batch_size": 8}), 3, 7, RecordingSpy(None), "T", "V")
+        assert kw == {
+            "train_data": "T",
+            "validation_data": "V",
+            "epochs": 3,
+            "batch_size": 8,
+            "verbose": 0,
+            "run_seed": 7,
+        }
+
+    def test_named_param_forwarded(self):
+        kw = build_fit_kwargs(ModelConfig({"learning_rate": 0.5}), 1, 1, _NamedLR(None), "T", "V")
+        assert kw["learning_rate"] == 0.5
+
+    def test_var_kwargs_without_opt_in_warns_and_drops(self):
+        with pytest.warns(UserWarning, match="learning_rate"):
+            kw = build_fit_kwargs(
+                ModelConfig({"learning_rate": 0.5}), 1, 1, RecordingSpy(None), "T", "V"
+            )
+        assert "learning_rate" not in kw
+
+    def test_opt_in_forwards_everything_present(self):
+        cfg = ModelConfig({k: 1 for k in FIT_KWARG_KEYS})
+        kw = build_fit_kwargs(cfg, 1, 1, _OptIn(None), "T", "V")
+        assert FIT_KWARG_KEYS <= set(kw)
+
+
+def test_isolated_training_function_forwards_run_seed():
+    X = np.random.RandomState(0).randn(30, 3)
+    y = (X[:, 0] > 0).astype(int)
+    out = _isolated_training_function(
+        model_builder=build_recording_spy,
+        config=ModelConfig({}),
+        train_data=(X, y),
+        val_data=(X, y),
+        test_data=None,
+        epochs=1,
+        run_id=1,
+        run_seed=12345,
+    )
+    assert out["history"]["val_seed_seen"][0] == 12345.0

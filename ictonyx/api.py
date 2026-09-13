@@ -7,8 +7,9 @@ and model comparisons. It abstracts away the complexity of DataHandlers,
 ModelConfigs, and ExperimentRunners into single function calls.
 """
 import dataclasses
+import inspect
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
@@ -21,7 +22,7 @@ from .core import PYTORCH_AVAILABLE, SKLEARN_AVAILABLE, TENSORFLOW_AVAILABLE, Ba
 from .data import DataHandler, auto_resolve_handler
 from .exceptions import ConfigurationError
 from .loggers import BaseLogger
-from .runners import VariabilityStudyResults
+from .runners import FIT_KWARG_KEYS, VariabilityStudyResults
 from .runners import run_variability_study as _run_study
 
 # Resolve torch.nn once at import time so isinstance checks below are reliable
@@ -30,6 +31,43 @@ if PYTORCH_AVAILABLE:
     import torch.nn as _torch_nn
 else:
     _torch_nn = None  # type: ignore[assignment]
+
+
+# Data-pipeline kwargs: routed to the DataHandler (or the runner), never into ModelConfig.
+_INFRA_KWARGS = frozenset(
+    {
+        "image_size",
+        "test_split",
+        "val_split",
+        "gpu_memory_limit",
+        "color_mode",
+        "validation_data",
+        "stratify",
+    }
+)
+
+
+def _resolve_handler(
+    data: Any, target_column: Optional[str], infra_kwargs: Dict[str, Any]
+) -> DataHandler:
+    """Route infra kwargs to the right DataHandler; reject silent drops."""
+    infra = dict(infra_kwargs)
+    infra.pop("gpu_memory_limit", None)  # runner concern; read separately via kwargs.get
+    validation_data = infra.pop("validation_data", None)
+    if validation_data is not None:
+        if isinstance(data, DataHandler):
+            raise ConfigurationError(
+                "validation_data= cannot be combined with a DataHandler instance; "
+                "construct the handler with X_val=/y_val= instead."
+            )
+        if not (isinstance(data, tuple) and len(data) == 2):
+            raise ConfigurationError(
+                "validation_data= is only supported when data is an (X, y) tuple."
+            )
+        if not (isinstance(validation_data, tuple) and len(validation_data) == 2):
+            raise ConfigurationError("validation_data must be an (X_val, y_val) tuple.")
+        infra["X_val"], infra["y_val"] = validation_data
+    return auto_resolve_handler(data, target_column=target_column, **infra)
 
 
 def variability_study(
@@ -92,6 +130,10 @@ def variability_study(
             derived via ``np.random.SeedSequence.spawn()``, guaranteeing
             statistically uncorrelated RNG streams. If ``None``, a random
             seed is generated and stored in the results.
+        stratify: Passed to ``ArraysDataHandler`` for tuple data.
+        validation_data: ``(X_val, y_val)`` to use as the validation set
+            instead of carving one from ``data``. Only with ``(X, y)`` tuple
+            data. Raises ``ConfigurationError`` otherwise.
         verbose: If ``False``, suppress all training output. Default ``True``.
         use_parallel: If ``True``, fan training runs across multiple
             processes using ``joblib``. Safe for sklearn models. Not
@@ -125,13 +167,6 @@ def variability_study(
     # Separate infrastructure kwargs (forwarded to the data handler) from
     # model kwargs (forwarded to ModelConfig). Add new DataHandler constructor
     # parameters to _INFRA_KWARGS to prevent them from appearing in ModelConfig.
-    _INFRA_KWARGS = {
-        "image_size",
-        "test_split",
-        "val_split",
-        "gpu_memory_limit",
-        "color_mode",
-    }
 
     model_kwargs = {k: v for k, v in kwargs.items() if k not in _INFRA_KWARGS}
     infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
@@ -162,7 +197,7 @@ def variability_study(
         )
 
     # 1. Prepare Data
-    handler = auto_resolve_handler(data, target_column=target_column, **infra_kwargs)
+    handler = _resolve_handler(data, target_column, infra_kwargs)
 
     # 2. Prepare Model Builder
     # If the user passes a class (e.g. RandomForestClassifier), we instantiate it per run.
@@ -325,9 +360,8 @@ def compare_models(
     # Apply the same infra/model kwargs separation used in variability_study().
     # Without this split, model hyperparameters like learning_rate reach
     # auto_resolve_handler() and raise TypeError.
-    _INFRA_KWARGS = {"image_size", "test_split", "val_split", "gpu_memory_limit", "color_mode"}
     infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
-    handler = auto_resolve_handler(data, target_column=target_column, **infra_kwargs)
+    handler = _resolve_handler(data, target_column, infra_kwargs)
 
     settings.logger.info(f"--- Starting Comparison of {len(models)} Models (seed={seed}) ---")
 
@@ -413,18 +447,13 @@ def compare_models(
         )
 
     if paired and len(results_store) == 2:
-        from .analysis import compare_two_models
+        from .analysis import align_paired, compare_two_models
 
         names = list(results_store.keys())
-        series_a = results_store[names[0]]
-        series_b = results_store[names[1]]
-        if len(series_a) != len(series_b):
-            raise ValueError(
-                f"compare_models(paired=True) requires equal run counts. "
-                f"'{names[0]}' has {len(series_a)} runs but "
-                f"'{names[1]}' has {len(series_b)} runs. "
-                "Use paired=False for independent comparison."
-            )
+        # All models ran under one seed, so pairing is valid; align on run id in
+        # case either study lost a run.
+        _, va, vb = align_paired(studies[names[0]], studies[names[1]], metric)
+        series_a, series_b = pd.Series(va), pd.Series(vb)
         paired_result = compare_two_models(series_a, series_b, paired=True, random_state=seed)
         return ModelComparisonResults(
             overall_test=paired_result,
@@ -457,6 +486,98 @@ def compare_models(
 # --- Clean Helpers ---
 
 
+class _EnsureWrapperBuilder:
+    """Picklable builder: call a user function, coerce the result to a BaseModelWrapper.
+
+    Replaces the former ``lambda conf: _ensure_wrapper(model(conf))``, which
+    stdlib pickle cannot serialise (1.14). Looks up ``_ensure_wrapper`` as a
+    module global at call time so tests can monkeypatch it.
+    """
+
+    def __init__(self, fn: Callable):
+        self.fn = fn
+
+    def __call__(self, conf: ModelConfig) -> BaseModelWrapper:
+        return _ensure_wrapper(self.fn(conf))
+
+    def __repr__(self) -> str:
+        return f"_EnsureWrapperBuilder({getattr(self.fn, '__name__', repr(self.fn))})"
+
+
+class _CloneBuilder:
+    """Picklable builder: ``sklearn.base.clone(model)`` per run."""
+
+    def __init__(self, model: Any):
+        self.model = model
+
+    def __call__(self, conf: ModelConfig) -> BaseModelWrapper:
+        from sklearn.base import clone
+
+        return _ensure_wrapper(clone(self.model))
+
+
+class _ClassBuilder:
+    """Picklable builder: instantiate ``model_class`` per run from a ModelConfig."""
+
+    def __init__(self, model_class: Type[Any]):
+        self.model_class = model_class
+
+    def __call__(self, conf: ModelConfig) -> BaseModelWrapper:
+        return _build_from_class(conf, self.model_class)
+
+
+def _build_from_class(conf: ModelConfig, _model_class: Type[Any]) -> BaseModelWrapper:
+    """Instantiate ``_model_class`` per run from ``conf``. Module-level so it pickles."""
+    sig = inspect.signature(_model_class)
+    # Extract kwargs from the ModelConfig that the wrapper's constructor
+    # actually accepts. Filter out infra keys the constructor doesn't know
+    # about (e.g. run_seed), and `random_state` which we pass explicitly
+    # below when the signature supports it.
+    accepted = set(sig.parameters.keys())
+    accepts_var_keyword = any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+
+    # Runner concerns, never a constructor's. Training-loop keys and
+    # validation_data are consumed by the runner; FIT_KWARG_KEYS are forwarded
+    # to fit() by runners.build_fit_kwargs, the single owner of that contract.
+    _RUNNER_ONLY_KWARGS = {"epochs", "batch_size", "verbose", "validation_data"} | FIT_KWARG_KEYS
+
+    construction_kwargs = {
+        k: v
+        for k, v in conf.items()
+        if k != "run_seed"
+        and k != "random_state"
+        and k not in _RUNNER_ONLY_KWARGS
+        and (accepts_var_keyword or k in accepted)
+    }
+
+    if ("random_state" in accepted or accepts_var_keyword) and not issubclass(
+        _model_class, BaseModelWrapper
+    ):
+        try:
+            return _ensure_wrapper(
+                _model_class(
+                    random_state=conf.get("run_seed"),
+                    **construction_kwargs,
+                )
+            )
+        except TypeError as e:
+            if "random_state" in str(e) or "unexpected keyword" in str(e):
+                warnings.warn(
+                    f"Could not pass random_state to {_model_class.__name__}. "
+                    f"Reproducibility not guaranteed. Original error: {e}",
+                    UserWarning,
+                    stacklevel=3,
+                )
+                return _ensure_wrapper(_model_class(**construction_kwargs))
+            raise ValueError(
+                f"Failed to construct {_model_class.__name__}: {e}. "
+                "Check that the class accepts the arguments in your ModelConfig."
+            ) from e
+    return _ensure_wrapper(_model_class(**construction_kwargs))
+
+
 def _get_model_builder(model: Any) -> Callable:
     """Normalize diverse model inputs into a consistent factory function.
 
@@ -478,93 +599,12 @@ def _get_model_builder(model: Any) -> Callable:
 
     # If it's already a function, trust it.
     if callable(model) and not isinstance(model, type):
-        return lambda conf: _ensure_wrapper(model(conf))
+        return _EnsureWrapperBuilder(model)
 
     # If it's a class (like RandomForestClassifier), instantiate it per run.
     if isinstance(model, type):
 
-        def _build_from_class(conf, _model_class=model):
-            import inspect
-
-            sig = inspect.signature(_model_class)
-            # Extract kwargs from the ModelConfig that the wrapper's constructor
-            # actually accepts. Filter out infra keys the constructor doesn't know
-            # about (e.g. run_seed), and `random_state` which we pass explicitly
-            # below when the signature supports it.
-            accepted = set(sig.parameters.keys())
-            accepts_var_keyword = any(
-                p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-            )
-
-            # Runner-concern kwargs that must not reach model constructors,
-            # even when the constructor accepts **kwargs. Wrappers that need
-            # these values read them from fit_kwargs at fit() time instead.
-
-            # These are training-loop or training-args concerns, not model-constructor
-            # concerns. Exclude even when the class accepts **kwargs. Wrappers that
-            # need these values (HuggingFaceModelWrapper uses learning_rate for
-            # TrainingArguments, for example) read them from fit_kwargs at fit() time.
-            #
-            # This list is intentionally conservative — it covers the kwargs that
-            # commonly leak in practice, specifically those used by
-            # HuggingFaceModelWrapper and the Keras wrapper. An architectural fix
-            # that introspects the underlying model's signature (not just the
-            # wrapper's) is scheduled for v0.5.0.
-            _RUNNER_ONLY_KWARGS = {
-                # Training-loop kwargs
-                "epochs",
-                "batch_size",
-                "verbose",
-                # Data-pipeline kwargs (same conceptual layer as 'data' but routed via **kwargs)
-                # this is a serious code flaw that MUST be addressed in near future versions
-                "validation_data",
-                # HuggingFace TrainingArguments kwargs commonly passed to variability_study
-                "learning_rate",
-                "weight_decay",
-                "warmup_steps",
-                "warmup_ratio",
-                "logging_steps",
-                "gradient_accumulation_steps",
-                "max_grad_norm",
-                # to be added in near-term commits
-                "lr_scheduler_type",
-            }
-
-            construction_kwargs = {
-                k: v
-                for k, v in conf.items()
-                if k != "run_seed"
-                and k != "random_state"
-                and k not in _RUNNER_ONLY_KWARGS
-                and (accepts_var_keyword or k in accepted)
-            }
-
-            if ("random_state" in accepted or accepts_var_keyword) and not issubclass(
-                _model_class, BaseModelWrapper
-            ):
-                try:
-                    return _ensure_wrapper(
-                        _model_class(
-                            random_state=conf.get("run_seed"),
-                            **construction_kwargs,
-                        )
-                    )
-                except TypeError as e:
-                    if "random_state" in str(e) or "unexpected keyword" in str(e):
-                        warnings.warn(
-                            f"Could not pass random_state to {_model_class.__name__}. "
-                            f"Reproducibility not guaranteed. Original error: {e}",
-                            UserWarning,
-                            stacklevel=3,
-                        )
-                        return _ensure_wrapper(_model_class(**construction_kwargs))
-                    raise ValueError(
-                        f"Failed to construct {_model_class.__name__}: {e}. "
-                        "Check that the class accepts the arguments in your ModelConfig."
-                    ) from e
-            return _ensure_wrapper(_model_class(**construction_kwargs))
-
-        return _build_from_class
+        return _ClassBuilder(model)
 
     # If it's an instance, we need to clone it per run for independence.
     if hasattr(model, "fit"):
@@ -594,7 +634,7 @@ def _build_instance_cloner(model: Any) -> Callable:
             settings.logger.info(
                 f"Cloning {type(model).__name__} instance per run for independence."
             )
-            return lambda conf: _ensure_wrapper(clone(model))
+            return _CloneBuilder(model)
         except Exception as e:
             raise ValueError(
                 f"Cannot clone sklearn model instance: {e}. "
@@ -716,6 +756,7 @@ def compare_results(
     metric: Optional[str] = None,
     paired: bool = True,
     seed: Optional[int] = None,
+    force_paired: bool = False,
 ) -> "ModelComparisonResults":
     """Compare two pre-computed VariabilityStudyResults without re-running training.
 
@@ -733,9 +774,14 @@ def compare_results(
         results_b: Second model's results.
         metric: Metric to compare. If ``None``, resolves via
             ``results_a.preferred_metric()``.
-        paired: If ``True`` (default) and run counts are equal, use the
-            paired Wilcoxon signed-rank test. Falls back to Mann-Whitney U
-            with a ``UserWarning`` when run counts differ.
+        paired: If ``True`` (default), align the two studies on run id via
+            :func:`~ictonyx.analysis.align_paired` and use the paired Wilcoxon
+            signed-rank test. Runs missing from either side are dropped with a
+            ``UserWarning``. If the studies have different ``seed`` values (so
+            their runs are not paired), falls back to Mann-Whitney U with a
+            ``UserWarning``.
+        force_paired: Skip the seed check in ``align_paired``. Use only when you
+            know the runs are paired despite differing or missing seeds.
         seed: Random state for bootstrap CI computation. Defaults to ``None``
             (non-deterministic CIs).
 
@@ -745,37 +791,34 @@ def compare_results(
     Raises:
         KeyError: If the resolved metric is not present in both results.
     """
-    from .analysis import mann_whitney_test, paired_wilcoxon_test
+    from .analysis import align_paired, compare_two_models
 
     resolved = metric if metric is not None else results_a.preferred_metric("accuracy")
-
-    if resolved.startswith("test_"):
-        values_a = pd.Series(results_a.get_test_metric_values(resolved))
-        values_b = pd.Series(results_b.get_test_metric_values(resolved))
-    else:
-        values_a = pd.Series(results_a.get_metric_values(resolved))
-        values_b = pd.Series(results_b.get_metric_values(resolved))
-
     pair_key = "results_a_vs_results_b"
 
-    from .analysis import compare_two_models
-
     if paired:
-        if len(values_a) == len(values_b):
-            test_result = compare_two_models(values_a, values_b, paired=True, random_state=seed)
-        else:
+        try:
+            _, va, vb = align_paired(results_a, results_b, resolved, force=force_paired)
+        except ValueError as e:
             warnings.warn(
-                f"compare_results(paired=True) requires equal run counts. "
-                f"results_a has {len(values_a)} runs, results_b has {len(values_b)}. "
-                "Falling back to unpaired comparison. "
-                "Pass paired=False to suppress this warning.",
+                f"compare_results(paired=True): {e} Falling back to an unpaired "
+                "Mann-Whitney U test. Pass paired=False to suppress this warning.",
                 UserWarning,
                 stacklevel=2,
             )
-            test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
-    else:
-        test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
+            paired = False
+        else:
+            values_a, values_b = pd.Series(va), pd.Series(vb)
+            test_result = compare_two_models(values_a, values_b, paired=True, random_state=seed)
 
+    if not paired:
+        if resolved.startswith("test_"):
+            values_a = pd.Series(results_a.get_test_metric_values(resolved))
+            values_b = pd.Series(results_b.get_test_metric_values(resolved))
+        else:
+            values_a = pd.Series(results_a.get_metric_values(resolved))
+            values_b = pd.Series(results_b.get_metric_values(resolved))
+        test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
     return ModelComparisonResults(
         overall_test=test_result,
         raw_data={"results_a": values_a, "results_b": values_b},

@@ -5,12 +5,26 @@ Supports both standard and process-isolated execution modes.
 """
 
 import gc
+import inspect
 import itertools
 import random
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    FrozenSet,
+    List,
+    Literal,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
 if TYPE_CHECKING:
     from .analysis import StatisticalTestResult
@@ -48,6 +62,102 @@ except ImportError:
 
 # version for _schema validation
 from ._version import __version__ as _ICTONYX_VERSION
+
+# Keys in ModelConfig that are training-loop / trainer-argument concerns.
+# build_fit_kwargs() forwards them to wrapper.fit(); api._build_from_class
+# imports this set to keep them away from model constructors.
+FIT_KWARG_KEYS: FrozenSet[str] = frozenset(
+    {
+        "learning_rate",
+        "weight_decay",
+        "warmup_steps",
+        "warmup_ratio",
+        "logging_steps",
+        "gradient_accumulation_steps",
+        "max_grad_norm",
+        "lr_scheduler_type",
+        "fp16",
+    }
+)
+
+# (wrapper class name, rejected keys) pairs already warned about this process.
+_WARNED_FIT_KWARGS: Set[Tuple[str, Tuple[str, ...]]] = set()
+
+
+def _fit_accepts(wrapper: BaseModelWrapper) -> Optional[Set[str]]:
+    """Parameter names ``wrapper.fit()`` accepts, or None if it opts in to all FIT_KWARG_KEYS.
+
+    Opt-in is the class attribute ``_ACCEPTS_FIT_KWARGS = True``, for wrappers
+    whose ``**kwargs`` is genuinely forwarded to a trainer. A ``**kwargs``
+    parameter alone is NOT an opt-in: KerasModelWrapper.fit() forwards unknown
+    kwargs to keras.Model.fit(), which rejects ``learning_rate``;
+    PyTorchModelWrapper.fit() and HuggingFaceModelWrapper.fit() ignore unknown
+    kwargs silently. All are worse than a warning. No built-in wrapper opts in
+    as of v0.4.9.
+    """
+    if getattr(type(wrapper), "_ACCEPTS_FIT_KWARGS", False):
+        return None
+    try:
+        sig = inspect.signature(wrapper.fit)
+    except (TypeError, ValueError):
+        return set()
+    return {
+        name
+        for name, p in sig.parameters.items()
+        if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
+    }
+
+
+def build_fit_kwargs(
+    config: ModelConfig,
+    epochs: int,
+    run_seed: Optional[int],
+    wrapper: BaseModelWrapper,
+    train_data: Any,
+    val_data: Any,
+) -> Dict[str, Any]:
+    """Assemble the keyword arguments for ``wrapper.fit()``.
+
+    Single source of truth for every execution path (standard,
+    process-isolated, parallel). Rules:
+
+    * sklearn wrappers receive only ``train_data`` / ``validation_data``.
+    * Every other wrapper receives ``epochs``, ``batch_size``, ``verbose``,
+      ``run_seed``.
+    * A key in ``FIT_KWARG_KEYS`` present in ``config`` is forwarded only if
+      ``fit()`` names it (or the class opts in). Otherwise a ``UserWarning``
+      names the key and the wrapper, so nothing is dropped silently.
+    """
+    kw: Dict[str, Any] = {"train_data": train_data, "validation_data": val_data}
+    if isinstance(wrapper, ScikitLearnModelWrapper):
+        return kw
+    kw["epochs"] = epochs
+    kw["batch_size"] = config.get("batch_size", 32)
+    kw["verbose"] = config.get("verbose", 0)
+    kw["run_seed"] = run_seed
+
+    present = [k for k in sorted(FIT_KWARG_KEYS) if k in config]
+    if not present:
+        return kw
+    accepted = _fit_accepts(wrapper)
+    rejected: List[str] = []
+    for k in present:
+        if accepted is None or k in accepted:
+            kw[k] = config.get(k)
+        else:
+            rejected.append(k)
+    if rejected:
+        key = (type(wrapper).__name__, tuple(rejected))
+        if key not in _WARNED_FIT_KWARGS:
+            _WARNED_FIT_KWARGS.add(key)
+            warnings.warn(
+                f"{type(wrapper).__name__}.fit() does not accept {rejected}; these config values "
+                "were NOT applied. Pass them at construction time via a builder function "
+                "(e.g. optimizer_params={'lr': config.get('learning_rate')}).",
+                UserWarning,
+                stacklevel=3,
+            )
+    return kw
 
 
 class ExperimentRunner:
@@ -197,13 +307,18 @@ class ExperimentRunner:
             _serializer.dumps(self.model_builder)
         except Exception as e:
             serializer_name = getattr(_serializer, "__name__", "pickle")
-            raise ValueError(
-                f"model_builder could not be serialised with {serializer_name} "
-                f"for process isolation: {e}\n"
-                "Ensure your model builder is a picklable function, class, or lambda. "
-                "Notebook cells that reference closed-over variables may fail "
-                "with standard pickle; install cloudpickle for broader support."
+            _mod = type(self.model_builder).__module__ or ""
+            origin = (
+                "an ictonyx builder wrapper" if _mod.startswith("ictonyx") else "your model builder"
             )
+            raise ValueError(
+                f"model_builder could not be serialised with {serializer_name} for process "
+                f"isolation ({origin}): {e}\n"
+                "Without cloudpickle, builders must be module-level functions or classes, "
+                "not lambdas or closures defined inside a function or notebook cell. "
+                "`pip install ictonyx[isolation]` adds cloudpickle, which also handles "
+                "notebook-defined functions."
+            ) from e
 
         # Check data size and serialisability
         import sys
@@ -378,8 +493,13 @@ class ExperimentRunner:
                         self.final_metrics[col].append(final_value)
                         self.tracker.log_metric(f"final_{col}", final_value, step=run_id)
 
-                # Store test metrics
-                test_metrics = result["result"].get("test_metrics")
+                # Store test metrics — on failure warn and append nothing (same as standard mode)
+                test_eval_error = result["result"].get("test_eval_error")
+                if test_eval_error:
+                    self._run_log(
+                        f"   Warning: Test evaluation failed: {test_eval_error}", level="warning"
+                    )
+                test_metrics = result["result"].get("test_metrics") or {}
                 if test_metrics:
                     self.final_test_metrics.append({"run_id": run_id, **test_metrics})
                     for key, value in test_metrics.items():
@@ -436,19 +556,16 @@ class ExperimentRunner:
             # Build model
             wrapped_model = self.model_builder(self.model_config)
 
-            # Train — use deterministic cudnn for reproducibility, restore after
-            # Build kwargs conditionally: sklearn wrappers ignore training-loop
-            # kwargs and emit DeprecationWarning when they're passed. Only forward
-            # epochs/batch_size/verbose to wrappers that use them.
-            fit_kwargs = {
-                "train_data": self.train_data,
-                "validation_data": self.val_data,
-            }
-            if not isinstance(wrapped_model, ScikitLearnModelWrapper):
-                fit_kwargs["epochs"] = epochs
-                fit_kwargs["batch_size"] = self.model_config.get("batch_size", 32)
-                fit_kwargs["verbose"] = self.model_config.get("verbose", 0)
-                fit_kwargs["run_seed"] = self.model_config.get("run_seed")
+            # Train — use deterministic cudnn for reproducibility, restore after.
+            # fit() kwargs come from the single contract in build_fit_kwargs().
+            fit_kwargs = build_fit_kwargs(
+                self.model_config,
+                epochs,
+                self.model_config.get("run_seed"),
+                wrapped_model,
+                self.train_data,
+                self.val_data,
+            )
 
             with self._deterministic_cudnn():
                 wrapped_model.fit(**fit_kwargs)
@@ -475,7 +592,10 @@ class ExperimentRunner:
             if self.test_data is not None:
                 try:
                     with self._deterministic_cudnn():
-                        test_metrics = wrapped_model.evaluate(data=self.test_data)
+                        _eb = self.model_config.get("eval_batch_size")
+                        test_metrics = wrapped_model.evaluate(
+                            data=self.test_data, **({"batch_size": _eb} if _eb else {})
+                        )
                         self.final_test_metrics.append({"run_id": run_id, **test_metrics})
                         for key, value in test_metrics.items():
                             self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
@@ -667,6 +787,10 @@ class ExperimentRunner:
                 "seed": self.seed,
             }
         )
+
+        # Invariant (v0.4.9): every key logged here was either passed to a
+        # constructor, forwarded to fit() by build_fit_kwargs, or warned about.
+        # Infra kwargs (validation_data, splits) never reach ModelConfig.
         self.tracker.log_params(self.model_config.params)
 
         # Print study configuration (System Logger)
@@ -799,6 +923,7 @@ class ExperimentRunner:
             final_test_metrics=self.final_test_metrics,
             seed=self.seed,
             run_seeds=list(self._child_seeds),
+            failed_runs=sorted(self.failed_runs),
         )
 
         if hasattr(self.tracker, "log_study_summary"):
@@ -876,32 +1001,30 @@ def _isolated_training_function(
         config.set("run_seed", run_seed)
     model = model_builder(config)
 
-    # Train model
-    model.fit(
-        train_data=train_data,
-        validation_data=val_data,
-        epochs=epochs,
-        batch_size=config.get("batch_size", 32),
-        verbose=config.get("verbose", 0),
-    )
+    # Train model — same contract as standard mode. (0.3: run_seed was missing here,
+    # so HF runs all used seed 42 and Keras runs were not reproducible.)
+    model.fit(**build_fit_kwargs(config, epochs, run_seed, model, train_data, val_data))
 
     # Extract history
     history = {}
     if model.training_result is not None:
         history = dict(model.training_result.history)
 
-    # Evaluate on test data if available
-    test_metrics = {}
+    # Evaluate on test data if available. On failure, report the error
+    # out-of-band so it never lands in final_test_metrics as a string.
+    test_metrics: Dict[str, Any] = {}
+    test_eval_error: Optional[str] = None
     if test_data is not None:
         try:
-            test_metrics = model.evaluate(data=test_data)
-            if isinstance(test_metrics, dict):
+            _eb = config.get("eval_batch_size")
+            raw = model.evaluate(data=test_data, **({"batch_size": _eb} if _eb else {}))
+            if isinstance(raw, dict):
                 test_metrics = {
                     k: float(v) if isinstance(v, (np.floating, np.integer)) else v
-                    for k, v in test_metrics.items()
+                    for k, v in raw.items()
                 }
         except Exception as e:
-            test_metrics = {"error": str(e)}
+            test_eval_error = f"{type(e).__name__}: {e}"
 
     # Cleanup before returning
     if hasattr(model, "cleanup"):
@@ -909,7 +1032,12 @@ def _isolated_training_function(
     del model
     gc.collect()
 
-    return {"history": history, "test_metrics": test_metrics, "run_id": run_id}
+    return {
+        "history": history,
+        "test_metrics": test_metrics,
+        "test_eval_error": test_eval_error,
+        "run_id": run_id,
+    }
 
 
 @dataclass
@@ -934,6 +1062,9 @@ class VariabilityStudyResults:
         run_seeds: List of per-run child seeds generated from the base
             seed via ``SeedSequence.spawn()``. Empty when results are
             reconstructed from MLflow or loaded from JSON.
+        failed_runs: Ids of runs that raised or produced no history, indexed
+            from 1 as in the ``run_num`` column. Empty when every run
+            succeeded.
     """
 
     all_runs_metrics: List[pd.DataFrame]
@@ -941,11 +1072,43 @@ class VariabilityStudyResults:
     final_test_metrics: List[Dict[str, Any]]
     seed: Optional[int] = None
     run_seeds: List[int] = field(default_factory=list)
+    failed_runs: List[int] = field(default_factory=list)
 
     @property
     def n_runs(self) -> int:
         """Number of successful runs."""
         return len(self.all_runs_metrics)
+
+    @property
+    def n_requested(self) -> int:
+        """Runs requested: successful plus failed. Equals ``len(run_seeds)`` for seeded studies."""
+        return self.n_runs + len(self.failed_runs)
+
+    @property
+    def run_ids(self) -> List[int]:
+        """Ids of the successful runs, indexed from 1 as in the ``run_num`` column.
+
+        Position ``i`` of ``final_metrics[m]`` and of ``all_runs_metrics``
+        belongs to run ``run_ids[i]``; that run's child seed is
+        ``run_seeds[run_ids[i] - 1]``. Falls back to ``1..n_runs`` when the
+        per-run DataFrames are absent (results from JSON or MLflow).
+        """
+        if not self.all_runs_metrics:
+            n = len(next(iter(self.final_metrics.values()), []))
+            return list(range(1, n + 1))
+        ids: List[int] = []
+        for i, df in enumerate(self.all_runs_metrics):
+            if "run_num" in df.columns and len(df):
+                ids.append(int(df["run_num"].iloc[0]))
+            else:
+                ids.append(i + 1)
+        return ids
+
+    def get_run_seed(self, run_id: int) -> Optional[int]:
+        """Child seed for a run id (indexed from 1); None if unseeded or out of range."""
+        if not self.run_seeds or not (1 <= run_id <= len(self.run_seeds)):
+            return None
+        return int(self.run_seeds[run_id - 1])
 
     def __repr__(self) -> str:
         metrics = list(self.final_metrics.keys())
@@ -957,6 +1120,7 @@ class VariabilityStudyResults:
             f"VariabilityStudyResults("
             f"n_runs={self.n_runs}, "
             f"seed={self.seed}, "
+            f"failed_runs={self.failed_runs}, "
             f"metrics={metrics}"
             f"{test_part})"
         )
@@ -966,11 +1130,13 @@ class VariabilityStudyResults:
         """True if at least one run produced test-set metrics."""
         return bool(self.final_test_metrics)
 
-    def get_metric_values(self, metric_name: str) -> List[float]:
+    def get_metric_values(self, metric_name: str, with_run_ids: bool = False):
         """Get collected final values for a specific metric.
 
         Args:
             metric_name: Metric key, e.g. 'val_accuracy', 'train_loss', 'val_f1'
+            with_run_ids: If True, return ``(run_ids, values)`` instead of
+                ``values``. ``run_ids`` are indexed from 1 as in ``run_num``.
 
         Returns:
             List of final-epoch values, one per run.
@@ -981,7 +1147,10 @@ class VariabilityStudyResults:
         if metric_name not in self.final_metrics:
             available = sorted(self.final_metrics.keys())
             raise KeyError(f"Metric '{metric_name}' not found. Available: {available}")
-        return self.final_metrics[metric_name]
+        values = self.final_metrics[metric_name]
+        if with_run_ids:
+            return self.run_ids[: len(values)], values
+        return values
 
     def get_final_metrics(self, metric_name: str = "val_accuracy") -> Dict[str, float]:
         """Extract final metric values for each run (labeled run_1, run_2, ...).
@@ -1151,6 +1320,9 @@ class VariabilityStudyResults:
             f"Successful runs: {self.n_runs}",
             f"Seed: {self.seed}",
         ]
+
+        if self.failed_runs:
+            lines.insert(3, f"Failed runs: {self.failed_runs}")
 
         def _format_metric_block(metric_name: str, values: list) -> list:
             n = len(values)
@@ -1472,6 +1644,7 @@ class VariabilityStudyResults:
             "final_test_metrics": self.final_test_metrics,
             "seed": self.seed,
             "run_seeds": list(self.run_seeds),
+            "failed_runs": list(self.failed_runs),
         }
         with open(path, "wb") as f:
             pickle.dump(data, f)
@@ -1479,6 +1652,9 @@ class VariabilityStudyResults:
     @classmethod
     def load(cls, path: str) -> "VariabilityStudyResults":
         """Restore results previously saved with :meth:`save`.
+
+        Files written before v0.4.9 contain no ``failed_runs``; it loads as
+        an empty list, which is correct only if that study had no failures.
 
         Args:
             path: File path written by :meth:`save`.
@@ -1513,6 +1689,7 @@ class VariabilityStudyResults:
             final_test_metrics=data["final_test_metrics"],
             seed=data.get("seed"),
             run_seeds=list(data.get("run_seeds", [])),
+            failed_runs=list(data.get("failed_runs", [])),
         )
 
     def to_json(self) -> str:
@@ -1523,7 +1700,7 @@ class VariabilityStudyResults:
 
         Returns:
             JSON string containing ``final_metrics``, ``final_test_metrics``,
-            ``seed``, and ``n_runs``.
+            ``seed``, ``n_runs``, ``failed_runs``, and ``run_ids``.
         """
         import json
 
@@ -1531,6 +1708,8 @@ class VariabilityStudyResults:
             {
                 "n_runs": self.n_runs,
                 "seed": self.seed,
+                "failed_runs": self.failed_runs,
+                "run_ids": self.run_ids,
                 "final_metrics": self.final_metrics,
                 "final_test_metrics": self.final_test_metrics,
             },
@@ -1554,6 +1733,7 @@ class VariabilityStudyResults:
             VariabilityStudyResults with ``final_metrics``,
             ``final_test_metrics``, and ``seed`` populated from the
             JSON. ``all_runs_metrics`` is empty; ``run_seeds`` is empty.
+            ``failed_runs`` is restored when present.
 
         Raises:
             ValueError: If the JSON is malformed or missing required keys.
@@ -1587,6 +1767,7 @@ class VariabilityStudyResults:
             final_test_metrics=data["final_test_metrics"],
             seed=data.get("seed"),
             run_seeds=[],
+            failed_runs=list(data.get("failed_runs", [])),
         )
 
     @classmethod

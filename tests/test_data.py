@@ -1514,3 +1514,81 @@ class TestImageDataHandlerShuffleSeeding:
             f"X-72 regression: 3 simulated runs produced identical orderings "
             f"despite distinct global TF seeds: {orderings}"
         )
+
+
+# ---------------------------------------------------------------------------
+# ArraysDataHandler X_val/stratify; tuple-branch kwargs
+# ---------------------------------------------------------------------------
+
+from sklearn.model_selection import train_test_split as _tts
+
+from ictonyx.data import ArraysDataHandler, auto_resolve_handler
+
+
+def _xy(n=100, k=3):
+    X = np.arange(n * 2).reshape(n, 2)
+    y = np.arange(n) % k
+    return X, y
+
+
+def test_arrays_default_split_identical_to_v0_4_8_internal_path():
+    X, y = _xy()
+    d = ArraysDataHandler(X, y).load()
+    Xtr, Xte, ytr, yte = _tts(X, y, test_size=0.2, random_state=42)
+    Xtr, Xva, ytr, yva = _tts(Xtr, ytr, test_size=0.1 / 0.8, random_state=42)
+    np.testing.assert_array_equal(d["train_data"][0], Xtr)
+    np.testing.assert_array_equal(d["val_data"][0], Xva)
+    np.testing.assert_array_equal(d["test_data"][0], Xte)
+
+
+def test_arrays_default_split_identical_to_v0_4_8_provided_test_path():
+    X, y = _xy()
+    Xt, yt = X[:10], y[:10]
+    d = ArraysDataHandler(X, y, X_test=Xt, y_test=yt, val_split=0.25).load()
+    Xtr, Xva, ytr, yva = _tts(X, y, test_size=0.25, random_state=42)
+    np.testing.assert_array_equal(d["train_data"][0], Xtr)
+    np.testing.assert_array_equal(d["val_data"][0], Xva)
+    np.testing.assert_array_equal(d["test_data"][0], Xt)
+
+
+def test_arrays_x_val_passthrough():
+    X, y = _xy()
+    Xv, yv = np.full((7, 2), -1), np.zeros(7, dtype=int)
+    d = ArraysDataHandler(X, y, X_val=Xv, y_val=yv).load()
+    np.testing.assert_array_equal(d["val_data"][0], Xv)
+    assert len(d["train_data"][0]) == 80  # only the test split was carved
+    assert d["test_data"] is not None
+
+
+def test_arrays_x_val_symmetry_errors():
+    X, y = _xy()
+    with pytest.raises(ValueError, match="both X_val and y_val"):
+        ArraysDataHandler(X, y, X_val=X[:5])
+    with pytest.raises(ValueError, match="Validation set length mismatch"):
+        ArraysDataHandler(X, y, X_val=X[:5], y_val=y[:4])
+
+
+def test_arrays_stratify_preserves_class_ratio():
+    X = np.arange(400).reshape(200, 2)
+    y = np.array([0] * 180 + [1] * 20)  # 10% minority
+    d = ArraysDataHandler(X, y, stratify=True).load()
+    for split in ("val_data", "test_data"):
+        frac = d[split][1].mean()
+        assert abs(frac - 0.10) < 0.03, f"{split} minority fraction {frac}"
+
+
+def test_auto_resolve_tuple_forwards_split_kwargs():
+    X, y = _xy()
+    d = auto_resolve_handler((X, y), test_split=0.5, val_split=0.3).load()
+    assert len(d["test_data"][1]) == 50
+    assert len(d["val_data"][1]) == 30
+
+
+def test_get_data_info_provenance():
+    X, y = _xy()
+    h = ArraysDataHandler(X, y)
+    assert h.get_data_info()["split_provenance"] is None
+    h.load()
+    prov = h.get_data_info()["split_provenance"]
+    assert prov["test"] == "split" and prov["val"] == "split"
+    assert prov["random_state"] == 42 and prov["stratified"] is False

@@ -7,16 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
-- `VariabilityStudyResults.report()` for self-contained HTML/markdown summaries
+### Planned for v0.5.0
+- Deprecated API removal (Master Development Guide v5 §3, Phase 1)
+- `metric_fns` for `PyTorchModelWrapper`
+- Explicit `XGBoostModelWrapper` / `LightGBMModelWrapper`
+- `probability_of_superiority`, `reversal_rate`, `practical_significance_filter`
+- `ResamplingPolicy` / split-perturbation studies
+- Module split (`core/`, `runners/`, `analysis/`, `plotting/`, `data/`)
+- `VariabilityStudyResults.report()`
 - `VariabilityStudyResults.bootstrap_ci()` convenience method
-- Infrastructure sweep
-- `PyTorchDataHandler`
-- Paired/blocked experimental designs for model comparison
-- `plot_run_independence_diagnostics`, `plot_paired_deltas`,
-  `plot_epoch_run_heatmap`, `plot_sequential_ci`, `plot_stability_pareto`,
-  `plot_run_metric_correlations`
-- Migration Guide (prerequisite for v0.5.0 deprecated API removal)
+- Beta classifier
+
+---
+
+## v0.4.9 — 2026-09-13
+
+Execution-path unification and paired-inference integrity hotfix.
+Twelve defects fixed; two of them critical and silent.
+
+**Critical**
+- Process-isolated mode never forwarded `run_seed` to `fit()`. HuggingFace
+  runs all used seed 42; Keras runs were not reproducible from
+  `results.run_seeds`. All execution paths now assemble `fit()` kwargs via
+  `runners.build_fit_kwargs`.
+- `compare_results(paired=True)` / `compare_models(paired=True)` paired by
+  list position after checking only that lengths matched; studies that each
+  lost a run at different indices were paired wrong. New
+  `analysis.align_paired()` aligns on run id and verifies seeds.
+
+**High**
+- `learning_rate`, `weight_decay` & co. passed to `variability_study` were
+  stripped at construction and never reached `fit()`. Forwarded when the
+  wrapper's `fit()` names the parameter; otherwise a `UserWarning` says the
+  value was not applied.
+- `validation_data=` passed to `variability_study` was discarded. It is now
+  routed to `ArraysDataHandler(X_val=, y_val=)`.
+- `variability_study(data=(X, y), test_split=, val_split=)` ignored the
+  splits.
+- `ArraysDataHandler` accepts a pre-split validation set (`X_val`, `y_val`).
+
+**Medium**
+- PyTorch `predict`/`predict_proba` run in batches; `evaluate` batch size
+  configurable. New `eval_batch_size` constructor arg and `batch_size=`
+  kwarg.
+- HuggingFace `predict`/`predict_proba` tokenize and infer in batches. New
+  `eval_batch_size` constructor arg and `batch_size=` kwarg.
+- Process isolation through `variability_study` no longer requires
+  cloudpickle for module-level builders.
+- `ArraysDataHandler(stratify=True)` opt-in. Default unchanged.
+
+**Low**
+- Isolated-mode `evaluate()` failure no longer stores an error string as a
+  test metric.
+- `VariabilityStudyResults` records `failed_runs`; new `run_ids`,
+  `n_requested`, `get_run_seed()`, `get_metric_values(with_run_ids=)`.
+  `get_data_info()` on `ArraysDataHandler` reports split provenance.
+
+**Changed**
+- Paired comparison with unequal run counts now pairs on the common runs
+  (with a warning) instead of falling back to unpaired. Studies with
+  different `seed` values fall back to unpaired unless `force_paired=True`.
+- Wrappers whose `fit()` takes `**kwargs` receive `learning_rate` & co. only
+  if `fit()` names the parameter (no built-in wrapper opts in); otherwise a
+  `UserWarning`. Keras would have crashed; PyTorch and HuggingFace would
+  have ignored them.
+- Default `ArraysDataHandler` splits are byte-identical to v0.4.8 (regression
+  tests pin both `load()` paths).
+
+**Repository**
+- `docs/_build/` untracked and ignored; `make install` fixed; CI installs the
+  `isolation` extra and runs on `fix/*`; `examples/09` re-executed with
+  `learning_rate` and `validation_data` honoured. Coverage gate unchanged
+  at 60% (measured ~70%; raise in v0.5.0).
 
 ---
 

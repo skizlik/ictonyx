@@ -5,6 +5,7 @@ Import automatically by pytest — no explicit import needed in test files.
 """
 
 import numpy as np
+import pandas as pd
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -37,6 +38,37 @@ def small_regression_arrays():
     X = rng.random((60, 3))
     y = X @ np.array([1.5, -2.0, 0.5]) + rng.normal(0, 0.05, 60)
     return X, y
+
+
+# ---------------------------------------------------------------------------
+# Real-dataset fixtures (v0.4.10): iris, session-scoped, used across commits
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def X_y():
+    """Iris as (X, y). Loaded once per session."""
+    from sklearn.datasets import load_iris
+
+    return load_iris(return_X_y=True)
+
+
+@pytest.fixture
+def X(X_y):
+    return X_y[0]
+
+
+@pytest.fixture
+def y(X_y):
+    return X_y[1]
+
+
+@pytest.fixture
+def df(X, y):
+    """Iris as a DataFrame with a 'target' column."""
+    d = pd.DataFrame(X, columns=[f"f{i}" for i in range(X.shape[1])])
+    d["target"] = y
+    return d
 
 
 # ---------------------------------------------------------------------------

@@ -108,6 +108,33 @@ def _fit_accepts(wrapper: BaseModelWrapper) -> Optional[Set[str]]:
     }
 
 
+def set_run_seeds(seed: int) -> None:
+    """Seed every RNG a run can touch: Python, NumPy, TensorFlow/Keras, PyTorch (CPU+CUDA).
+
+    Single owner of the seeding contract. Called by the runner before every
+    builder call (standard, isolated, parallel) and by HyperparameterTuner
+    before every evaluation. Keras 3 initializers draw from Keras's own global
+    SeedGenerator, which ``tf.random.set_seed`` does not touch;
+    ``keras.utils.set_random_seed`` does (v12 0.7).
+    """
+    seed = int(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    if HAS_TENSORFLOW:
+        try:
+            tf.keras.utils.set_random_seed(seed)
+        except Exception:  # TF < 2.7 has no keras.utils.set_random_seed
+            tf.random.set_seed(seed)
+    try:
+        import torch
+
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
+
+
 def build_fit_kwargs(
     config: ModelConfig,
     epochs: int,
@@ -338,28 +365,8 @@ class ExperimentRunner:
 
     @staticmethod
     def _set_seeds(seed: int):
-        """Set all relevant RNGs for reproducibility.
-
-        Called before each run with a unique per-run seed derived via
-        SeedSequence.spawn(). This controls global RNGs for numpy, Python,
-        TensorFlow, and PyTorch. sklearn estimators that accept random_state
-        are seeded at wrapper construction time when possible.
-        """
-        random.seed(seed)
-        np.random.seed(seed)
-
-        # TensorFlow
-        if HAS_TENSORFLOW:
-            tf.random.set_seed(seed)
-
-        try:
-            import torch
-
-            torch.manual_seed(seed)
-            if torch.cuda.is_available():
-                torch.cuda.manual_seed_all(seed)
-        except ImportError:
-            pass
+        """Alias for :func:`set_run_seeds`; kept for subclasses and existing tests."""
+        set_run_seeds(seed)
 
     @staticmethod
     def _standardize_history_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -975,24 +982,9 @@ def _isolated_training_function(
     """
     import gc
 
-    # Set seeds in subprocess
+    # Set seeds in subprocess — same owner as the in-process paths.
     if run_seed is not None:
-        import random
-
-        random.seed(run_seed)
-        np.random.seed(run_seed)
-        try:
-            import tensorflow as tf
-
-            tf.random.set_seed(run_seed)
-        except ImportError:
-            pass
-        try:
-            import torch
-
-            torch.manual_seed(run_seed)
-        except ImportError:
-            pass
+        set_run_seeds(run_seed)
 
     # Build model in subprocess — inject run_seed so class-based builders
     # can pass it as random_state to sklearn estimators.

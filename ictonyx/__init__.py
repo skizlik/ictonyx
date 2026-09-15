@@ -55,6 +55,7 @@ from .runners import (
     VariabilityStudyResults,
     run_grid_study,
     run_variability_study,
+    set_run_seeds,
 )
 
 # Global settings
@@ -77,6 +78,7 @@ __all__ = [
     # Experiment running
     "ExperimentRunner",
     "run_variability_study",
+    "set_run_seeds",
     "VariabilityStudyResults",
     "run_grid_study",
     "GridStudyResults",

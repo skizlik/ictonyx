@@ -105,3 +105,13 @@ def tabular_regression_handler(small_regression_arrays):
 
     X, y = small_regression_arrays
     return ArraysDataHandler(X, y, val_split=0.2, test_split=0.1)
+
+
+@pytest.fixture(autouse=True)
+def _reset_warn_once_registries():
+    """Warn-once registries make warning tests order-dependent (v12 2.74). Reset per test."""
+    import ictonyx.runners as r
+
+    r._WARNED_FIT_KWARGS.clear()
+    yield
+    r._WARNED_FIT_KWARGS.clear()

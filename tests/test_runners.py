@@ -2995,3 +2995,31 @@ def test_isolated_training_function_forwards_run_seed():
         run_seed=12345,
     )
     assert out["history"]["val_seed_seen"][0] == 12345.0
+
+
+# ---------------------------------------------------------------------------
+# v0.4.10 - single owner of seeding
+# ---------------------------------------------------------------------------
+
+
+def test_set_run_seeds_is_single_owner():
+    """Every seeding site delegates to set_run_seeds (v12 §7.39)."""
+    import inspect
+
+    import ictonyx.runners as r
+
+    src = inspect.getsource(r._isolated_training_function)
+    assert "set_run_seeds(" in src
+    assert "np.random.seed(" not in src
+    assert "set_run_seeds" in dir(__import__("ictonyx"))
+
+
+@pytest.mark.xfail(
+    strict=True, reason="tuner does not call set_run_seeds until C10 (v12 0.8, 2.44)"
+)
+def test_tuner_seeds_through_set_run_seeds():
+    import inspect
+
+    import ictonyx.tuning as t
+
+    assert "set_run_seeds(" in inspect.getsource(t)

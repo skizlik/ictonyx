@@ -6,9 +6,15 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.linear_model import LogisticRegression
 
+import ictonyx as ix
+from ictonyx.api import _get_model_builder
 from ictonyx.config import ModelConfig
 from ictonyx.core import BaseModelWrapper, TrainingResult
+from ictonyx.data import ArraysDataHandler
+from ictonyx.exceptions import ExperimentError
+from ictonyx.loggers import BaseLogger
 from ictonyx.runners import (
     ExperimentRunner,
     GridStudyResults,
@@ -16,6 +22,7 @@ from ictonyx.runners import (
     run_grid_study,
     run_variability_study,
 )
+from tests._builders import _AlwaysFails, _FailsAfterFirst, _FailsSometimes
 
 
 def _picklable_builder(config):
@@ -107,7 +114,9 @@ class TestExperimentRunner:
         )
 
         assert runner.model_builder is model_builder
-        assert runner.model_config is config
+        assert runner.user_config is config
+        assert runner.model_config is not config
+        assert runner.model_config.params == config.params
         assert runner.train_data is not None
         assert runner.val_data is not None
 
@@ -152,11 +161,13 @@ class TestExperimentRunner:
         assert len(results.final_metrics["val_accuracy"]) == 3
 
     def test_failure_handling(self):
-        """Test handling of failed runs."""
+        """Failures after a successful first run are recorded, not raised (v12 2.62)."""
+        calls = {"n": 0}
 
         def failing_model_builder(config):
-            if np.random.random() > 0.2:
-                raise ValueError("Random failure")
+            calls["n"] += 1
+            if calls["n"] > 1 and calls["n"] % 2 == 0:  # runs 2, 4 fail; 1, 3, 5 succeed
+                raise ValueError("Simulated failure")
             return MockModel(config)
 
         runner = ExperimentRunner(
@@ -168,10 +179,8 @@ class TestExperimentRunner:
 
         results = runner.run_study(num_runs=5, stop_on_failure_rate=0.8)
 
-        # Verify the runner tracked everything consistently.
-        total_attempted = results.n_runs + len(runner.failed_runs)
-        assert total_attempted >= 1
-        assert total_attempted <= 5
+        assert results.n_runs == 3
+        assert runner.failed_runs == [2, 4]
         assert results.n_runs == len(results.all_runs_metrics)
 
     def test_summary_stats(self):
@@ -920,12 +929,9 @@ class TestRunnerFailureRate:
             verbose=False,
         )
 
-        results = runner.run_study(num_runs=10, stop_on_failure_rate=0.5)
-
-        # Should have stopped early, not attempted all 10
-        total = results.n_runs + len(runner.failed_runs)
-        assert total < 10
-        assert results.n_runs == 0  # all failed
+        with pytest.raises(ExperimentError, match="first run failed"):
+            runner.run_study(num_runs=10, stop_on_failure_rate=0.5)
+        assert call_count == 1  # aborted after the first attempt, not after 10
 
     def test_no_training_result_counts_as_failure(self):
         """A model that trains but produces no training_result should count as failed."""
@@ -944,11 +950,10 @@ class TestRunnerFailureRate:
             model_config=ModelConfig({"epochs": 2}),
             verbose=False,
         )
-        # Use high stop threshold so all runs are attempted
-        results = runner.run_study(num_runs=3, stop_on_failure_rate=1.0)
-
-        assert results.n_runs == 0
-        assert len(runner.failed_runs) >= 1
+        # A missing training_result is a failed run; on the first run that is fatal.
+        with pytest.raises(ExperimentError, match="first run failed"):
+            runner.run_study(num_runs=3, stop_on_failure_rate=1.0)
+        assert runner.failed_runs == [1]
 
 
 class TestRunnerDefaultEpochs:
@@ -3023,3 +3028,44 @@ def test_tuner_seeds_through_set_run_seeds():
     import ictonyx.tuning as t
 
     assert "set_run_seeds(" in inspect.getsource(t)
+
+
+# ---------------------------------------------------------------------------
+# v0.4.10
+# ---------------------------------------------------------------------------
+
+
+def test_first_run_failure_is_fatal(X, y):
+    with pytest.raises(ExperimentError, match="first run failed"):
+        ix.variability_study(_AlwaysFails, data=(X, y), runs=10, verbose=False, seed=1)
+
+
+def test_failure_rate_guard_stops_at_default(X, y):
+    _FailsAfterFirst._first_seed = None
+    r = ix.variability_study(_FailsAfterFirst, data=(X, y), runs=10, verbose=False, seed=1)
+    # run 1 ok; then 1/2, 2/3, 3/4 < 0.8; 4/5 = 0.8 -> stop before run 6
+    assert r.n_runs == 1
+    assert r.failed_runs == [2, 3, 4, 5]
+
+
+def test_failure_rate_guard_does_not_stop_on_minority(X, y):
+    r = ix.variability_study(_FailsSometimes, data=(X, y), runs=10, verbose=False, seed=1)
+    assert r.n_runs + len(r.failed_runs) == 10
+
+
+def test_frozen_config_runs_and_caller_unmutated(X, y):
+    cfg = ModelConfig({"epochs": 1}).freeze()
+    runner = ExperimentRunner(
+        _get_model_builder(LogisticRegression), ArraysDataHandler(X, y), cfg, verbose=False, seed=0
+    )
+    assert runner.run_study(num_runs=3).n_runs == 3
+    assert cfg.params == {"epochs": 1}
+    assert cfg._frozen
+    assert runner.user_config is cfg
+
+
+def test_tracker_end_run_called_on_abort(X, y):
+    tr = BaseLogger()
+    with pytest.raises(ExperimentError):
+        ix.variability_study(_AlwaysFails, data=(X, y), runs=3, verbose=False, seed=1, tracker=tr)
+    assert tr._ended is True

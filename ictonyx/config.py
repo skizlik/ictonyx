@@ -33,8 +33,17 @@ class ModelConfig:
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the config with a dictionary of parameters."""
-        self.params = params if params is not None else {}
+        self.params = dict(params) if params is not None else {}
         self._frozen = False
+
+    def _write(self, key: str, value: Any) -> None:
+        """Single write path; the only place that checks the frozen flag (v12 2.46)."""
+        if self._frozen:
+            raise RuntimeError(
+                "ModelConfig is frozen and cannot be modified. Use copy(keep_frozen=False) "
+                "to obtain a writable copy."
+            )
+        self.params[key] = value
 
     def __repr__(self) -> str:
         """Provides a clean string representation."""
@@ -50,12 +59,7 @@ class ModelConfig:
 
     def __setitem__(self, key: str, value: Any):
         """Allow dictionary-style setting like `config['epochs'] = 10`."""
-        if self._frozen:
-            raise RuntimeError(
-                "ModelConfig is frozen and cannot be modified. "
-                "Create a copy with config.copy() before making changes."
-            )
-        self.params[key] = value
+        self._write(key, value)
 
     def __contains__(self, key: str) -> bool:
         """Support 'in' operator: `'epochs' in config`."""
@@ -96,22 +100,13 @@ class ModelConfig:
 
     def set(self, key: str, value: Any) -> "ModelConfig":
         """Set parameter and return self for chaining."""
-        if self._frozen:
-            raise RuntimeError(
-                "ModelConfig is frozen and cannot be modified. "
-                "Create a copy with config.copy() before making changes."
-            )
-        self.params[key] = value
+        self._write(key, value)
         return self
 
     def update(self, other_params: Dict[str, Any]) -> "ModelConfig":
         """Update multiple parameters at once and return self for chaining."""
-        if self._frozen:
-            raise RuntimeError(
-                "ModelConfig is frozen and cannot be modified. "
-                "Create a copy with config.copy() before making changes."
-            )
-        self.params.update(other_params)
+        for key, value in other_params.items():
+            self._write(key, value)
         return self
 
     def merge(self, other_params: Dict[str, Any]) -> "ModelConfig":
@@ -160,15 +155,17 @@ class ModelConfig:
         """Get all parameter key-value pairs."""
         return self.params.items()
 
-    def copy(self) -> "ModelConfig":
+    def copy(self, *, keep_frozen: bool = True) -> "ModelConfig":
         """Create a deep copy of the configuration.
 
-        The frozen state is preserved: a frozen config produces a frozen copy.
+        By default the frozen state is preserved. ``keep_frozen=False`` yields a
+        writable copy of a frozen config; the runner uses it for its private
+        working copy.
         """
-        import copy
+        import copy as _copy
 
-        new = ModelConfig(copy.deepcopy(self.params))
-        if self._frozen:
+        new = ModelConfig(_copy.deepcopy(self.params))
+        if self._frozen and keep_frozen:
             new.freeze()
         return new
 
@@ -230,7 +227,7 @@ class ModelConfig:
         """Set epochs parameter with validation."""
         if not isinstance(value, (int, np.integer)) or value <= 0:
             raise ValueError(f"epochs must be a positive integer, got {value}")
-        self.params["epochs"] = value
+        self._write("epochs", value)
 
     @property
     def batch_size(self) -> Optional[int]:
@@ -242,7 +239,7 @@ class ModelConfig:
         """Set batch_size parameter with validation."""
         if not isinstance(value, (int, np.integer)) or value <= 0:
             raise ValueError(f"batch_size must be a positive integer, got {value}")
-        self.params["batch_size"] = value
+        self._write("batch_size", value)
 
     @property
     def learning_rate(self) -> Optional[float]:
@@ -254,7 +251,7 @@ class ModelConfig:
         """Set learning_rate parameter with validation."""
         if not isinstance(value, (float, int, np.integer)) or value <= 0:
             raise ValueError(f"learning_rate must be a positive number, got {value}")
-        self.params["learning_rate"] = float(value)
+        self._write("learning_rate", float(value))
 
     @property
     def verbose(self) -> Optional[int]:
@@ -266,7 +263,7 @@ class ModelConfig:
         """Set verbose parameter with validation."""
         if not isinstance(value, (int, np.integer)) or value < 0:
             raise ValueError(f"verbose must be a non-negative integer, got {value}")
-        self.params["verbose"] = value
+        self._write("verbose", value)
 
     # NEW: Experiment-specific properties for runners.py
     @property
@@ -279,7 +276,7 @@ class ModelConfig:
         """Set num_runs parameter with validation."""
         if not isinstance(value, (int, np.integer)) or value <= 0:
             raise ValueError(f"num_runs must be a positive integer, got {value}")
-        self.params["num_runs"] = value
+        self._write("num_runs", value)
 
     @property
     def epochs_per_run(self) -> Optional[int]:
@@ -291,7 +288,7 @@ class ModelConfig:
         """Set epochs_per_run parameter with validation."""
         if not isinstance(value, (int, np.integer)) or value <= 0:
             raise ValueError(f"epochs_per_run must be a positive integer, got {value}")
-        self.params["epochs_per_run"] = value
+        self._write("epochs_per_run", value)
 
     # Factory Methods for Smart Defaults
 
@@ -380,7 +377,7 @@ class ModelConfig:
         Returns:
             A new :class:`ModelConfig` with study parameters added.
         """
-        study_config = base_config.copy()
+        study_config = base_config.copy(keep_frozen=False)
         study_config.set("num_runs", num_runs)
         study_config.set("epochs_per_run", base_config.get("epochs", 10))
         return study_config
@@ -395,4 +392,4 @@ class ModelConfig:
         """Set cleanup threshold with validation."""
         if not isinstance(value, (float, int, np.integer)) or not 0.1 <= value <= 1.0:
             raise ValueError("cleanup_threshold must be between 0.1 and 1.0")
-        self.params["cleanup_threshold"] = float(value)
+        self._write("cleanup_threshold", float(value))

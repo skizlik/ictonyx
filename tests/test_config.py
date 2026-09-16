@@ -376,3 +376,38 @@ class TestModelConfigCopy:
         copied = config.copy()
         # Even though copy is frozen, original should be unchanged
         assert config.get("epochs") == 10
+
+
+def test_modelconfig_does_not_alias_caller_dict():
+    d = {"epochs": 1}
+    ModelConfig(d).set("run_seed", 5)
+    assert "run_seed" not in d
+
+
+@pytest.mark.parametrize(
+    "attr,val",
+    [
+        ("epochs", 99),
+        ("batch_size", 8),
+        ("learning_rate", 0.5),
+        ("verbose", 1),
+        ("num_runs", 3),
+        ("epochs_per_run", 2),
+        ("cleanup_threshold", 0.5),
+    ],
+)
+def test_property_setters_respect_freeze(attr, val):
+    c = ModelConfig({"epochs": 5}).freeze()
+    with pytest.raises(RuntimeError, match="frozen"):
+        setattr(c, attr, val)
+
+
+def test_copy_keep_frozen_false_is_writable():
+    c = ModelConfig({"a": 1}).freeze()
+    assert c.copy(keep_frozen=False).set("b", 2)["b"] == 2
+    with pytest.raises(RuntimeError):
+        c.copy().set("b", 2)
+
+
+def test_for_variability_study_accepts_frozen_base():
+    ModelConfig.for_variability_study(ModelConfig({"epochs": 5}).freeze(), num_runs=3)

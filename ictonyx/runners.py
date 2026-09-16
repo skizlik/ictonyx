@@ -36,6 +36,7 @@ from scipy import stats as _scipy_stats
 from .config import ModelConfig
 from .core import BaseModelWrapper, ScikitLearnModelWrapper
 from .data import DataHandler
+from .exceptions import ExperimentError
 from .loggers import BaseLogger
 from .memory import get_memory_info, get_memory_manager
 
@@ -239,7 +240,10 @@ class ExperimentRunner:
         """
         self.model_builder = model_builder
         self.data_handler = data_handler
-        self.model_config = model_config
+        # Private, writable working copy: run_seed is written into it per run;
+        # the caller's object (frozen or not) is never mutated.
+        self.user_config = model_config
+        self.model_config = model_config.copy(keep_frozen=False)
         self.seed: int = (
             seed if seed is not None else int(np.random.default_rng().integers(0, 2**31))
         )
@@ -283,7 +287,7 @@ class ExperimentRunner:
                     logger.warning("No validation data provided")
 
         except Exception as e:
-            raise RuntimeError(f"Failed to load data: {e}")
+            raise RuntimeError(f"Failed to load data: {e}") from e
 
         # Initialize result storage
         self.all_runs_metrics: List[pd.DataFrame] = []
@@ -547,19 +551,18 @@ class ExperimentRunner:
         """
         self._run_log(f" - Run {run_id}: Training...")
 
-        # Set deterministic seeds for this run
-        if self._child_seeds:
-            child_seed = self._child_seeds[run_id - 1]
-            self._set_seeds(child_seed)
-            # Inject run_seed into config so class-based builders can pass it
-            # as random_state. Mirrors the behaviour of isolated mode.
-            self.model_config.set("run_seed", child_seed)
-
         # Log run start (Metric Tracker)
         self.tracker.log_params({"run_id": run_id, "mode": "standard"})
 
         wrapped_model = None
         try:
+            # Seed and inject run_seed INSIDE the try so a frozen config or a
+            # seeding failure is a failed run, not an aborted study (v12 1.21).
+            if self._child_seeds:
+                child_seed = self._child_seeds[run_id - 1]
+                set_run_seeds(child_seed)
+                self.model_config.set("run_seed", child_seed)
+
             # Build model
             wrapped_model = self.model_builder(self.model_config)
 
@@ -615,6 +618,7 @@ class ExperimentRunner:
 
         except Exception as e:
             self._run_log(f" - Run {run_id}: Failed with error: {e}", level="error")
+            self._last_run_error = e
             self.failed_runs.append(run_id)
             return None
 
@@ -816,101 +820,123 @@ class ExperimentRunner:
         run_iter = range(num_runs)
         if self._progress_bar:
             run_iter = tqdm(run_iter, desc="Variability Study", unit="run")
+        try:
+            if use_parallel and not self.use_process_isolation:
+                # --- Parallel execution path ---
+                try:
+                    from joblib import Parallel, delayed
+                except ImportError:
+                    raise ImportError(
+                        "joblib is required for parallel execution. "
+                        "Install with: pip install joblib"
+                    )
 
-        if use_parallel and not self.use_process_isolation:
-            # --- Parallel execution path ---
-            try:
-                from joblib import Parallel, delayed
-            except ImportError:
-                raise ImportError(
-                    "joblib is required for parallel execution. " "Install with: pip install joblib"
+                logger.info(f"Running {num_runs} runs in parallel (n_jobs={n_jobs})...")
+
+                # Build the list of run_ids being dispatched, preserving order.
+                # parallel_results[j] corresponds to dispatched_run_ids[j].
+                dispatched_run_ids = [
+                    i + 1 for i in range(num_runs) if (i + 1) not in completed_run_ids
+                ]
+
+                parallel_results = Parallel(n_jobs=n_jobs, backend="loky")(
+                    delayed(self._run_single_fit)(run_id=run_id, epochs=epochs_per_run)
+                    for run_id in dispatched_run_ids
                 )
 
-            logger.info(f"Running {num_runs} runs in parallel (n_jobs={n_jobs})...")
-
-            # Build the list of run_ids being dispatched, preserving order.
-            # parallel_results[j] corresponds to dispatched_run_ids[j].
-            dispatched_run_ids = [
-                i + 1 for i in range(num_runs) if (i + 1) not in completed_run_ids
-            ]
-
-            parallel_results = Parallel(n_jobs=n_jobs, backend="loky")(
-                delayed(self._run_single_fit)(run_id=run_id, epochs=epochs_per_run)
-                for run_id in dispatched_run_ids
-            )
-
-            for run_id, metrics_df in zip(dispatched_run_ids, parallel_results):
-                if metrics_df is not None:
-                    self.all_runs_metrics.append(metrics_df)
-                    self._extract_and_store_final_metrics(metrics_df)
-                else:
-                    self.failed_runs.append(run_id)
-
-        else:
-            # --- Sequential execution path ---
-            try:
-                for i in run_iter:
-                    # Skip runs already completed in a prior checkpoint
-                    if (i + 1) in completed_run_ids:
-                        continue
-
-                    # Check failure rate
-                    if i > 0:
-                        completed = i
-                        failure_rate = len(self.failed_runs) / max(
-                            1, completed + len(self.failed_runs)
-                        )
-                        if failure_rate >= stop_on_failure_rate:
-                            self._run_log(
-                                f"Stopping due to high failure rate: {failure_rate:.1%}",
-                                level="error",
-                            )
-                            break
-
-                    # Run single training
-                    metrics_df = self._run_single_fit(run_id=i + 1, epochs=epochs_per_run)
+                for run_id, metrics_df in zip(dispatched_run_ids, parallel_results):
                     if metrics_df is not None:
                         self.all_runs_metrics.append(metrics_df)
-                        if self._progress_bar:
-                            self._update_progress_postfix(run_iter, metrics_df)
+                        self._extract_and_store_final_metrics(metrics_df)
+                    else:
+                        self.failed_runs.append(run_id)
 
-                        # Save checkpoint after each successful run
-                        if checkpoint_dir is not None:
-                            import os
-                            import pickle as _pickle
+            else:
+                # --- Sequential execution path ---
+                try:
+                    for i in run_iter:
+                        # Skip runs already completed in a prior checkpoint
+                        if (i + 1) in completed_run_ids:
+                            continue
 
-                            os.makedirs(checkpoint_dir, exist_ok=True)
-                            _checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
-                            _checkpoint_data = {
-                                "_schema_version": _ICTONYX_VERSION,
-                                "all_runs_metrics": list(self.all_runs_metrics),
-                                "final_metrics": dict(self.final_metrics),
-                                "final_test_metrics": list(self.final_test_metrics),
-                                "seed": self.seed,
-                                "failed_runs": list(self.failed_runs),
-                            }
-                            _tmp_path = _checkpoint_path + ".tmp"
-                            with open(_tmp_path, "wb") as _f:
-                                _pickle.dump(_checkpoint_data, _f)
-                            os.replace(_tmp_path, _checkpoint_path)
+                        # Failure-rate guard. attempts = successes + failures so
+                        # far, including runs restored from a checkpoint. Minimum three
+                        # attempts so a single early failure cannot trip a low threshold.
+                        attempts = len(self.all_runs_metrics) + len(self.failed_runs)
+                        if attempts >= 3:
+                            failure_rate = len(self.failed_runs) / attempts
+                            if failure_rate >= stop_on_failure_rate:
+                                self._run_log(
+                                    f"Stopping: failure rate {failure_rate:.0%} "
+                                    f"({len(self.failed_runs)}/{attempts}) >= {stop_on_failure_rate}",
+                                    level="error",
+                                )
+                                break
 
-                    # Log memory info periodically
-                    if (i + 1) % 10 == 0 and self.verbose and not self._progress_bar:
-                        memory_info = get_memory_info()
-                        if "process_rss_mb" in memory_info:
-                            logger.info(f"  Memory check: {memory_info['process_rss_mb']:.1f}MB")
+                        # Run single training
+                        metrics_df = self._run_single_fit(run_id=i + 1, epochs=epochs_per_run)
 
-            except KeyboardInterrupt:
-                if self.verbose:
-                    logger.warning(f"\n\nStudy interrupted after {len(self.all_runs_metrics)} runs")
+                        # First-run failure is fatal (v12 2.62): almost always a
+                        # configuration error every later run would repeat.
+                        if (
+                            metrics_df is None
+                            and not self.all_runs_metrics
+                            and len(self.failed_runs) == 1
+                        ):
+                            err = getattr(self, "_last_run_error", None)
+                            raise ExperimentError(
+                                f"The first run failed ({type(err).__name__}: {err}). Aborting instead "
+                                "of recording identical failures; check the builder signature, data "
+                                "shape, and dependencies.",
+                                run_id=i + 1,
+                                stage="first_run",
+                            ) from err
+                        if metrics_df is not None:
+                            self.all_runs_metrics.append(metrics_df)
+                            if self._progress_bar:
+                                self._update_progress_postfix(run_iter, metrics_df)
 
-            # --- Cleanup and return (runs regardless of which path was taken) ---
-        if not self.use_process_isolation:
-            final_cleanup = self.memory_manager.cleanup()
-            if self.verbose and final_cleanup.memory_freed_mb:
-                logger.info(f"\nFinal cleanup freed {final_cleanup.memory_freed_mb:.1f}MB")
+                            # Save checkpoint after each successful run
+                            if checkpoint_dir is not None:
+                                import os
+                                import pickle as _pickle
 
-        self.tracker.end_run()
+                                os.makedirs(checkpoint_dir, exist_ok=True)
+                                _checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
+                                _checkpoint_data = {
+                                    "_schema_version": _ICTONYX_VERSION,
+                                    "all_runs_metrics": list(self.all_runs_metrics),
+                                    "final_metrics": dict(self.final_metrics),
+                                    "final_test_metrics": list(self.final_test_metrics),
+                                    "seed": self.seed,
+                                    "failed_runs": list(self.failed_runs),
+                                }
+                                _tmp_path = _checkpoint_path + ".tmp"
+                                with open(_tmp_path, "wb") as _f:
+                                    _pickle.dump(_checkpoint_data, _f)
+                                os.replace(_tmp_path, _checkpoint_path)
+
+                        # Log memory info periodically
+                        if (i + 1) % 10 == 0 and self.verbose and not self._progress_bar:
+                            memory_info = get_memory_info()
+                            if "process_rss_mb" in memory_info:
+                                logger.info(
+                                    f"  Memory check: {memory_info['process_rss_mb']:.1f}MB"
+                                )
+
+                except KeyboardInterrupt:
+                    if self.verbose:
+                        logger.warning(
+                            f"\n\nStudy interrupted after {len(self.all_runs_metrics)} runs"
+                        )
+
+        finally:
+            # --- Cleanup and end the tracker run however we got here (v12 2.61) ---
+            if not self.use_process_isolation:
+                final_cleanup = self.memory_manager.cleanup()
+                if self.verbose and final_cleanup.memory_freed_mb:
+                    logger.info(f"\nFinal cleanup freed {final_cleanup.memory_freed_mb:.1f}MB")
+            self.tracker.end_run()
 
         if self.verbose:
             successful = len(self.all_runs_metrics)
@@ -921,8 +947,8 @@ class ExperimentRunner:
             for metric_name, values in self.final_metrics.items():
                 if values:
                     mean_val = np.mean(values)
-                    std_val = np.std(values, ddof=1)
-                    logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {std_val:.4f})")
+                    sd_txt = f"{np.std(values, ddof=1):.4f}" if len(values) > 1 else "n/a (1 run)"
+                    logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {sd_txt})")
 
         results = VariabilityStudyResults(
             all_runs_metrics=self.all_runs_metrics,
@@ -961,7 +987,9 @@ class ExperimentRunner:
         for metric_name, values in self.final_metrics.items():
             if values:
                 stats[f"{metric_name}_mean"] = float(np.mean(values))
-                stats[f"{metric_name}_std"] = float(np.std(values, ddof=1))
+                stats[f"{metric_name}_std"] = (
+                    float(np.std(values, ddof=1)) if len(values) > 1 else float("nan")
+                )
                 stats[f"{metric_name}_min"] = float(np.min(values))
                 stats[f"{metric_name}_max"] = float(np.max(values))
 
@@ -989,7 +1017,7 @@ def _isolated_training_function(
     # Build model in subprocess — inject run_seed so class-based builders
     # can pass it as random_state to sklearn estimators.
     if run_seed is not None:
-        config = config.copy()
+        config = config.copy(keep_frozen=False)
         config.set("run_seed", run_seed)
     model = model_builder(config)
 
@@ -2221,7 +2249,7 @@ def run_grid_study(
             logger.info(f"Configuration {i}/{n_configs}: {param_combo}")
             logger.info(f"{'=' * 50}")
 
-        config = base_config.copy().update(param_combo)
+        config = base_config.copy(keep_frozen=False).update(param_combo)
 
         result = run_variability_study(
             model_builder=model_builder,

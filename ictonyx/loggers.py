@@ -64,6 +64,7 @@ class BaseLogger:
         self.print_params = print_params
         self.print_metrics = print_metrics
         self.history: Dict[str, Any] = {"params": {}, "metrics": []}
+        self._ended = False
 
     def log_params(self, params: Dict[str, Any]):
         """Logs a dictionary of parameters and stores it in history."""
@@ -104,6 +105,7 @@ class BaseLogger:
 
     def end_run(self):
         """Called at the end of a run to finalize logging."""
+        self._ended = True
         if self.verbose:
             logger.info("-" * 50)
 

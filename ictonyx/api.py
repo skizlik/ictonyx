@@ -34,36 +34,66 @@ else:
 
 
 # Data-pipeline kwargs: routed to the DataHandler (or the runner), never into ModelConfig.
-_INFRA_KWARGS = frozenset(
-    {
-        "image_size",
-        "test_split",
-        "val_split",
-        "gpu_memory_limit",
-        "color_mode",
-        "validation_data",
-        "stratify",
-    }
-)
+# Per handler type, so a key the handler would ignore is rejected instead of dropped (v12 0.6).
+_SPLIT_KWARGS = frozenset({"test_split", "val_split", "split_seed", "stratify"})
+_HANDLER_KWARGS: Dict[str, frozenset] = {
+    "arrays": _SPLIT_KWARGS | {"validation_data", "X_val", "y_val", "X_test", "y_test"},
+    "tabular": _SPLIT_KWARGS | {"features", "sep", "header", "return_frames"},
+    "image": (_SPLIT_KWARGS - {"stratify"}) | {"image_size", "color_mode"},
+    "text": _SPLIT_KWARGS | {"text_column", "label_column", "max_features"},
+    "timeseries": (_SPLIT_KWARGS - {"stratify"})
+    | {"value_column", "sequence_length", "lookback", "stride"},
+}
+_RUNNER_KWARGS = frozenset({"gpu_memory_limit"})
+_INFRA_KWARGS = frozenset().union(*_HANDLER_KWARGS.values()) | _RUNNER_KWARGS
+_TS_TRIGGERS = ("value_column", "sequence_length", "lookback", "stride")
+
+
+def _handler_kind(data: Any, kwargs: Dict[str, Any]) -> str:
+    """Mirror auto_resolve_handler's routing so validation matches construction."""
+    import os
+
+    if isinstance(data, DataHandler):
+        return data.data_type
+    if isinstance(data, tuple) and len(data) == 2:
+        return "arrays"
+    if isinstance(data, pd.DataFrame):
+        return "tabular"
+    if isinstance(data, str):
+        if os.path.isdir(data):
+            return "image"
+        if "text_column" in kwargs or "label_column" in kwargs:
+            return "text"
+        if any(k in kwargs for k in _TS_TRIGGERS):
+            return "timeseries"
+        return "tabular"
+    raise TypeError(f"Unsupported data type: {type(data).__name__}")
 
 
 def _resolve_handler(
     data: Any, target_column: Optional[str], infra_kwargs: Dict[str, Any]
 ) -> DataHandler:
-    """Route infra kwargs to the right DataHandler; reject silent drops."""
-    infra = dict(infra_kwargs)
-    infra.pop("gpu_memory_limit", None)  # runner concern; read separately via kwargs.get
+    """Route infra kwargs to the right DataHandler; reject anything that would be dropped."""
+    infra = {k: v for k, v in infra_kwargs.items() if k not in _RUNNER_KWARGS}
+    kind = _handler_kind(data, infra)
+
+    unknown = sorted(set(infra) - _HANDLER_KWARGS[kind])
+    if unknown:
+        raise ConfigurationError(
+            f"{unknown} are not accepted for {kind!r} data and would have been ignored. "
+            f"Accepted: {sorted(_HANDLER_KWARGS[kind])}."
+        )
+
+    if isinstance(data, DataHandler):
+        if infra:
+            raise ConfigurationError(
+                f"{sorted(infra)} cannot be combined with a DataHandler instance; "
+                "construct the handler with these arguments instead."
+            )
+        return data
+
     validation_data = infra.pop("validation_data", None)
     if validation_data is not None:
-        if isinstance(data, DataHandler):
-            raise ConfigurationError(
-                "validation_data= cannot be combined with a DataHandler instance; "
-                "construct the handler with X_val=/y_val= instead."
-            )
-        if not (isinstance(data, tuple) and len(data) == 2):
-            raise ConfigurationError(
-                "validation_data= is only supported when data is an (X, y) tuple."
-            )
         if not (isinstance(validation_data, tuple) and len(validation_data) == 2):
             raise ConfigurationError("validation_data must be an (X_val, y_val) tuple.")
         infra["X_val"], infra["y_val"] = validation_data
@@ -141,9 +171,20 @@ def variability_study(
             ``use_process_isolation``. Default ``False``.
         n_jobs: Number of parallel workers. ``-1`` uses all CPUs.
             Ignored when ``use_parallel=False``. Default ``-1``.
-        **kwargs: Additional arguments forwarded to both the
-            :class:`~ictonyx.config.ModelConfig` and the data handler
-            (e.g. ``image_size``, ``test_split``, ``val_split``).
+        **kwargs: Data-handler keys are routed to the handler; everything else goes
+            into ModelConfig. Accepted data-handler keys by input type:
+              arrays (X, y):   test_split, val_split, split_seed, stratify,
+                               validation_data, X_val, y_val, X_test, y_test
+              DataFrame / CSV: test_split, val_split, split_seed, stratify,
+                               features, sep, header, return_frames
+              image directory: test_split, val_split, split_seed, image_size, color_mode
+              text CSV:        test_split, val_split, split_seed, stratify,
+                               text_column, label_column, max_features
+              time-series CSV: test_split, val_split, split_seed,
+                               value_column, sequence_length, lookback, stride
+            A key not accepted for the detected input type raises ConfigurationError.
+            split_seed (default 42) is shared across models in compare_models, so
+            every model sees the same split.
 
     Returns:
         :class:`~ictonyx.runners.VariabilityStudyResults` containing

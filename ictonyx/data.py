@@ -162,6 +162,7 @@ class ImageDataHandler(FileDataHandler):
         color_mode: str = "rgb",
         val_split: float = 0.2,
         test_split: float = 0.1,
+        split_seed: Optional[int] = None,
     ):
         """
         Initialize the image data handler.
@@ -188,7 +189,7 @@ class ImageDataHandler(FileDataHandler):
 
         self.image_size = image_size
         self.batch_size = batch_size
-        self.seed = seed
+        self.seed = split_seed if split_seed is not None else seed
         if color_mode not in ("rgb", "grayscale"):
             raise ValueError(f"color_mode must be 'rgb' or 'grayscale', got '{color_mode}'.")
         self.color_mode = color_mode
@@ -301,17 +302,21 @@ class ImageDataHandler(FileDataHandler):
         img = tf.io.read_file(file_path)
         # decode_image handles JPEG, PNG, BMP, GIF.
         # expand_animations=False collapses GIF frames to the first frame only.
-        img = tf.image.decode_image(img, channels=3, expand_animations=False)
+        channels = 1 if self.color_mode == "grayscale" else 3  # v12 2.48
+        img = tf.image.decode_image(img, channels=channels, expand_animations=False)
         # decode_image does not set static shape; set it explicitly so
         # downstream ops (resize) know the rank.
-        img.set_shape([None, None, 3])
+        img.set_shape([None, None, channels])
         img = tf.cast(img, tf.float32)
         img = tf.image.resize(img, self.image_size)
         img = img / 255.0
         return img, label
 
     def load(
-        self, validation_split: float = 0.2, test_split: float = 0.1, **kwargs: Any
+        self,
+        validation_split: Optional[float] = None,
+        test_split: Optional[float] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         Loads and splits the dataset into training, validation, and test sets,
@@ -324,6 +329,10 @@ class ImageDataHandler(FileDataHandler):
         Returns:
             Dict with 'train_data', 'val_data', 'test_data' as tf.data.Dataset objects
         """
+
+        # Defaults come from the constructor (v12 0.6); load() previously ignored them.
+        validation_split = self.val_split if validation_split is None else validation_split
+        test_split = self.test_split if test_split is None else test_split
 
         if not HAS_SKLEARN:
             raise ImportError(
@@ -492,7 +501,12 @@ class TabularDataHandler(FileDataHandler):
         features: Optional[List[str]] = None,
         sep: str = ",",
         header: int = 0,
-        **kwargs,
+        val_split: float = 0.1,
+        test_split: float = 0.2,
+        split_seed: int = 42,
+        stratify: Optional[bool] = None,
+        return_frames: bool = False,
+        data_path: Optional[str] = None,
     ):
         """
         Initialize the tabular data handler.
@@ -503,13 +517,19 @@ class TabularDataHandler(FileDataHandler):
             features: List of feature column names (None = all except target).
             sep: CSV separator (only used if data is a path).
             header: Header row number (only used if data is a path).
-            **kwargs: Captures legacy 'data_path' argument.
+            val_split: Fraction of the original data for validation. Default 0.1.
+            test_split: Fraction of the original data for testing. Default 0.2.
+            split_seed: Seed for the train/val/test split. Default 42.
+            stratify: If True, stratify both splits on the target column.
+            return_frames: If True, load() returns DataFrames/Series instead of
+                NumPy arrays. Default False (PyTorch cannot tensorise a DataFrame).
+            data_path: Legacy alias for ``data``.
         """
         # ------------------------------------------------------------------
         # FIX: Backward Compatibility for data_path keyword argument
         # ------------------------------------------------------------------
-        if data is None and "data_path" in kwargs:
-            data = kwargs["data_path"]
+        if data is None and data_path is not None:
+            data = data_path
 
         if data is None:
             raise ValueError("Must provide 'data' (or legacy 'data_path') argument.")
@@ -533,6 +553,11 @@ class TabularDataHandler(FileDataHandler):
         self.sep = sep
         self.header = header
         self.data: Optional[pd.DataFrame] = None
+        self.val_split = val_split
+        self.test_split = test_split
+        self.split_seed = split_seed
+        self._stratify = stratify
+        self.return_frames = return_frames
 
     def _validate_data_path(self):
         """Override validation to skip file check if using DataFrame."""
@@ -577,12 +602,22 @@ class TabularDataHandler(FileDataHandler):
 
     # ... (Keep existing load() and get_data_info() methods identical to previous version) ...
     def load(
-        self, test_split: float = 0.2, val_split: float = 0.1, random_state: int = 42, **kwargs: Any
+        self,
+        test_split: Optional[float] = None,
+        val_split: Optional[float] = None,
+        random_state: Optional[int] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         if not HAS_SKLEARN:
             raise ImportError("scikit-learn is required for data splitting.")
 
-        if test_split + val_split >= 1.0:
+        # Defaults come from the constructor so the runner's bare load() honours
+        # what the user configured (v12 0.6).
+        _test = self.test_split if test_split is None else test_split
+        _val = self.val_split if val_split is None else val_split
+        _rs = self.split_seed if random_state is None else random_state
+
+        if _test + _val >= 1.0:
             raise ValueError("Sum of test_split and val_split must be < 1.0")
 
         self._load_and_validate_data()
@@ -612,25 +647,33 @@ class TabularDataHandler(FileDataHandler):
             logger.warning(f"{y.isnull().sum()} missing values in target column")
 
         # Split data
-        if test_split > 0:
+        if _test > 0:
             X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_split, random_state=random_state
+                X, y, test_size=_test, random_state=_rs, stratify=(y if self._stratify else None)
             )
         else:
             X_train, X_test, y_train, y_test = X, None, y, None
 
         X_val, y_val = None, None
-        if val_split > 0 and len(X_train) > 1:
-            adj_val_split = val_split / (1 - test_split) if test_split > 0 else val_split
+        if _val > 0 and len(X_train) > 1:
+            adj_val_split = _val / (1 - _test) if _test > 0 else _val
             if adj_val_split < 1.0:
                 X_train, X_val, y_train, y_val = train_test_split(
-                    X_train, y_train, test_size=adj_val_split, random_state=random_state
+                    X_train,
+                    y_train,
+                    test_size=adj_val_split,
+                    random_state=_rs,
+                    stratify=(y_train if self._stratify else None),
                 )
 
+        def _out(a):
+            # v12 2.43: PyTorch cannot tensorise a DataFrame; return NumPy unless asked.
+            return a if (a is None or self.return_frames) else a.to_numpy()
+
         return {
-            "train_data": (X_train, y_train),
-            "val_data": (X_val, y_val) if X_val is not None else None,
-            "test_data": (X_test, y_test) if X_test is not None else None,
+            "train_data": (_out(X_train), _out(y_train)),
+            "val_data": (_out(X_val), _out(y_val)) if X_val is not None else None,
+            "test_data": (_out(X_test), _out(y_test)) if X_test is not None else None,
         }
 
     def get_data_info(self) -> Dict[str, Any]:
@@ -710,6 +753,8 @@ class TextDataHandler(FileDataHandler):
         max_features: int = 10000,
         val_split: float = 0.1,
         test_split: float = 0.2,
+        split_seed: int = 42,
+        stratify: Optional[bool] = None,
     ):
         if not HAS_SKLEARN:
             raise ImportError(
@@ -727,13 +772,15 @@ class TextDataHandler(FileDataHandler):
         self.max_features = max_features
         self.val_split = val_split
         self.test_split = test_split
+        self.split_seed = split_seed
+        self._stratify = stratify
         self.vectorizer: Optional[Any] = None
 
     def load(
         self,
         test_split: Optional[float] = None,
         val_split: Optional[float] = None,
-        random_state: int = 42,
+        random_state: Optional[int] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Load text data, vectorise with TF-IDF, and split.
@@ -743,6 +790,7 @@ class TextDataHandler(FileDataHandler):
             ``(X, y)`` tuples of numpy arrays. ``X`` has shape
             ``(n_samples, max_features)``.
         """
+        _rs = self.split_seed if random_state is None else random_state
         _test_split = test_split if test_split is not None else self.test_split
         _val_split = val_split if val_split is not None else self.val_split
 
@@ -773,7 +821,11 @@ class TextDataHandler(FileDataHandler):
         # First split: carve out test set
         if _test_split > 0:
             X_trainval, X_test, y_trainval, y_test = train_test_split(
-                texts, labels, test_size=_test_split, random_state=random_state
+                texts,
+                labels,
+                test_size=_test_split,
+                random_state=_rs,
+                stratify=(labels if self._stratify else None),
             )
         else:
             X_trainval, y_trainval = texts, labels
@@ -784,7 +836,11 @@ class TextDataHandler(FileDataHandler):
             adj_val = _val_split / (1.0 - _test_split) if _test_split > 0 else _val_split
             if adj_val < 1.0:
                 X_train, X_val, y_train, y_val = train_test_split(
-                    X_trainval, y_trainval, test_size=adj_val, random_state=random_state
+                    X_trainval,
+                    y_trainval,
+                    test_size=adj_val,
+                    random_state=_rs,
+                    stratify=(y_trainval if self._stratify else None),
                 )
             else:
                 X_train, y_train = X_trainval, y_trainval
@@ -876,6 +932,7 @@ class TimeSeriesDataHandler(FileDataHandler):
         stride: int = 1,
         val_split: float = 0.1,
         test_split: float = 0.2,
+        split_seed: int = 42,
     ):
         # Accept sequence_length as an alias for lookback (backward compat)
         if sequence_length is not None:
@@ -895,6 +952,7 @@ class TimeSeriesDataHandler(FileDataHandler):
         self.stride = stride
         self.val_split = val_split
         self.test_split = test_split
+        self.split_seed = split_seed  # accepted for API symmetry; the split is chronological
 
     @staticmethod
     def _make_windows(
@@ -1071,6 +1129,7 @@ class ArraysDataHandler(DataHandler):
         X_val: Optional[Union[np.ndarray, List, Any]] = None,
         y_val: Optional[Union[np.ndarray, List, Any]] = None,
         stratify: Optional[bool] = None,
+        split_seed: int = 42,
     ):
         """Data handler for pre-loaded in-memory arrays.
 
@@ -1113,6 +1172,7 @@ class ArraysDataHandler(DataHandler):
         self._stratify = stratify
         self._default_val_split = val_split
         self._default_test_split = test_split
+        self.split_seed = split_seed
 
         if len(self.X) != len(self.y):
             raise ValueError(f"Length mismatch: X has {len(self.X)}, y has {len(self.y)}")
@@ -1153,7 +1213,7 @@ class ArraysDataHandler(DataHandler):
         self,
         test_split: Optional[float] = None,
         val_split: Optional[float] = None,
-        random_state: int = 42,
+        random_state: Optional[int] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Split the pre-loaded arrays.
@@ -1184,9 +1244,10 @@ class ArraysDataHandler(DataHandler):
         if _test_split + _val_split >= 1.0:
             raise ValueError("Sum of splits must be < 1.0")
 
+        _rs = self.split_seed if random_state is None else random_state
         strat_full = self.y if self._stratify else None
         self._provenance: Dict[str, Any] = {
-            "random_state": random_state,
+            "random_state": _rs,
             "stratified": bool(self._stratify),
             "test": (
                 "provided"
@@ -1209,7 +1270,7 @@ class ArraysDataHandler(DataHandler):
                 self.X,
                 self.y,
                 test_size=_test_split,
-                random_state=random_state,
+                random_state=_rs,
                 stratify=strat_full,
             )
         else:
@@ -1227,7 +1288,7 @@ class ArraysDataHandler(DataHandler):
                     X_pool,
                     y_pool,
                     test_size=adj,
-                    random_state=random_state,
+                    random_state=_rs,
                     stratify=(y_pool if self._stratify else None),
                 )
             else:
@@ -1298,7 +1359,16 @@ def auto_resolve_handler(
     if isinstance(data, tuple) and len(data) == 2:
         # Simple heuristic: check if elements have shape or length
         if hasattr(data[0], "shape") or hasattr(data[0], "__len__"):
-            _ok = {"val_split", "test_split", "X_val", "y_val", "stratify"}
+            _ok = {
+                "val_split",
+                "test_split",
+                "split_seed",
+                "stratify",
+                "X_val",
+                "y_val",
+                "X_test",
+                "y_test",
+            }
             return ArraysDataHandler(
                 data[0], data[1], **{k: v for k, v in kwargs.items() if k in _ok}
             )
@@ -1329,8 +1399,8 @@ def auto_resolve_handler(
                 return TextDataHandler(data, **kwargs)
 
             # TimeSeries
-            if "value_column" in kwargs or "sequence_length" in kwargs:
-                return TimeSeriesDataHandler(data, **kwargs)
+            if any(k in kwargs for k in ("value_column", "sequence_length", "lookback", "stride")):
+                return TimeSeriesDataHandler(data, target_column=target_column, **kwargs)
 
             # Default to Tabular if target provided
             if target_column:
@@ -1341,7 +1411,7 @@ def auto_resolve_handler(
                 "Ambiguous file input. Please provide:\n"
                 " - 'target_column' for Tabular data\n"
                 " - 'text_column' for Text data\n"
-                " - 'sequence_length' for TimeSeries data"
+                " - 'lookback' or 'value_column' for TimeSeries data"
             )
 
     # 4. Fallback

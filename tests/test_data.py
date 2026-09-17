@@ -1198,7 +1198,9 @@ class TestTabularDataHandlerCoverage2:
                 "label": [0, 1] * 20,
             }
         )
-        handler = TabularDataHandler(df, target_column="label", features=["f1", "f2"])
+        handler = TabularDataHandler(
+            df, target_column="label", features=["f1", "f2"], return_frames=True
+        )
         result = handler.load(test_split=0.2, val_split=0.1)
         X_train, _ = result["train_data"]
         assert list(X_train.columns) == ["f1", "f2"]
@@ -1592,3 +1594,43 @@ def test_get_data_info_provenance():
     prov = h.get_data_info()["split_provenance"]
     assert prov["test"] == "split" and prov["val"] == "split"
     assert prov["random_state"] == 42 and prov["stratified"] is False
+
+
+# ---------------------------------------------------------------------------
+# v0.4.10
+# ---------------------------------------------------------------------------
+
+
+def _write_png_dir(root, classes, n_per_class):
+    import numpy as _np
+    from PIL import Image
+
+    for cls in classes:
+        (root / cls).mkdir()
+        for i in range(n_per_class):
+            arr = (_np.random.rand(8, 8, 3) * 255).astype("uint8")
+            Image.fromarray(arr).save(root / cls / f"{i}.png")
+
+
+@pytest.mark.skipif(not TENSORFLOW_AVAILABLE, reason="TensorFlow required")
+def test_image_load_uses_constructor_splits(tmp_path):
+    from ictonyx.data import ImageDataHandler
+
+    _write_png_dir(tmp_path, ("a", "b"), 10)
+    h = ImageDataHandler(str(tmp_path), image_size=(8, 8), val_split=0.5, test_split=0.0)
+    d = h.load()
+    n_train = sum(1 for _ in d["train_data"].unbatch())
+    n_val = sum(1 for _ in d["val_data"].unbatch())
+    assert abs(n_train - n_val) <= 2
+
+
+@pytest.mark.skipif(not TENSORFLOW_AVAILABLE, reason="TensorFlow required")
+def test_image_grayscale_has_one_channel(tmp_path):
+    from ictonyx.data import ImageDataHandler
+
+    _write_png_dir(tmp_path, ("a",), 2)
+    h = ImageDataHandler(
+        str(tmp_path), image_size=(8, 8), color_mode="grayscale", val_split=0.0, test_split=0.0
+    )
+    img, _ = next(iter(h.load()["train_data"].unbatch()))
+    assert img.shape[-1] == 1

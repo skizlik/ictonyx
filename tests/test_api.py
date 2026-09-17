@@ -4,11 +4,14 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.linear_model import LogisticRegression
 
+import ictonyx as ix
 from ictonyx import ModelConfig, api
 from ictonyx.analysis import ModelComparisonResults, StatisticalTestResult
-from ictonyx.api import _ensure_wrapper, _get_model_name
+from ictonyx.api import _ensure_wrapper, _get_model_name, _resolve_handler
 from ictonyx.core import TENSORFLOW_AVAILABLE, BaseModelWrapper
+from ictonyx.exceptions import ConfigurationError
 
 # --- Fixtures (Reusable Data) ---
 
@@ -1027,7 +1030,7 @@ def test_validation_data_with_handler_raises():
 
     X = np.zeros((10, 2))
     y = np.zeros(10, dtype=int)
-    with pytest.raises(ConfigurationError, match="X_val="):
+    with pytest.raises(ConfigurationError, match="cannot be combined with a DataHandler"):
         api.variability_study(
             model=_build_val_spy,
             data=ArraysDataHandler(X, y),
@@ -1041,7 +1044,7 @@ def test_validation_data_with_dataframe_raises():
     from ictonyx.exceptions import ConfigurationError
 
     df = pd.DataFrame({"a": range(10), "t": [0, 1] * 5})
-    with pytest.raises(ConfigurationError, match="tuple"):
+    with pytest.raises(ConfigurationError, match="not accepted for 'tabular'"):
         api.variability_study(
             model=_build_val_spy,
             data=df,
@@ -1050,3 +1053,65 @@ def test_validation_data_with_dataframe_raises():
             validation_data=(df[["a"]].values, df["t"].values),
             verbose=False,
         )
+
+
+# ---------------------------------------------------------------------------
+# v0.4.10: validated handler dispatcher
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def five_inputs(tmp_path, X, y, df):
+    csv = tmp_path / "t.csv"
+    df.to_csv(csv, index=False)
+    txt = tmp_path / "text.csv"
+    pd.DataFrame({"text": [f"word{i % 7} word{i % 3}" for i in range(len(y))], "label": y}).to_csv(
+        txt, index=False
+    )
+    ts = tmp_path / "ts.csv"
+    pd.DataFrame({"value": np.sin(np.arange(200) / 5)}).to_csv(ts, index=False)
+    return {
+        "arrays": ((X, y), {}),
+        "tabular_df": (df, {"target_column": "target"}),
+        "tabular_csv": (str(csv), {"target_column": "target"}),
+        "text": (str(txt), {"text_column": "text", "label_column": "label"}),
+        "timeseries": (str(ts), {"lookback": 5}),
+    }
+
+
+@pytest.mark.parametrize("kind", ["arrays", "tabular_df", "tabular_csv", "text", "timeseries"])
+def test_test_split_reaches_every_handler(kind, five_inputs):
+    data, extra = five_inputs[kind]
+    target = extra.pop("target_column", None)
+    d = _resolve_handler(data, target, {"test_split": 0.5, "val_split": 0.0, **extra}).load()
+    n_train, n_test = len(d["train_data"][0]), len(d["test_data"][0])
+    assert abs(n_train - n_test) <= 2, (kind, n_train, n_test)
+
+
+def test_unknown_infra_kwarg_raises(X, y):
+    with pytest.raises(ConfigurationError, match="not accepted for 'arrays'"):
+        _resolve_handler((X, y), None, {"text_column": "t"})
+
+
+def test_stratify_rejected_for_timeseries(five_inputs):
+    data, extra = five_inputs["timeseries"]
+    with pytest.raises(ConfigurationError, match="not accepted for 'timeseries'"):
+        _resolve_handler(data, None, {"stratify": True, **extra})
+
+
+def test_split_seed_changes_split(X, y):
+    a = _resolve_handler((X, y), None, {"split_seed": 1}).load()
+    b = _resolve_handler((X, y), None, {"split_seed": 2}).load()
+    assert not np.array_equal(a["test_data"][1], b["test_data"][1])
+
+
+def test_dataframe_data_returns_numpy(df):
+    d = _resolve_handler(df, "target", {}).load()
+    assert isinstance(d["train_data"][0], np.ndarray)
+    assert isinstance(d["train_data"][1], np.ndarray)
+
+
+def test_text_csv_is_reachable_via_public_api(five_inputs):
+    data, extra = five_inputs["text"]
+    r = ix.variability_study(LogisticRegression, data=data, runs=2, seed=0, verbose=False, **extra)
+    assert r.n_runs == 2

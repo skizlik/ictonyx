@@ -273,6 +273,25 @@ def variability_study(
     )
 
 
+def _warn_incomplete_studies(studies: Dict[str, VariabilityStudyResults], metric: str) -> None:
+    """Warn once per study whose runs failed or produced NaN (v12 2.67).
+
+    Excluding runs that diverged understates variance and overstates the mean;
+    the user should know the comparison is on fewer runs than requested.
+    """
+    for name, s in studies.items():
+        vals = np.asarray(s.get_metric_values(metric), dtype=float)
+        n_nan = int(np.isnan(vals).sum())
+        if s.failed_runs or n_nan:
+            warnings.warn(
+                f"{name}: {len(s.failed_runs)} of {s.n_requested} runs failed and {n_nan} "
+                f"produced a NaN {metric}; they are excluded from the comparison. "
+                "Excluding runs that diverged understates variance and overstates the mean.",
+                UserWarning,
+                stacklevel=3,
+            )
+
+
 def compare_models(
     models: List[Any],
     data: Union[str, pd.DataFrame, Tuple[np.ndarray, np.ndarray]],
@@ -398,10 +417,13 @@ def compare_models(
     if seed is None:
         seed = int(np.random.default_rng().integers(0, 2**31))
 
-    # Apply the same infra/model kwargs separation used in variability_study().
-    # Without this split, model hyperparameters like learning_rate reach
-    # auto_resolve_handler() and raise TypeError.
+    # Split kwargs exactly as variability_study does. The handler is resolved
+    # ONCE and shared, so every model sees the same split (data-level pairing).
+    # Only model kwargs and runner kwargs are forwarded; handler kwargs must not
+    # reach variability_study(data=handler), which rightly rejects them (v12 0.5).
     infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
+    model_kwargs = {k: v for k, v in kwargs.items() if k not in _INFRA_KWARGS}
+    runner_kwargs = {k: v for k, v in infra_kwargs.items() if k in _RUNNER_KWARGS and v is not None}
     handler = _resolve_handler(data, target_column, infra_kwargs)
 
     settings.logger.info(f"--- Starting Comparison of {len(models)} Models (seed={seed}) ---")
@@ -425,7 +447,8 @@ def compare_models(
             epochs=epochs,
             seed=seed,
             verbose=verbose,
-            **kwargs,
+            **runner_kwargs,
+            **model_kwargs,
         )
         studies[name] = study_result
 
@@ -493,12 +516,16 @@ def compare_models(
         names = list(results_store.keys())
         # All models ran under one seed, so pairing is valid; align on run id in
         # case either study lost a run.
-        _, va, vb = align_paired(studies[names[0]], studies[names[1]], metric)
-        series_a, series_b = pd.Series(va), pd.Series(vb)
+        run_ids, va, vb = align_paired(studies[names[0]], studies[names[1]], metric)
+        series_a = pd.Series(va, index=run_ids, name=names[0])
+        series_b = pd.Series(vb, index=run_ids, name=names[1])
+        _warn_incomplete_studies(studies, metric)
         paired_result = compare_two_models(series_a, series_b, paired=True, random_state=seed)
         return ModelComparisonResults(
             overall_test=paired_result,
-            raw_data=results_store,
+            # raw_data is the aligned pairs the test actually used (v12 2.33)
+            raw_data={names[0]: series_a, names[1]: series_b},
+            run_counts={n: (s.n_requested, s.n_runs) for n, s in studies.items()},
             pairwise_comparisons={f"{names[0]}_vs_{names[1]}": dataclasses.replace(paired_result)},
             significant_comparisons=(
                 [f"{names[0]}_vs_{names[1]}"] if paired_result.is_significant() else []
@@ -518,7 +545,9 @@ def compare_models(
             stacklevel=2,
         )
 
+    _warn_incomplete_studies(studies, metric)
     stat_results = _stat_compare(results_store, random_state=seed)
+    stat_results.run_counts = {n: (s.n_requested, s.n_runs) for n, s in studies.items()}
     stat_results.metric = metric
     stat_results.raw_data = results_store
     return stat_results
@@ -790,7 +819,25 @@ def _get_model_name(obj: Any) -> str:
     return str(obj)
 
 
-# AFTER (complete replacement)
+def _warn_incomplete_studies(studies: Dict[str, VariabilityStudyResults], metric: str) -> None:
+    """Warn once per study whose runs failed or produced NaN (v12 2.67).
+
+    Excluding runs that diverged understates variance and overstates the mean;
+    the user should know the comparison is on fewer runs than requested.
+    """
+    for name, s in studies.items():
+        vals = np.asarray(s.get_metric_values(metric), dtype=float)
+        n_nan = int(np.isnan(vals).sum())
+        if s.failed_runs or n_nan:
+            warnings.warn(
+                f"{name}: {len(s.failed_runs)} of {s.n_requested} runs failed and {n_nan} "
+                f"produced a NaN {metric}; they are excluded from the comparison. "
+                "Excluding runs that diverged understates variance and overstates the mean.",
+                UserWarning,
+                stacklevel=3,
+            )
+
+
 def compare_results(
     results_a: "VariabilityStudyResults",
     results_b: "VariabilityStudyResults",

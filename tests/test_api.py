@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
 
 import ictonyx as ix
 from ictonyx import ModelConfig, api
@@ -12,6 +13,7 @@ from ictonyx.analysis import ModelComparisonResults, StatisticalTestResult
 from ictonyx.api import _ensure_wrapper, _get_model_name, _resolve_handler
 from ictonyx.core import TENSORFLOW_AVAILABLE, BaseModelWrapper
 from ictonyx.exceptions import ConfigurationError
+from tests._builders import _FailsSometimes
 
 # --- Fixtures (Reusable Data) ---
 
@@ -1115,3 +1117,55 @@ def test_text_csv_is_reachable_via_public_api(five_inputs):
     data, extra = five_inputs["text"]
     r = ix.variability_study(LogisticRegression, data=data, runs=2, seed=0, verbose=False, **extra)
     assert r.n_runs == 2
+
+
+# ---------------------------------------------------------------------------
+# v0.4.10: compare_models routing, aligned raw_data, incomplete-study warning
+# ---------------------------------------------------------------------------
+
+
+def test_compare_models_accepts_validation_data(X, y):
+    r = ix.compare_models(
+        [LogisticRegression, DecisionTreeClassifier],
+        data=(X[:100], y[:100]),
+        validation_data=(X[100:], y[100:]),
+        runs=6,
+        seed=0,
+        verbose=False,
+    )
+    assert r.n_models == 2
+
+
+def test_compare_models_raw_data_matches_test_n(X, y):
+    with pytest.warns(UserWarning, match="runs failed"):
+        r = ix.compare_models(
+            [_FailsSometimes, DecisionTreeClassifier], data=(X, y), runs=8, seed=1, verbose=False
+        )
+    n = r.overall_test.sample_sizes["n_pairs"]
+    a, b = r.raw_data.values()
+    assert len(a) == len(b) == n
+    assert a.index.tolist() == b.index.tolist()
+    assert r.run_counts["_FailsSometimes"][1] < 8
+    assert "Incomplete studies" in r.get_summary()
+
+
+def test_compare_models_resolves_handler_once(X, y, monkeypatch):
+    import ictonyx.api as api_mod
+
+    calls = []
+    real = api_mod._resolve_handler
+
+    def spy(d, t, k):
+        calls.append(dict(k))
+        return real(d, t, k)
+
+    monkeypatch.setattr(api_mod, "_resolve_handler", spy)
+    ix.compare_models(
+        [LogisticRegression, DecisionTreeClassifier],
+        data=(X, y),
+        runs=6,
+        seed=0,
+        verbose=False,
+        split_seed=7,
+    )
+    assert [c for c in calls if "split_seed" in c] == [{"split_seed": 7}]

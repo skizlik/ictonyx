@@ -5,7 +5,7 @@ joblib workers can pickle it. Test files import from this module; nothing here
 imports from test files.
 """
 
-import numpy as np  # noqa: F401  (used by builders added in later commits)
+import numpy as np
 
 
 class _AlwaysFails:
@@ -36,10 +36,11 @@ class _FailsAfterFirst:
             _FailsAfterFirst._first_seed = self.rs
         if self.rs != _FailsAfterFirst._first_seed:
             raise RuntimeError("boom")
+        self.classes_ = np.unique(y)
         self.c_ = 0
 
     def predict(self, X):
-        return np.zeros(len(X))
+        return np.zeros(len(X), dtype=int)
 
     def score(self, X, y):
         return 0.0
@@ -54,10 +55,33 @@ class _FailsSometimes:
     def fit(self, X, y):
         if self.rs is not None and self.rs % 10 < 3:
             raise RuntimeError("boom")
+        self.classes_ = np.unique(y)
         self.c_ = 0
 
     def predict(self, X):
-        return np.zeros(len(X))
+        return np.zeros(len(X), dtype=int)
+
+    def score(self, X, y):
+        return 0.0
+
+
+class _FailsOnSecondRun:
+    """Run 1 succeeds; run 2 fails; runs 3+ succeed. One hole, deterministic."""
+
+    _calls = 0
+
+    def __init__(self, random_state=None, **kw):
+        self.rs = random_state
+
+    def fit(self, X, y):
+        _FailsOnSecondRun._calls += 1
+        if _FailsOnSecondRun._calls == 2:
+            raise RuntimeError("boom")
+        self.classes_ = np.unique(y)
+        self.c_ = 0
+
+    def predict(self, X):
+        return np.zeros(len(X), dtype=int)
 
     def score(self, X, y):
         return 0.0

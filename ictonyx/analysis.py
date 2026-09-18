@@ -1961,6 +1961,8 @@ class ModelComparisonResults:
     correction_method: str = "holm"
     n_models: int = 0
     metric: Optional[str] = None
+    run_counts: Dict[str, Tuple[int, int]] = field(default_factory=dict)
+    """Per model: (runs requested, runs that completed). Set by compare_models."""
 
     def is_significant(self, alpha: float = 0.05) -> bool:
         """True if the omnibus test is significant at the given alpha."""
@@ -1985,6 +1987,13 @@ class ModelComparisonResults:
 
         if self.significant_comparisons:
             lines.append(f"\nSignificant pairs: {', '.join(self.significant_comparisons)}")
+
+        incomplete = {n: c for n, c in self.run_counts.items() if c[0] != c[1]}
+        if incomplete:
+            lines.append(
+                "\nIncomplete studies (requested/completed): "
+                + ", ".join(f"{n} {c[1]}/{c[0]}" for n, c in incomplete.items())
+            )
 
         return "\n".join(lines)
 

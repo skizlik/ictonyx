@@ -673,13 +673,25 @@ def bootstrap_paired_difference_ci(
     Raises:
         ValueError: If groups differ in length (pairing is impossible).
     """
-    g1 = _to_clean_array(group1)
-    g2 = _to_clean_array(group2)
-
-    if len(g1) != len(g2):
+    # Pair by position and drop rows where EITHER value is missing. Dropping NaNs
+    # per group (the previous behaviour) silently re-paired the remaining rows
+    # (v12 2.18).
+    a1 = np.asarray(pd.Series(group1).to_numpy(), dtype=float).ravel()
+    a2 = np.asarray(pd.Series(group2).to_numpy(), dtype=float).ravel()
+    if len(a1) != len(a2):
         raise ValueError(
-            f"Paired bootstrap requires equal-length groups. " f"Got {len(g1)} and {len(g2)}."
+            f"Paired bootstrap requires equal-length groups. Got {len(a1)} and {len(a2)}."
         )
+    keep = np.isfinite(a1) & np.isfinite(a2)
+    n_dropped = int((~keep).sum())
+    if n_dropped:
+        warnings.warn(
+            f"bootstrap_paired_difference_ci: dropped {n_dropped} pair(s) with a missing "
+            "value in either group.",
+            UserWarning,
+            stacklevel=2,
+        )
+    g1, g2 = a1[keep], a2[keep]
     if len(g1) < 2:
         raise ValueError(f"Need at least 2 paired observations, got {len(g1)}.")
 

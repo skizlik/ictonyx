@@ -1302,32 +1302,42 @@ def friedman_test(
             "Use compare_two_models() for paired two-group comparisons."
         )
 
-    # Clean data and validate matched lengths
-    clean_groups: List[pd.Series] = []
-    group_names: List[str] = []
-    for name, series in model_metrics.items():
-        clean_data = series.dropna()
-        if len(clean_data) > 0:
-            clean_groups.append(clean_data)
-            group_names.append(name)
-
-    if len(clean_groups) < 3:
-        raise ValueError(
-            "Insufficient data after cleaning. Friedman test requires at "
-            "least three non-empty groups."
-        )
-
-    # All groups must have the same length — Friedman requires matched pairs.
-    lengths = [len(g) for g in clean_groups]
-    if len(set(lengths)) > 1:
+    # Friedman requires matched rows. Build the block design first, then drop any
+    # ROW with a missing value; dropping NaNs per group silently mis-aligned the
+    # remaining rows (v12 2.25).
+    lengths = {name: len(s) for name, s in model_metrics.items()}
+    if len(set(lengths.values())) > 1:
         raise ValueError(
             f"Friedman test requires matched pairs: all groups must have the "
-            f"same length. Got lengths {dict(zip(group_names, lengths))}. "
+            f"same length. Got lengths {lengths}. "
             f"If your data is unpaired or has mismatched n, use "
             f"kruskal_wallis_test() instead."
         )
+    frame = pd.DataFrame(
+        {
+            name: np.asarray(pd.Series(s).to_numpy(), dtype=float)
+            for name, s in model_metrics.items()
+        }
+    )
+    n_before = len(frame)
+    frame = frame.dropna(axis=0, how="any")
+    if len(frame) < n_before:
+        warnings.warn(
+            f"friedman_test: dropped {n_before - len(frame)} run(s) with a missing value in "
+            "at least one group.",
+            UserWarning,
+            stacklevel=2,
+        )
+    group_names: List[str] = list(frame.columns)
+    clean_groups: List[pd.Series] = [frame[c] for c in group_names]
 
-    n = lengths[0]  # Number of subjects / rows / runs
+    if len(clean_groups) < 3 or len(frame) == 0:
+        raise ValueError(
+            "Insufficient data after cleaning. Friedman test requires at "
+            "least three groups with at least one complete row."
+        )
+
+    n = len(frame)  # Number of subjects / rows / runs
     k = len(clean_groups)  # Number of groups / conditions / models
 
     # Sample size validation

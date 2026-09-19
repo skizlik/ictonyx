@@ -294,6 +294,7 @@ class ExperimentRunner:
         self.final_metrics: Dict[str, List[float]] = {}
         self.final_test_metrics: List[Dict[str, Any]] = []
         self.failed_runs: List[int] = []
+        self.metric_run_ids: Dict[str, List[int]] = {}
 
         # Validate process isolation if enabled
         if use_process_isolation:
@@ -495,14 +496,8 @@ class ExperimentRunner:
                 # Standardize column names
                 history_df = self._standardize_history_df(history_df)
 
-                # Store final values for ALL tracked metrics
-                for col in history_df.columns:
-                    if col not in ("run_num", "epoch"):
-                        final_value = float(history_df[col].iloc[-1])
-                        if col not in self.final_metrics:
-                            self.final_metrics[col] = []
-                        self.final_metrics[col].append(final_value)
-                        self.tracker.log_metric(f"final_{col}", final_value, step=run_id)
+                # Store final values for ALL tracked metrics (shared with standard mode)
+                self._extract_and_store_final_metrics(history_df, run_id=run_id)
 
                 # Store test metrics — on failure warn and append nothing (same as standard mode)
                 test_eval_error = result["result"].get("test_eval_error")
@@ -655,6 +650,7 @@ class ExperimentRunner:
                     self.final_metrics[col] = []
                 self.final_metrics[col].append(final_value)
                 if run_id:
+                    self.metric_run_ids.setdefault(col, []).append(run_id)
                     self.tracker.log_metric(f"final_{col}", final_value, step=run_id)
 
     def run_study(
@@ -754,6 +750,9 @@ class ExperimentRunner:
                     self.failed_runs = list(
                         _prior_data.get("failed_runs", [])
                     )  # added v0.4.4; absent in older checkpoints
+                    self.metric_run_ids = {
+                        k: list(v) for k, v in _prior_data.get("metric_run_ids", {}).items()
+                    }
                     completed_run_ids = {
                         int(df["run_num"].iloc[0]) for df in self.all_runs_metrics if not df.empty
                     }
@@ -847,7 +846,7 @@ class ExperimentRunner:
                 for run_id, metrics_df in zip(dispatched_run_ids, parallel_results):
                     if metrics_df is not None:
                         self.all_runs_metrics.append(metrics_df)
-                        self._extract_and_store_final_metrics(metrics_df)
+                        self._extract_and_store_final_metrics(metrics_df, run_id=run_id)
                     else:
                         self.failed_runs.append(run_id)
 
@@ -910,6 +909,9 @@ class ExperimentRunner:
                                     "final_test_metrics": list(self.final_test_metrics),
                                     "seed": self.seed,
                                     "failed_runs": list(self.failed_runs),
+                                    "metric_run_ids": {
+                                        k: list(v) for k, v in self.metric_run_ids.items()
+                                    },
                                 }
                                 _tmp_path = _checkpoint_path + ".tmp"
                                 with open(_tmp_path, "wb") as _f:
@@ -957,6 +959,7 @@ class ExperimentRunner:
             seed=self.seed,
             run_seeds=list(self._child_seeds),
             failed_runs=sorted(self.failed_runs),
+            metric_run_ids={k: list(v) for k, v in self.metric_run_ids.items()},
         )
 
         if hasattr(self.tracker, "log_study_summary"):
@@ -1093,6 +1096,12 @@ class VariabilityStudyResults:
     seed: Optional[int] = None
     run_seeds: List[int] = field(default_factory=list)
     failed_runs: List[int] = field(default_factory=list)
+    metric_run_ids: Dict[str, List[int]] = field(default_factory=dict)
+    """Per metric, the run id each entry of ``final_metrics[metric]`` came from.
+
+    A metric absent from one run's history would otherwise shift every later
+    entry against ``run_ids`` (v12 2.19).
+    """
 
     @property
     def n_runs(self) -> int:
@@ -1169,7 +1178,8 @@ class VariabilityStudyResults:
             raise KeyError(f"Metric '{metric_name}' not found. Available: {available}")
         values = self.final_metrics[metric_name]
         if with_run_ids:
-            return self.run_ids[: len(values)], values
+            ids = self.metric_run_ids.get(metric_name) or self.run_ids[: len(values)]
+            return list(ids), values
         return values
 
     def get_final_metrics(self, metric_name: str = "val_accuracy") -> Dict[str, float]:

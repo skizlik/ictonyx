@@ -244,6 +244,9 @@ class ExperimentRunner:
         # the caller's object (frozen or not) is never mutated.
         self.user_config = model_config
         self.model_config = model_config.copy(keep_frozen=False)
+        # v12 1.38: a runner constructed without seed= must adopt a checkpoint's
+        # seed on resume, so remember whether the user actually gave one.
+        self._seed_explicit: bool = seed is not None
         self.seed: int = (
             seed if seed is not None else int(np.random.default_rng().integers(0, 2**31))
         )
@@ -661,6 +664,7 @@ class ExperimentRunner:
         checkpoint_dir: Optional[str] = None,
         use_parallel: bool = False,
         n_jobs: int = -1,
+        resume_ignore_seed: bool = False,
     ) -> "VariabilityStudyResults":
         """Execute the complete variability study.
 
@@ -725,46 +729,63 @@ class ExperimentRunner:
 
         # Resume from checkpoint if available
         completed_run_ids: set = set()
+        self._mixed_seed = False
+        self._restored_run_seeds: List[int] = []
         if checkpoint_dir is not None:
             import os
             import pickle as _pickle
 
             checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
+            _prior_data = None
             if os.path.exists(checkpoint_path):
-                try:
+                try:  # only the load is guarded; a bad seed must NOT be swallowed here
                     with open(checkpoint_path, "rb") as _f:
                         _prior_data = _pickle.load(_f)
-                    _schema = _prior_data.get("_schema_version")
-                    if _schema != _ICTONYX_VERSION:
-                        warnings.warn(
-                            f"Checkpoint schema version '{_schema}' does not match "
-                            f"current '{_ICTONYX_VERSION}'. The checkpoint was written by a "
-                            "different version of Ictonyx and may be incompatible. "
-                            "Delete the checkpoint directory to start fresh.",
-                            UserWarning,
-                            stacklevel=2,
-                        )
-                    self.all_runs_metrics = list(_prior_data["all_runs_metrics"])
-                    self.final_metrics = dict(_prior_data["final_metrics"])
-                    self.final_test_metrics = list(_prior_data["final_test_metrics"])
-                    self.failed_runs = list(
-                        _prior_data.get("failed_runs", [])
-                    )  # added v0.4.4; absent in older checkpoints
-                    self.metric_run_ids = {
-                        k: list(v) for k, v in _prior_data.get("metric_run_ids", {}).items()
-                    }
-                    completed_run_ids = {
-                        int(df["run_num"].iloc[0]) for df in self.all_runs_metrics if not df.empty
-                    }
-                    logger.info(
-                        f"Resuming from checkpoint: "
-                        f"{len(completed_run_ids)} of {num_runs} runs already complete."
-                    )
                 except Exception as e:
                     logger.warning(
                         f"Could not load checkpoint from {checkpoint_path}: {e}. "
                         "Starting from scratch."
                     )
+            if _prior_data is not None:
+                _schema = _prior_data.get("_schema_version")
+                if _schema != _ICTONYX_VERSION:
+                    warnings.warn(
+                        f"Checkpoint was written by ictonyx {_schema or '<unknown>'}; this is "
+                        f"{_ICTONYX_VERSION}. Resuming anyway; verify results if the format changed.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                stored_seed = _prior_data.get("seed")
+                if stored_seed is not None:
+                    if not self._seed_explicit:
+                        # v12 1.38: adopt the checkpoint's seed so the child-seed family
+                        # is the one the restored runs were actually trained under.
+                        self.seed = int(stored_seed)
+                        logger.info(f"Resuming with checkpoint seed {self.seed}.")
+                    elif stored_seed != self.seed and not resume_ignore_seed:
+                        raise ValueError(
+                            f"Checkpoint in {checkpoint_dir} was written with seed={stored_seed}; "
+                            f"this runner was given seed={self.seed}. Resuming would mix two "
+                            "child-seed families and break pairing. Use the same seed, delete the "
+                            "checkpoint, or pass resume_ignore_seed=True (results.seed becomes None)."
+                        )
+                    elif stored_seed != self.seed:
+                        self._mixed_seed = True
+                self._restored_run_seeds = list(_prior_data.get("run_seeds", []))
+                self.all_runs_metrics = list(_prior_data["all_runs_metrics"])
+                self.final_metrics = dict(_prior_data["final_metrics"])
+                self.final_test_metrics = list(_prior_data["final_test_metrics"])
+                self.failed_runs = list(_prior_data.get("failed_runs", []))
+                self.metric_run_ids = {
+                    k: list(v) for k, v in _prior_data.get("metric_run_ids", {}).items()
+                }
+                completed_run_ids = {
+                    int(df["run_num"].iloc[0]) for df in self.all_runs_metrics if not df.empty
+                }
+                logger.info(
+                    f"Resuming from checkpoint: {len(completed_run_ids)} of {num_runs} runs "
+                    "already complete."
+                )
 
         if use_parallel and self.test_data is not None:
             warnings.warn(
@@ -908,6 +929,7 @@ class ExperimentRunner:
                                     "final_metrics": dict(self.final_metrics),
                                     "final_test_metrics": list(self.final_test_metrics),
                                     "seed": self.seed,
+                                    "run_seeds": list(self._child_seeds),
                                     "failed_runs": list(self.failed_runs),
                                     "metric_run_ids": {
                                         k: list(v) for k, v in self.metric_run_ids.items()
@@ -952,15 +974,48 @@ class ExperimentRunner:
                     sd_txt = f"{np.std(values, ddof=1):.4f}" if len(values) > 1 else "n/a (1 run)"
                     logger.info(f"  {metric_name}: {mean_val:.4f} (SD = {sd_txt})")
 
+        # Provenance (v12 1.33): under an explicit seed override, restored runs keep
+        # the child seed they were trained under and the study seed becomes None.
+        run_seeds = list(self._child_seeds)
+        seed_out: Optional[int] = self.seed
+        if self._mixed_seed and self._restored_run_seeds:
+            for rid in completed_run_ids:
+                if rid - 1 < len(self._restored_run_seeds):
+                    run_seeds[rid - 1] = self._restored_run_seeds[rid - 1]
+            seed_out = None
+            warnings.warn(
+                "Mixed-seed study (checkpoint resumed under a different explicit seed): "
+                "results.seed is None and paired comparison cannot be verified.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         results = VariabilityStudyResults(
             all_runs_metrics=self.all_runs_metrics,
             final_metrics=self.final_metrics,
             final_test_metrics=self.final_test_metrics,
-            seed=self.seed,
-            run_seeds=list(self._child_seeds),
+            seed=seed_out,
+            run_seeds=run_seeds,
             failed_runs=sorted(self.failed_runs),
             metric_run_ids={k: list(v) for k, v in self.metric_run_ids.items()},
+            _run_ids=[
+                int(df["run_num"].iloc[0]) if "run_num" in df.columns and len(df) else i + 1
+                for i, df in enumerate(self.all_runs_metrics)
+            ],
         )
+
+        # A completed study's checkpoint is retired so the next run_study() with the
+        # same directory trains rather than replaying (v12 1.33).
+        if checkpoint_dir is not None:
+            import os
+
+            _cp = os.path.join(checkpoint_dir, "checkpoint.pkl")
+            if (
+                os.path.exists(_cp)
+                and len(self.all_runs_metrics) + len(self.failed_runs) >= num_runs
+            ):
+                os.replace(_cp, _cp[: -len(".pkl")] + ".done.pkl")
+                logger.info(f"Study complete; checkpoint retired to {_cp[: -4] + '.done.pkl'}")
 
         if hasattr(self.tracker, "log_study_summary"):
             self.tracker.log_study_summary(results)
@@ -1097,6 +1152,7 @@ class VariabilityStudyResults:
     run_seeds: List[int] = field(default_factory=list)
     failed_runs: List[int] = field(default_factory=list)
     metric_run_ids: Dict[str, List[int]] = field(default_factory=dict)
+    _run_ids: Optional[List[int]] = field(default=None, repr=False)
     """Per metric, the run id each entry of ``final_metrics[metric]`` came from.
 
     A metric absent from one run's history would otherwise shift every later
@@ -1120,8 +1176,11 @@ class VariabilityStudyResults:
         Position ``i`` of ``final_metrics[m]`` and of ``all_runs_metrics``
         belongs to run ``run_ids[i]``; that run's child seed is
         ``run_seeds[run_ids[i] - 1]``. Falls back to ``1..n_runs`` when the
-        per-run DataFrames are absent (results from JSON or MLflow).
+        per-run DataFrames are absent (results from JSON or MLflow) and no
+        stored ids exist (v12 2.15).
         """
+        if self._run_ids is not None:
+            return list(self._run_ids)
         if not self.all_runs_metrics:
             n = len(next(iter(self.final_metrics.values()), []))
             return list(range(1, n + 1))
@@ -1740,6 +1799,8 @@ class VariabilityStudyResults:
                 "seed": self.seed,
                 "failed_runs": self.failed_runs,
                 "run_ids": self.run_ids,
+                "run_seeds": list(self.run_seeds),
+                "metric_run_ids": self.metric_run_ids,
                 "final_metrics": self.final_metrics,
                 "final_test_metrics": self.final_test_metrics,
             },
@@ -1762,7 +1823,8 @@ class VariabilityStudyResults:
         Returns:
             VariabilityStudyResults with ``final_metrics``,
             ``final_test_metrics``, and ``seed`` populated from the
-            JSON. ``all_runs_metrics`` is empty; ``run_seeds`` is empty.
+            JSON. ``all_runs_metrics`` is empty; ``run_ids``, ``run_seeds`` and
+            ``metric_run_ids`` are restored.
             ``failed_runs`` is restored when present.
 
         Raises:
@@ -1796,8 +1858,10 @@ class VariabilityStudyResults:
             final_metrics=data["final_metrics"],
             final_test_metrics=data["final_test_metrics"],
             seed=data.get("seed"),
-            run_seeds=[],
+            run_seeds=[int(x) for x in data.get("run_seeds", [])],
             failed_runs=list(data.get("failed_runs", [])),
+            metric_run_ids={k: list(v) for k, v in data.get("metric_run_ids", {}).items()},
+            _run_ids=[int(x) for x in data["run_ids"]] if data.get("run_ids") else None,
         )
 
     @classmethod

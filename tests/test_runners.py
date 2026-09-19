@@ -2466,7 +2466,8 @@ class TestCheckpointResume:
         """A checkpoint.pkl file must exist after the first run completes."""
         runner = self._make_runner()
         runner.run_study(num_runs=3, checkpoint_dir=str(tmp_path))
-        assert (tmp_path / "checkpoint.pkl").exists()
+        # v0.4.10: a completed study's checkpoint is retired to checkpoint.done.pkl
+        assert (tmp_path / "checkpoint.done.pkl").exists()
 
     def test_checkpoint_resumes_correctly(self, tmp_path):
         """A fresh runner loading the checkpoint must produce exactly
@@ -2498,7 +2499,7 @@ class TestCheckpointResume:
         """No .tmp sentinel file should remain after a clean write."""
         runner = self._make_runner()
         runner.run_study(num_runs=2, checkpoint_dir=str(tmp_path))
-        assert (tmp_path / "checkpoint.pkl").exists()
+        assert (tmp_path / "checkpoint.done.pkl").exists()
         assert not (tmp_path / "checkpoint.pkl.tmp").exists()
 
     def test_checkpoint_schema_version_present(self, tmp_path):
@@ -2508,7 +2509,7 @@ class TestCheckpointResume:
 
         runner = self._make_runner()
         runner.run_study(num_runs=2, checkpoint_dir=str(tmp_path))
-        with open(tmp_path / "checkpoint.pkl", "rb") as f:
+        with open(tmp_path / "checkpoint.done.pkl", "rb") as f:
             data = pickle.load(f)
         assert data.get("_schema_version") == __version__
 
@@ -2525,7 +2526,7 @@ class TestCheckpointResume:
         with open(tmp_path / "checkpoint.pkl", "wb") as f:
             pickle.dump(bad_data, f)
         runner = self._make_runner()
-        with pytest.warns(UserWarning, match="schema version"):
+        with pytest.warns(UserWarning, match="Checkpoint was written by ictonyx"):
             runner.run_study(num_runs=2, checkpoint_dir=str(tmp_path))
 
 
@@ -2759,7 +2760,7 @@ class TestFailedRunsCheckpoint:
 
         runner = self._make_failing_runner(fail_on_run=2)
         runner.run_study(num_runs=4, checkpoint_dir=str(tmp_path))
-        cp = pickle.load(open(tmp_path / "checkpoint.pkl", "rb"))
+        cp = pickle.load(open(tmp_path / "checkpoint.done.pkl", "rb"))
         assert "failed_runs" in cp
 
     def test_failed_runs_restored_from_checkpoint(self, tmp_path):
@@ -2768,7 +2769,7 @@ class TestFailedRunsCheckpoint:
         runner = self._make_failing_runner(fail_on_run=2)
         results = runner.run_study(num_runs=4, checkpoint_dir=str(tmp_path))
         # Manually inspect checkpoint
-        cp = pickle.load(open(tmp_path / "checkpoint.pkl", "rb"))
+        cp = pickle.load(open(tmp_path / "checkpoint.done.pkl", "rb"))
         assert isinstance(cp["failed_runs"], list)
 
     def test_failure_rate_uses_attempted_denominator(self):

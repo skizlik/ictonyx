@@ -85,3 +85,38 @@ class _FailsOnSecondRun:
 
     def score(self, X, y):
         return 0.0
+
+
+class _InterruptsAfter:
+    """Trains a stochastic tree; raises KeyboardInterrupt on call number ``stop_after + 1``.
+
+    Set ``_InterruptsAfter.stop_after = k`` (or None to never interrupt) and
+    reset ``_InterruptsAfter.calls = 0`` before each study. Standard mode only
+    (class-level state does not survive a spawned child).
+    """
+
+    stop_after = None
+    calls = 0
+
+    def __init__(self, random_state=None, **kw):
+        from sklearn.tree import DecisionTreeClassifier
+
+        self.rs = random_state
+        self._tree = DecisionTreeClassifier(max_features=1, random_state=random_state)
+
+    def fit(self, X, y):
+        _InterruptsAfter.calls += 1
+        if (
+            _InterruptsAfter.stop_after is not None
+            and _InterruptsAfter.calls > _InterruptsAfter.stop_after
+        ):
+            raise KeyboardInterrupt
+        self._tree.fit(X, y)
+        self.classes_ = self._tree.classes_
+        return self
+
+    def predict(self, X):
+        return self._tree.predict(X)
+
+    def score(self, X, y):
+        return self._tree.score(X, y)

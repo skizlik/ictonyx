@@ -231,7 +231,7 @@ def variability_study(
     if runs < 20:
         warnings.warn(
             f"runs={runs} may be insufficient for reliable statistical inference. "
-            "Mann-Whitney U has limited power against small effects below n=20. "
+            "rank-based tests (paired Wilcoxon, Mann-Whitney U) have limited power against small effects below n=20. "
             "Consider runs >= 20 for publication-quality results.",
             UserWarning,
             stacklevel=2,
@@ -407,7 +407,7 @@ def compare_models(
     if runs < 20:
         warnings.warn(
             f"runs={runs} may be insufficient for reliable statistical inference. "
-            "Mann-Whitney U has limited power against small effects below n=20. "
+            "rank-based tests (paired Wilcoxon, Mann-Whitney U) have limited power against small effects below n=20. "
             "Consider runs >= 20 for publication-quality results.",
             UserWarning,
             stacklevel=2,

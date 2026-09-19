@@ -1670,20 +1670,17 @@ def compare_two_models(
     paired: bool = False,
     alpha: float = 0.05,
     random_state: Optional[int] = None,
-    ci_target: str = "auto",
-    test_method: str = "auto",
+    ci_target: str = "median_difference",
+    test_method: str = "mann_whitney",
 ) -> StatisticalTestResult:
     """
-    Compares two models using intelligent, assumption-driven test selection.
+    Compares two models with a test the caller chooses up front.
 
-    This function automatically selects the correct statistical test based
-    on the data's properties and whether the samples are paired.
-
-    - If `paired=True`, performs a Wilcoxon signed-rank test on the differences.
-    - If `paired=False`, the test is selected by ``test_method``. The
-      default is ``"auto"`` which applies data-driven selection (deprecated
-      — see test_method parameter); v0.5.0 will default to
-      ``"mann_whitney"``.
+    - If ``paired=True``, performs a paired Wilcoxon signed-rank test on the
+      differences (``test_method`` and ``ci_target`` are ignored).
+    - If ``paired=False``, runs the test named by ``test_method``. There is no
+      data-driven pre-test: choosing a test after inspecting the data inflates
+      Type I error. ``"auto"`` was removed in v0.4.10.
 
     Args:
         model1_results (pd.Series): A Series of metric results for model 1.
@@ -1704,9 +1701,7 @@ def compare_two_models(
               Mann-Whitney null and is the methodologically correct CI
               when MW is dispatched. Also valid for parametric tests,
               where it is a robust alternative to the mean-difference CI.
-            - ``"auto"`` (default in v0.4.7): emits a DeprecationWarning
-              and uses ``"mean_difference"`` for backward compatibility.
-              The default changes to ``"median_difference"`` in v0.5.0.
+            Default ``"median_difference"``.
         test_method (str, optional): Which test to use for the unpaired
             comparison. Ignored when ``paired=True`` (paired comparisons
             always use paired Wilcoxon).
@@ -1721,60 +1716,34 @@ def compare_two_models(
             - ``"parametric"``: auto-choose between Student's and Welch's
               based on an equal-variance pre-test. Does not pre-test
               normality; caller is asserting normality holds.
-            - ``"auto"`` (default in v0.4.7): emits a DeprecationWarning
-              and applies data-driven test selection (pre-tests normality
-              via Shapiro-Wilk, then equal variances via Levene, then
-              dispatches to Student/Welch/Mann-Whitney accordingly).
-              This pre-test-then-choose pattern inflates Type I error
-              rates and is methodologically criticized. The default
-              changes to ``"mann_whitney"`` in v0.5.0.
+            Default ``"mann_whitney"``.
 
     Returns:
         StatisticalTestResult: A rich object containing the test name,
         statistic, p-value, effect size, and details on which
         assumptions were met.
     Note:
-        :func:`~ictonyx.api.compare_models` — the primary public entry point —
-        routes all comparisons through :func:`compare_multiple_models`, which
-        applies Kruskal-Wallis + Mann-Whitney unconditionally regardless of
-        data properties. The assumption-driven test selection in this function
-        (normality → variance → Student/Welch/Mann-Whitney) is only exercised
-        when calling it directly from ``ictonyx.analysis``.
+        :func:`~ictonyx.api.compare_models` and
+        :func:`~ictonyx.api.compare_results` both use these defaults, so the
+        two public entry points run the same test for the same request.
     """
 
-    # Validate and resolve ci_target
-    if ci_target not in ("auto", "mean_difference", "median_difference"):
+    # Validate ci_target and test_method. 'auto' was removed in v0.4.10 (v12 2.17):
+    # the data-driven pre-test inflated Type I error and the deprecation
+    # warnings fired from the library's own primary entry point on every call.
+    if ci_target == "auto" or test_method == "auto":
         raise ValueError(
-            f"ci_target must be 'auto', 'mean_difference', or 'median_difference'; "
-            f"got {ci_target!r}."
+            "'auto' was removed in v0.4.10. Use ci_target in "
+            "{'mean_difference', 'median_difference'} and test_method in "
+            "{'mann_whitney', 'student_t', 'welch_t', 'parametric'}."
         )
-    if ci_target == "auto":
-        warnings.warn(
-            "compare_two_models: ci_target defaults to 'mean_difference' in "
-            "v0.4.7 for backward compatibility. In v0.5.0 the default changes "
-            "to 'median_difference' (Hodges-Lehmann), which matches the "
-            "Mann-Whitney U null hypothesis. Pass ci_target explicitly to "
-            "silence this warning.",
-            DeprecationWarning,
-            stacklevel=2,
+    if ci_target not in ("mean_difference", "median_difference"):
+        raise ValueError(
+            f"ci_target must be 'mean_difference' or 'median_difference'; got {ci_target!r}."
         )
-        ci_target = "mean_difference"
-    # Validate and resolve test_method
-    _valid_test_methods = ("auto", "mann_whitney", "student_t", "welch_t", "parametric")
+    _valid_test_methods = ("mann_whitney", "student_t", "welch_t", "parametric")
     if test_method not in _valid_test_methods:
-        raise ValueError(
-            f"test_method must be one of {_valid_test_methods}; " f"got {test_method!r}."
-        )
-    if test_method == "auto":
-        warnings.warn(
-            "compare_two_models: test_method defaults to 'auto' (data-driven "
-            "pre-test-then-choose) in v0.4.7 for backward compatibility. This "
-            "pattern inflates Type I error rates and is methodologically "
-            "criticized. The default changes to 'mann_whitney' in v0.5.0. "
-            "Pass test_method explicitly to silence this warning.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        raise ValueError(f"test_method must be one of {_valid_test_methods}; got {test_method!r}.")
 
     # Clean data
     if paired:
@@ -1858,40 +1827,6 @@ def compare_two_models(
                 result = _run_welch_t(clean1, clean2)
             result.assumptions_met["equal_variances"] = equal_vars
             result.assumption_details["variance_test"] = var_details
-
-        else:
-            # test_method == "auto" — legacy data-driven path.
-            # Pre-test normality via Shapiro-Wilk, then equal variances
-            # via Levene (if both groups normal), then dispatch to
-            # Student/Welch/Mann-Whitney accordingly. This pattern is
-            # methodologically criticized and deprecated; the default
-            # flips to "mann_whitney" in v0.5.0.
-            is_normal1, norm_details1 = check_normality(clean1, alpha=alpha, require_all_tests=True)
-            is_normal2, norm_details2 = check_normality(clean2, alpha=alpha, require_all_tests=True)
-            assumptions_met = {
-                "normality_group1": is_normal1,
-                "normality_group2": is_normal2,
-            }
-            assumption_details = {
-                "normality_group1": norm_details1,
-                "normality_group2": norm_details2,
-            }
-            if is_normal1 and is_normal2:
-                equal_vars, var_details = check_equal_variances(clean1, clean2, alpha=alpha)
-                assumptions_met["equal_variances"] = equal_vars
-                assumption_details["variance_test"] = var_details
-                if equal_vars:
-                    result = _run_student_t(clean1, clean2)
-                else:
-                    result = _run_welch_t(clean1, clean2)
-            else:
-                result = mann_whitney_test(clean1, clean2, alpha=alpha)
-                result.test_name = "Independent Comparison (Mann-Whitney U)"
-
-            # Attach assumption info without overwriting keys set by the chosen test.
-            for _k, _v in assumptions_met.items():
-                result.assumptions_met.setdefault(_k, _v)
-            result.assumption_details.update(assumption_details)
 
     # --- Bootstrap confidence intervals ---
     if HAS_BOOTSTRAP and not np.isnan(result.p_value):

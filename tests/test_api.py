@@ -958,12 +958,8 @@ def test_compare_results_seed_mismatch_falls_back_unpaired():
     b = _seeded_results(list(range(1, 11)), list(np.linspace(0.75, 0.85, 10)), seed=2)
     with pytest.warns(UserWarning, match="Falling back"):
         res = api.compare_results(a, b, metric="val_accuracy", paired=True)
-    # Unpaired path dispatches to Student/Welch/Mann-Whitney based on normality
-    # (test_method="auto" default until v0.5.0); any of them proves the fallback happened.
-    assert (
-        "Independent Comparison" in res.overall_test.test_name
-        or "Mann-Whitney" in res.overall_test.test_name
-    )
+    # v0.4.10: the unpaired fallback runs Mann-Whitney (no data-driven pre-test).
+    assert "Mann-Whitney" in res.overall_test.test_name
     assert "Wilcoxon" not in res.overall_test.test_name
 
 

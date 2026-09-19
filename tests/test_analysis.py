@@ -850,7 +850,7 @@ class TestCompareTwoModels:
     def test_effect_size_ci_populated(self):
         m1 = pd.Series([0.80, 0.82, 0.79, 0.81, 0.83, 0.80, 0.82, 0.79])
         m2 = pd.Series([0.70, 0.71, 0.69, 0.72, 0.68, 0.70, 0.71, 0.69])
-        result = compare_two_models(m1, m2, paired=False)
+        result = compare_two_models(m1, m2, paired=False, test_method="student_t")
         assert result.ci_effect_size is not None
         es_lo, es_hi = result.ci_effect_size
         assert es_lo < es_hi
@@ -1211,13 +1211,15 @@ class TestCompareTwoModelsTestMethod:
         )
         assert "Student" in result.test_name or "Welch" in result.test_name
 
-    def test_auto_emits_deprecation_warning(self):
-        """test_method='auto' (default) must emit a DeprecationWarning."""
+    def test_auto_is_rejected(self):
+        """v0.4.10: test_method='auto' was removed; default is 'mann_whitney'."""
         from ictonyx.analysis import compare_two_models
 
         g1, g2 = self._make_normal_groups()
-        with pytest.warns(DeprecationWarning, match="test_method"):
-            compare_two_models(g1, g2, paired=False, ci_target="mean_difference")
+        with pytest.raises(ValueError, match="removed in v0.4.10"):
+            compare_two_models(g1, g2, paired=False, test_method="auto")
+        result = compare_two_models(g1, g2, paired=False)
+        assert "Mann-Whitney" in result.test_name
 
     def test_invalid_test_method_raises(self):
         """Invalid test_method value raises ValueError."""
@@ -1806,16 +1808,19 @@ class TestCompareTwoModelsCITarget:
         result = compare_two_models(g1, g2, paired=False, ci_target="mean_difference")
         assert result.confidence_interval is not None
 
-    def test_auto_emits_deprecation_warning(self):
-        """Default ci_target='auto' must emit a DeprecationWarning."""
+    def test_ci_target_auto_is_rejected(self):
+        """v0.4.10: ci_target='auto' was removed; default is 'median_difference'."""
         from ictonyx.analysis import compare_two_models
 
         rng = np.random.default_rng(0)
         g1 = pd.Series(rng.normal(0.9, 0.02, size=20))
         g2 = pd.Series(rng.normal(0.85, 0.02, size=20))
 
-        with pytest.warns(DeprecationWarning, match="ci_target"):
-            compare_two_models(g1, g2, paired=False)
+        with pytest.raises(ValueError, match="removed in v0.4.10"):
+            compare_two_models(g1, g2, paired=False, ci_target="auto")
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            compare_two_models(g1, g2, paired=False)  # no self-deprecation
 
     def test_invalid_ci_target_raises(self):
         """Invalid ci_target value must raise ValueError."""

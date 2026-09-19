@@ -375,13 +375,17 @@ except ImportError:
 
 # Feature availability summary
 def get_feature_availability() -> dict:
-    """Get a comprehensive summary of which optional features are available."""
-    try:
-        import joblib
+    """Which optional features are usable in this environment.
 
-        has_process_isolation = True
-    except ImportError:
-        has_process_isolation = False
+    Optional-dependency flags are computed from ``importlib.util.find_spec`` on
+    the package the feature actually needs, not from whether an ictonyx module
+    imported (v12 1.23: isolation was keyed on joblib, tuning was True without
+    Optuna, mlflow was True without mlflow).
+    """
+    from importlib.util import find_spec
+
+    def _has(mod: str) -> bool:
+        return find_spec(mod) is not None
 
     return {
         "tensorflow_support": TENSORFLOW_AVAILABLE,
@@ -391,10 +395,10 @@ def get_feature_availability() -> dict:
         "statistical_functions": _has_statistical_functions,
         "bootstrap_ci": _has_bootstrap,
         "plotting_functions": _has_plotting_functions,
-        "mlflow_logger": _has_mlflow_logger,
-        "hyperparameter_tuning": _has_hyperparameter_tuning,
-        "explainability": _has_explainability,
+        "mlflow_logger": _has("mlflow"),
+        "hyperparameter_tuning": _has("optuna"),
+        "explainability": _has("shap"),
         "data_handlers": _data_handlers_loaded,
         "memory_management": True,
-        "process_isolation": has_process_isolation,
+        "process_isolation": _has("cloudpickle"),
     }

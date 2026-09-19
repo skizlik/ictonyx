@@ -1322,7 +1322,7 @@ def plot_pairwise_comparison_matrix(
             significance_matrix[j, i] = 1
         if result.effect_size is not None:
             effect_size_matrix[i, j] = result.effect_size
-            effect_size_matrix[j, i] = result.effect_size
+            effect_size_matrix[j, i] = -result.effect_size  # signed: r_ji = -r_ij (v12 2.66)
 
     n_plots = 2 if not show_effect_sizes or not np.any(effect_size_matrix) else 3
     fig, axes = plt.subplots(1, n_plots, figsize=figsize)

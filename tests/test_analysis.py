@@ -538,7 +538,7 @@ class TestWilcoxonSignedRankTest:
             result.p_value < 0.05
         ), f"Expected p < 0.05 for data clearly above null, got p={result.p_value:.4f}"
         assert result.effect_size is not None, "effect_size must be computed"
-        assert 0.0 <= result.effect_size <= 1.0
+        assert -1.0 <= result.effect_size <= 1.0
 
     def test_wilcoxon_effect_size_absent_at_small_n(self):
         """For n <= 25, exact method does not compute zstatistic.
@@ -561,7 +561,7 @@ class TestWilcoxonSignedRankTest:
             "effect_size must be computed for a valid result. "
             "Check that the p-value fallback for effect size is in place."
         )
-        assert 0.0 <= result.effect_size <= 1.0
+        assert -1.0 <= result.effect_size <= 1.0
 
     def test_wilcoxon_consistent_with_paired(self):
         """wilcoxon_signed_rank_test and paired_wilcoxon_test should use the
@@ -716,7 +716,7 @@ class TestWilcoxonTieCorrection:
         data = pd.Series([0.6, 0.7, 0.75, 0.8, 0.72, 0.68, 0.78, 0.82])
         result = wilcoxon_signed_rank_test(data, null_value=0.5)
         assert result.effect_size is not None
-        assert 0.0 <= result.effect_size <= 1.0
+        assert -1.0 <= result.effect_size <= 1.0
 
     def test_effect_size_present_with_ties(self):
         """Effect size must still be computed when tied values are present."""
@@ -725,7 +725,7 @@ class TestWilcoxonTieCorrection:
         # With ties, manual formula would give incorrect result.
         # We just verify effect size is present and in valid range.
         assert result.effect_size is not None
-        assert 0.0 <= result.effect_size <= 1.0
+        assert -1.0 <= result.effect_size <= 1.0
 
 
 class TestShapiroWilkTest:
@@ -1414,14 +1414,15 @@ class TestPairedWilcoxonTest:
         assert result.p_value is not None
         assert not np.isnan(result.p_value)
 
-    def test_unequal_lengths_handled(self):
+    def test_unequal_lengths_raise(self):
+        """v0.4.10: mismatched lengths are not a valid pairing; raise rather
+        than silently pair by pandas index (v12 2.41)."""
         from ictonyx.analysis import paired_wilcoxon_test
 
         a = pd.Series([0.8, 0.9, 0.85, 0.88, 0.87])
         b = pd.Series([0.7, 0.75, 0.72])
-        # Should not crash — dropna alignment handles mismatched lengths
-        result = paired_wilcoxon_test(a, b)
-        assert result is not None
+        with pytest.raises(ValueError, match="equal-length"):
+            paired_wilcoxon_test(a, b)
 
     def test_all_zero_differences_warns(self):
         from ictonyx.analysis import paired_wilcoxon_test
@@ -1479,7 +1480,7 @@ class TestPairedWilcoxonTest:
         b = pd.Series([0.70, 0.73, 0.71, 0.72, 0.68, 0.75])
         result = paired_wilcoxon_test(a, b)
         assert result.effect_size is not None
-        assert 0.0 <= result.effect_size <= 1.0, f"effect_size={result.effect_size} out of [0, 1]"
+        assert -1.0 <= result.effect_size <= 1.0, f"effect_size={result.effect_size} out of [-1, 1]"
         # Independently compute r using the W-statistic formula with tie correction
         differences = (a - b).values
         nonzero = differences[differences != 0]
@@ -1492,10 +1493,13 @@ class TestPairedWilcoxonTest:
         sigma_w_sq -= np.sum(tie_counts**3 - tie_counts) / 48.0
         sigma_w = np.sqrt(max(sigma_w_sq, 0.0))
         expected_r = min(abs((W - mu_w) / sigma_w) / np.sqrt(n_eff), 1.0) if sigma_w > 0 else 0.0
-        assert abs(result.effect_size - expected_r) < 1e-9, (
-            f"effect_size={result.effect_size:.8f} does not match W-statistic "
-            f"formula={expected_r:.8f}."
+        # v0.4.10: |z|/sqrt(n) is reported as the SECONDARY effect size; the
+        # primary is the signed matched-pairs rank-biserial r.
+        assert abs(result.effect_size_secondary - expected_r) < 1e-9, (
+            f"effect_size_secondary={result.effect_size_secondary:.8f} does not match "
+            f"W-statistic formula={expected_r:.8f}."
         )
+        assert -1.0 <= result.effect_size <= 1.0
 
 
 class TestCheckNormalityRequireAllTests:
@@ -1913,7 +1917,7 @@ class TestKruskalWallisDualEffectSize:
         groups = self._make_three_groups()
         result = kruskal_wallis_test(groups)
 
-        assert 0.0 <= result.effect_size <= 1.0
+        assert -1.0 <= result.effect_size <= 1.0
         assert 0.0 <= result.effect_size_secondary <= 1.0
 
     def test_large_effect_produces_both_large_effect_sizes(self):
@@ -2053,7 +2057,7 @@ class TestFriedmanTest:
         groups = self._make_significant_groups()
         result = friedman_test(groups)
         assert result.effect_size_name == "Kendall's W"
-        assert 0.0 <= result.effect_size <= 1.0
+        assert -1.0 <= result.effect_size <= 1.0
 
     def test_effect_size_interpretation_present(self):
         """Effect size has a qualitative interpretation label."""

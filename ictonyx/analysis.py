@@ -747,6 +747,8 @@ def mann_whitney_test(
     """Mann-Whitney U test for comparing two independent groups.
 
     A non-parametric test that does not assume normal distributions.
+    ``random_state`` is accepted and ignored (the test is deterministic);
+    it is kept for backward compatibility and removed in v0.5.0.
     Includes sample-size validation, independence checks, rank-biserial
     effect size, and auto-generated interpretation text.
 
@@ -840,6 +842,43 @@ def mann_whitney_test(
     return result
 
 
+def _signed_rank_effect_sizes(d: np.ndarray) -> Tuple[float, float, float, float]:
+    """Effect sizes for a signed-rank test on differences ``d``.
+
+    Returns ``(r_mp, r_z, R_plus, R_minus)``.
+
+    ``r_mp`` -- matched-pairs rank-biserial correlation, Pratt-consistent: ranks are
+    assigned over |d| for ALL n pairs (zeros included), ``R+``/``R-`` sum the ranks of
+    positive/negative differences, and ``r_mp = (R+ - R-) / (n(n+1)/2)``. Signed, in
+    [-1, 1]; equals +/-1 only when every difference is non-zero and of one sign. Zero
+    differences pull it toward 0, which is what a zero difference is evidence of.
+
+    ``r_z`` -- Rosenthal's ``|z| / sqrt(n_nonzero)`` with tie-corrected variance over the
+    non-zero differences; unsigned; bounded below 1 in practice (v12 1.25).
+    """
+    from scipy.stats import rankdata
+
+    d = np.asarray(d, dtype=float)
+    n = len(d)
+    if n == 0 or not np.any(d != 0):
+        return float("nan"), float("nan"), 0.0, 0.0
+    ranks_all = rankdata(np.abs(d))
+    r_plus = float(ranks_all[d > 0].sum())
+    r_minus = float(ranks_all[d < 0].sum())
+    r_mp = (r_plus - r_minus) / (n * (n + 1) / 2.0)
+
+    nz = d[d != 0]
+    m = len(nz)
+    w_plus = float(rankdata(np.abs(nz))[nz > 0].sum())
+    mu = m * (m + 1) / 4.0
+    var = m * (m + 1) * (2 * m + 1) / 24.0
+    _, ties = np.unique(np.abs(nz), return_counts=True)
+    var -= np.sum(ties**3 - ties) / 48.0
+    sigma = np.sqrt(max(var, 0.0))
+    z = (w_plus - mu) / sigma if sigma > 0 else 0.0
+    return r_mp, min(abs(z) / np.sqrt(m), 1.0), r_plus, r_minus
+
+
 def _wilcoxon_signed_rank_impl(
     model_metrics: pd.Series,
     null_value: float = 0.5,
@@ -886,40 +925,20 @@ def _wilcoxon_signed_rank_impl(
         try:
             if len(non_zero_data) < 6:
                 raise ValueError("Insufficient non-zero differences for Wilcoxon test")
-            wilcoxon_result = wilcoxon(non_zero_data, alternative=alternative, method="auto")
+            # Pratt: zeros are ranked with the rest, then dropped from the statistic,
+            # so the test and the effect size describe the same sample (v12 3.8).
+            wilcoxon_result = wilcoxon(
+                centered_data, zero_method="pratt", alternative=alternative, method="auto"
+            )
             result.statistic = float(wilcoxon_result.statistic)
             result.p_value = float(wilcoxon_result.pvalue)
-            # Effect size r computed from the W statistic via the asymptotic
-            # normal approximation of the Wilcoxon distribution. Valid for both
-            # the exact and approximate p-value paths.
-            n = len(non_zero_data)
-            p_val = float(wilcoxon_result.pvalue)
-            if n > 0 and p_val <= 0:
-                # Perfect separation: all differences same sign. r = 1.0 by convention.
-                result.effect_size = 1.0
-                result.effect_size_name = "r (effect size)"
-                result.effect_size_interpretation = _interpret_wilcoxon_r(1.0)
-            elif n > 0:
-                # Derive r from the W statistic directly via the asymptotic formula.
-                # This is valid regardless of whether scipy used the exact or normal
-                # approximation internally. The norm.ppf(p/2) path is only correct
-                # when p came from the normal approximation; method='auto' uses the
-                # exact test for small n (the common case), making that conversion wrong.
-                W = float(wilcoxon_result.statistic)
-                mu_w = n * (n + 1) / 4.0
-                # Tie-corrected variance. The uncorrected formula
-                # overestimates sigma_w when tied absolute differences exist,
-                # systematically underestimating effect size r.
-                sigma_w_sq = n * (n + 1) * (2 * n + 1) / 24.0
-                abs_vals = np.abs(non_zero_data.values)
-                _, tie_counts = np.unique(abs_vals, return_counts=True)
-                sigma_w_sq -= np.sum(tie_counts**3 - tie_counts) / 48.0
-                sigma_w = np.sqrt(max(sigma_w_sq, 0.0))
-                z_approx = (W - mu_w) / sigma_w if sigma_w > 0 else 0.0
-                r = min(abs(z_approx) / np.sqrt(n), 1.0)
-                result.effect_size = r
-                result.effect_size_name = "r (effect size)"
-                result.effect_size_interpretation = _interpret_wilcoxon_r(r)
+            r_mp, r_z, _, _ = _signed_rank_effect_sizes(centered_data.to_numpy())
+            result.effect_size = r_mp
+            result.effect_size_name = "matched-pairs rank-biserial r"
+            result.effect_size_interpretation = _interpret_rank_biserial(abs(r_mp))
+            result.effect_size_secondary = r_z
+            result.effect_size_secondary_name = "r_z = |z|/sqrt(n_nonzero) (Rosenthal)"
+            result.effect_size_secondary_interpretation = _interpret_wilcoxon_r(r_z)
 
         except Exception as e:
             result.warnings.append(f"Test failed: {str(e)}")
@@ -1025,8 +1044,10 @@ def anova_test(model_metrics: Dict[str, pd.Series], alpha: float = 0.05) -> Stat
     for i, (name, group) in enumerate(zip(group_names, clean_groups)):
         is_normal, norm_details = check_normality(group, require_all_tests=True)
         normality_results[name] = norm_details
-        if is_normal is False:
+        if is_normal is not True:  # False, or None = untestable (v12 3.22)
             all_normal = False
+            if is_normal is None and isinstance(norm_details, dict):
+                norm_details["note"] = "untestable (n < 3)"
 
     result.assumptions_met["normality"] = all_normal
     result.assumption_details["normality"] = normality_results
@@ -1520,27 +1541,51 @@ def paired_wilcoxon_test(
     alpha: float = 0.05,
     random_state: Optional[int] = None,
     deterministic_tol: float = 1e-10,
+    alternative: str = "two-sided",
 ) -> StatisticalTestResult:
     """Paired Wilcoxon signed-rank test for two matched samples.
 
-    Tests whether the median difference between ``series_a`` and
-    ``series_b`` differs from zero. Appropriate when both models are
-    evaluated on the same random seeds.
+    Tests whether the paired differences ``series_a - series_b`` are
+    symmetric about zero. Pairs are matched by POSITION, not by pandas index.
+    Zero differences are handled by Pratt's method (ranked, then dropped from
+    the statistic), so the test, the effect size and any CI computed by the
+    caller all describe the same ``n_pairs`` sample.
+
+    Two effect sizes are reported:
+
+    * ``effect_size`` -- matched-pairs rank-biserial correlation r, signed
+      (positive means A tends to exceed B), in [-1, 1]. Interpreted with
+      Cohen's correlation conventions (0.1 / 0.3 / 0.5). This is the scale
+      ``required_runs_paired`` consumes.
+    * ``effect_size_secondary`` -- Rosenthal's |z| / sqrt(n_nonzero),
+      unsigned. Some authors divide by sqrt(2 * n_pairs) instead, which
+      shrinks r by sqrt(2).
+
+    ``statistic`` is scipy's Pratt statistic: min(R+, R-) when
+    ``alternative="two-sided"``, R+ otherwise.
 
     Args:
         series_a: Per-run metric values for model A.
-        series_b: Per-run metric values for model B.
+        series_b: Per-run metric values for model B (same length).
         alpha: Significance threshold. Default 0.05.
+        random_state: Accepted and ignored (this test is deterministic);
+            kept for backward compatibility, removed in v0.5.0.
+        deterministic_tol: Differences with SD below this are treated as
+            constant and the test returns an inconclusive result.
+        alternative: ``"two-sided"`` (default), ``"greater"`` or ``"less"``.
 
     Returns:
         StatisticalTestResult with paired-comparison conclusion text.
     """
     from scipy.stats import wilcoxon
 
-    aligned = pd.DataFrame({"a": series_a, "b": series_b}).dropna()
-    n = len(aligned)
-    differences = aligned["a"] - aligned["b"]
-    nonzero = differences[differences != 0]
+    a = np.asarray(pd.Series(series_a).to_numpy(), dtype=float).ravel()
+    b = np.asarray(pd.Series(series_b).to_numpy(), dtype=float).ravel()
+    if len(a) != len(b):
+        raise ValueError(f"Paired test needs equal-length samples; got {len(a)} and {len(b)}.")
+    keep = np.isfinite(a) & np.isfinite(b)
+    differences = pd.Series(a[keep] - b[keep])
+    n = int(keep.sum())
 
     if np.std(differences, ddof=1) < deterministic_tol:
         warnings.warn(
@@ -1572,54 +1617,41 @@ def paired_wilcoxon_test(
         statistic=float("nan"),
         p_value=float("nan"),
     )
-    result.sample_sizes = {"n_pairs": n, "non_zero_differences": len(nonzero)}
+    diffs = differences.to_numpy()
+    n_nonzero = int(np.sum(diffs != 0))
+    result.sample_sizes = {"n_pairs": n, "non_zero_differences": n_nonzero}
 
-    if len(nonzero) < 1:
+    if n_nonzero < 1:
         result.warnings.append("All paired differences are zero; test undefined.")
         return result
 
-    if len(nonzero) < 6:
+    if n_nonzero < 6:
         result.warnings.append(
-            f"Only {len(nonzero)} non-zero differences; Wilcoxon test results "
+            f"Only {n_nonzero} non-zero differences; Wilcoxon test results "
             "may be unreliable. Use num_runs >= 10 for reliable inference."
         )
 
     try:
-        stat, p = wilcoxon(nonzero, method="auto")
+        # Pratt zero handling: the test sees the same n_pairs sample that the
+        # effect size and the caller's CI are computed on (v12 1.22, 3.8).
+        stat, p = wilcoxon(diffs, zero_method="pratt", method="auto", alternative=alternative)
         result.statistic = float(stat)
         result.p_value = float(p)
 
-        # Effect size r = |Z| / sqrt(N), derived from the W statistic via the
-        # asymptotic normal approximation of the Wilcoxon distribution.
-        # Valid regardless of whether scipy used the exact or approximate path.
-        # The prior norm.ppf(p/2) approach is only correct when p came from the
-        # normal approximation; wilcoxon(method='auto') uses the exact distribution
-        # for small n (the common case), making that inversion invalid.
-        # Mirrors the formula used in wilcoxon_signed_rank_test().
-        n_eff = len(nonzero)
-        W = float(stat)
-        mu_w = n_eff * (n_eff + 1) / 4.0
-        # BUG-048-3: tie-corrected variance
-        sigma_w_sq = n_eff * (n_eff + 1) * (2 * n_eff + 1) / 24.0
-        abs_nonzero = np.abs(nonzero.values) if hasattr(nonzero, "values") else np.abs(nonzero)
-        _, tie_counts = np.unique(abs_nonzero, return_counts=True)
-        sigma_w_sq -= np.sum(tie_counts**3 - tie_counts) / 48.0
-        sigma_w = np.sqrt(max(sigma_w_sq, 0.0))
-        if sigma_w > 0:
-            z_approx = (W - mu_w) / sigma_w
-            r = min(abs(z_approx) / np.sqrt(n_eff), 1.0)
-        else:
-            r = 0.0
-            r = 0.0
-        result.effect_size = r
-        result.effect_size_name = "r (effect size)"
-        result.effect_size_interpretation = _interpret_wilcoxon_r(r)
+        r_mp, r_z, _, _ = _signed_rank_effect_sizes(diffs)
+        result.effect_size = r_mp
+        result.effect_size_name = "matched-pairs rank-biserial r"
+        result.effect_size_interpretation = _interpret_rank_biserial(abs(r_mp))
+        result.effect_size_secondary = r_z
+        result.effect_size_secondary_name = "r_z = |z|/sqrt(n_nonzero) (Rosenthal)"
+        result.effect_size_secondary_interpretation = _interpret_wilcoxon_r(r_z)
 
-        direction = "A" if float(differences.median()) > 0 else "B"
+        # Direction follows the sign of the effect size, not the median (v12 2.41).
+        direction = "A" if r_mp > 0 else "B"
         if p < alpha:
             result.conclusion = (
                 f"Model {direction} outperforms the other in paired comparison "
-                f"(W={stat:.3f}, p={p:.4f}, n={n} pairs)."
+                f"(W={stat:.3f}, p={p:.4f}, r={r_mp:+.3f}, n={n} pairs)."
             )
         else:
             result.conclusion = (
@@ -1747,7 +1779,18 @@ def compare_two_models(
     # Clean data
     if paired:
         # For paired data, remove rows where either value is missing
-        combined = pd.DataFrame({"model1": model1_results, "model2": model2_results})
+        if len(model1_results) != len(model2_results):
+            raise ValueError(
+                "paired=True requires equal-length samples; got "
+                f"{len(model1_results)} and {len(model2_results)}."
+            )
+        # Pair by POSITION, not pandas index (v12 2.41).
+        combined = pd.DataFrame(
+            {
+                "model1": np.asarray(model1_results, dtype=float),
+                "model2": np.asarray(model2_results, dtype=float),
+            }
+        )
         combined_clean = combined.dropna()
         clean1 = combined_clean["model1"]
         clean2 = combined_clean["model2"]
@@ -2782,13 +2825,16 @@ def required_runs_paired(
             not in (0, 1).
 
     Note:
-        The simulation models paired differences directly as
-        Normal(shift, 1.0) with no correlation term — equivalent to the
-        independent-pair case (ρ=0). Users whose paired runs have
-        substantial correlation (same data split, matched seeds, etc.)
-        will achieve the target power with fewer runs than this function
-        estimates. Modeling correlation is planned for a future release;
-        for now, this returns a conservative upper bound under ρ=0.
+        ``effect_size`` is the matched-pairs rank-biserial r reported by
+        ``paired_wilcoxon_test`` -- an effect size OF THE PAIRED DIFFERENCES.
+        Correlation between the two raw metric series is already absorbed on
+        that scale, so there is no rho term to set and this is not an upper
+        bound. The simulation maps r to a mean shift of the differences via
+        P((D_i + D_j)/2 > 0) = (r + 1) / 2.
+
+        The result is a Monte Carlo estimate: at ``n_sim=1000`` the standard
+        error of estimated power is about 0.013, so the returned n is
+        uncertain by 1-2 runs and may differ across ``random_state``.
 
         The simulation draws from unbounded standard normal differences.
         For metrics concentrated near 0 or 1 the normal approximation
@@ -2803,11 +2849,12 @@ def required_runs_paired(
 
     rng = np.random.default_rng(random_state)
 
-    # Convert matched-pairs rank-biserial r to P(D > 0) where D is the
-    # paired difference: r ≈ 2*P(D > 0) - 1, so P(D > 0) = (r + 1) / 2.
-    # For Normal(μ_d, σ_d=1) this gives μ_d = Φ⁻¹((r + 1) / 2).
+    # The signed-rank statistic counts positive Walsh averages (D_i + D_j)/2,
+    # so for Normal(mu, 1) differences the matched-pairs rank-biserial r
+    # converges to 2*Phi(sqrt(2)*mu) - 1. Hence mu = Phi^-1((r+1)/2) / sqrt(2).
+    # (v12 3.14: the previous mapping omitted the sqrt(2) and was the sign-test scale.)
     p_positive = (effect_size + 1.0) / 2.0
-    shift = stats.norm.ppf(p_positive)
+    shift = stats.norm.ppf(p_positive) / np.sqrt(2.0)
 
     for n in range(6, 201):  # Wilcoxon requires n >= 6 non-zero differences
         rejections = 0

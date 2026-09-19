@@ -819,25 +819,6 @@ def _get_model_name(obj: Any) -> str:
     return str(obj)
 
 
-def _warn_incomplete_studies(studies: Dict[str, VariabilityStudyResults], metric: str) -> None:
-    """Warn once per study whose runs failed or produced NaN (v12 2.67).
-
-    Excluding runs that diverged understates variance and overstates the mean;
-    the user should know the comparison is on fewer runs than requested.
-    """
-    for name, s in studies.items():
-        vals = np.asarray(s.get_metric_values(metric), dtype=float)
-        n_nan = int(np.isnan(vals).sum())
-        if s.failed_runs or n_nan:
-            warnings.warn(
-                f"{name}: {len(s.failed_runs)} of {s.n_requested} runs failed and {n_nan} "
-                f"produced a NaN {metric}; they are excluded from the comparison. "
-                "Excluding runs that diverged understates variance and overstates the mean.",
-                UserWarning,
-                stacklevel=3,
-            )
-
-
 def compare_results(
     results_a: "VariabilityStudyResults",
     results_b: "VariabilityStudyResults",

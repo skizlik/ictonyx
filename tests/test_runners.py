@@ -3019,17 +3019,6 @@ def test_set_run_seeds_is_single_owner():
     assert "set_run_seeds" in dir(__import__("ictonyx"))
 
 
-@pytest.mark.xfail(
-    strict=True, reason="tuner does not call set_run_seeds until C10 (v12 0.8, 2.44)"
-)
-def test_tuner_seeds_through_set_run_seeds():
-    import inspect
-
-    import ictonyx.tuning as t
-
-    assert "set_run_seeds(" in inspect.getsource(t)
-
-
 # ---------------------------------------------------------------------------
 # v0.4.10
 # ---------------------------------------------------------------------------

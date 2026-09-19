@@ -39,12 +39,68 @@ except ImportError:
 from .config import ModelConfig
 from .core import BaseModelWrapper
 from .data import DataHandler
+from .exceptions import ConfigurationError
+from .runners import build_fit_kwargs, set_run_seeds
+
+_MAXIMIZE_KEYWORDS = ("accuracy", "precision", "recall", "r2", "f1", "auc")
+_METRIC_CANDIDATES = ("val_accuracy", "val_r2", "val_loss")
 
 
-def _should_minimize(metric: str) -> bool:
-    """Return True if lower values are better for this metric."""
-    maximize_keywords = ("accuracy", "precision", "recall", "r2", "f1", "auc")
-    return not any(kw in metric.lower() for kw in maximize_keywords)
+def _resolve_direction(direction: str, metric: Optional[str]) -> str:
+    """Resolve 'auto' to 'minimize' or 'maximize' from the metric name.
+
+    One implementation for both backends (v12 7.39: the previous two copies
+    could drift). Raises if 'auto' is requested before the metric is known.
+    """
+    if direction != "auto":
+        return direction
+    if metric is None:
+        raise ValueError(
+            "direction='auto' cannot be resolved before the metric is known. "
+            "Pass metric= to HyperparameterTuner, or direction='minimize'/'maximize'."
+        )
+    return "maximize" if any(kw in metric.lower() for kw in _MAXIMIZE_KEYWORDS) else "minimize"
+
+
+def _resolve_metric(
+    requested: Optional[str], wrapper: BaseModelWrapper, eval_result: Dict[str, Any]
+) -> "tuple[str, float]":
+    """Return ``(metric_name, value)`` for one evaluation, or raise ConfigurationError.
+
+    Lookup for ``val_<x>``: ``eval_result[<x>]`` (a fresh evaluation on the
+    validation set) then ``history[val_<x>][-1]``. For any other name:
+    ``eval_result[name]`` then ``history[name][-1]``. With ``requested=None``
+    the first candidate in ``_METRIC_CANDIDATES`` that resolves is used.
+    Raising here surfaces a bad metric on the FIRST trial instead of after
+    every trial has been pruned (v12 1.31).
+    """
+    hist = wrapper.training_result.history if wrapper.training_result is not None else {}
+    names = [requested] if requested else list(_METRIC_CANDIDATES)
+    for name in names:
+        bare = name[4:] if name.startswith("val_") else None
+        if bare is not None and bare in eval_result:
+            return name, float(eval_result[bare])
+        if name in eval_result:
+            return name, float(eval_result[name])
+        if name in hist and hist[name]:
+            return name, float(hist[name][-1])
+    raise ConfigurationError(
+        f"HyperparameterTuner could not resolve metric {requested or _METRIC_CANDIDATES}. "
+        f"evaluate() produced {sorted(eval_result)}; training history has {sorted(hist)}. "
+        "Pass metric= as one of these names (val_<x> reads evaluate()'s <x>)."
+    )
+
+
+def _suggest_public(trial: "optuna.Trial", name: str, dist: Any) -> Any:
+    """Dispatch an Optuna distribution to the public suggest_* API (v12 2.31)."""
+    D = optuna.distributions
+    if isinstance(dist, D.FloatDistribution):
+        return trial.suggest_float(name, dist.low, dist.high, log=dist.log, step=dist.step)
+    if isinstance(dist, D.IntDistribution):
+        return trial.suggest_int(name, dist.low, dist.high, log=dist.log, step=dist.step)
+    if isinstance(dist, D.CategoricalDistribution):
+        return trial.suggest_categorical(name, dist.choices)
+    raise TypeError(f"Unsupported Optuna distribution for {name!r}: {type(dist).__name__}")
 
 
 class HyperparameterTuner:
@@ -65,9 +121,10 @@ class HyperparameterTuner:
         model_builder: Callable[[ModelConfig], BaseModelWrapper],
         data_handler: DataHandler,
         model_config: ModelConfig,
-        metric: str = "val_loss",
+        metric: Optional[str] = None,
         n_evals_per_trial: int = 3,
         stability_weight: float = 0.0,
+        seed: Optional[int] = None,
     ):
         """
         Args:
@@ -75,7 +132,15 @@ class HyperparameterTuner:
             data_handler: DataHandler for loading data. Data is loaded lazily
                 at tune() time, not during construction.
             model_config: Base ModelConfig updated with trial parameters.
-            metric: Metric to optimize. Default 'val_loss'.
+            metric: Metric to optimize. ``val_<x>`` reads ``evaluate()``'s
+                ``<x>`` on the validation set, falling back to the last
+                training-history value. ``None`` (default) resolves to the
+                first of ``val_accuracy``, ``val_r2``, ``val_loss`` the model
+                produces; with ``None`` you must pass ``direction=`` to
+                ``tune()``. An unresolvable metric raises on the first trial.
+            seed: Base seed for the Optuna sampler and for every evaluation's
+                ``run_seed``. Same seed, same trial sequence, same runs.
+                ``None`` draws a random seed (recorded in ``resolved_seed``).
             n_evals_per_trial: Independent training runs per trial. The trial
                 objective is the mean metric across these runs. Default 3.
                 Set to 1 to reproduce single-run (old) behavior.
@@ -85,7 +150,10 @@ class HyperparameterTuner:
                 Maximisation objectives (e.g. ``'val_accuracy'``):
                 ``objective = mean - stability_weight * std``.
                 In both cases, higher variance worsens the objective score.
-                Default 0.0 (variance not penalized).
+                Default 0.0 (variance not penalized). The SD is estimated from
+                ``n_evals_per_trial`` runs; at the default 3 its relative
+                standard error is about 50%, so the penalty is mostly noise
+                unless ``n_evals_per_trial`` is raised.
         """
         self.model_builder = model_builder
         self.data_handler = data_handler
@@ -93,6 +161,8 @@ class HyperparameterTuner:
         self.metric = metric
         self.n_evals_per_trial = n_evals_per_trial
         self.stability_weight = stability_weight
+        self.seed = seed
+        self.resolved_seed: Optional[int] = None
         if not 0.0 <= self.stability_weight <= 1.0:
             raise ValueError(
                 f"stability_weight must be between 0.0 and 1.0, "
@@ -106,15 +176,6 @@ class HyperparameterTuner:
         self._optuna_study = None
         # Legacy hyperopt trials object — populated only when using hyperopt backend
         self.trials = Trials() if HAS_HYPEROPT else None
-
-    def _resolve_direction(self, direction: str) -> str:
-        """Resolve 'auto' to 'minimize' or 'maximize' based on metric name."""
-        if direction != "auto":
-            return direction
-        maximize_keywords = ("accuracy", "precision", "recall", "r2", "f1", "auc")
-        return (
-            "maximize" if any(kw in self.metric.lower() for kw in maximize_keywords) else "minimize"
-        )
 
     def _ensure_data_loaded(self) -> None:
         """Load data lazily on first call. Validates val_data is present."""
@@ -175,48 +236,64 @@ class HyperparameterTuner:
 
         if not isinstance(param_space, dict) or not param_space:
             raise ValueError("param_space must be a non-empty dict of Optuna distributions.")
+        if max_evals <= 0:
+            raise ValueError(f"max_evals must be positive, got {max_evals}.")
 
         self._ensure_data_loaded()
-        resolved_direction = self._resolve_direction(direction)
+        resolved_direction = _resolve_direction(direction, self.metric)
+
+        # One base seed drives the sampler and every evaluation (v12 2.36, 0.8).
+        base_seed = (
+            self.seed if self.seed is not None else int(np.random.default_rng().integers(0, 2**31))
+        )
+        self.resolved_seed = base_seed
+        trial_seeds = [
+            int(ss.generate_state(1)[0])
+            for ss in np.random.SeedSequence(base_seed).spawn(max_evals)
+        ]
+        resolved: Dict[str, str] = {}
 
         def objective(trial: "optuna.Trial") -> float:
-            params = {}
-            for name, dist in param_space.items():
-                params[name] = trial._suggest(name, dist)
-
-            config = self.model_config.copy()
-            config.update(params)
-
-            seed_seq = np.random.SeedSequence(trial.number)
-            child_seeds = seed_seq.spawn(self.n_evals_per_trial)
+            params = {
+                name: _suggest_public(trial, name, dist) for name, dist in param_space.items()
+            }
+            config = self.model_config.copy(keep_frozen=False).update(params)
+            child_seeds = np.random.SeedSequence(trial_seeds[trial.number]).spawn(
+                self.n_evals_per_trial
+            )
             metric_values = []
 
             for i, child_seed in enumerate(child_seeds):
                 run_seed = int(child_seed.generate_state(1)[0])
-                run_config = config.copy()
-                run_config["run_seed"] = run_seed
+                run_config = config.copy().set("run_seed", run_seed)
+                wrapper = None
                 try:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore")
-                        wrapper = self.model_builder(run_config)
-                        wrapper.fit(
-                            train_data=self.train_data,
-                            validation_data=self.val_data,
-                            epochs=run_config.get("epochs", 10),
-                            verbose=0,
+                    set_run_seeds(run_seed)  # global RNGs, same owner as the runner
+                    wrapper = self.model_builder(run_config)
+                    wrapper.fit(  # the fit() contract: run_seed, batch_size, etc. (0.8)
+                        **build_fit_kwargs(
+                            run_config,
+                            run_config.get("epochs", 10),
+                            run_seed,
+                            wrapper,
+                            self.train_data,
+                            self.val_data,
                         )
+                    )
                     result = wrapper.evaluate(data=self.val_data)
-                    if self.metric in result:
-                        metric_values.append(float(result[self.metric]))
-                    elif (
-                        wrapper.training_result is not None
-                        and self.metric in wrapper.training_result.history
-                    ):
-                        vals = wrapper.training_result.history[self.metric]
-                        if vals:
-                            metric_values.append(float(vals[-1]))
+                    name, value = _resolve_metric(self.metric, wrapper, result)
+                    resolved.setdefault("metric", name)
+                    metric_values.append(value)
+                except ConfigurationError:
+                    raise  # a bad metric fails the first trial, not the last (1.31)
                 except Exception as e:
                     logger.warning(f"Trial {trial.number} run {i + 1} failed: {e}")
+                finally:
+                    if wrapper is not None:  # v12 2.37: release the model every time
+                        try:
+                            wrapper.cleanup()
+                        except Exception:
+                            pass
 
             if not metric_values:
                 raise optuna.TrialPruned()
@@ -232,8 +309,10 @@ class HyperparameterTuner:
 
             return mean_val
 
-        study = optuna.create_study(direction=resolved_direction)
+        sampler = optuna.samplers.TPESampler(seed=base_seed)
+        study = optuna.create_study(direction=resolved_direction, sampler=sampler)
         study.optimize(objective, n_trials=max_evals, timeout=timeout, n_jobs=n_jobs)
+        self.metric = self.metric or resolved.get("metric")
 
         self._optuna_study = study
         best = study.best_params
@@ -271,47 +350,50 @@ class HyperparameterTuner:
             assert self.trials is not None
             trial_num = len(self.trials.trials) + 1
             logger.info(f"\nTrial {trial_num}/{max_evals}: {params}")
+            wrapped_model = None
             try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    if HAS_TENSORFLOW:
-                        tf.keras.backend.clear_session()
-                    trial_config = ModelConfig(self.model_config.params.copy())
-                    trial_config.update(params)
-                    wrapped_model = self.model_builder(trial_config)
-                    _start = time.time()
-                    wrapped_model.fit(
-                        train_data=self.train_data,
-                        validation_data=self.val_data,
-                        epochs=trial_config.get("epochs", 10),
-                        verbose=0,
+                if HAS_TENSORFLOW:
+                    tf.keras.backend.clear_session()
+                base_seed = self.seed if self.seed is not None else 0
+                run_seed = int(np.random.SeedSequence([base_seed, trial_num]).generate_state(1)[0])
+                trial_config = self.model_config.copy(keep_frozen=False).update(params)
+                trial_config.set("run_seed", run_seed)
+                set_run_seeds(run_seed)
+                wrapped_model = self.model_builder(trial_config)
+                _start = time.time()
+                wrapped_model.fit(
+                    **build_fit_kwargs(
+                        trial_config,
+                        trial_config.get("epochs", 10),
+                        run_seed,
+                        wrapped_model,
+                        self.train_data,
+                        self.val_data,
                     )
-                    _elapsed = time.time() - _start
-                    training_result = wrapped_model.training_result
-                    if training_result is None or not training_result.history:
-                        raise ValueError("Model training did not produce a TrainingResult.")
-                    history_dict = training_result.history
-                    if self.metric not in history_dict:
-                        raise ValueError(
-                            f"Metric '{self.metric}' not found. "
-                            f"Available: {list(history_dict.keys())}"
-                        )
-                    metric_values = history_dict[self.metric]
-                    final_value = metric_values[-1]
-                    loss = (
-                        -float(final_value)
-                        if not _should_minimize(self.metric)
-                        else float(final_value)
-                    )
-                    return {
-                        "loss": loss,
-                        "status": STATUS_OK,
-                        "eval_time": _elapsed,
-                        "final_metric": final_value,
-                    }
+                )
+                _elapsed = time.time() - _start
+                eval_result = wrapped_model.evaluate(data=self.val_data)
+                name, final_value = _resolve_metric(self.metric, wrapped_model, eval_result)
+                self.metric = self.metric or name
+                direction = _resolve_direction("auto", self.metric)
+                loss = -float(final_value) if direction == "maximize" else float(final_value)
+                return {
+                    "loss": loss,
+                    "status": STATUS_OK,
+                    "eval_time": _elapsed,
+                    "final_metric": final_value,
+                }
+            except ConfigurationError:
+                raise
             except Exception as e:
                 logger.warning(f"  Trial failed: {e}")
                 return {"loss": float("inf"), "status": STATUS_OK, "error": str(e)}
+            finally:
+                if wrapped_model is not None:
+                    try:
+                        wrapped_model.cleanup()
+                    except Exception:
+                        pass
 
         try:
             best_params = fmin(
@@ -355,7 +437,9 @@ class HyperparameterTuner:
             # Legacy hyperopt path
             best_trial = self.trials.best_trial
             best_loss = best_trial["result"]["loss"]
-            best_metric_value = -best_loss if not _should_minimize(self.metric) else best_loss
+            best_metric_value = (
+                -best_loss if _resolve_direction("auto", self.metric) == "maximize" else best_loss
+            )
             return {
                 "best_params": self.trials.argmin,
                 "best_metric_value": best_metric_value,

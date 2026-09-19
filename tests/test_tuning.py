@@ -1,23 +1,27 @@
-"""Tests for HyperparameterTuner."""
+"""Tests for HyperparameterTuner.
+
+v0.4.10: this file was gated on shap (unrelated) and referenced a class that
+never existed, so it had never run on any machine (v12 2.73). It now requires
+optuna (the supported backend); hyperopt-specific tests skip without hyperopt.
+"""
 
 import numpy as np
 import pytest
 
 from ictonyx.config import ModelConfig
 from ictonyx.core import BaseModelWrapper, TrainingResult
+from ictonyx.tuning import HyperparameterTuner, _resolve_direction
+
+pytest.importorskip("optuna", reason="optuna not installed")
 
 try:
-    import hyperopt
-
-    from ictonyx.tuning import HyperparameterTuner, create_search_space
+    import hyperopt  # noqa: F401
 
     HAS_HYPEROPT = True
 except ImportError:
     HAS_HYPEROPT = False
 
-pytest.importorskip("shap", reason="shap not installed")
-
-pytestmark = pytest.mark.skipif(not HAS_HYPEROPT, reason="hyperopt not installed")
+needs_hyperopt = pytest.mark.skipif(not HAS_HYPEROPT, reason="hyperopt not installed")
 
 
 class SimpleRegressionWrapper(BaseModelWrapper):
@@ -115,29 +119,39 @@ def test_tuner_rejects_empty_param_space(regression_handler):
 
 
 def test_tuner_rejects_invalid_max_evals(regression_handler):
-    from hyperopt import hp
+    import optuna
 
     config = ModelConfig({"learning_rate": 0.01})
-    tuner = HyperparameterTuner(lambda c: SimpleRegressionWrapper(c), regression_handler, config)
+    tuner = HyperparameterTuner(
+        lambda c: SimpleRegressionWrapper(c), regression_handler, config, metric="val_r2"
+    )
     with pytest.raises(ValueError, match="max_evals"):
-        tuner.tune({"learning_rate": hp.uniform("lr", 0.001, 0.1)}, max_evals=0)
+        tuner.tune(
+            {"learning_rate": optuna.distributions.FloatDistribution(0.001, 0.1)}, max_evals=0
+        )
 
 
+@needs_hyperopt
 def test_r2_is_negated_for_minimization(regression_handler):
-    """REGRESSION TEST for bug fix: r2 must be negated so tuner maximises it."""
+    """Hyperopt backend: r2 must be negated so the tuner maximises it."""
+    from unittest.mock import patch
+
     from hyperopt import hp
 
     config = ModelConfig({"learning_rate": 0.01, "epochs": 1})
     tuner = HyperparameterTuner(
         lambda c: SimpleRegressionWrapper(c), regression_handler, config, metric="val_r2"
     )
-    result = tuner.tune({"learning_rate": hp.uniform("lr", 0.001, 0.5)}, max_evals=5)
-    # best val_r2 should be positive — tuner found a good lr, not the worst one
+    with patch("ictonyx.tuning.HAS_OPTUNA", False), pytest.warns(DeprecationWarning):
+        result = tuner.tune({"learning_rate": hp.uniform("lr", 0.001, 0.5)}, max_evals=5)
     assert result["best_metric_value"] > 0
 
 
-def test_accuracy_best_value_positive(regression_handler):
-    """Accuracy is maximize-better; returned best_metric_value must be positive."""
+@needs_hyperopt
+def test_accuracy_best_value_positive():
+    """Hyperopt backend: accuracy is maximize-better; best_metric_value positive."""
+    from unittest.mock import patch
+
     from hyperopt import hp
 
     from ictonyx.data import ArraysDataHandler
@@ -149,42 +163,30 @@ def test_accuracy_best_value_positive(regression_handler):
     tuner = HyperparameterTuner(
         lambda c: SimpleClassificationWrapper(c), handler, config, metric="val_accuracy"
     )
-    result = tuner.tune({"learning_rate": hp.uniform("lr", 0.01, 0.2)}, max_evals=3)
+    with patch("ictonyx.tuning.HAS_OPTUNA", False), pytest.warns(DeprecationWarning):
+        result = tuner.tune({"learning_rate": hp.uniform("lr", 0.01, 0.2)}, max_evals=3)
     assert result["best_metric_value"] > 0
 
 
-class TestShouldMinimize:
-    """_should_minimize() does not require hyperopt."""
+class TestResolveDirection:
+    """_resolve_direction() replaces the two former copies of the metric heuristic."""
 
-    def test_loss_should_minimize(self):
-        from ictonyx.tuning import _should_minimize
+    @pytest.mark.parametrize("metric", ["val_loss", "train_loss", "loss", "mse", "mae"])
+    def test_minimize_metrics(self, metric):
+        assert _resolve_direction("auto", metric) == "minimize"
 
-        assert _should_minimize("val_loss") is True
-        assert _should_minimize("train_loss") is True
-        assert _should_minimize("loss") is True
+    @pytest.mark.parametrize(
+        "metric", ["val_accuracy", "accuracy", "r2", "val_r2", "f1", "val_f1", "auc"]
+    )
+    def test_maximize_metrics(self, metric):
+        assert _resolve_direction("auto", metric) == "maximize"
 
-    def test_accuracy_should_not_minimize(self):
-        from ictonyx.tuning import _should_minimize
+    def test_explicit_direction_wins(self):
+        assert _resolve_direction("minimize", "val_accuracy") == "minimize"
 
-        assert _should_minimize("val_accuracy") is False
-        assert _should_minimize("accuracy") is False
-
-    def test_r2_should_not_minimize(self):
-        from ictonyx.tuning import _should_minimize
-
-        assert _should_minimize("r2") is False
-        assert _should_minimize("val_r2") is False
-
-    def test_f1_should_not_minimize(self):
-        from ictonyx.tuning import _should_minimize
-
-        assert _should_minimize("f1") is False
-        assert _should_minimize("val_f1") is False
-
-    def test_auc_should_not_minimize(self):
-        from ictonyx.tuning import _should_minimize
-
-        assert _should_minimize("auc") is False
+    def test_auto_without_metric_raises(self):
+        with pytest.raises(ValueError, match="direction"):
+            _resolve_direction("auto", None)
 
 
 class TestTuningImportErrors:
@@ -193,9 +195,7 @@ class TestTuningImportErrors:
     def test_hyperparameter_tuner_raises_without_hyperopt(self):
         from unittest.mock import MagicMock, patch
 
-        from ictonyx.config import ModelConfig
         from ictonyx.data import ArraysDataHandler
-        from ictonyx.tuning import HyperparameterTuner
 
         X = np.zeros((20, 2))
         y = np.zeros(20)
@@ -213,24 +213,20 @@ class TestTuningImportErrors:
     def test_create_search_space_raises_without_hyperopt(self):
         from unittest.mock import patch
 
-        with patch("ictonyx.tuning.HAS_HYPEROPT", False):
-            from ictonyx.tuning import create_search_space
+        from ictonyx.tuning import create_search_space
 
+        with patch("ictonyx.tuning.HAS_HYPEROPT", False):
             with pytest.raises(ImportError, match="Hyperopt"):
                 create_search_space()
 
 
 class TestStabilityWeightValidation:
-    """Stability_weight outside [0, 1] must raise ValueError."""
+    """stability_weight outside [0, 1] must raise ValueError."""
 
     def _make_tuner(self, stability_weight):
-        pytest.importorskip("optuna")
         from unittest.mock import MagicMock
 
-        from ictonyx.config import ModelConfig
-        from ictonyx.tuning import VariabilityAwareTuner  # adjust to actual class name
-
-        return VariabilityAwareTuner(
+        return HyperparameterTuner(
             model_builder=lambda cfg: MagicMock(),
             data_handler=MagicMock(),
             model_config=ModelConfig({}),
@@ -238,13 +234,13 @@ class TestStabilityWeightValidation:
         )
 
     def test_zero_is_valid(self):
-        self._make_tuner(0.0)  # must not raise
+        self._make_tuner(0.0)
 
     def test_one_is_valid(self):
-        self._make_tuner(1.0)  # must not raise
+        self._make_tuner(1.0)
 
     def test_midpoint_is_valid(self):
-        self._make_tuner(0.5)  # must not raise
+        self._make_tuner(0.5)
 
     def test_negative_raises(self):
         with pytest.raises(ValueError, match="stability_weight"):

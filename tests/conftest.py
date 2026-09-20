@@ -115,6 +115,8 @@ def _reset_warn_once_registries():
 
     r._WARNED_FIT_KWARGS.clear()
     a._CloneBuilder._warned = False
+    a._WARNED_DROPPED_KWARGS.clear()
     yield
     r._WARNED_FIT_KWARGS.clear()
     a._CloneBuilder._warned = False
+    a._WARNED_DROPPED_KWARGS.clear()

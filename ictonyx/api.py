@@ -669,39 +669,66 @@ def _build_from_class(conf: ModelConfig, _model_class: Type[Any]) -> BaseModelWr
     # to fit() by runners.build_fit_kwargs, the single owner of that contract.
     _RUNNER_ONLY_KWARGS = {"epochs", "batch_size", "verbose", "validation_data"} | FIT_KWARG_KEYS
 
-    construction_kwargs = {
+    candidate = {
         k: v
         for k, v in conf.items()
-        if k != "run_seed"
-        and k != "random_state"
-        and k not in _RUNNER_ONLY_KWARGS
-        and (accepts_var_keyword or k in accepted)
+        if k != "run_seed" and k != "random_state" and k not in _RUNNER_ONLY_KWARGS
     }
+    construction_kwargs = {
+        k: v for k, v in candidate.items() if accepts_var_keyword or k in accepted
+    }
+    dropped = sorted(set(candidate) - set(construction_kwargs))
+    if dropped:
+        _warn_dropped_construction_kwargs(_model_class, dropped)
 
-    if ("random_state" in accepted or accepts_var_keyword) and not issubclass(
+    passes_random_state = ("random_state" in accepted or accepts_var_keyword) and not issubclass(
         _model_class, BaseModelWrapper
-    ):
-        try:
+    )
+    try:
+        if passes_random_state:
             return _ensure_wrapper(
-                _model_class(
-                    random_state=conf.get("run_seed"),
-                    **construction_kwargs,
-                )
+                _model_class(random_state=conf.get("run_seed"), **construction_kwargs)
             )
-        except TypeError as e:
-            if "random_state" in str(e) or "unexpected keyword" in str(e):
-                warnings.warn(
-                    f"Could not pass random_state to {_model_class.__name__}. "
-                    f"Reproducibility not guaranteed. Original error: {e}",
-                    UserWarning,
-                    stacklevel=3,
-                )
-                return _ensure_wrapper(_model_class(**construction_kwargs))
-            raise ValueError(
-                f"Failed to construct {_model_class.__name__}: {e}. "
-                "Check that the class accepts the arguments in your ModelConfig."
-            ) from e
-    return _ensure_wrapper(_model_class(**construction_kwargs))
+        return _ensure_wrapper(_model_class(**construction_kwargs))
+    except TypeError as e:
+        # v12 2.53: only a random_state complaint is a random_state problem. Any
+        # other TypeError is a configuration error and is reported as one.
+        if passes_random_state and "random_state" in str(e):
+            try:
+                built = _model_class(**construction_kwargs)  # retry without the seed
+            except TypeError as e2:
+                raise ConfigurationError(
+                    f"Failed to construct {_model_class.__name__}: {e2}. "
+                    "Check the keys in your ModelConfig against the constructor signature."
+                ) from e2
+            warnings.warn(
+                f"Could not pass random_state to {_model_class.__name__}. "
+                f"Reproducibility not guaranteed. Original error: {e}",
+                UserWarning,
+                stacklevel=3,
+            )
+            return _ensure_wrapper(built)
+        raise ConfigurationError(
+            f"Failed to construct {_model_class.__name__}: {e}. "
+            "Check the keys in your ModelConfig against the constructor signature."
+        ) from e
+
+
+_WARNED_DROPPED_KWARGS: set = set()
+
+
+def _warn_dropped_construction_kwargs(model_class: Type[Any], dropped: List[str]) -> None:
+    """Warn once per (class, keys) that config keys the constructor cannot take were dropped."""
+    key = (model_class.__name__, tuple(dropped))
+    if key in _WARNED_DROPPED_KWARGS:
+        return
+    _WARNED_DROPPED_KWARGS.add(key)
+    warnings.warn(
+        f"{model_class.__name__} does not accept {dropped}; these ModelConfig keys were not "
+        "passed to its constructor. Check for typos. (This becomes an error in v0.5.0.)",
+        UserWarning,
+        stacklevel=4,
+    )
 
 
 def _get_model_builder(model: Any) -> Callable:
@@ -723,20 +750,38 @@ def _get_model_builder(model: Any) -> Callable:
             a ``fit`` method.
     """
 
-    # If it's already a function, trust it.
-    if callable(model) and not isinstance(model, type):
-        return _EnsureWrapperBuilder(model)
-
-    # If it's a class (like RandomForestClassifier), instantiate it per run.
+    # 1. A class (RandomForestClassifier, a wrapper subclass): instantiate per run.
     if isinstance(model, type):
-
         return _ClassBuilder(model)
 
-    # If it's an instance, we need to clone it per run for independence.
+    # 2. Framework model INSTANCES and wrapper instances, BEFORE the generic
+    #    callable test: Keras models and nn.Modules are callable, so the old
+    #    order treated them as builder functions and called forward(ModelConfig)
+    #    (v12 1.32). _build_instance_cloner has the right message for them.
+    if _is_framework_instance(model) or isinstance(model, BaseModelWrapper):
+        return _build_instance_cloner(model)
+
+    # 3. Any other callable is a builder function: trust it.
+    if callable(model):
+        return _EnsureWrapperBuilder(model)
+
+    # 4. Anything else with fit() is an estimator instance to clone per run.
     if hasattr(model, "fit"):
         return _build_instance_cloner(model)
 
     raise ValueError(f"Invalid model input: {model}")
+
+
+def _is_framework_instance(obj: Any) -> bool:
+    """True for a Keras Model or torch nn.Module instance (both are callable)."""
+    if PYTORCH_AVAILABLE and _torch_nn is not None and isinstance(obj, _torch_nn.Module):
+        return True
+    if TENSORFLOW_AVAILABLE:
+        import tensorflow as tf
+
+        if isinstance(obj, tf.keras.Model):
+            return True
+    return False
 
 
 def _build_instance_cloner(model: Any) -> Callable:
@@ -750,6 +795,13 @@ def _build_instance_cloner(model: Any) -> Callable:
     For Keras and PyTorch instances, cloning is not reliably possible, so
     we raise an error guiding the user to pass a class or builder function.
     """
+    if isinstance(model, BaseModelWrapper):
+        raise ValueError(
+            f"{type(model).__name__} is a wrapper INSTANCE. Pass a builder function that "
+            "returns a fresh wrapper per run (def build(config): return "
+            f"{type(model).__name__}(...)), so every run starts from an untrained model."
+        )
+
     # sklearn: clone() creates an unfitted copy with same hyperparameters
     if hasattr(model, "get_params"):
         try:

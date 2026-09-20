@@ -36,7 +36,7 @@ from scipy import stats as _scipy_stats
 from .config import ModelConfig
 from .core import BaseModelWrapper, ScikitLearnModelWrapper
 from .data import DataHandler
-from .exceptions import ExperimentError
+from .exceptions import ConfigurationError, ExperimentError
 from .loggers import BaseLogger
 from .memory import get_memory_info, get_memory_manager
 
@@ -629,6 +629,9 @@ class ExperimentRunner:
             self._run_log(f" - Run {run_id}: Completed successfully")
 
             return history_df
+
+        except ConfigurationError:
+            raise  # a misconfiguration is not a failed run
 
         except Exception as e:
             self._run_log(f" - Run {run_id}: Failed with error: {e}", level="error")

@@ -485,6 +485,11 @@ def bootstrap_mean_difference_ci(
 ) -> BootstrapCIResult:
     """Bootstrap CI for the difference in means (group1 - group2).
 
+    Coverage note: at n <= 10-20 per group, ``bca`` and ``percentile``
+    intervals on a mean difference cover about 89-93% for a nominal 95%
+    (simulated on normal and exponential data); a Welch-t interval covers
+    about 95%. A ``method="t"`` option is planned for 0.5.0.
+
     Resamples each group independently, computes the difference in means
     for each bootstrap replicate, and constructs a CI on that distribution.
 

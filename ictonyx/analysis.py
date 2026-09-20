@@ -1842,10 +1842,10 @@ def compare_two_models(
     if HAS_BOOTSTRAP and not np.isnan(result.p_value):
         try:
             if paired:
-                # Paired comparison: always paired-difference bootstrap.
-                # ci_target doesn't apply to the paired branch (both mean
-                # and median differences for paired data would collapse
-                # to the same conceptual target).
+                # Paired comparison: paired-difference bootstrap on the MEAN
+                # difference. Note this differs from the Wilcoxon test's location
+                # target (the pseudo-median of differences) under skew; a
+                # Walsh-average CI aligns them and is planned for 0.5.0.
                 ci_result = bootstrap_paired_difference_ci(
                     clean1,
                     clean2,
@@ -1996,9 +1996,12 @@ def compare_multiple_models(
     """
     Compares three or more models using a robust, two-step procedure.
 
-    This function is the standard way to compare multiple groups in a
-    statistically sound manner, protecting against inflating the error rate
-    by running too many tests.
+    This function is the standard way to compare multiple groups. Holm
+    correction controls the family-wise error rate of the pairwise tests;
+    the omnibus gate is an additional, conservative convention that can
+    suppress a pair Holm would have declared significant. For matched
+    runs (shared seeds) a Friedman test with paired post-hoc tests is the
+    better design and is planned for 0.5.0.
 
     The procedure is:
     1.  **Omnibus Test:** First, it runs a single "overall" test
@@ -2302,6 +2305,12 @@ def check_convergence(
     slope_threshold: float = 1e-4,
 ) -> bool:
     """Check whether a metric series has converged using a linear slope test.
+
+    Treat the result as descriptive. The p > 0.10 criterion accepts the
+    null: on a steadily declining noisy series it declares convergence in
+    the majority of cases (about 80% at slope -0.002/epoch, SD 0.02, with
+    the default 10-point window). A criterion that tests for a slope inside
+    an equivalence margin is planned for 0.5.0.
 
     Fits a linear regression to the most recent ``window_size`` values.
     Convergence is declared when the absolute slope is below

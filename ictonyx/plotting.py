@@ -2297,9 +2297,11 @@ def plot_sequential_ci(
     with the running mean. The narrowing band illustrates how quickly
     additional runs reduce uncertainty and where returns diminish.
 
-    Useful for the "how many runs do I need?" methodology argument.
-    Look for the point where the band stops meaningfully narrowing —
-    additional runs past that point buy little precision.
+    Useful for the "how many runs do I need?" methodology argument. Reading
+    off "the point where the band stops narrowing" is an informal stopping
+    rule with no error control: the interval at a chosen n is descriptive,
+    not a 95% interval for a study stopped by that rule. Use
+    ``required_runs_paired`` for a planned sample size.
 
     Args:
         results: A completed :class:`VariabilityStudyResults`.

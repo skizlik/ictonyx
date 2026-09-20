@@ -379,6 +379,21 @@ class ExperimentRunner:
                 "with non-picklable data types like tf.data.Dataset"
             )
 
+    def _split_sizes(self) -> Dict[str, int]:
+        """Sample counts of the loaded splits, where they can be read cheaply."""
+        out: Dict[str, int] = {}
+        for name, data in (
+            ("train", self.train_data),
+            ("val", self.val_data),
+            ("test", self.test_data),
+        ):
+            try:
+                if isinstance(data, tuple) and len(data) == 2 and hasattr(data[0], "__len__"):
+                    out[name] = int(len(data[0]))
+            except Exception:
+                pass
+        return out
+
     @staticmethod
     def _set_seeds(seed: int):
         """Alias for :func:`set_run_seeds`; kept for subclasses and existing tests."""
@@ -1017,6 +1032,7 @@ class ExperimentRunner:
             run_seeds=run_seeds,
             failed_runs=sorted(self.failed_runs),
             metric_run_ids={k: list(v) for k, v in self.metric_run_ids.items()},
+            split_sizes=self._split_sizes(),
             _run_ids=[
                 int(df["run_num"].iloc[0]) if "run_num" in df.columns and len(df) else i + 1
                 for i, df in enumerate(self.all_runs_metrics)
@@ -1171,6 +1187,10 @@ class VariabilityStudyResults:
     run_seeds: List[int] = field(default_factory=list)
     failed_runs: List[int] = field(default_factory=list)
     metric_run_ids: Dict[str, List[int]] = field(default_factory=dict)
+    split_sizes: Dict[str, int] = field(default_factory=dict)
+    """Number of samples in the train / val / test splits, where known. Final
+    metrics are the LAST-epoch values of each run (not best-epoch), so the
+    reported spread includes any late-epoch drift."""
     _run_ids: Optional[List[int]] = field(default=None, repr=False)
     """Per metric, the run id each entry of ``final_metrics[metric]`` came from.
 
@@ -1428,6 +1448,15 @@ class VariabilityStudyResults:
             f"Successful runs: {self.n_runs}",
             f"Seed: {self.seed}",
         ]
+        if self.split_sizes:
+            parts = [f"{k} {v}" for k, v in self.split_sizes.items() if v is not None]
+            lines.append("Data split: " + " / ".join(parts))
+            n_eval = self.split_sizes.get("val") or self.split_sizes.get("test")
+            if n_eval:
+                lines.append(
+                    f"Metric granularity: one evaluation sample = {100.0 / n_eval:.1f} pp "
+                    f"(n_eval = {n_eval}); no number of runs resolves finer than this."
+                )
 
         if self.failed_runs:
             lines.insert(3, f"Failed runs: {self.failed_runs}")
@@ -1477,7 +1506,9 @@ class VariabilityStudyResults:
         """Compute per-epoch mean, SD, SE, and confidence band across all runs.
 
         Aligns all runs at each epoch position. Runs with fewer epochs
-        than the maximum are excluded from epochs beyond their last.
+        than the maximum are excluded from epochs beyond their last. The band
+        is pointwise (one interval per epoch), not a simultaneous band over
+        the whole curve.
 
         Args:
             metric: Column name in per-run DataFrames, e.g.
@@ -1606,10 +1637,14 @@ class VariabilityStudyResults:
         alpha: float = 0.05,
         alternative: str = "two-sided",
     ) -> "StatisticalTestResult":
-        """Test whether a metric's distribution differs from a null value.
+        """Test whether a metric's seed-distribution differs from a null value.
 
         Applies a one-sample Wilcoxon signed-rank test to the per-run final
-        values of ``metric``.
+        values of ``metric``. Every run scores the same fixed validation/test
+        set, so this tests the effect of training randomness on this split;
+        the sampling error of the evaluation set itself is not propagated and
+        the effective sample size for a claim about new data is bounded by
+        the evaluation set's size, not by the number of runs.
 
         Args:
             null_value: The null hypothesis value. Use 0.5 for chance-level
@@ -1668,7 +1703,13 @@ class VariabilityStudyResults:
         alpha: float = 0.05,
         chance_level: float = 0.5,
     ) -> "StatisticalTestResult":
-        """Test whether a model performs significantly above chance.
+        """Test whether a model's seed-distribution of a metric is above a chance level.
+
+        All runs share one fixed evaluation set, so this is a statement about
+        training randomness on this split. A model at chance on the population
+        but above chance on a lucky small test set passes at any number of
+        runs; use a binomial test on the evaluation set to assess the model
+        itself.
 
         One-sided variant of :meth:`test_against_null` that tests the
         specific hypothesis "this model's median performance is greater
@@ -1690,8 +1731,10 @@ class VariabilityStudyResults:
 
         Returns:
             A StatisticalTestResult with ``is_significant``, ``p_value``,
-            ``statistic``, and ``conclusion``. The test is one-sided, so
-            ``p_value`` reflects P(median <= chance_level | observed data).
+            ``statistic``, and ``conclusion``. The test is one-sided:
+            ``p_value`` is the probability, under the null hypothesis that
+            the median equals ``chance_level``, of a signed-rank statistic at
+            least as favourable to the alternative as the one observed.
 
         Note:
             Recommended sample size: ``num_runs >= 20`` for reliable

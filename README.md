@@ -161,7 +161,7 @@ val_loss:
   Max:              0.7476
 ```
 
-On a 178-sample dataset, the same architecture produces models with validation accuracy ranging from 72% to 100% depending solely on the random seed.  Ictonyx also provides for plotting of training histories:
+On a 178-sample dataset, the same architecture produces models with validation accuracy ranging from 72% to 100% depending solely on the random seed. Part of that spread is arithmetic: with the default splits the validation set has a few dozen examples, so one example is several percentage points, and no number of runs resolves a metric more finely than one evaluation sample.  Ictonyx also provides for plotting of training histories:
 
 ```python
 ix.plot_variability_summary(results=results, metric='accuracy')
@@ -214,7 +214,7 @@ Significant pairs: MLPClassifier_vs_RandomForestClassifier
 
 Each model receives the same seed per run: each MLP run is directly paired with the corresponding Random Forest run.  This allows us to use the non-parametric paired Wilcoxon signed-rank test.
 
-Here, MLP outperformed Random Forest with an effect size of r=0.815 (p=0.0005).  We can confirm with strong statistical significance that it's the more accurate model.
+Here, MLP outperformed Random Forest with a matched-pairs rank-biserial effect size of r=0.815 (p=0.0005). What a significant paired result establishes is that, **on this train/validation split**, MLP's seed-to-seed distribution is shifted relative to Random Forest's. It does not by itself establish that MLP is the more accurate model on new splits or new data; the sampling error of the fixed evaluation set is shared by every run and is not part of the test. Pairing on seed guarantees aligned samples; it does not make the test more powerful than an unpaired one, so plan `runs` accordingly.
 
 The 'none correction' label is present because with only two models, no multiple-comparison correction is applied.
 

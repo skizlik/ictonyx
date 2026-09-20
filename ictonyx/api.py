@@ -338,6 +338,12 @@ def compare_models(
     distribution of the chosen metric. The distributions are then compared
     using non-parametric statistical tests.
 
+    **What this establishes.** Inference is conditional on this fixed
+    train/validation/test split and on seed-induced training randomness only.
+    Test-set sampling error is shared by every run and is not propagated. A
+    significant result therefore shows a seed-distribution shift *on this
+    split*; it does not by itself show superiority on new splits or new data.
+
     **Seeding and pairing**
 
     All models receive the same base ``seed``. Internally,
@@ -349,10 +355,15 @@ def compare_models(
     For this reason ``paired`` defaults to ``True``:
 
     * **Two models (default, paired):** Paired Wilcoxon signed-rank test on the
-      per-run differences. More powerful than the independent-samples alternative
-      because it removes run-to-run noise that is common to both models.
-    * **Two models (unpaired):** Kruskal-Wallis omnibus + Mann-Whitney U with
-      Holm correction. Valid but does not exploit the RNG pairing.
+      per-run differences. Pairing guarantees that run *i* of each model
+      trained under the same child seed, so unequal or misaligned samples are
+      impossible. It does **not** in general increase power: for different
+      model families the shared seed drives unrelated random streams and the
+      paired differences are approximately independent (observed Spearman
+      correlation near 0 for, e.g., random forest vs. MLP). Plan ``runs`` as
+      you would for an unpaired test.
+    * **Two models (unpaired):** Mann-Whitney U (no omnibus test is run for
+      two groups). Valid but does not use the RNG pairing.
     * **Three or more models:** Kruskal-Wallis omnibus + pairwise Mann-Whitney U
       with Holm correction, regardless of ``paired``. (Paired multi-group
       analysis requires a different design not yet implemented.)
@@ -952,6 +963,12 @@ def compare_results(
     Extracts metric values from each results object and compares them
     statistically. Use this when you already have results from
     :func:`variability_study` and want to compare them without retraining.
+
+    **What this establishes.** Inference is conditional on this fixed
+    train/validation/test split and on seed-induced training randomness only.
+    Test-set sampling error is shared by every run and is not propagated. A
+    significant result therefore shows a seed-distribution shift *on this
+    split*; it does not by itself show superiority on new splits or new data.
 
     **Pairing:** If both results were produced with the same ``seed``, the runs
     are paired by construction. Pass ``paired=True`` (default) to exploit this

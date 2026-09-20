@@ -131,11 +131,19 @@ def _two_sample_bootstrap(
                 boot_stats[i] = np.nan
 
     valid_mask = np.isfinite(boot_stats)
-    n_valid = valid_mask.sum()
+    n_valid = int(valid_mask.sum())
 
     if n_valid < 100:
         raise ValueError(
-            f"Only {n_valid} of {n_bootstrap} bootstrap replicates produced " f"finite values."
+            f"Only {n_valid} of {n_bootstrap} bootstrap replicates produced finite values."
+        )
+    n_dropped = n_bootstrap - n_valid
+    if n_dropped > 0.01 * n_bootstrap:
+        warnings.warn(
+            f"{n_dropped} of {n_bootstrap} bootstrap replicates were non-finite (typically a "
+            "zero-variance resample) and were dropped; the interval is computed on the rest.",
+            UserWarning,
+            stacklevel=3,
         )
 
     boot_stats_clean = boot_stats[valid_mask]
@@ -568,7 +576,10 @@ def bootstrap_effect_size_ci(
             denom = np.sqrt(pooled_var)
         else:
             denom = np.std(b, ddof=1)
-        return float(mean_diff / denom) if denom > 0 else 0.0
+        # NaN, not 0.0: a zero-variance resample has no defined effect size, and
+        # counting it as "no effect" biases the bootstrap distribution toward 0
+        # (v12 2.29). _two_sample_bootstrap drops non-finite replicates.
+        return float(mean_diff / denom) if denom > 0 else float("nan")
 
     return _two_sample_bootstrap(
         g1,
@@ -621,11 +632,11 @@ def bootstrap_hedges_g_ci(
         n1, n2 = len(a), len(b)
         df = n1 + n2 - 2
         if df <= 0:
-            return 0.0
+            return float("nan")
         pooled_var = ((n1 - 1) * np.var(a, ddof=1) + (n2 - 1) * np.var(b, ddof=1)) / df
         s = np.sqrt(pooled_var)
         if s == 0:
-            return 0.0
+            return float("nan")  # see _cohens_d (v12 2.29)
         d = (np.mean(a) - np.mean(b)) / s
         j = 1.0 - (3.0 / (4.0 * df - 1.0))
         return float(d * j)

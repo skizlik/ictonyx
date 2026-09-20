@@ -234,7 +234,10 @@ def variability_study(
 
     set_verbose(verbose)
 
-    if runs < 20:
+    # compare_models warns once for the whole comparison and asks each study not
+    # to repeat it (v12 2.27). The key is popped so it never reaches ModelConfig.
+    _suppress_runs_warning = bool(kwargs.pop("_suppress_runs_warning", False))
+    if runs < 20 and not _suppress_runs_warning:
         warnings.warn(
             f"runs={runs} may be insufficient for reliable statistical inference. "
             "rank-based tests (paired Wilcoxon, Mann-Whitney U) have limited power against small effects below n=20. "
@@ -471,6 +474,7 @@ def compare_models(
             epochs=epochs,
             seed=seed,
             verbose=verbose,
+            _suppress_runs_warning=True,
             **runner_kwargs,
             **model_kwargs,
         )
@@ -478,19 +482,27 @@ def compare_models(
 
     # --- Resolve metric now that all studies are complete ---
     if metric is None:
-        # BUG-048-4: was hardcoded to "val_accuracy", breaking regression.
-        # Auto-resolve from available metrics.
-        first_study = next(iter(studies.values()))
-        available = first_study.get_available_metrics()
+        # Resolve from the metrics EVERY study produced, not the first one's
+        # (v12 2.30: a regressor first and a classifier second raised for val_r2).
+        per_model = {name: set(s.get_available_metrics()) for name, s in studies.items()}
+        common = set.intersection(*per_model.values()) if per_model else set()
         for candidate in ("val_accuracy", "val_r2", "val_loss"):
-            if candidate in available:
+            if candidate in common:
                 metric = candidate
                 break
         else:
-            val_metrics = [m for m in available if m.startswith("val_")]
-            metric = (
-                val_metrics[0] if val_metrics else (available[0] if available else "val_accuracy")
-            )
+            val_common = sorted(m for m in common if m.startswith("val_"))
+            if val_common:
+                metric = val_common[0]
+            elif not any(per_model.values()):
+                metric = "val_accuracy"  # nothing recorded anywhere: fall through to the
+                #                            downstream "insufficient valid results" error
+            else:
+                raise ConfigurationError(
+                    "compare_models() found no metric common to all models. Per model: "
+                    + "; ".join(f"{n}: {sorted(m)}" for n, m in per_model.items())
+                    + ". Pass metric= explicitly, or compare models of the same task type."
+                )
 
     # --- Loop 2: extract metric values now that metric is a concrete string ---
     results_store = {}

@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
-from .exceptions import ModelError
+from .exceptions import ConfigurationError, ModelError
 from .memory import get_memory_manager
 from .settings import logger
 
@@ -1412,9 +1412,15 @@ if PYTORCH_AVAILABLE:
                 for X_batch, y_batch in train_loader:
                     optimizer.zero_grad()
                     outputs = self.model(X_batch)
+                    self._check_bce_output_shape(outputs)
 
-                    # Squeeze for regression with single output
-                    if self.task == "regression" and outputs.dim() > 1 and outputs.shape[-1] == 1:
+                    # Squeeze single-output heads: regression, or BCE binary
+                    # classification (BCE needs input and target of equal shape).
+                    if (
+                        (self.task == "regression" or self._is_binary_single_logit())
+                        and outputs.dim() > 1
+                        and outputs.shape[-1] == 1
+                    ):
                         outputs = outputs.squeeze(-1)
 
                     loss = self.criterion(outputs, y_batch)
@@ -1425,8 +1431,8 @@ if PYTORCH_AVAILABLE:
                     total += X_batch.size(0)
 
                     if self.task == "classification":
-                        _, predicted = torch.max(outputs, 1)
-                        correct += (predicted == y_batch).sum().item()
+                        predicted = self._predicted_classes(outputs)
+                        correct += (predicted == y_batch.long()).sum().item()
 
                 epoch_loss = running_loss / total
                 history["loss"].append(epoch_loss)
@@ -1489,6 +1495,48 @@ if PYTORCH_AVAILABLE:
                 "val_r2": metrics["r2"],
             }
 
+        # ------------------------------------------------------------------
+        # Output-shape helpers (v12 1.24, 1.34, 2.51). One place decides how a
+        # batch of raw outputs becomes class predictions or probabilities.
+        # ------------------------------------------------------------------
+        def _is_binary_single_logit(self) -> bool:
+            """True when the criterion is BCE(-WithLogits): one output per sample."""
+            return self.task == "classification" and isinstance(
+                self.criterion, (nn.BCEWithLogitsLoss, nn.BCELoss)
+            )
+
+        def _check_bce_output_shape(self, outputs: "torch.Tensor") -> None:
+            if self._is_binary_single_logit() and outputs.dim() > 1 and outputs.shape[-1] > 1:
+                raise ConfigurationError(
+                    f"{type(self.criterion).__name__} requires a single-logit output per "
+                    f"sample, but the model emits {outputs.shape[-1]} values. Use "
+                    "nn.CrossEntropyLoss for multi-output classifiers."
+                )
+
+        def _predicted_classes(self, outputs: "torch.Tensor") -> "torch.Tensor":
+            """Class indices from raw outputs, for any supported classification head."""
+            if outputs.dim() > 1 and outputs.shape[-1] == 1:
+                outputs = outputs.squeeze(-1)
+            if self._is_binary_single_logit():
+                if isinstance(self.criterion, nn.BCELoss):
+                    probs = outputs  # model already applied sigmoid
+                else:
+                    probs = torch.sigmoid(outputs)
+                return (probs > 0.5).long()
+            return torch.max(outputs, 1)[1]
+
+        def _output_activation(self) -> Optional[str]:
+            """'softmax' / 'log_softmax' if the model's last direct child applies one, else None."""
+            children = list(self.model.children())
+            if not children:
+                return None
+            last = children[-1]
+            if isinstance(last, nn.Softmax):
+                return "softmax"
+            if isinstance(last, nn.LogSoftmax):
+                return "log_softmax"
+            return None
+
         def _evaluate_loader(self, loader: "DataLoader") -> Tuple[float, float]:
             """Evaluate model on a DataLoader. Returns (loss, metric).
 
@@ -1514,12 +1562,8 @@ if PYTORCH_AVAILABLE:
                     total += X_batch.size(0)
 
                     if self.task == "classification":
-                        if isinstance(self.criterion, (nn.BCEWithLogitsLoss, nn.BCELoss)):
-                            # Binary: threshold at 0 (logits) or 0.5 (probs)
-                            predicted = (outputs > 0).long()
-                        else:
-                            _, predicted = torch.max(outputs, 1)
-                        correct += (predicted == y_batch).sum().item()
+                        predicted = self._predicted_classes(outputs)
+                        correct += (predicted == y_batch.long()).sum().item()
 
             avg_loss = running_loss / total
             if self.task == "classification":
@@ -1553,7 +1597,7 @@ if PYTORCH_AVAILABLE:
                 )
 
             if self.task == "classification":
-                _, predicted = torch.max(outputs, 1)
+                predicted = self._predicted_classes(outputs)
                 self.predictions = predicted.cpu().numpy()
                 return self.predictions  # type: ignore[return-value]
             else:
@@ -1581,28 +1625,25 @@ if PYTORCH_AVAILABLE:
             if self.task != "classification":
                 raise ValueError("predict_proba() is only available for classification models.")
 
-            # Use direct children (not recursive modules()) — reliable for common architectures.
-            # modules()[-1] returns the deepest leaf of the last sub-branch for ResNets and
-            # other nested designs, which is not the output layer.
-            _children = list(self.model.children())
-            if _children and isinstance(_children[-1], (torch.nn.Softmax, torch.nn.LogSoftmax)):
-                warnings.warn(
-                    f"PyTorchModelWrapper.predict_proba(): the model's final "
-                    f"layer is {type(_children[-1]).__name__}, but predict_proba() "
-                    "also applies softmax. This double-application produces "
-                    "incorrectly squashed probabilities. Remove the final "
-                    "softmax layer and return raw logits instead.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-
             outputs = self._forward_batched(data, kwargs.get("batch_size"))
-            # Single-output sigmoid: binary classifier with one output neuron.
-            # softmax on (n, 1) produces all-ones rather than probabilities.
+
+            # Single-output binary head: sigmoid (or already-sigmoid for BCELoss).
             if outputs.dim() > 1 and outputs.shape[-1] == 1:
-                p_pos = torch.sigmoid(outputs).squeeze(-1).numpy()
+                if isinstance(self.criterion, nn.BCELoss):
+                    p_pos = outputs.squeeze(-1).numpy()
+                else:
+                    p_pos = torch.sigmoid(outputs).squeeze(-1).numpy()
                 return np.column_stack([1.0 - p_pos, p_pos])
-            # Multi-output softmax (standard multi-class case).
+
+            # Multi-output head: if the model already applies (log-)softmax as its last
+            # direct child, use its output; applying softmax twice squashes the
+            # probabilities (v12 2.51). Direct children, not modules(): modules()[-1]
+            # is the deepest leaf of the last sub-branch for nested architectures.
+            activation = self._output_activation()
+            if activation == "softmax":
+                return outputs.numpy()
+            if activation == "log_softmax":
+                return torch.exp(outputs).numpy()
             return torch.softmax(outputs, dim=1).numpy()
 
         def evaluate(self, data: Any, **kwargs) -> Dict[str, Any]:

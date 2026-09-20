@@ -377,3 +377,84 @@ def test_evaluate_batch_size_kwarg_reaches_dataloader(monkeypatch):
     y = np.random.RandomState(1).randint(0, 3, 20)
     w.evaluate((X, y), batch_size=8)
     assert seen["bs"] == 8
+
+
+# ---------------------------------------------------------------------------
+# v0.4.10: single-logit binary heads; predict / predict_proba consistency
+# ---------------------------------------------------------------------------
+
+
+def _fit_binary(binary_data, model, criterion, epochs=25):
+    import torch
+
+    from ictonyx.core import PyTorchModelWrapper
+
+    X_train, y_train, X_val, y_val = binary_data
+    w = PyTorchModelWrapper(
+        model=model,
+        criterion=criterion,
+        optimizer_class=torch.optim.Adam,
+        optimizer_params={"lr": 0.05},
+        task="classification",
+        device="cpu",
+    )
+    w.fit((X_train, y_train), validation_data=(X_val, y_val), epochs=epochs, batch_size=16)
+    return w, X_val, y_val
+
+
+@pytest.mark.parametrize("head", ["bce_with_logits", "bce_sigmoid"])
+def test_single_logit_binary_head_trains_and_predicts(binary_data, head):
+    import numpy as np
+    import torch.nn as nn
+    from sklearn.metrics import accuracy_score
+
+    if head == "bce_with_logits":
+        model = nn.Sequential(nn.Linear(4, 16), nn.ReLU(), nn.Linear(16, 1))
+        crit = nn.BCEWithLogitsLoss()
+    else:
+        model = nn.Sequential(nn.Linear(4, 16), nn.ReLU(), nn.Linear(16, 1), nn.Sigmoid())
+        crit = nn.BCELoss()
+
+    w, X_val, y_val = _fit_binary(binary_data, model, crit)
+    acc_hist = w.training_result.history["accuracy"]
+    assert len(set(np.round(acc_hist, 6))) > 1, "training accuracy is constant (v12 1.24)"
+    assert acc_hist[-1] > 0.6
+
+    pred = w.predict(X_val)
+    proba = w.predict_proba(X_val)
+    assert set(np.unique(pred)) <= {0, 1}
+    assert np.array_equal(
+        pred, proba.argmax(axis=1)
+    ), "predict disagrees with predict_proba (v12 1.34)"
+    assert np.allclose(proba.sum(axis=1), 1.0)
+    assert w.evaluate((X_val, y_val))["accuracy"] == pytest.approx(accuracy_score(y_val, pred))
+
+
+def test_bce_with_multi_output_head_raises(binary_data):
+    import torch.nn as nn
+
+    from ictonyx.exceptions import ConfigurationError
+
+    model = nn.Sequential(nn.Linear(4, 2))
+    with pytest.raises(ConfigurationError, match="single-logit"):
+        _fit_binary(binary_data, model, nn.BCEWithLogitsLoss(), epochs=1)
+
+
+def test_predict_proba_respects_softmax_head(binary_data):
+    import numpy as np
+    import torch
+    import torch.nn as nn
+
+    from ictonyx.core import PyTorchModelWrapper
+
+    X_train, y_train, X_val, y_val = binary_data
+    model = nn.Sequential(nn.Linear(4, 2), nn.Softmax(dim=1))
+    w = PyTorchModelWrapper(
+        model=model, criterion=nn.CrossEntropyLoss(), task="classification", device="cpu"
+    )
+    w.fit((X_train, y_train), epochs=1, batch_size=16)
+    proba = w.predict_proba(X_val)
+    with torch.no_grad():
+        raw = model(torch.as_tensor(np.asarray(X_val), dtype=torch.float32)).numpy()
+    assert np.allclose(proba, raw)  # used as-is, not softmaxed twice (v12 2.51)
+    assert np.allclose(proba.sum(axis=1), 1.0)

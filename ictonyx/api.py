@@ -70,6 +70,30 @@ def _handler_kind(data: Any, kwargs: Dict[str, Any]) -> str:
     raise TypeError(f"Unsupported data type: {type(data).__name__}")
 
 
+_AMBIGUOUS_KWARGS = frozenset({"max_features"})
+"""Names that are a data-handler argument for SOME kinds and a model hyperparameter
+for others (max_features: TextDataHandler's TF-IDF vocabulary vs RandomForest).
+When the detected handler does not accept them they route to the model; every
+other cross-kind handler key raises rather than silently becoming a model param."""
+
+
+def _split_kwargs(data: Any, kwargs: Dict[str, Any]) -> "tuple[Dict[str, Any], Dict[str, Any]]":
+    """Split ``**kwargs`` into (infra, model) by the DETECTED handler kind."""
+    kind = _handler_kind(data, kwargs)
+    accepted = _HANDLER_KWARGS[kind] | _RUNNER_KWARGS
+    stray = sorted(
+        k for k in kwargs if k in _INFRA_KWARGS and k not in accepted and k not in _AMBIGUOUS_KWARGS
+    )
+    if stray:
+        raise ConfigurationError(
+            f"{stray} are not accepted for {kind!r} data and would have been ignored. "
+            f"Accepted: {sorted(_HANDLER_KWARGS[kind])}."
+        )
+    infra = {k: v for k, v in kwargs.items() if k in accepted}
+    model = {k: v for k, v in kwargs.items() if k not in accepted}
+    return infra, model
+
+
 def _resolve_handler(
     data: Any, target_column: Optional[str], infra_kwargs: Dict[str, Any]
 ) -> DataHandler:
@@ -205,24 +229,6 @@ def variability_study(
         print(results.summarize())
     """
 
-    # Separate infrastructure kwargs (forwarded to the data handler) from
-    # model kwargs (forwarded to ModelConfig). Add new DataHandler constructor
-    # parameters to _INFRA_KWARGS to prevent them from appearing in ModelConfig.
-
-    model_kwargs = {k: v for k, v in kwargs.items() if k not in _INFRA_KWARGS}
-    infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
-
-    # If model is a class and the user passed model_kwargs=dict (the pattern
-    # documented in the HuggingFaceModelWrapper docstring), unpack it into
-    # model_kwargs so individual constructor parameters flow through the
-    # normal ModelConfig path. Without this unpacking, the entire dict lands
-    # in ModelConfig as a single 'model_kwargs' key, which the wrapper's
-    # __init__ then sees as one kwarg instead of unpacked arguments.
-    if isinstance(model, type) and "model_kwargs" in model_kwargs:
-        user_model_kwargs = model_kwargs.pop("model_kwargs")
-        if isinstance(user_model_kwargs, dict):
-            model_kwargs.update(user_model_kwargs)
-
     # Apply verbose setting to global logger
     from .settings import set_verbose
 
@@ -236,6 +242,23 @@ def variability_study(
             UserWarning,
             stacklevel=2,
         )
+
+    # Separate infrastructure kwargs (forwarded to the data handler) from
+    # model kwargs (forwarded to ModelConfig). Add new DataHandler constructor
+    # parameters to _INFRA_KWARGS to prevent them from appearing in ModelConfig.
+
+    infra_kwargs, model_kwargs = _split_kwargs(data, kwargs)
+
+    # If model is a class and the user passed model_kwargs=dict (the pattern
+    # documented in the HuggingFaceModelWrapper docstring), unpack it into
+    # model_kwargs so individual constructor parameters flow through the
+    # normal ModelConfig path. Without this unpacking, the entire dict lands
+    # in ModelConfig as a single 'model_kwargs' key, which the wrapper's
+    # __init__ then sees as one kwarg instead of unpacked arguments.
+    if isinstance(model, type) and "model_kwargs" in model_kwargs:
+        user_model_kwargs = model_kwargs.pop("model_kwargs")
+        if isinstance(user_model_kwargs, dict):
+            model_kwargs.update(user_model_kwargs)
 
     # 1. Prepare Data
     handler = _resolve_handler(data, target_column, infra_kwargs)
@@ -423,8 +446,7 @@ def compare_models(
     # ONCE and shared, so every model sees the same split (data-level pairing).
     # Only model kwargs and runner kwargs are forwarded; handler kwargs must not
     # reach variability_study(data=handler), which rightly rejects them (v12 0.5).
-    infra_kwargs = {k: v for k, v in kwargs.items() if k in _INFRA_KWARGS}
-    model_kwargs = {k: v for k, v in kwargs.items() if k not in _INFRA_KWARGS}
+    infra_kwargs, model_kwargs = _split_kwargs(data, kwargs)
     runner_kwargs = {k: v for k, v in infra_kwargs.items() if k in _RUNNER_KWARGS and v is not None}
     handler = _resolve_handler(data, target_column, infra_kwargs)
 
@@ -577,15 +599,47 @@ class _EnsureWrapperBuilder:
 
 
 class _CloneBuilder:
-    """Picklable builder: ``sklearn.base.clone(model)`` per run."""
+    """Picklable builder: ``sklearn.base.clone(model)`` per run, seeded per run.
+
+    v12 0.9: clone() preserves the user's ``random_state``, so an instance
+    with a fixed seed trained identical models on every run and one with
+    ``random_state=None`` was seeded only through the global NumPy RNG. The
+    clone now receives the run's child seed, exactly as the class path does.
+    """
+
+    _warned: bool = False  # once per process, like _WARNED_FIT_KWARGS
 
     def __init__(self, model: Any):
         self.model = model
+        params = model.get_params() if hasattr(model, "get_params") else {}
+        self.has_random_state = "random_state" in params
+        self.user_random_state = params.get("random_state")
 
     def __call__(self, conf: ModelConfig) -> BaseModelWrapper:
         from sklearn.base import clone
 
-        return _ensure_wrapper(clone(self.model))
+        est = clone(self.model)
+        run_seed = conf.get("run_seed")
+        if self.has_random_state and run_seed is not None:
+            est.set_params(random_state=run_seed)
+            if self.user_random_state is not None and not _CloneBuilder._warned:
+                _CloneBuilder._warned = True
+                warnings.warn(
+                    f"{type(self.model).__name__} instance has random_state="
+                    f"{self.user_random_state}; it is overridden with the per-run child seed "
+                    "so runs vary and pair across models. Pass the class instead to silence this.",
+                    UserWarning,
+                    stacklevel=4,
+                )
+        elif not self.has_random_state and not _CloneBuilder._warned:
+            _CloneBuilder._warned = True
+            warnings.warn(
+                f"{type(self.model).__name__} has no random_state parameter; per-run variation "
+                "depends on the global NumPy RNG only and results may be identical across runs.",
+                UserWarning,
+                stacklevel=4,
+            )
+        return _ensure_wrapper(est)
 
 
 class _ClassBuilder:

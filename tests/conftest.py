@@ -110,8 +110,11 @@ def tabular_regression_handler(small_regression_arrays):
 @pytest.fixture(autouse=True)
 def _reset_warn_once_registries():
     """Warn-once registries make warning tests order-dependent (v12 2.74). Reset per test."""
+    import ictonyx.api as a
     import ictonyx.runners as r
 
     r._WARNED_FIT_KWARGS.clear()
+    a._CloneBuilder._warned = False
     yield
     r._WARNED_FIT_KWARGS.clear()
+    a._CloneBuilder._warned = False

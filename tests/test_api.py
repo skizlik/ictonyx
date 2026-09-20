@@ -1047,7 +1047,7 @@ def test_validation_data_with_dataframe_raises():
             model=_build_val_spy,
             data=df,
             target_column="t",
-            runs=1,
+            runs=2,
             validation_data=(df[["a"]].values, df["t"].values),
             verbose=False,
         )

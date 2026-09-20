@@ -101,3 +101,41 @@ def test_results_invariants_after_failure():
     )
     assert r.failed_runs == [2] and r.run_ids == [1, 3, 4]
     assert len(r.run_seeds) == r.n_runs + len(r.failed_runs)
+
+
+# ---------------------------------------------------------------------------
+# v0.4.10: the instance path is under the same seeding contract
+# ---------------------------------------------------------------------------
+
+
+class _SeedRecorder:
+    """sklearn-shaped estimator whose fitted history records the random_state it was given."""
+
+    def __init__(self, random_state=None):
+        self.random_state = random_state
+
+    def get_params(self, deep=True):
+        return {"random_state": self.random_state}
+
+    def set_params(self, **p):
+        self.random_state = p.get("random_state", self.random_state)
+        return self
+
+    def fit(self, X, y):
+        self.classes_ = np.unique(y)
+        return self
+
+    def predict(self, X):
+        return np.full(len(X), self.classes_[0])
+
+    def score(self, X, y):
+        return float(self.random_state % 1000) / 1000.0  # seed shows up in the metric
+
+
+@pytest.mark.parametrize("path", PATHS)
+def test_instance_path_receives_run_seed_as_random_state(path, X, y):
+    r = ix.variability_study(
+        _SeedRecorder(random_state=0), data=(X, y), runs=3, seed=5, verbose=False, **path
+    )
+    expected = [float(s % 1000) / 1000.0 for s in r.run_seeds]
+    assert r.get_metric_values("val_accuracy") == pytest.approx(expected)

@@ -44,7 +44,7 @@ _HANDLER_KWARGS: Dict[str, frozenset] = {
     "timeseries": (_SPLIT_KWARGS - {"stratify"})
     | {"value_column", "sequence_length", "lookback", "stride"},
 }
-_RUNNER_KWARGS = frozenset({"gpu_memory_limit"})
+_RUNNER_KWARGS = frozenset({"gpu_memory_limit", "process_timeout", "allow_isolation_fallback"})
 _INFRA_KWARGS = frozenset().union(*_HANDLER_KWARGS.values()) | _RUNNER_KWARGS
 _TS_TRIGGERS = ("value_column", "sequence_length", "lookback", "stride")
 
@@ -270,6 +270,8 @@ def variability_study(
         verbose=verbose,
         use_parallel=use_parallel,
         n_jobs=n_jobs,
+        process_timeout=kwargs.get("process_timeout"),
+        allow_isolation_fallback=bool(kwargs.get("allow_isolation_fallback", False)),
     )
 
 

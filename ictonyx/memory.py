@@ -85,9 +85,10 @@ class MemoryManager:
         self,
         use_process_isolation: bool = False,
         gpu_memory_limit: Optional[int] = None,
-        process_timeout: int = 3600,
+        process_timeout: Optional[float] = None,
         allow_memory_growth: bool = True,
         verbose: bool = True,
+        allow_fallback: bool = False,
     ):
         """
         Initialize memory manager.
@@ -95,13 +96,20 @@ class MemoryManager:
         Args:
             use_process_isolation: If True, run in isolated subprocess
             gpu_memory_limit: GPU memory limit in MB
-            process_timeout: Timeout for subprocess execution
+            process_timeout: Seconds to wait for a subprocess result. ``None``
+                means the default, 3600 (one hour). Runs longer than this are
+                killed and reported as failed (v12 2.49).
             allow_memory_growth: Allow GPU memory to grow as needed
             verbose: Print informative messages
+            allow_fallback: If the function cannot be serialised for a
+                subprocess, run it in-process instead of raising. Default
+                False: a run that silently was not isolated is worse than an
+                error (v12 1.28).
         """
         self.use_process_isolation = use_process_isolation
         self.gpu_memory_limit = gpu_memory_limit
-        self.process_timeout = process_timeout
+        self.process_timeout = 3600.0 if process_timeout is None else float(process_timeout)
+        self.allow_fallback = allow_fallback
         self.allow_memory_growth = allow_memory_growth
         self.verbose = verbose
         self._setup_complete = False
@@ -112,6 +120,20 @@ class MemoryManager:
 
     def _setup_process_isolation(self):
         """Setup process isolation with appropriate serialization."""
+        # v12 2.35: a script without an `if __name__ == "__main__":` guard re-runs
+        # itself inside every spawned child, which then tries to start ITS OWN
+        # isolated study. Detect that from the child side and say so, instead of
+        # letting Python's bootstrapping error surface.
+        if mp.current_process().name != "MainProcess" and not os.environ.get(
+            "ICTONYX_ALLOW_NESTED_ISOLATION"
+        ):
+            raise RuntimeError(
+                "An Ictonyx study with use_process_isolation=True started inside a spawned "
+                "child process. This almost always means the calling script has no "
+                "`if __name__ == '__main__':` guard, so each child re-runs the whole script. "
+                "Add the guard. (Set ICTONYX_ALLOW_NESTED_ISOLATION=1 if nesting is intended.)"
+            )
+
         # Check serialization capability
         if not HAS_CLOUDPICKLE:
             warnings.warn(
@@ -338,19 +360,25 @@ class MemoryManager:
             return self._run_with_standard_pickle(func, args, kwargs)
 
         else:
-            # Can't serialize for subprocess
-            warning_msg = (
-                "Cannot serialize function for process isolation. "
-                "Options:\n"
-                "1. Install cloudpickle: pip install cloudpickle\n"
-                "2. Define function in a module file (not notebook)\n"
-                "3. Use standard mode (use_process_isolation=False)\n"
-                "\nFalling back to in-process execution with cleanup..."
+            # Can't serialize for subprocess (v12 1.28: never silently un-isolate)
+            if not self.allow_fallback:
+                raise RuntimeError(
+                    "Process isolation was requested but the function/arguments cannot be "
+                    "serialised for a subprocess. Install cloudpickle (pip install "
+                    "ictonyx[isolation]) or define the builder at module level. Pass "
+                    "allow_isolation_fallback=True to run in-process instead."
+                )
+            warnings.warn(
+                "Cannot serialize function for process isolation; running in-process "
+                "with aggressive cleanup because allow_isolation_fallback=True. "
+                "This run is NOT isolated.",
+                UserWarning,
+                stacklevel=2,
             )
-            warnings.warn(warning_msg)
-
-            # Fallback: aggressive in-process execution
-            return self._run_with_aggressive_cleanup(func, args, kwargs)
+            result = self._run_with_aggressive_cleanup(func, args, kwargs)
+            if isinstance(result, dict):
+                result["mode"] = "fallback"
+            return result
 
     def _test_pickle(self, func, args, kwargs):
         """Test if objects can be pickled."""
@@ -417,29 +445,59 @@ class MemoryManager:
             gc.collect()
 
     def _execute_subprocess(self, process, result_queue):
-        """Common subprocess execution logic."""
+        """Start the child, poll for its result, THEN join.
+
+        A child whose result exceeds the pipe buffer (~64 KiB) blocks in
+        Queue.put() until the parent reads; joining first turned that into a
+        process_timeout hang (v12 1.28). Polling lets a crashed child be
+        reported as a crash and a hung child be killed at the deadline.
+        """
+        import queue as _queue
+        import time as _time
+
         try:
             process.start()
-            process.join(timeout=self.process_timeout)
+            deadline = _time.monotonic() + self.process_timeout
+            result = None
+            while True:
+                try:
+                    result = result_queue.get(timeout=1.0)
+                    break
+                except _queue.Empty:
+                    pass
+                if not process.is_alive():
+                    # Exited without a result on the queue: one last drain, then report.
+                    try:
+                        result = result_queue.get(timeout=1.0)
+                        break
+                    except _queue.Empty:
+                        process.join(timeout=5)
+                        return {
+                            "success": False,
+                            "error": f"Process crashed (exit code {process.exitcode})",
+                        }
+                if _time.monotonic() > deadline:
+                    process.terminate()
+                    process.join(timeout=5)
+                    if process.is_alive():
+                        process.kill()
+                        process.join()
+                    return {
+                        "success": False,
+                        "error": (
+                            f"No result received from subprocess within "
+                            f"{self.process_timeout:g}s"
+                        ),
+                    }
 
+            process.join(timeout=30)
             if process.is_alive():
                 process.terminate()
                 process.join(timeout=5)
                 if process.is_alive():
                     process.kill()
                     process.join()
-                return {"success": False, "error": f"Process timeout ({self.process_timeout}s)"}
-
-            if process.exitcode != 0:
-                return {
-                    "success": False,
-                    "error": f"Process crashed (exit code {process.exitcode})",
-                }
-
-            try:
-                return result_queue.get(timeout=5)
-            except Exception:
-                return {"success": False, "error": "No result from subprocess"}
+            return result
 
         except Exception as e:
             return {"success": False, "error": f"Subprocess execution failed: {e}"}

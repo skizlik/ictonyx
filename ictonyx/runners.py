@@ -233,10 +233,14 @@ class ExperimentRunner:
         gpu_memory_limit: Optional[int] = None,
         seed: Optional[int] = None,
         verbose: bool = True,
+        process_timeout: Optional[float] = None,
+        allow_isolation_fallback: bool = False,
     ):
         """Initialize the experiment runner.
 
-        See class docstring for full parameter descriptions.
+        See class docstring for full parameter descriptions. ``process_timeout``
+        (seconds, default 3600) bounds each isolated run; ``allow_isolation_fallback``
+        lets an unserialisable builder run in-process instead of raising.
         """
         self.model_builder = model_builder
         self.data_handler = data_handler
@@ -262,7 +266,10 @@ class ExperimentRunner:
 
         # Initialize memory manager
         self.memory_manager = get_memory_manager(
-            use_process_isolation=use_process_isolation, gpu_memory_limit=gpu_memory_limit
+            use_process_isolation=use_process_isolation,
+            gpu_memory_limit=gpu_memory_limit,
+            process_timeout=process_timeout,
+            allow_fallback=allow_isolation_fallback,
         )
 
         # Setup memory constraints for standard mode
@@ -297,6 +304,7 @@ class ExperimentRunner:
         self.final_metrics: Dict[str, List[float]] = {}
         self.final_test_metrics: List[Dict[str, Any]] = []
         self.failed_runs: List[int] = []
+        self.fallback_runs: List[int] = []  # isolated runs that executed in-process
         self.metric_run_ids: Dict[str, List[int]] = {}
 
         # Validate process isolation if enabled
@@ -514,8 +522,16 @@ class ExperimentRunner:
                     for key, value in test_metrics.items():
                         self.tracker.log_metric(f"final_test_{key}", value, step=run_id)
 
+                if result.get("mode") == "fallback":
+                    self.fallback_runs.append(run_id)
                 if self.verbose:
-                    self._run_log(f" - Run {run_id}: Completed successfully (isolated)")
+                    if result.get("mode") == "fallback":
+                        self._run_log(
+                            f" - Run {run_id}: Completed (in-process; isolation unavailable)",
+                            level="warning",
+                        )
+                    else:
+                        self._run_log(f" - Run {run_id}: Completed successfully (isolated)")
 
                 return history_df
 
@@ -2148,6 +2164,8 @@ def run_variability_study(
     verbose: bool = True,
     use_parallel: bool = False,
     n_jobs: int = -1,
+    process_timeout: Optional[float] = None,
+    allow_isolation_fallback: bool = False,
 ) -> VariabilityStudyResults:
     """Run a complete variability study (convenience function).
 
@@ -2180,6 +2198,8 @@ def run_variability_study(
         gpu_memory_limit=gpu_memory_limit,
         seed=seed,
         verbose=verbose,
+        process_timeout=process_timeout,
+        allow_isolation_fallback=allow_isolation_fallback,
     )
 
     return runner.run_study(

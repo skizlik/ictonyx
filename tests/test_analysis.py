@@ -1941,9 +1941,13 @@ class TestKruskalWallisDualEffectSize:
         ), f"Expected large secondary effect, got ε²_R = {result.effect_size_secondary}"
 
 
+@pytest.mark.slow
 class TestRequiredRunsPaired:
-    """Tests for required_runs_paired — paired-comparison power analysis
-    added in v0.4.7 (X-19-14b)."""
+    """Tests for required_runs_paired — paired-comparison power analysis.
+
+    Marked slow (v12 2.34): each call is a Monte-Carlo search over n. Run with
+    ``pytest -m slow``; CI runs them on one cell.
+    """
 
     def test_returns_integer(self):
         """Result is an int between the 6-minimum and 200-ceiling."""

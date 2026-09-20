@@ -101,7 +101,10 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
 markers = ["slow: marks tests as slow (skip with '-m not slow')"]
-addopts = "--cov=ictonyx --cov-report=html --cov-report=term --cov-fail-under=60"
+# Coverage flags live in CI (see .github/workflows/test.yml), not here: a
+# contributor running a single file should not need pytest-cov or fail a
+# coverage gate. The timeout guards the subprocess paths (v12 2.64f).
+addopts = "--timeout=300"
 
 [tool.mypy]
 ignore_missing_imports = true

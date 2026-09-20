@@ -29,23 +29,38 @@ Then set up pre-commit hooks:
     pytest tests/ -v
 
 The `pre-commit install` step sets up git hooks that run black and isort automatically on every commit.
+
 ## Running Tests
 
-Full suite:
+The default run excludes the Monte-Carlo power tests, which take several
+minutes:
 
-    pytest tests/ -v
+    pytest -m "not slow"          # ~5-7 min on a bare sklearn environment
 
-Single module:
+Run the slow tests separately (CI does this on one cell):
 
-    pytest tests/test_runners.py -v
+    pytest -m slow
 
-Stop on first failure (useful when debugging):
+A single file, or a subset that avoids subprocess-heavy tests:
 
-    pytest tests/ -x -q
+    pytest tests/test_analysis.py
+    pytest tests/test_api.py -k "not isolation and not parallel"
 
-With coverage report:
+Coverage is measured in CI; locally it is opt-in:
 
-    pytest tests/ --cov=ictonyx --cov-report=term
+    pytest -m "not slow" --cov=ictonyx --cov-report=term
+
+Notes:
+
+- `.flake8` sets the line length to 100 to match black. Run
+  `flake8 ictonyx --select=E,W` for style; the `F` codes are a known backlog.
+- Tests that need an optional framework (TensorFlow, PyTorch, transformers)
+  are `skipif`-guarded and run on the Linux/Windows CI cells. macOS is the
+  bare sklearn cell.
+- `tests/test_tuning.py` requires optuna; hyperopt-specific tests in it
+  skip without hyperopt.
+- Process-isolation tests spawn subprocesses. If your machine is
+  memory-constrained, close other heavy applications before a full run.
 
 ## Code Style
 

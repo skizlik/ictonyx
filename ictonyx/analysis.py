@@ -2700,6 +2700,12 @@ def required_runs(
         normal approximation overestimates spread and ``required_runs()`` will
         over-estimate the number of runs needed. Results are most reliable for
         loss-scale metrics and accuracy values in the 0.4–0.8 range.
+
+    Note:
+        The result is a Monte Carlo estimate. At ``n_sim=1000`` the standard
+        error of estimated power at any n is about 0.013, so the returned
+        value is uncertain by 1-2 runs and may differ across ``random_state``.
+        Do not report it as exact (v12 3.14).
     """
     if not 0 < effect_size < 1:
         raise ValueError(f"effect_size must be in (0, 1), got {effect_size}.")
@@ -2861,6 +2867,12 @@ def minimum_detectable_effect(
         normal approximation overestimates spread and the detectable effect will
         be under-estimated. Results are most reliable for loss-scale metrics
         and accuracy values in the 0.4–0.8 range.
+
+    Note:
+        The result is a Monte Carlo estimate. At ``n_sim=1000`` the standard
+        error of estimated power at any n is about 0.013, so the returned
+        value is uncertain by 1-2 runs and may differ across ``random_state``.
+        Do not report it as exact (v12 3.14).
     """
     if n_runs < 2:
         raise ValueError(f"n_runs must be >= 2, got {n_runs}.")

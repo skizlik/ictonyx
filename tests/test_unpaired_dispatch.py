@@ -37,13 +37,13 @@ def test_auto_is_rejected():
 @pytest.mark.slow
 def test_unpaired_entry_points_agree(X, y):
     """compare_results(paired=False) and compare_models(paired=False) must run the same test."""
-    ra = ix.variability_study(LogisticRegression, data=(X, y), runs=5, seed=3, verbose=False)
-    rb = ix.variability_study(DecisionTreeClassifier, data=(X, y), runs=5, seed=3, verbose=False)
+    ra = ix.variability_study(LogisticRegression, data=(X, y), runs=8, seed=3, verbose=False)
+    rb = ix.variability_study(DecisionTreeClassifier, data=(X, y), runs=8, seed=3, verbose=False)
     via_results = ix.compare_results(ra, rb, metric="val_accuracy", paired=False)
     via_models = ix.compare_models(
         [LogisticRegression, DecisionTreeClassifier],
         data=(X, y),
-        runs=5,
+        runs=8,
         seed=3,
         verbose=False,
         paired=False,

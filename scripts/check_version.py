@@ -10,11 +10,13 @@ SITES = {
     "pyproject.toml": r'^version = "([^"]+)"',
     "CITATION.cff": r"^version: (\S+)",
     "README.md": r"version = \{([^}]+)\}",
+    "README.md#release-line": r"Current release: \*\*([^*]+)\*\*",
     "ictonyx/__init__.py": r"^# v(\S+)",
 }
 found = {}
 for rel, pat in SITES.items():
-    m = re.search(pat, (ROOT / rel).read_text(), flags=re.M)
+    text = (ROOT / rel.split("#")[0]).read_text()
+    m = re.search(pat, text, flags=re.M)
     found[rel] = m.group(1) if m else "<missing>"
 versions = set(found.values())
 for rel, v in found.items():

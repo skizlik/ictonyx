@@ -45,7 +45,7 @@ Extras can be combined:
 pip install "ictonyx[tensorflow,isolation]"
 ```
 
-Requires Python 3.10+. Current release: **0.4.9** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
+Requires Python 3.10+. Current release: **0.4.10** — [changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/ictonyx/)
 
 ---
 
@@ -175,7 +175,7 @@ ix.plot_variability_summary(results=results, metric='accuracy')
 
 Because of training variability, a single run is generally inadequate to make valid comparisons between models with respect to a particular metric.  Ictonyx facilitates more statistically sound model comparison with its compare_models() function, which runs multiple models the same number of times, and applies an appropriate hypothesis test to the results.
 
-Ictonyx also supports sklearn estimators — pass a class or configured instance directly, No wrapper is required.
+Ictonyx also supports sklearn estimators — pass a class or a configured instance directly; no wrapper is required. An instance's `random_state` is overridden with the per-run seed (a warning says so once).
 
 ```python
 from sklearn.neural_network import MLPClassifier

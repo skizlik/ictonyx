@@ -76,7 +76,7 @@ jobs:
           --cov-report=term \
           --timeout=300 \
           --durations=15 \
-          -q -rs
+          -q -rfEs
 
     - name: Run slow (Monte-Carlo) tests
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'

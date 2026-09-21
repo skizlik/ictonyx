@@ -1801,8 +1801,12 @@ class TestPyTorchRegressionHistory:
 
 
 class TestPyTorchDoubleSoftmax:
-    def test_warns_on_softmax_final_layer(self):
+    def test_softmax_final_layer_output_used_directly(self):
+        """A Softmax head is used as-is, not re-softmaxed (formerly warned about 'double')."""
         pytest.importorskip("torch")
+        import warnings
+
+        import numpy as np
         import torch
         import torch.nn as nn
 
@@ -1816,8 +1820,14 @@ class TestPyTorchDoubleSoftmax:
             optimizer_params={"lr": 0.01},
             task="classification",
         )
-        with pytest.warns(UserWarning, match="double"):
-            wrapper.predict_proba(np.random.rand(5, 4).astype(np.float32))
+        X = np.random.rand(8, 4).astype("float32")
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            proba = wrapper.predict_proba(X)
+        with torch.no_grad():
+            raw = model(torch.as_tensor(X)).numpy()
+        assert np.allclose(proba, raw)
+        assert np.allclose(proba.sum(axis=1), 1.0)
 
 
 class TestKerasEvaluateScalarReturn:
@@ -1922,9 +1932,12 @@ class TestPyTorchDoubleSoftmaxDetection:
             warnings.simplefilter("error", UserWarning)
             wrapper.predict_proba(np.random.rand(5, 4).astype(np.float32))
 
-    def test_sequential_softmax_output_warns(self):
-        """Sequential ending in Softmax must still warn."""
+    def test_sequential_softmax_output_used_directly(self):
+        """A Softmax head is used as-is, not re-softmaxed (formerly warned about 'double')."""
         pytest.importorskip("torch")
+        import warnings
+
+        import numpy as np
         import torch
         import torch.nn as nn
 
@@ -1938,8 +1951,14 @@ class TestPyTorchDoubleSoftmaxDetection:
             optimizer_params={"lr": 0.01},
             task="classification",
         )
-        with pytest.warns(UserWarning, match="double"):
-            wrapper.predict_proba(np.random.rand(5, 4).astype(np.float32))
+        X = np.random.rand(8, 4).astype("float32")
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            proba = wrapper.predict_proba(X)
+        with torch.no_grad():
+            raw = model(torch.as_tensor(X)).numpy()
+        assert np.allclose(proba, raw)
+        assert np.allclose(proba.sum(axis=1), 1.0)
 
 
 class TestHuggingFaceModelWrapper:

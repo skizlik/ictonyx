@@ -190,7 +190,7 @@ class MLflowLogger(BaseLogger):
         # side effect on MLflow's active-run state and an unused logger leaves
         # nothing open.
         self._run_name = run_name
-        self._run = None
+        self._run: Optional[Any] = None
         self._run_id: Optional[str] = None
         self._current_child_run_id: Optional[str] = None
         if self.verbose:
@@ -201,8 +201,9 @@ class MLflowLogger(BaseLogger):
     def _ensure_run(self) -> None:
         """Start the MLflow run if it has not been started."""
         if self._run is None:
-            self._run = mlflow.start_run(run_name=self._run_name)
-            self._run_id = self._run.info.run_id
+            run = mlflow.start_run(run_name=self._run_name)
+            self._run = run
+            self._run_id = run.info.run_id
             if self.verbose:
                 logger.info(f"Started MLflow run: {self._run_id}")
 
@@ -214,9 +215,16 @@ class MLflowLogger(BaseLogger):
         return self._run_id  # type: ignore[return-value]
 
     @property
+    def _active_run(self) -> Any:
+        """The MLflow run object; starts the run if needed (typed non-None for mypy)."""
+        self._ensure_run()
+        assert self._run is not None
+        return self._run
+
+    @property
     def experiment_name(self) -> str:
         """Get the current experiment name."""
-        return mlflow.get_experiment(self._run.info.experiment_id).name
+        return mlflow.get_experiment(self._active_run.info.experiment_id).name
 
     def log_params(self, params: Dict[str, Any]):
         """Logs parameters to MLflow and stores in history."""
@@ -505,7 +513,7 @@ class MLflowLogger(BaseLogger):
         import os
 
         tracking_uri = mlflow.get_tracking_uri()
-        exp_id = self._run.info.experiment_id
+        exp_id = self._active_run.info.experiment_id
         run_id = self._run_id
 
         if tracking_uri.startswith("file://"):

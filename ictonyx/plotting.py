@@ -1038,7 +1038,10 @@ def plot_rank_correlation_over_epoch(
     # Annotation: first epoch at threshold
     if threshold_epoch is not None:
         ax.axvline(
-            threshold_epoch, color=settings.THEME["significant"], linestyle=":", linewidth=1.5
+            float(threshold_epoch),
+            color=settings.THEME["significant"],
+            linestyle=":",
+            linewidth=1.5,
         )
         ax.annotate(
             f"ρ ≥ {threshold}\nat epoch {threshold_epoch}",
@@ -1242,7 +1245,9 @@ def plot_comparison_forest(
         # Draw the interval that was COMPUTED, at its own centre and with its own
         # asymmetry. Symmetrising a BCa interval and re-centring it on the mean
         # difference produced a bar that was neither.
-        lo = hi = center = None
+        lo: Optional[float] = None
+        hi: Optional[float] = None
+        center: Optional[float] = None
         sig: Optional[bool] = None
         for key in (f"{name}_vs_{baseline_model}", f"{baseline_model}_vs_{name}"):
             result = pairwise_comps.get(key)
@@ -1271,6 +1276,7 @@ def plot_comparison_forest(
             half = _scipy_stats.t.ppf(0.975, df=df_w) * np.sqrt(v1 + v2)
             center, lo, hi = diff, diff - half, diff + half
             used_fallback = True
+        assert lo is not None and hi is not None and center is not None
 
         models.append(name)
         centers.append(center)

@@ -173,7 +173,7 @@ class HyperparameterTuner:
         self.train_data = None
         self.val_data = None
         self.best_params: Optional[Dict[str, Any]] = None
-        self._optuna_study = None
+        self._optuna_study: Optional[Any] = None
         # Legacy hyperopt trials object — populated only when using hyperopt backend
         self.trials = Trials() if HAS_HYPEROPT else None
 

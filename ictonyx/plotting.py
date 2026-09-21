@@ -410,6 +410,43 @@ def plot_precision_recall_curve(
 # --- Variability & Comparison Visualizations ---
 
 
+def _resolve_results_metric(results: Any, metric: Optional[str]) -> str:
+    """Full metric name for a results object from either a full or a base name.
+
+    Returns ``metric`` unchanged if the results object does not resolve names
+    (e.g. a stand-in without a real ``preferred_metric``).
+    """
+    requested = metric or "accuracy"
+    tracked = getattr(results, "final_metrics", None)
+    if isinstance(tracked, dict) and requested in tracked:
+        return requested
+    try:
+        resolved = results.preferred_metric(requested)
+    except KeyError:
+        base = requested
+        for prefix in ("val_", "test_", "train_"):
+            if base.startswith(prefix):
+                base = base[len(prefix) :]
+        try:
+            resolved = results.preferred_metric(base)
+        except KeyError:
+            return requested
+    return resolved if isinstance(resolved, str) else requested
+
+
+def _nanmean_curve(runs: List[pd.DataFrame], col: str) -> Optional[np.ndarray]:
+    """Per-epoch mean of ``col`` across runs of possibly different lengths."""
+    series = [np.asarray(run[col].values, dtype=float) for run in runs if col in run.columns]
+    if not series:
+        return None
+    width = max(len(s) for s in series)
+    stack = np.full((len(series), width), np.nan)
+    for i, s in enumerate(series):
+        stack[i, : len(s)] = s
+    with np.errstate(invalid="ignore"):
+        return np.nanmean(stack, axis=0)
+
+
 def plot_variability_summary(
     all_runs_metrics_list: Optional[List[pd.DataFrame]] = None,
     final_metrics_series: Optional[Union[pd.Series, List]] = None,
@@ -462,7 +499,7 @@ def plot_variability_summary(
         figsize: Figure size as ``(width, height)`` in inches.
             ``None`` (default) auto-calculates based on the number
             of panels.
-        dpi: Figure resolution in dots per inch (default ``150``).
+        dpi: Figure resolution in dots per inch (default ``300``).
         show: Display behavior. See :func:`plot_confusion_matrix`.
 
     Returns:
@@ -472,7 +509,11 @@ def plot_variability_summary(
 
     _check_plotting()
 
-    # ── New dispatch path: results= + kind= ──────────────────────────────
+    # A results object passed positionally is the documented call shape; honour it.
+    if results is None and hasattr(all_runs_metrics_list, "all_runs_metrics"):
+        results, all_runs_metrics_list = all_runs_metrics_list, None
+
+    # ── Dispatch path: results= + kind= ──────────────────────────────────
     if results is not None and kind is not None:
         _dispatch = {
             "trajectories": plot_run_trajectories,
@@ -484,7 +525,7 @@ def plot_variability_summary(
             raise ValueError(
                 f"Unknown kind='{kind}'. " f"Valid options: {sorted(_dispatch.keys())}."
             )
-        return fn(results, metric=None, show=show)
+        return fn(results, metric=_resolve_results_metric(results, metric), show=show)
 
     # ── Legacy positional-argument form deprecation ───────────────────────
     if all_runs_metrics_list is not None or final_metrics_series is not None:
@@ -502,17 +543,11 @@ def plot_variability_summary(
     # Allow passing a VariabilityStudyResults object directly via results=
     if results is not None:
         all_runs_metrics_list = results.all_runs_metrics
-        # Auto-resolve metric base from preferred_metric when results provided
-        resolved_base = results.preferred_metric(metric).replace("test_", "").replace("val_", "")
-        try:
-            final_metrics_series = pd.Series(
-                results.get_metric_values(results.preferred_metric(metric))
-            )
-        except (KeyError, ValueError):
-            try:
-                final_metrics_series = pd.Series(results.get_metric_values(f"val_{metric}"))
-            except (KeyError, ValueError):
-                final_metrics_series = pd.Series(results.get_metric_values(metric))
+        # Accept either a full metric name ("val_accuracy") or a base ("accuracy").
+        resolved_full = _resolve_results_metric(results, metric)
+        resolved_base = resolved_full.replace("test_", "").replace("val_", "").replace("train_", "")
+        metric = resolved_base  # column detection below works on the base name
+        final_metrics_series = pd.Series(results.get_metric_values(resolved_full))
         # Also pull test series if available
         if results.has_test_data and final_test_series is None:
             test_key = f"test_{resolved_base}"
@@ -585,32 +620,29 @@ def plot_variability_summary(
         if show_val and val_col and val_col in df.columns:
             ax.plot(epochs, df[val_col], color=colors["val"], alpha=alpha)
 
-    # Add Mean Lines
+    # Add Mean Lines. Runs may have different epoch counts (early stopping):
+    # pad to the longest run with NaN and average what is present at each epoch.
     if show_mean_lines and len(all_runs_metrics_list) > 1:
         if show_train and train_col:
-            try:
-                train_stack = np.array([run[train_col].values for run in all_runs_metrics_list])
+            mean_curve = _nanmean_curve(all_runs_metrics_list, train_col)
+            if mean_curve is not None:
                 ax.plot(
-                    range(1, train_stack.shape[1] + 1),
-                    np.mean(train_stack, axis=0),
+                    range(1, len(mean_curve) + 1),
+                    mean_curve,
                     color=colors["train"],
                     linewidth=3,
                     label="Mean Train",
                 )
-            except ValueError:
-                pass
         if show_val and val_col:
-            try:
-                val_stack = np.array([run[val_col].values for run in all_runs_metrics_list])
+            mean_curve = _nanmean_curve(all_runs_metrics_list, val_col)
+            if mean_curve is not None:
                 ax.plot(
-                    range(1, val_stack.shape[1] + 1),
-                    np.mean(val_stack, axis=0),
+                    range(1, len(mean_curve) + 1),
+                    mean_curve,
                     color=colors["val"],
                     linewidth=3,
                     label="Mean Val",
                 )
-            except ValueError:
-                pass
 
     ax.set_title(f"{metric_display} over {len(all_runs_metrics_list)} Runs")
     ax.set_xlabel("Epoch")
@@ -645,27 +677,27 @@ def plot_variability_summary(
         ax.legend()
         plot_idx += 1
 
-        # PANEL 3: Boxplot
-        if show_boxplot and len(final_metrics_series) > 0:
-            ax = axes[plot_idx]
-            box_dict = {"Val": pd.Series(final_metrics_series)}
-            if final_test_series is not None:
-                box_dict["Test"] = pd.Series(final_test_series)
-            box_df = pd.DataFrame(box_dict).melt(var_name="Split", value_name=metric_display)
-            palette_map = {"Val": colors["val"]}
-            if final_test_series is not None:
-                palette_map["Test"] = colors["test"]
-            sns.boxplot(
-                data=box_df,
-                x="Split",
-                y=metric_display,
-                hue="Split",
-                palette=palette_map,
-                ax=ax,
-                legend=False,
-            )
-            ax.set_title("Performance Spread")
-            plot_idx += 1
+    # PANEL 3: Boxplot (independent of the histogram panel)
+    if show_boxplot and len(final_metrics_series) > 0:
+        ax = axes[plot_idx]
+        box_dict = {"Val": pd.Series(final_metrics_series)}
+        if final_test_series is not None:
+            box_dict["Test"] = pd.Series(final_test_series)
+        box_df = pd.DataFrame(box_dict).melt(var_name="Split", value_name=metric_display)
+        palette_map = {"Val": colors["val"]}
+        if final_test_series is not None:
+            palette_map["Test"] = colors["test"]
+        sns.boxplot(
+            data=box_df,
+            x="Split",
+            y=metric_display,
+            hue="Split",
+            palette=palette_map,
+            ax=ax,
+            legend=False,
+        )
+        ax.set_title("Performance Spread")
+        plot_idx += 1
     plt.tight_layout()
     return _finalize_plot(fig, show)
 
@@ -1178,9 +1210,27 @@ def plot_comparison_forest(
     baseline_mean = np.mean(baseline_scores)
 
     models = []
-    diff_means = []
-    cis = []
+    centers = []
+    lows = []
+    highs = []
     colors = []
+    used_fallback = False
+
+    pairwise_comps: Dict = {}
+    if hasattr(comparison_results, "pairwise_comparisons"):
+        pairwise_comps = comparison_results.pairwise_comparisons or {}
+    elif isinstance(comparison_results, dict):
+        pairwise_comps = comparison_results.get("pairwise_comparisons", {}) or {}
+
+    def _finite_pair(obj):
+        if isinstance(obj, (list, tuple)) and len(obj) == 2:
+            try:
+                lo, hi = float(obj[0]), float(obj[1])
+            except (TypeError, ValueError):
+                return None
+            if np.isfinite(lo) and np.isfinite(hi):
+                return lo, hi
+        return None
 
     for name, scores in data_dict.items():
         if name == baseline_model:
@@ -1189,44 +1239,49 @@ def plot_comparison_forest(
         scores = np.array(scores)
         diff = scores.mean() - baseline_mean
 
-        # Extract pre-computed pairwise CI if available (paired, correct).
-        pairwise_comps: Dict = {}
-        if hasattr(comparison_results, "pairwise_comparisons"):
-            pairwise_comps = comparison_results.pairwise_comparisons or {}
-        elif isinstance(comparison_results, dict):
-            pairwise_comps = comparison_results.get("pairwise_comparisons", {})
-
-        ci_half = None
+        # Draw the interval that was COMPUTED, at its own centre and with its own
+        # asymmetry. Symmetrising a BCa interval and re-centring it on the mean
+        # difference produced a bar that was neither.
+        lo = hi = center = None
+        sig: Optional[bool] = None
         for key in (f"{name}_vs_{baseline_model}", f"{baseline_model}_vs_{name}"):
             result = pairwise_comps.get(key)
-            ci = getattr(result, "confidence_interval", None)
-            if ci is not None and isinstance(ci, (list, tuple)) and len(ci) == 2:
-                lo, hi = ci
-                ci_half = (hi - lo) / 2.0
-                break
-
-        if ci_half is None:
-            # Fallback: Welch unpaired. ~2.36x too wide for paired data (r≈0.85).
-            se_diff = np.sqrt(
-                np.var(scores, ddof=1) / len(scores)
-                + np.var(baseline_scores, ddof=1) / len(baseline_scores)
+            pair = _finite_pair(getattr(result, "confidence_interval", None))
+            if pair is None:
+                continue
+            lo, hi = pair
+            pe = getattr(result, "point_estimate", None)
+            center = (
+                float(pe) if isinstance(pe, (int, float)) and np.isfinite(pe) else (lo + hi) / 2.0
             )
-            df_welch = len(scores) + len(baseline_scores) - 2
-            t_crit = _scipy_stats.t.ppf(0.975, df=df_welch)
-            ci_half = t_crit * se_diff
+            if key.startswith(baseline_model):  # baseline - name: flip orientation
+                lo, hi, center = -hi, -lo, -center
+            is_sig = getattr(result, "is_significant", None)
+            if callable(is_sig):
+                value = is_sig()
+                sig = value if isinstance(value, bool) else None  # corrected p, if any
+            break
 
-        ci = ci_half
+        if lo is None:
+            # Fallback: unpaired Welch t interval with Welch-Satterthwaite df.
+            n1, n2 = len(scores), len(baseline_scores)
+            v1 = np.var(scores, ddof=1) / n1
+            v2 = np.var(baseline_scores, ddof=1) / n2
+            df_w = (v1 + v2) ** 2 / (v1**2 / (n1 - 1) + v2**2 / (n2 - 1))
+            half = _scipy_stats.t.ppf(0.975, df=df_w) * np.sqrt(v1 + v2)
+            center, lo, hi = diff, diff - half, diff + half
+            used_fallback = True
 
         models.append(name)
-        diff_means.append(diff)
-        cis.append(ci)
-
-        if diff - ci > 0:
-            colors.append(settings.THEME["test"])  # Better
-        elif diff + ci < 0:
-            colors.append(settings.THEME["significant"])  # Worse
+        centers.append(center)
+        lows.append(lo)
+        highs.append(hi)
+        if sig is True:
+            colors.append(settings.THEME["test"] if center > 0 else settings.THEME["significant"])
+        elif sig is False:
+            colors.append("gray")
         else:
-            colors.append("gray")  # Neutral
+            colors.append("gray")  # no corrected test available: do not imply one
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, len(models) * 0.8 + 2))
@@ -1234,14 +1289,25 @@ def plot_comparison_forest(
         fig = ax.figure  # type: ignore[assignment]
 
     y_pos = np.arange(len(models))
-    for i, (dm, yp, ci, col) in enumerate(zip(diff_means, y_pos, cis, colors)):
-        ax.errorbar(dm, yp, xerr=ci, fmt="o", color="black", ecolor=col, capsize=5)
+    for c, yp, lo, hi, col in zip(centers, y_pos, lows, highs, colors):
+        ax.errorbar(c, yp, xerr=[[c - lo], [hi - c]], fmt="o", color="black", ecolor=col, capsize=5)
+    if used_fallback:
+        ax.text(
+            0.99,
+            0.01,
+            "Welch t (unpaired) where no pairwise interval was available",
+            transform=ax.transAxes,
+            ha="right",
+            va="bottom",
+            fontsize=8,
+            color="gray",
+        )
 
     ax.axvline(0, color=settings.THEME["baseline"], linestyle="--")
 
     ax.set_yticks(y_pos)
     ax.set_yticklabels(models)
-    ax.set_xlabel(f"Difference in {metric} (vs {baseline_model})")
+    ax.set_xlabel(f"Difference in {metric} (vs {baseline_model}); interval as computed")
     ax.set_title(f"Model Performance vs Baseline ({baseline_model})")
     ax.grid(axis="x", linestyle=":", alpha=0.5)
 

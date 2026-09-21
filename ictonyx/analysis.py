@@ -132,6 +132,8 @@ class StatisticalTestResult:
 
     # Confidence intervals (populated by bootstrap)
     confidence_interval: Optional[Tuple[float, float]] = None
+    point_estimate: Optional[float] = None
+    """The statistic the confidence interval was built around (bootstrap point estimate)."""
     ci_confidence_level: Optional[float] = None
     ci_method: Optional[str] = None
     ci_effect_size: Optional[Tuple[float, float]] = None
@@ -1877,6 +1879,7 @@ def compare_two_models(
                     random_state=random_state,
                 )
             result.confidence_interval = (ci_result.ci_lower, ci_result.ci_upper)
+            result.point_estimate = float(ci_result.point_estimate)
 
             result.ci_confidence_level = ci_result.confidence_level
             result.ci_method = ci_result.method

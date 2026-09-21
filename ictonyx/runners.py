@@ -487,7 +487,7 @@ class ExperimentRunner:
         self._run_log(f" - Run {run_id}: Starting in isolated process...")
 
         # Log run start (Metric Tracker)
-        self.tracker.log_params({"run_id": run_id, "mode": "isolated"})
+        self.tracker.log_metric("run_id", run_id, step=run_id)
 
         # Execute in subprocess
         result = self.memory_manager.run_isolated(
@@ -581,7 +581,7 @@ class ExperimentRunner:
         self._run_log(f" - Run {run_id}: Training...")
 
         # Log run start (Metric Tracker)
-        self.tracker.log_params({"run_id": run_id, "mode": "standard"})
+        self.tracker.log_metric("run_id", run_id, step=run_id)
 
         wrapped_model = None
         try:
@@ -843,6 +843,7 @@ class ExperimentRunner:
             )
 
         # Log study parameters (Metric Tracker)
+        self.tracker.set_tags({"mode": "isolated" if self.use_process_isolation else "standard"})
         self.tracker.log_params(
             {
                 "num_runs": num_runs,
@@ -874,6 +875,7 @@ class ExperimentRunner:
         run_iter = range(num_runs)
         if self._progress_bar:
             run_iter = tqdm(run_iter, desc="Variability Study", unit="run")
+        _completed = False
         try:
             if use_parallel and not self.use_process_isolation:
                 # --- Parallel execution path ---
@@ -987,14 +989,15 @@ class ExperimentRunner:
                         logger.warning(
                             f"\n\nStudy interrupted after {len(self.all_runs_metrics)} runs"
                         )
-
+                _completed = True
         finally:
             # --- Cleanup and end the tracker run however we got here (v12 2.61) ---
             if not self.use_process_isolation:
                 final_cleanup = self.memory_manager.cleanup()
                 if self.verbose and final_cleanup.memory_freed_mb:
                     logger.info(f"\nFinal cleanup freed {final_cleanup.memory_freed_mb:.1f}MB")
-            self.tracker.end_run()
+            if not _completed:
+                self.tracker.end_run()  # abort: close the run now
 
         if self.verbose:
             successful = len(self.all_runs_metrics)
@@ -1054,7 +1057,7 @@ class ExperimentRunner:
 
         if hasattr(self.tracker, "log_study_summary"):
             self.tracker.log_study_summary(results)
-
+        self.tracker.end_run()  # success: close after the summary is logged
         return results
 
     def get_summary_stats(self) -> Dict[str, Any]:

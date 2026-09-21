@@ -12,9 +12,10 @@ logger = settings.logger
 
 # Optional MLflow dependency
 try:
-    import mlflow
-    import mlflow.sklearn
-    import mlflow.tensorflow
+    import mlflow  # framework flavours (mlflow.sklearn / .tensorflow / .pytorch) are
+
+    #                 imported inside log_model(); importing mlflow.tensorflow here
+    #                 made MLflowLogger unusable without TensorFlow installed.
 
     HAS_MLFLOW = True
 except ImportError:
@@ -185,21 +186,32 @@ class MLflowLogger(BaseLogger):
 
         mlflow.set_experiment(experiment_name)
 
-        # Start the run
-        self._run = mlflow.start_run(run_name=run_name)
-        self._run_id = self._run.info.run_id
-
+        # The run is started lazily on first use, so constructing a logger has no
+        # side effect on MLflow's active-run state and an unused logger leaves
+        # nothing open.
+        self._run_name = run_name
+        self._run = None
+        self._run_id: Optional[str] = None
         self._current_child_run_id: Optional[str] = None
         if self.verbose:
-            logger.info(f"Started MLflow run: {self._run_id}")
             logger.info(f"Experiment: {experiment_name}")
             if tracking_uri:
                 logger.info(f"Tracking URI: {tracking_uri}")
 
+    def _ensure_run(self) -> None:
+        """Start the MLflow run if it has not been started."""
+        if self._run is None:
+            self._run = mlflow.start_run(run_name=self._run_name)
+            self._run_id = self._run.info.run_id
+            if self.verbose:
+                logger.info(f"Started MLflow run: {self._run_id}")
+
     @property
     def run_id(self) -> str:
-        """Get the current run ID."""
-        return self._run_id
+        """The run ID. Starts the run on first access; after end_run() returns the ended run's ID."""
+        if self._run_id is None:
+            self._ensure_run()
+        return self._run_id  # type: ignore[return-value]
 
     @property
     def experiment_name(self) -> str:
@@ -208,6 +220,7 @@ class MLflowLogger(BaseLogger):
 
     def log_params(self, params: Dict[str, Any]):
         """Logs parameters to MLflow and stores in history."""
+        self._ensure_run()
         super().log_params(params)
 
         # MLflow has limitations on parameter types, so convert appropriately
@@ -225,6 +238,7 @@ class MLflowLogger(BaseLogger):
 
     def log_metric(self, key: str, value: float, step: int = 0):
         """Logs a metric to MLflow and stores in history."""
+        self._ensure_run()
         super().log_metric(key, value, step)
 
         # Handle NaN values
@@ -237,6 +251,7 @@ class MLflowLogger(BaseLogger):
 
     def log_metrics(self, metrics: Dict[str, float], step: int = 0):
         """Logs multiple metrics efficiently."""
+        self._ensure_run()
         # Filter out invalid values
         valid_metrics = {}
         for key, value in metrics.items():
@@ -254,6 +269,7 @@ class MLflowLogger(BaseLogger):
 
     def log_artifact(self, artifact_path: str, artifact_name: Optional[str] = None):
         """Logs an artifact file to MLflow."""
+        self._ensure_run()
         super().log_artifact(artifact_path, artifact_name)
 
         if not os.path.exists(artifact_path):
@@ -275,6 +291,7 @@ class MLflowLogger(BaseLogger):
 
     def log_model(self, model, artifact_path: str = "model", **kwargs):
         """Log a model to MLflow using the framework-appropriate flavor."""
+        self._ensure_run()
         super().log_model(model, artifact_path)
         try:
             _logged = False
@@ -320,6 +337,7 @@ class MLflowLogger(BaseLogger):
 
     def log_figure(self, figure, artifact_name: str):
         """Logs a matplotlib figure as an artifact."""
+        self._ensure_run()
         super().log_figure(figure, artifact_name)
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
@@ -330,6 +348,7 @@ class MLflowLogger(BaseLogger):
 
     def log_dataframe(self, df: pd.DataFrame, artifact_name: str):
         """Logs a pandas DataFrame as a CSV artifact."""
+        self._ensure_run()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as tmp_file:
             df.to_csv(tmp_file.name, index=False)
             tmp_file.flush()
@@ -346,6 +365,7 @@ class MLflowLogger(BaseLogger):
         self, history: Union[Dict, pd.DataFrame], artifact_name: str = "training_history.csv"
     ):
         """Logs training history as both metrics and artifact."""
+        self._ensure_run()
         if isinstance(history, dict):
             history_df = pd.DataFrame(history)
         else:
@@ -367,6 +387,7 @@ class MLflowLogger(BaseLogger):
 
     def set_tags(self, tags: Dict[str, str]):
         """Sets tags for the current run."""
+        self._ensure_run()
         super().set_tags(tags)
 
         # Convert all values to strings
@@ -375,6 +396,7 @@ class MLflowLogger(BaseLogger):
 
     def log_system_info(self):
         """Logs system information as tags."""
+        self._ensure_run()
         system_tags = {}
 
         # Always available Python info
@@ -414,6 +436,7 @@ class MLflowLogger(BaseLogger):
 
     def start_child_run(self, run_name: Optional[str] = None) -> str:
         """Start a nested child run under the current parent run."""
+        self._ensure_run()
         if not HAS_MLFLOW:
             return ""
         child_run = mlflow.start_run(run_name=run_name, nested=True)
@@ -428,13 +451,17 @@ class MLflowLogger(BaseLogger):
         self._current_child_run_id = None
 
     def end_run(self):
-        """Ends the MLflow run."""
+        """Ends the MLflow run. Safe to call more than once, or without a run."""
         super().end_run()
+        if self._run is None:
+            return
+        if self._current_child_run_id is not None:
+            self.end_child_run()
         mlflow.end_run()
-
         if self.verbose:
             logger.info(f"Ended MLflow run: {self._run_id}")
             logger.info(f"View results at: {mlflow.get_tracking_uri()}")
+        self._run = None
 
     def log_study_summary(self, results: Any) -> None:
         """Log statistical summary of a completed study to the parent run.
@@ -446,6 +473,7 @@ class MLflowLogger(BaseLogger):
             results: A VariabilityStudyResults object from run_study()
                 or variability_study().
         """
+        self._ensure_run()
         if not HAS_MLFLOW:
             return
 
@@ -473,6 +501,7 @@ class MLflowLogger(BaseLogger):
         Override with the ``MLFLOW_UI_URL`` environment variable when serving
         the UI on a non-default host or port.
         """
+        self._ensure_run()
         import os
 
         tracking_uri = mlflow.get_tracking_uri()

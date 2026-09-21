@@ -229,12 +229,13 @@ class TestMLflowLoggerMocked:
                 with patch("ictonyx.loggers.mlflow", mock_mlf):
                     yield mock_mlf
 
-    def test_init_creates_run(self, mock_mlflow):
+    def test_run_starts_lazily_on_first_use(self, mock_mlflow):
         from ictonyx.loggers import MLflowLogger
 
         logger = MLflowLogger(verbose=False)
+        mock_mlflow.start_run.assert_not_called()  # construction has no side effect
+        assert logger.run_id == "test-run-123"  # first use starts the run
         mock_mlflow.start_run.assert_called_once()
-        assert logger.run_id == "test-run-123"
 
     def test_log_params_calls_mlflow(self, mock_mlflow):
         from ictonyx.loggers import MLflowLogger
@@ -294,7 +295,12 @@ class TestMLflowLoggerMocked:
         from ictonyx.loggers import MLflowLogger
 
         logger = MLflowLogger(verbose=False)
+        logger.end_run()  # nothing started: must not call mlflow.end_run
+        mock_mlflow.end_run.assert_not_called()
+        logger.log_metric("x", 1.0)
         logger.end_run()
+        mock_mlflow.end_run.assert_called_once()
+        logger.end_run()  # idempotent
         mock_mlflow.end_run.assert_called_once()
 
     def test_set_tags_calls_mlflow(self, mock_mlflow):

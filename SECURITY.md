@@ -6,6 +6,9 @@ ictonyx uses Python's `pickle` module in:
 
 - `ScikitLearnModelWrapper.save_model()` / `load_model()`
 - `save_object()` / `load_object()` in `ictonyx.utils`
+- `VariabilityStudyResults.save()` / `load()`
+- checkpoint files (`checkpoint.pkl`, `checkpoint.done.pkl`) read on resume by
+  `ExperimentRunner.run_study(checkpoint_dir=...)`
 
 **Only load files from trusted sources.** Pickle files can execute
 arbitrary code on deserialization. Do not load `.pkl` files downloaded

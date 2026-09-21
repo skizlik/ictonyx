@@ -527,7 +527,7 @@ if TENSORFLOW_AVAILABLE:
                 verbose = kwargs.pop("verbose")
                 kwargs["verbose"] = int(bool(verbose)) if not isinstance(verbose, int) else verbose
 
-            # BUG-048-5: clear_session() MUST run BEFORE set_random_seed().
+            # clear_session() MUST run BEFORE set_random_seed().
             # In TF 2.16+, clear_session() resets the global random state,
             # nullifying any seed set before it.
             if self.clear_session:
@@ -1354,7 +1354,7 @@ if PYTORCH_AVAILABLE:
         ) -> "DataLoader":
             """Create a DataLoader from numpy arrays."""
             X_t = self._to_tensor(X, dtype=torch.float32)
-            # BUG-048-7: BCEWithLogitsLoss and BCELoss require float targets
+            # BCEWithLogitsLoss and BCELoss require float targets
             # even for binary classification. Check criterion type to avoid
             # dtype mismatch in _evaluate_loader() during test evaluation.
             if self.task == "classification" and not isinstance(
@@ -1465,7 +1465,7 @@ if PYTORCH_AVAILABLE:
                         history["val_loss"].append(val_loss)
                         history["val_accuracy"].append(val_metric)
                     else:
-                        # BUG-048-1: Do NOT append val_loss here.
+                        # Do NOT append val_loss here.
                         # _compute_epoch_regression_metrics() already returns
                         # {"val_loss": ..., "val_mse": ..., ...}. Appending
                         # val_loss both here and via that dict gave 2N entries
@@ -1570,7 +1570,7 @@ if PYTORCH_AVAILABLE:
 
                     # Squeeze single-output models: regression OR BCE binary
                     # classification. BCEWithLogitsLoss requires input and
-                    # target to have the same shape. (BUG-048-7)
+                    # target to have the same shape.
                     if outputs.dim() > 1 and outputs.shape[-1] == 1:
                         outputs = outputs.squeeze(-1)
 
@@ -2014,7 +2014,7 @@ if HUGGINGFACE_AVAILABLE:
             import tempfile
 
             # ── Seed control ─────────────────────────────────────────────
-            # Per-run seed is threaded via fit_kwargs by the runner (X-40 fix,
+            # Per-run seed is threaded via fit_kwargs by the runner (since
             # v0.4.7). The prior implementation read from self.model_config,
             # which is never populated on the wrapper — so every run used the
             # fallback 42, producing bit-for-bit identical metrics across all

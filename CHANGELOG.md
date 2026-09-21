@@ -20,6 +20,127 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v0.4.10 — 2026-09-21
+
+Hotfix release, driven by six independent reviews of v0.4.9. The theme
+throughout: a value the user set was not the value the model trained with,
+and nothing said so. Every item below either makes the value arrive or
+makes the silence an error. Also corrects several claims the library made
+about its own inference.
+
+### Behaviour changes (read these first)
+
+- **Checkpoint resume keeps the seed family.** A runner constructed without
+  `seed=` adopts the checkpoint's seed on resume; an explicit different seed
+  raises `ValueError` unless `resume_ignore_seed=True`. Completed checkpoints
+  are renamed `checkpoint.done.pkl` so a re-run trains rather than replays.
+- **Model instances are seeded per run.** An sklearn estimator passed as an
+  instance has its `random_state` overridden with the run's child seed
+  (one-time warning). Previously `RandomForestClassifier(random_state=0)`
+  trained identical models on every run.
+- **A study whose first run fails raises `ExperimentError`** instead of
+  recording N identical failures. `stop_on_failure_rate` now fires at its
+  default (its denominator double-counted failures).
+- **`compare_two_models`**: `ci_target` defaults to `"median_difference"`,
+  `test_method` to `"mann_whitney"`; `"auto"` (the data-driven pre-test)
+  raises. `compare_results(paired=False)` and `compare_models(paired=False)`
+  now run the same test.
+- **Paired statistics**: zero differences use Pratt's method; the primary
+  effect size is the signed matched-pairs rank-biserial r over all pairs
+  (Rosenthal's |z|/√n moves to `effect_size_secondary`); pairs are matched by
+  position and unequal lengths raise. `required_runs_paired` maps r to a
+  mean shift with the previously missing √2, so its answer is 1–2 runs lower
+  for the same input.
+- **Data-handler kwargs are validated.** `test_split`, `val_split`,
+  `split_seed` and `stratify` now reach every handler (DataFrame, CSV, image,
+  text, time-series); a key the detected handler cannot use raises
+  `ConfigurationError`. `TabularDataHandler.load()` returns NumPy arrays
+  (`return_frames=True` for DataFrames) and its constructor no longer accepts
+  `**kwargs`.
+- **`HyperparameterTuner`**: `metric` defaults to `None` (auto-resolved);
+  `seed=` added and the Optuna sampler is seeded; an unresolvable metric raises
+  on the first trial; `run_seed` and `batch_size` now reach `fit()`.
+- **Process isolation** raises when the builder cannot be serialised
+  (`allow_isolation_fallback=True` restores in-process fallback);
+  `process_timeout=` is exposed (default 3600 s).
+- **`MLflowLogger`** no longer opens a run at construction, no longer requires
+  TensorFlow, and no longer aborts on the second run.
+- **Wrapper finalisers no longer clear the Keras session or the CUDA cache.**
+  `wrapper.release()` does; the runner calls it between runs.
+- `ModelConfig(params)` copies its input; `freeze()` now covers the property
+  setters; `copy(keep_frozen=False)` added.
+- `plot_variability_summary` accepts the results object positionally and a
+  full metric name; `kind=` honours `metric=`.
+- `random_state` on `paired_wilcoxon_test` and `mann_whitney_test` is
+  documented as accepted-and-ignored; removal deferred to 0.5.0.
+
+### Fixed
+
+- `compare_models(validation_data=...)` raised; it forwarded handler kwargs to
+  each per-model study. Handler kwargs now stop at the handler.
+- `compare_models` reported `raw_data` from the unaligned per-study values
+  while testing aligned pairs; plots and summaries disagreed with the test.
+- `compare_models` warns when runs failed or produced NaN;
+  `ModelComparisonResults.run_counts` reports requested vs completed.
+- `friedman_test` and `bootstrap_paired_difference_ci` dropped NaNs per group,
+  silently re-pairing rows; they drop incomplete rows and warn.
+- `VariabilityStudyResults.metric_run_ids` records which run each final
+  metric came from; `to_json`/`from_json` round-trip `run_ids`, `run_seeds`
+  and `metric_run_ids`, so JSON-restored studies pair correctly.
+- Keras initial weights follow `run_seed` (seeded via
+  `keras.utils.set_random_seed` before the builder runs).
+- `get_feature_availability()` checks the real optional packages.
+- `anova_test` no longer counts untestable normality (n < 3) as met.
+- The pairwise-comparison matrix showed the wrong sign in one triangle.
+- The forest plot draws the computed interval at its own point estimate
+  (`StatisticalTestResult.point_estimate`, new), uses Welch–Satterthwaite
+  degrees of freedom in its fallback, and colours by corrected significance.
+- PyTorch single-logit binary heads (`BCEWithLogitsLoss`, `BCELoss`) train
+  and predict correctly; `predict()` agrees with `predict_proba()`; a
+  trailing `Softmax` is used as-is instead of applied twice.
+- `ImageDataHandler` honours `color_mode` (grayscale was decoded as RGB).
+- Text and time-series CSV inputs are reachable through the public API.
+- Keras `Model` and torch `nn.Module` instances get the "pass a builder"
+  message instead of a `TypeError` from `forward()`; a bad constructor kwarg
+  raises `ConfigurationError` naming the class.
+- A zero-variance bootstrap resample is dropped (NaN) instead of counted as
+  an effect of zero.
+- The `runs<20` warning fires once per comparison.
+- The comparison metric is resolved across all studies, not the first.
+
+### Documentation
+
+- `compare_models`, `compare_results`, `test_against_null` and
+  `test_above_chance` state that inference is conditional on the fixed split
+  and on training randomness only; the evaluation set's sampling error is
+  shared by every run.
+- Seed pairing is documented as a guarantee of aligned samples, not a power
+  gain: for different model families the paired differences are approximately
+  independent.
+- `check_convergence` documents that its p > 0.10 criterion accepts the null;
+  `bootstrap_mean_difference_ci` documents small-n under-coverage;
+  `get_epoch_statistics` bands are documented as pointwise.
+- `summarize()` prints the split sizes and the metric granularity implied by
+  the evaluation set; the README explains its headline result in those terms.
+- `CONTRIBUTING.md` documents the test conventions; `.flake8` matches black.
+
+### Tests and CI
+
+- `tests/test_tuning.py` had never run on any machine (gated on an unrelated
+  package; referenced a class that does not exist). It runs now.
+- Framework installs on CI fail the job instead of silently skipping ~100
+  tests; the tuning extra and mlflow are installed; Monte-Carlo power tests
+  are marked `slow` and run on one cell; coverage flags live in CI only.
+- New regression tests for every item above.
+
+### Dependencies
+
+- `cloudpickle >=2.0,<4`, `psutil >=5.9,<8` (were `^2`, `^5.9`).
+- `poetry.lock` not regenerated in this release; `pip install -e .` is the
+  supported install path.
+
+---
+
 ## v0.4.9 — 2026-09-13
 
 Execution-path unification and paired-inference integrity hotfix.

@@ -65,9 +65,9 @@ jobs:
       run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
     - name: Validate imports and version strings
-        run: |
-          python scripts/validate_imports.py
-          python scripts/check_version.py
+      run: |
+        python scripts/validate_imports.py
+        python scripts/check_version.py
 
     - name: Run tests with coverage
       shell: bash

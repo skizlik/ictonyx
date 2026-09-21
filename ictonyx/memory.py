@@ -263,9 +263,17 @@ class MemoryManager:
             warnings.warn(f"PyTorch setup failed: {e}")
             return False
 
-    def cleanup(self) -> MemoryResult:
-        """
-        Perform memory cleanup (standard mode only).
+    def cleanup(self, *, global_teardown: bool = False) -> MemoryResult:
+        """Perform memory cleanup (standard mode only).
+
+        Args:
+            global_teardown: If True, also run process-wide framework teardown
+                (``tf.keras.backend.clear_session()``, graph reset, CUDA cache
+                release) and three GC passes. Default False: release local
+                references and run one GC pass. Global teardown affects every
+                Keras model in the process, so it must be an explicit, scoped
+                decision (the runner makes it between runs), never a side
+                effect of an object being garbage-collected.
         """
         if self.use_process_isolation:
             # No cleanup needed - process will die
@@ -283,8 +291,8 @@ class MemoryManager:
             except Exception:
                 pass
 
-        # TensorFlow cleanup
-        if HAS_TENSORFLOW:
+        # TensorFlow cleanup (global: touches every Keras model in the process)
+        if global_teardown and HAS_TENSORFLOW:
             try:
                 tf.keras.backend.clear_session()
                 result.actions.append("tf_clear_session")
@@ -307,8 +315,8 @@ class MemoryManager:
             except Exception as e:
                 result.errors.append(f"TF cleanup: {str(e)[:100]}")
 
-        # PyTorch cleanup
-        if HAS_TORCH and torch.cuda.is_available():
+        # PyTorch cleanup (global: CUDA cache is process-wide)
+        if global_teardown and HAS_TORCH and torch.cuda.is_available():
             try:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
@@ -316,8 +324,8 @@ class MemoryManager:
             except Exception as e:
                 result.errors.append(f"PyTorch cleanup: {str(e)[:100]}")
 
-        # Garbage collection
-        collected = sum(gc.collect() for _ in range(3))
+        # Garbage collection: one pass locally, three for a full teardown
+        collected = sum(gc.collect() for _ in range(3 if global_teardown else 1))
         result.actions.append(f"gc_collected_{collected}")
 
         # Measure after
@@ -613,7 +621,7 @@ def managed_memory(use_process_isolation: bool = False, **kwargs):
             manager.setup()
             yield manager
         finally:
-            manager.cleanup()
+            manager.cleanup(global_teardown=True)  # explicit scope: full teardown on exit
     else:
         yield manager
 
@@ -621,7 +629,7 @@ def managed_memory(use_process_isolation: bool = False, **kwargs):
 def cleanup_gpu_memory() -> MemoryResult:
     """Quick GPU memory cleanup."""
     manager = MemoryManager(use_process_isolation=False)
-    return manager.cleanup()
+    return manager.cleanup(global_teardown=True)
 
 
 def get_memory_info() -> Dict[str, Any]:

@@ -289,9 +289,9 @@ class HyperparameterTuner:
                 except Exception as e:
                     logger.warning(f"Trial {trial.number} run {i + 1} failed: {e}")
                 finally:
-                    if wrapper is not None:  # v12 2.37: release the model every time
+                    if wrapper is not None:  # release the model every time
                         try:
-                            wrapper.cleanup()
+                            wrapper.release()
                         except Exception:
                             pass
 
@@ -391,7 +391,7 @@ class HyperparameterTuner:
             finally:
                 if wrapped_model is not None:
                     try:
-                        wrapped_model.cleanup()
+                        wrapped_model.release()
                     except Exception:
                         pass
 

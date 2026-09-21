@@ -658,14 +658,16 @@ class ExperimentRunner:
             # Cleanup
             if wrapped_model is not None:
                 try:
-                    if hasattr(wrapped_model, "cleanup"):
+                    if hasattr(wrapped_model, "release"):
+                        wrapped_model.release()  # explicit between-run teardown
+                    elif hasattr(wrapped_model, "cleanup"):
                         wrapped_model.cleanup()
                     del wrapped_model
                 except Exception:
                     pass
 
-            # Perform memory cleanup
-            cleanup_result = self.memory_manager.cleanup()
+            # Perform memory cleanup (global: this is the moment the runner controls)
+            cleanup_result = self.memory_manager.cleanup(global_teardown=True)
             if cleanup_result.memory_freed_mb and cleanup_result.memory_freed_mb > 10:
                 self._run_log(f"   Freed {cleanup_result.memory_freed_mb:.1f}MB")
 
@@ -993,7 +995,7 @@ class ExperimentRunner:
         finally:
             # --- Cleanup and end the tracker run however we got here (v12 2.61) ---
             if not self.use_process_isolation:
-                final_cleanup = self.memory_manager.cleanup()
+                final_cleanup = self.memory_manager.cleanup(global_teardown=True)
                 if self.verbose and final_cleanup.memory_freed_mb:
                     logger.info(f"\nFinal cleanup freed {final_cleanup.memory_freed_mb:.1f}MB")
             if not _completed:

@@ -173,17 +173,32 @@ class BaseModelWrapper(ABC):
         if sys.is_finalizing():
             return
         try:
+            self._finalizing = True  # framework-local cleanup only; never global teardown
             self.cleanup()
         except Exception:
             pass
 
-    def cleanup(self):
+    def release(self) -> None:
+        """Release this model AND run process-wide framework teardown.
+
+        This is what the runner calls between runs. It clears the Keras session
+        and the CUDA cache, which affects every model in the process; call it
+        yourself only when you mean that. ``cleanup()`` is the local version.
         """
-        Clean up resources used by this model.
+        self.cleanup()
+        try:
+            self._resource_manager.cleanup(global_teardown=True)
+        except Exception as e:
+            logger.warning(f"Release warning: {e}")
+
+    def cleanup(self):
+        """Release this model's own resources (local; no process-wide teardown).
+
+        Drops the framework model reference and runs one garbage-collection
+        pass. Use :meth:`release` for the full teardown between runs.
         """
         try:
             self._cleanup_implementation()
-            # Use new resource manager cleanup
             cleanup_result = self._resource_manager.cleanup()
 
             # Report significant cleanup events
@@ -382,7 +397,7 @@ class BaseModelWrapper(ABC):
 
         Returns a summary dict if more than 50 MB was freed, otherwise ``None``.
         """
-        cleanup_result = self._resource_manager.cleanup()
+        cleanup_result = self._resource_manager.cleanup(global_teardown=True)
         if cleanup_result.memory_freed_mb and cleanup_result.memory_freed_mb > 50:
             return {"cleaned": True, "freed_mb": cleanup_result.memory_freed_mb}
         return None
@@ -446,14 +461,16 @@ if TENSORFLOW_AVAILABLE:
 
         def _cleanup_implementation(self):
             """TensorFlow/Keras specific cleanup."""
-            # Clear the TF session before deleting the model reference.
-            # Reversing this order can leave dangling references in the session.
-            try:
-                import tensorflow as tf
+            # Clear the TF session before deleting the model reference, but only
+            # on an explicit cleanup(): a Keras wrapper being garbage-collected
+            # must not wipe the session other models are using.
+            if not getattr(self, "_finalizing", False):
+                try:
+                    import tensorflow as tf
 
-                tf.keras.backend.clear_session()
-            except Exception:
-                pass
+                    tf.keras.backend.clear_session()
+                except Exception:
+                    pass
             if hasattr(self, "model"):
                 try:
                     del self.model

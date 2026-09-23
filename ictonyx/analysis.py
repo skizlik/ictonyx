@@ -1690,29 +1690,84 @@ def paired_wilcoxon_test(
     differences = pd.Series(a[keep] - b[keep])
     n = int(keep.sum())
 
-    if np.std(differences, ddof=1) < deterministic_tol:
+    if n >= 2 and np.std(differences, ddof=1) < deterministic_tol:
+        common = float(np.median(differences))
+        if abs(common) < deterministic_tol:
+            # All differences zero: the two models are the same model on
+            # every run. The test is undefined (v13 C17 kept this branch).
+            warnings.warn(
+                "All paired differences are zero: both models produced "
+                "identical values on every run. The paired comparison is "
+                "undefined. If both models are deterministic under the fixed "
+                "data split, seed variation measures nothing here; use "
+                "resample_split (v0.5.x), a model with training-time "
+                "randomness, or VariabilityStudyResults.test_against_null() "
+                "on a single study.",
+                UserWarning,
+                stacklevel=2,
+            )
+            result = StatisticalTestResult(
+                test_name="Paired Wilcoxon Signed-Rank Test (inconclusive)",
+                statistic=float("nan"),
+                p_value=float("nan"),
+            )
+            result.sample_sizes = {"n_pairs": n, "non_zero_differences": 0}
+            result.conclusion = (
+                "Inconclusive: paired differences are all zero (identical model pair)."
+            )
+            result.warnings.append("All paired differences are zero; test undefined.")
+            return result
+
+        # Constant NON-zero differences (v16 3.26): every run favoured the
+        # same model by the same amount. That is the strongest possible
+        # paired evidence, not an inconclusive one. All ranks tie, so the
+        # signed-rank test reduces to the sign test; report its exact p.
+        a_is_higher = common > 0
+        p_one = 0.5**n
+        if alternative == "two-sided":
+            p_exact = min(1.0, 2.0 * p_one)
+        elif alternative == "greater":
+            p_exact = p_one if a_is_higher else 1.0 - p_one
+        elif alternative == "less":
+            p_exact = p_one if not a_is_higher else 1.0 - p_one
+        else:
+            raise ValueError(
+                f"alternative must be 'two-sided', 'greater' or 'less'; got {alternative!r}"
+            )
         warnings.warn(
-            "All paired differences are effectively constant "
-            f"(std < {deterministic_tol}). A paired test on deterministic "
-            "differences is not informative — p-values will be trivially "
-            "significant or trivially not. Returning inconclusive result. "
-            "If both models used identical seeds and produced identical "
-            "predictions, the paired comparison is undefined; use "
-            "VariabilityStudyResults.test_against_null() or inspect per-run "
-            "values directly.",
+            f"All paired differences are constant ({common:+.4g} on every one of "
+            f"{n} runs). Both models are deterministic under the fixed split, so "
+            "the differences carry no seed variability; the signed-rank test "
+            "reduces to an exact sign test. p reflects the direction only.",
             UserWarning,
             stacklevel=2,
         )
+        r_mp = 1.0 if a_is_higher else -1.0
         result = StatisticalTestResult(
-            test_name="Paired Wilcoxon Signed-Rank Test (inconclusive)",
-            statistic=float("nan"),
-            p_value=float("nan"),
+            test_name="Paired Wilcoxon Signed-Rank Test (constant differences; exact sign test)",
+            statistic=float(n * (n + 1) / 2) if a_is_higher else 0.0,
+            p_value=float(p_exact),
         )
-        result.sample_sizes = {"n_pairs": n, "non_zero_differences": 0}
-        result.conclusion = (
-            "Inconclusive: paired differences have zero variance " "(deterministic model pair)."
+        result.sample_sizes = {"n_pairs": n, "non_zero_differences": n}
+        result.effect_size = r_mp
+        result.effect_size_name = "matched-pairs rank-biserial r"
+        result.effect_size_interpretation = _interpret_rank_biserial(1.0)
+        result.assumption_details["constant_difference"] = common
+        result.warnings.append(
+            f"Paired differences are constant ({common:+.4g}); p is the exact sign-test "
+            "p-value and carries no information about seed variability."
         )
-        result.warnings.append("Deterministic paired differences; test returned inconclusive.")
+        clause = _direction_sentence(metric, a_is_higher)
+        if p_exact < alpha:
+            result.conclusion = (
+                f"{clause} on every one of {n} runs by exactly {abs(common):.4g} "
+                f"(exact sign test, p={p_exact:.2e}, r={r_mp:+.1f})."
+            )
+        else:
+            result.conclusion = (
+                f"{clause} on every one of {n} runs, but {n} runs are too few for "
+                f"an exact sign test to reach alpha={alpha} (p={p_exact:.3f})."
+            )
         return result
 
     result = StatisticalTestResult(

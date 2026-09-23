@@ -114,3 +114,32 @@ def test_forest_plot_colour_follows_metric_direction():
     assert bar_colour(fig_acc) == good  # A above B on accuracy: better
     assert bar_colour(fig_loss) == bad  # A above B on loss: worse
     matplotlib.pyplot.close("all")
+
+
+# --------------------------------------------------------------------------
+# 3.26
+# --------------------------------------------------------------------------
+def test_constant_nonzero_paired_difference_is_decisive():
+    a = pd.Series(np.linspace(0.80, 0.90, 20))
+    b = a - 0.05  # A beats B by exactly 0.05 on every run
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r = A.paired_wilcoxon_test(a, b)
+    assert "inconclusive" not in r.test_name.lower()
+    assert r.p_value == pytest.approx(2 * 0.5**20)
+    assert r.effect_size == pytest.approx(1.0)
+    assert r.is_significant()
+    assert any("constant" in w.lower() for w in r.warnings)
+
+    # Sign is respected.
+    r2 = A.paired_wilcoxon_test(b, a)
+    assert r2.effect_size == pytest.approx(-1.0)
+
+
+def test_all_zero_paired_differences_stay_undefined():
+    a = pd.Series(np.linspace(0.80, 0.90, 20))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r = A.paired_wilcoxon_test(a, a.copy())
+    assert np.isnan(r.p_value)
+    assert not r.is_significant()

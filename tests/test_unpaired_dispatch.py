@@ -50,4 +50,8 @@ def test_unpaired_entry_points_agree(X, y):
     )
     assert "Mann-Whitney" in via_results.overall_test.test_name
     assert "Mann-Whitney" in via_models.overall_test.test_name
-    assert via_results.overall_test.p_value == pytest.approx(via_models.overall_test.p_value)
+    # Both sklearn models are deterministic under the fixed split, so both
+    # paths return the undefined (NaN) result; they must still agree.
+    assert via_results.overall_test.p_value == pytest.approx(
+        via_models.overall_test.p_value, nan_ok=True
+    )

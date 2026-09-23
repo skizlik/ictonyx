@@ -873,9 +873,56 @@ def mann_whitney_test(
     result.warnings.extend(size_warnings)
     result.assumptions_met["adequate_sample_size"] = adequate_size
 
-    # Independence check
-    is_indep1, indep_details1 = check_independence(clean1)
-    is_indep2, indep_details2 = check_independence(clean2)
+    # Zero-variance groups (v16 3.40). A constant group is one observation
+    # repeated: the model is deterministic under the fixed split. Two constant
+    # groups make the test undefined, exactly as the paired path treats
+    # all-zero differences; one constant group is still a valid rank test
+    # but must say so.
+    zero_var = [
+        name
+        for name, arr in (("group1", clean1), ("group2", clean2))
+        if len(arr) >= 2 and np.std(arr, ddof=1) < 1e-10
+    ]
+    if zero_var:
+        result.assumption_details["zero_variance_groups"] = zero_var
+        if len(zero_var) == 2:
+            msg = (
+                "group1 and group2 have zero variance across runs: both models are "
+                "deterministic under the fixed data split, so each group is one "
+                "observation repeated, not a sample of seed variability."
+            )
+        else:
+            msg = (
+                f"{zero_var[0]} has zero variance across runs: that model is "
+                "deterministic under the fixed data split, so its group is one "
+                "observation repeated, not a sample of seed variability."
+            )
+        result.warnings.append(msg)
+    if len(zero_var) == 2:
+        warnings.warn(
+            "Both groups have zero variance across runs (both models are "
+            "deterministic under the fixed split). A Mann-Whitney U test on two "
+            "repeated constants is undefined; returning an inconclusive result.",
+            UserWarning,
+            stacklevel=2,
+        )
+        result.test_name = "Mann-Whitney U Test (undefined: both groups constant)"
+        result.statistic = float("nan")
+        result.p_value = float("nan")
+        result.conclusion = (
+            "Inconclusive: both groups have zero variance (deterministic model pair)."
+        )
+        result.detailed_interpretation = _generate_detailed_interpretation(result, alpha)
+        return result
+
+    # Independence check. Skipped for a constant group: a constant series has
+    # no autocorrelation to detect (pandas returns NaN, which read as False).
+    is_indep1, indep_details1 = (
+        (None, {"skipped": "zero variance"}) if "group1" in zero_var else check_independence(clean1)
+    )
+    is_indep2, indep_details2 = (
+        (None, {"skipped": "zero variance"}) if "group2" in zero_var else check_independence(clean2)
+    )
 
     if is_indep1 is False or is_indep2 is False:
         # Explicitly False means the test ran and found autocorrelation.
@@ -884,7 +931,9 @@ def mann_whitney_test(
             "Data shows evidence of autocorrelation, violating independence assumption"
         )
 
-    if is_indep1 is None or is_indep2 is None:
+    if (is_indep1 is None and "group1" not in zero_var) or (
+        is_indep2 is None and "group2" not in zero_var
+    ):
         result.warnings.append(
             "Independence could not be assessed: too few observations for "
             "the autocorrelation test."

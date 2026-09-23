@@ -143,3 +143,32 @@ def test_all_zero_paired_differences_stay_undefined():
         r = A.paired_wilcoxon_test(a, a.copy())
     assert np.isnan(r.p_value)
     assert not r.is_significant()
+
+
+# --------------------------------------------------------------------------
+# 3.40
+# --------------------------------------------------------------------------
+def test_unpaired_both_constant_is_undefined_like_paired():
+    c1 = pd.Series([0.80] * 20)
+    c2 = pd.Series([0.70] * 20)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r = A.mann_whitney_test(c1, c2)
+    assert np.isnan(r.p_value)
+    assert not r.is_significant()
+    assert "undefined" in r.test_name.lower() or "inconclusive" in r.test_name.lower()
+    assert r.assumption_details.get("zero_variance_groups") == ["group1", "group2"]
+
+
+def test_unpaired_one_constant_group_warns_but_tests():
+    rng = np.random.default_rng(1)
+    c = pd.Series([0.80] * 20)
+    n = pd.Series(rng.normal(0.75, 0.02, 20))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r = A.mann_whitney_test(c, n)
+    assert np.isfinite(r.p_value)
+    assert r.assumption_details.get("zero_variance_groups") == ["group1"]
+    assert any("deterministic" in w.lower() for w in r.warnings)
+    # A constant series is not "autocorrelated".
+    assert not any("autocorrelation" in w.lower() for w in r.warnings)

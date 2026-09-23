@@ -41,3 +41,31 @@ REPO = Path(__file__).resolve().parent.parent
 )
 def test_metric_direction_table(name, expected):
     assert A.metric_direction(name) == expected
+
+
+def _paired_fixture():
+    rng = np.random.default_rng(7)
+    a = pd.Series(rng.normal(0.30, 0.01, 20))  # A has the HIGHER values
+    b = pd.Series(rng.normal(0.25, 0.01, 20))
+    return a, b
+
+
+def test_direction_wording_flips_for_loss_metrics():
+    a, b = _paired_fixture()
+    acc = A.paired_wilcoxon_test(a, b, metric="val_accuracy")
+    loss = A.paired_wilcoxon_test(a, b, metric="val_loss")
+    assert acc.is_significant() and loss.is_significant()
+    # Same data, same effect size, opposite winner named.
+    assert acc.effect_size == pytest.approx(loss.effect_size)
+    assert "Model A outperforms" in acc.conclusion
+    assert "Model B outperforms" in loss.conclusion
+    assert "lower val_loss" in loss.conclusion
+
+
+def test_unknown_metric_uses_neutral_wording():
+    a, b = _paired_fixture()
+    r = A.paired_wilcoxon_test(a, b)  # no metric
+    assert "outperforms" not in r.conclusion
+    assert "higher" in r.conclusion and "Model A" in r.conclusion
+    r2 = A.paired_wilcoxon_test(a, b, metric="wobble_index")
+    assert "outperforms" not in r2.conclusion

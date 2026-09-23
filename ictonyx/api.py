@@ -567,7 +567,9 @@ def compare_models(
         series_a = pd.Series(va, index=run_ids, name=names[0])
         series_b = pd.Series(vb, index=run_ids, name=names[1])
         _warn_incomplete_studies(studies, metric)
-        paired_result = compare_two_models(series_a, series_b, paired=True, random_state=seed)
+        paired_result = compare_two_models(
+            series_a, series_b, paired=True, random_state=seed, metric=metric
+        )
         return ModelComparisonResults(
             overall_test=paired_result,
             # raw_data is the aligned pairs the test actually used (v12 2.33)
@@ -593,7 +595,7 @@ def compare_models(
         )
 
     _warn_incomplete_studies(studies, metric)
-    stat_results = _stat_compare(results_store, random_state=seed)
+    stat_results = _stat_compare(results_store, random_state=seed, metric=metric)
     stat_results.run_counts = {n: (s.n_requested, s.n_runs) for n, s in studies.items()}
     stat_results.metric = metric
     stat_results.raw_data = results_store
@@ -1015,7 +1017,9 @@ def compare_results(
             paired = False
         else:
             values_a, values_b = pd.Series(va), pd.Series(vb)
-            test_result = compare_two_models(values_a, values_b, paired=True, random_state=seed)
+            test_result = compare_two_models(
+                values_a, values_b, paired=True, random_state=seed, metric=resolved
+            )
 
     if not paired:
         if resolved.startswith("test_"):
@@ -1024,7 +1028,9 @@ def compare_results(
         else:
             values_a = pd.Series(results_a.get_metric_values(resolved))
             values_b = pd.Series(results_b.get_metric_values(resolved))
-        test_result = compare_two_models(values_a, values_b, paired=False, random_state=seed)
+        test_result = compare_two_models(
+            values_a, values_b, paired=False, random_state=seed, metric=resolved
+        )
     return ModelComparisonResults(
         overall_test=test_result,
         raw_data={"results_a": values_a, "results_b": values_b},

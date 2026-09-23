@@ -1639,8 +1639,14 @@ def paired_wilcoxon_test(
     random_state: Optional[int] = None,
     deterministic_tol: float = 1e-10,
     alternative: str = "two-sided",
+    metric: Optional[str] = None,
 ) -> StatisticalTestResult:
     """Paired Wilcoxon signed-rank test for two matched samples.
+
+    ``metric`` (the metric's name, e.g. ``"val_loss"``) decides which model
+    the conclusion calls better: see :func:`metric_direction`. When it is
+    omitted or unrecognised the sentence says which model has the higher
+    values and makes no claim about which is better.
 
     Tests whether the paired differences ``series_a - series_b`` are
     symmetric about zero. Pairs are matched by POSITION, not by pandas index.
@@ -1743,11 +1749,11 @@ def paired_wilcoxon_test(
         result.effect_size_secondary_name = "r_z = |z|/sqrt(n_nonzero) (Rosenthal)"
         result.effect_size_secondary_interpretation = _interpret_wilcoxon_r(r_z)
 
-        # Direction follows the sign of the effect size, not the median (v12 2.41).
-        direction = "A" if r_mp > 0 else "B"
+        # Direction follows the sign of the effect size, not the median (v12
+        # 2.41); which model that makes *better* depends on the metric (v16 3.37).
         if p < alpha:
             result.conclusion = (
-                f"Model {direction} outperforms the other in paired comparison "
+                f"{_direction_sentence(metric, r_mp > 0)} in paired comparison "
                 f"(W={stat:.3f}, p={p:.4f}, r={r_mp:+.3f}, n={n} pairs)."
             )
         else:
@@ -1769,9 +1775,14 @@ def compare_two_models(
     random_state: Optional[int] = None,
     ci_target: str = "median_difference",
     test_method: str = "mann_whitney",
+    metric: Optional[str] = None,
 ) -> StatisticalTestResult:
     """
     Compares two models with a test the caller chooses up front.
+
+    ``metric`` names the metric (e.g. ``"val_loss"``) so the conclusion can
+    say which model is *better*, not just which is higher; see
+    :func:`metric_direction`. Omit it and the wording stays neutral.
 
     - If ``paired=True``, performs a paired Wilcoxon signed-rank test on the
       differences (``test_method`` and ``ci_target`` are ignored).
@@ -1876,7 +1887,7 @@ def compare_two_models(
         return result
 
     if paired:
-        result = paired_wilcoxon_test(clean1, clean2, alpha=alpha)
+        result = paired_wilcoxon_test(clean1, clean2, alpha=alpha, metric=metric)
     else:
         # Dispatch based on test_method. Helper closure to avoid repeating
         # the Student/Welch construction in two places.

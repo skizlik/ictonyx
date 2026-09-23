@@ -1225,6 +1225,11 @@ def plot_comparison_forest(
     elif isinstance(comparison_results, dict):
         pairwise_comps = comparison_results.get("pairwise_comparisons", {}) or {}
 
+    # Prefer the metric the comparison was run on over the axis label.
+    from .analysis import metric_direction
+
+    direction = metric_direction(getattr(comparison_results, "metric", None) or metric)
+
     def _finite_pair(obj):
         if isinstance(obj, (list, tuple)) and len(obj) == 2:
             try:
@@ -1283,7 +1288,19 @@ def plot_comparison_forest(
         lows.append(lo)
         highs.append(hi)
         if sig is True:
-            colors.append(settings.THEME["test"] if center > 0 else settings.THEME["significant"])
+            # Green means "better than baseline", which depends on the metric's
+            # direction (v16 3.37). Unknown direction: colour by sign is a claim
+            # we cannot make, so use gray.
+            if direction == "higher":
+                colors.append(
+                    settings.THEME["test"] if center > 0 else settings.THEME["significant"]
+                )
+            elif direction == "lower":
+                colors.append(
+                    settings.THEME["test"] if center < 0 else settings.THEME["significant"]
+                )
+            else:
+                colors.append("gray")
         elif sig is False:
             colors.append("gray")
         else:

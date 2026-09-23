@@ -69,3 +69,48 @@ def test_unknown_metric_uses_neutral_wording():
     assert "higher" in r.conclusion and "Model A" in r.conclusion
     r2 = A.paired_wilcoxon_test(a, b, metric="wobble_index")
     assert "outperforms" not in r2.conclusion
+
+
+def test_forest_plot_colour_follows_metric_direction():
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+    from ictonyx import plotting as P
+
+    a, b = _paired_fixture()
+    from ictonyx.analysis import ModelComparisonResults, compare_two_models
+
+    def build(metric):
+        # Same shape compare_models() returns for two models (paired, with CI).
+        t = compare_two_models(a, b, paired=True, metric=metric)
+        assert t.is_significant() and t.confidence_interval is not None
+        return ModelComparisonResults(
+            overall_test=t,
+            raw_data={"A": a, "B": b},
+            pairwise_comparisons={"A_vs_B": t},
+            significant_comparisons=["A_vs_B"],
+            correction_method="none",
+            n_models=2,
+            metric=metric,
+        )
+
+    cmp_acc, cmp_loss = build("val_accuracy"), build("val_loss")
+
+    fig_acc = P.plot_comparison_forest(
+        cmp_acc, baseline_model="B", metric="val_accuracy", show=False
+    )
+    fig_loss = P.plot_comparison_forest(cmp_loss, baseline_model="B", metric="val_loss", show=False)
+
+    def bar_colour(fig):
+        ax = fig.axes[0]
+        # errorbar's line collection carries the ecolor
+        cols = [c for c in ax.collections if hasattr(c, "get_color")]
+        assert cols, "no errorbar drawn"
+        return tuple(np.asarray(cols[0].get_color()[0]).round(3))
+
+    from ictonyx import settings
+
+    good = tuple(np.asarray(matplotlib.colors.to_rgba(settings.THEME["test"])).round(3))
+    bad = tuple(np.asarray(matplotlib.colors.to_rgba(settings.THEME["significant"])).round(3))
+    assert bar_colour(fig_acc) == good  # A above B on accuracy: better
+    assert bar_colour(fig_loss) == bad  # A above B on loss: worse
+    matplotlib.pyplot.close("all")

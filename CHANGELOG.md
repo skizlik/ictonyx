@@ -20,6 +20,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v0.4.11 — 2026-09-23
+
+Patch release. Three further external reviews of v0.4.9 found places
+where the library's *text* said something its *numbers* did not. Every
+item below changes a sentence, a colour, or a refusal; none changes a
+p-value on a path that already ran. Each fix has a test that reads the
+sentence.
+
+### Behaviour changes
+
+- **The two-model conclusion knows which way is up.** `paired_wilcoxon_test`
+  (and therefore `compare_models` and `compare_results`) used to write
+  "Model A outperforms the other" whenever A's values were higher. On
+  `val_loss`, `mse`, `mae` and every other lower-is-better metric that named
+  the loser. The sentence now reads "Model B outperforms Model A (lower
+  val_loss)". When the metric's direction cannot be inferred from its name,
+  the sentence says which model has the higher values and makes no claim
+  about which is better. The forest plot's green/red follows the same rule
+  and is gray when the direction is unknown. New public helper
+  `ictonyx.metric_direction(name)` returns `"higher"`, `"lower"` or
+  `"unknown"`; `paired_wilcoxon_test` and `compare_two_models` accept
+  `metric=` to opt in.
+- **A constant non-zero paired difference is decisive, not inconclusive.**
+  If model A beat model B by exactly the same amount on every run, the
+  paired test returned "inconclusive". That is the strongest possible paired
+  evidence: every rank ties, the signed-rank test reduces to an exact sign
+  test, and the result now reports that p (2·0.5ⁿ two-sided), r = ±1, and a
+  warning that both models are deterministic under the fixed split. All-zero
+  differences are still undefined.
+- **Two constant groups are undefined on the unpaired path too.** A
+  Mann-Whitney test between two zero-variance groups used to return p ≈ 0
+  and r = ±1 with no warning — twenty copies of one number each. It now
+  returns an inconclusive result, matching what the paired path already
+  did. One constant group against a varying one still tests, with a
+  warning naming the deterministic model; that group is no longer flagged
+  as "autocorrelated".
+- **Multi-model conclusions use the corrected p-value.** For three or more
+  models the pairwise sentence was generated before Holm/Bonferroni/BH ran,
+  so a pair could read "indicates a statistically significant difference
+  (p=0.024)" while `is_significant()` was `False` on the corrected 0.14.
+  The sentence and `detailed_interpretation` are now regenerated after
+  correction and print the corrected p.
+
+### Documentation
+
+- README examples no longer fit `StandardScaler` on the whole dataset
+  before Ictonyx splits it. The Keras example normalises inside the model;
+  the sklearn comparison uses `make_pipeline(StandardScaler(), ...)`, which
+  fits the scaler on each run's training data. Pipelines are seeded per run
+  through their final estimator and are named by it
+  (`Pipeline(MLPClassifier)`).
+- `required_runs`, `required_runs_paired` and `minimum_detectable_effect`
+  gave the wrong reason for their bounded-metric caveat. The simulation is
+  scale-free; what a quantised metric changes is ties, which lower real
+  power. The functions therefore *under*-estimate n on tie-heavy metrics,
+  the opposite of what the docstrings said.
+- `functools.partial` builders are named by the wrapped function instead of
+  `"partial"`.
+
+### Tests
+
+- `tests/test_report_text.py`: one test per item above (23 tests), each
+  asserting on the sentence, colour, name or refusal a user would see.
+- One existing test asserted the old "inconclusive" behaviour for constant
+  differences and is replaced; one slow dispatch-agreement test compares
+  two deterministic sklearn models and now accepts the undefined result
+  from both entry points.
+
+---
+
 ## v0.4.10 — 2026-09-21
 
 Hotfix release, driven by six independent reviews of v0.4.9. The theme

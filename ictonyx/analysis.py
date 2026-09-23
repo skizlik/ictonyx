@@ -562,6 +562,91 @@ def rank_biserial_correlation(
     return r, interpretation
 
 
+# --------------------------------------------------------------------------
+# Metric direction (v16 3.37). One table, one function. Every sentence or
+# colour that turns a signed difference into "better" must consult this.
+# --------------------------------------------------------------------------
+_LOWER_IS_BETTER = (
+    "loss",
+    "error",
+    "mse",
+    "rmse",
+    "mae",
+    "mape",
+    "msle",
+    "perplexity",
+    "nll",
+    "logloss",
+    "log_loss",
+    "brier",
+    "hinge",
+    "crossentropy",
+    "cross_entropy",
+    "deviance",
+    "regret",
+)
+_HIGHER_IS_BETTER = (
+    "accuracy",
+    "acc",
+    "f1",
+    "precision",
+    "recall",
+    "auc",
+    "roc",
+    "r2",
+    "r_squared",
+    "score",
+    "iou",
+    "dice",
+    "map",
+    "ndcg",
+    "bleu",
+    "rouge",
+    "reward",
+)
+
+
+def metric_direction(name: Optional[str]) -> str:
+    """Return ``"higher"``, ``"lower"`` or ``"unknown"`` for a metric name.
+
+    Matches whole tokens after splitting on ``_`` and stripping the
+    ``train_`` / ``val_`` / ``test_`` prefix, so ``val_loss`` is lower,
+    ``test_f1_macro`` is higher and ``wobble_index`` is unknown. ``None``
+    and empty strings are unknown. Lower-is-better wins when both match
+    (``accuracy_loss`` is a loss).
+    """
+    if not name:
+        return "unknown"
+    tokens = [t for t in str(name).lower().replace("-", "_").split("_") if t]
+    if tokens and tokens[0] in ("train", "val", "validation", "test", "final"):
+        tokens = tokens[1:]
+    joined = "_".join(tokens)
+    if any(t in _LOWER_IS_BETTER for t in tokens) or any(
+        k in joined for k in ("logloss", "log_loss")
+    ):
+        return "lower"
+    if any(t in _HIGHER_IS_BETTER for t in tokens):
+        return "higher"
+    return "unknown"
+
+
+def _direction_sentence(metric: Optional[str], a_is_higher: bool) -> str:
+    """Wording for a significant two-model result.
+
+    ``a_is_higher`` is the sign of the effect (A's values above B's).
+    Returns a clause such as ``"Model A outperforms Model B (lower val_loss)"``
+    or, when the metric's direction is unknown, ``"Model A has the higher
+    values"`` -- never a claim about which is better.
+    """
+    direction = metric_direction(metric)
+    higher, lower = ("A", "B") if a_is_higher else ("B", "A")
+    if direction == "higher":
+        return f"Model {higher} outperforms Model {lower} (higher {metric})"
+    if direction == "lower":
+        return f"Model {lower} outperforms Model {higher} (lower {metric})"
+    return f"Model {higher} has the higher values (metric direction unknown)"
+
+
 def _interpret_rank_biserial(abs_r: float) -> str:
     """Interpret rank-biserial correlation magnitude."""
     if abs_r < 0.1:

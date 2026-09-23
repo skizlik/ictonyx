@@ -220,3 +220,31 @@ def test_power_docstrings_name_ties_not_spread(func):
     doc = func.__doc__
     assert "over-estimate" not in doc and "overestimates spread" not in doc
     assert "ties" in doc.lower()
+
+
+# --------------------------------------------------------------------------
+# 3.36 -- documentation, and 2.94 -- model naming
+# --------------------------------------------------------------------------
+def test_readme_example_has_no_pre_split_transform():
+    text = (REPO / "README.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```python\n(.*?)```", text, flags=re.S)
+    assert blocks
+    for block in blocks:
+        # A transform fitted on the whole dataset before Ictonyx splits it.
+        assert not re.search(r"\.fit_transform\(\s*data\.data", block), block
+        assert "StandardScaler().fit_transform(X)" not in block
+
+
+def test_pipeline_and_partial_builders_are_named_by_estimator():
+    from functools import partial
+
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    from ictonyx.api import _get_model_name
+
+    pipe = make_pipeline(StandardScaler(), LogisticRegression())
+    assert _get_model_name(pipe) == "Pipeline(LogisticRegression)"
+    assert _get_model_name(partial(LogisticRegression, C=0.1)) == "LogisticRegression"
+    assert _get_model_name(LogisticRegression) == "LogisticRegression"

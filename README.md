@@ -87,16 +87,19 @@ Train a small feed-forward network on the wine data from sklearn twenty times an
 ```python
 import tensorflow as tf
 from sklearn.datasets import load_wine
-from sklearn.preprocessing import StandardScaler
 import ictonyx as ix
 
 data = load_wine()
-X = StandardScaler().fit_transform(data.data)
-y = data.target
+X, y = data.data, data.target
+# Ictonyx splits X into train/val/test itself, so do not fit a scaler on the
+# full array here: validation and test statistics would leak into training.
+# Scale inside the model instead (BatchNormalization on the inputs), or use
+# an sklearn Pipeline as in the comparison example below.
 
 
 def build_model(config):
     model = tf.keras.Sequential([
+        tf.keras.layers.BatchNormalization(),
         tf.keras.layers.Dense(16, activation='relu'),
         tf.keras.layers.Dense(16, activation='relu'),
         tf.keras.layers.Dense(3, activation='softmax')
@@ -178,13 +181,17 @@ Because of training variability, a single run is generally inadequate to make va
 Ictonyx also supports sklearn estimators — pass a class or a configured instance directly; no wrapper is required. An instance's `random_state` is overridden with the per-run seed (a warning says so once).
 
 ```python
-from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
+# A Pipeline fits the scaler on each run's training data only. Ictonyx seeds
+# the final estimator per run and names the pipeline by it.
 comparison = ix.compare_models(
     models=[
-        MLPClassifier(hidden_layer_sizes=(64,), max_iter=200),
-        RandomForestClassifier(n_estimators=40),
+        make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(64,), max_iter=200)),
+        make_pipeline(StandardScaler(), RandomForestClassifier(n_estimators=40)),
     ],
     data=(X, y),
     runs=20,
@@ -205,9 +212,9 @@ Models compared: 2
 Omnibus test: Paired Wilcoxon Signed-Rank Test: 5.500, p=0.0005 ***, r (effect size)=0.815
 
 Pairwise comparisons (none correction):
-  MLPClassifier_vs_RandomForestClassifier: Paired Wilcoxon Signed-Rank Test: 5.500, p=0.0005 ***, r (effect size)=0.815 *
+  Pipeline(MLPClassifier)_vs_Pipeline(RandomForestClassifier): Paired Wilcoxon Signed-Rank Test: 5.500, p=0.0005 ***, r (effect size)=0.815 *
 
-Significant pairs: MLPClassifier_vs_RandomForestClassifier
+Significant pairs: Pipeline(MLPClassifier)_vs_Pipeline(RandomForestClassifier)
 ```
 ![Comparison boxplots for model comparison](images/comparison_boxplots.png)
 

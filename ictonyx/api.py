@@ -945,6 +945,16 @@ def _get_model_name(obj: Any) -> str:
     Returns:
         A string suitable for use in log messages and result keys.
     """
+    import functools
+
+    # functools.partial has no __name__; its class name is "partial" (v16 2.94).
+    if isinstance(obj, functools.partial):
+        return _get_model_name(obj.func)
+    # An sklearn Pipeline is named by its final estimator, so two pipelines
+    # that differ only in the model read as the model (v16 3.36 README fix).
+    steps = getattr(obj, "steps", None)
+    if isinstance(steps, list) and steps and isinstance(steps[-1], tuple) and len(steps[-1]) == 2:
+        return f"Pipeline({_get_model_name(steps[-1][1])})"
     if hasattr(obj, "__name__"):
         return obj.__name__
     if hasattr(obj, "__class__"):

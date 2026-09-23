@@ -207,3 +207,16 @@ def test_conclusion_agrees_with_is_significant_after_correction(correction):
         shown = float(re.search(r"p=([0-9.]+)", t.conclusion).group(1))
         assert shown == pytest.approx(t.corrected_p_value, abs=5e-5)
         assert t.detailed_interpretation.startswith(t.conclusion)
+
+
+# --------------------------------------------------------------------------
+# 3.32 -- documentation
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "func",
+    [A.required_runs, A.required_runs_paired, A.minimum_detectable_effect],
+)
+def test_power_docstrings_name_ties_not_spread(func):
+    doc = func.__doc__
+    assert "over-estimate" not in doc and "overestimates spread" not in doc
+    assert "ties" in doc.lower()

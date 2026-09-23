@@ -2912,11 +2912,14 @@ def required_runs(
         ValueError: If ``effect_size`` is not in (0, 1) or ``power`` is
             not in (0, 1).
     Note:
-        The simulation draws from unbounded standard normal distributions. For
-        metrics concentrated near 0 or 1 (e.g. accuracy on easy tasks), the
-        normal approximation overestimates spread and ``required_runs()`` will
-        over-estimate the number of runs needed. Results are most reliable for
-        loss-scale metrics and accuracy values in the 0.4–0.8 range.
+        The simulation draws continuous standard normal values, so it never
+        produces ties. Rank-test power depends on P(A > B), which the
+        simulation sets directly, not on the metric's spread. What a bounded,
+        quantised metric (accuracy on a small evaluation set, say) actually
+        changes is that many runs share a value: ties reduce the information
+        in the ranks, so real power is lower than simulated and this function
+        will *under*-estimate the runs needed. Results are most reliable for
+        continuous, loss-scale metrics.
 
     Note:
         The result is a Monte Carlo estimate. At ``n_sim=1000`` the standard
@@ -3004,11 +3007,12 @@ def required_runs_paired(
         error of estimated power is about 0.013, so the returned n is
         uncertain by 1-2 runs and may differ across ``random_state``.
 
-        The simulation draws from unbounded standard normal differences.
-        For metrics concentrated near 0 or 1 the normal approximation
-        overestimates spread and this function will over-estimate n.
-        Results are most reliable for loss-scale metrics and accuracy
-        values in the 0.4–0.8 range.
+        The simulation draws continuous normal differences, so it never
+        produces ties or zero differences. A bounded, quantised metric makes
+        many paired differences tie or vanish, which reduces the information
+        in the signed ranks; real power is then lower than simulated and this
+        function will *under*-estimate n. Results are most reliable for
+        continuous, loss-scale metrics.
     """
     if not 0 < effect_size < 1:
         raise ValueError(f"effect_size must be in (0, 1), got {effect_size}.")
@@ -3079,11 +3083,11 @@ def minimum_detectable_effect(
     Raises:
         ValueError: If ``n_runs`` < 2 or ``power`` is not in (0, 1).
     Note:
-        The simulation draws from unbounded standard normal distributions. For
-        metrics concentrated near 0 or 1 (e.g. accuracy on easy tasks), the
-        normal approximation overestimates spread and the detectable effect will
-        be under-estimated. Results are most reliable for loss-scale metrics
-        and accuracy values in the 0.4–0.8 range.
+        The simulation draws continuous standard normal values, so it never
+        produces ties. A bounded, quantised metric makes many runs share a
+        value; ties reduce the information in the ranks, so the effect you can
+        actually detect at this n is *larger* than the value returned here.
+        Results are most reliable for continuous, loss-scale metrics.
 
     Note:
         The result is a Monte Carlo estimate. At ``n_sim=1000`` the standard

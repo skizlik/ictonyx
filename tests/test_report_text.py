@@ -172,3 +172,38 @@ def test_unpaired_one_constant_group_warns_but_tests():
     assert any("deterministic" in w.lower() for w in r.warnings)
     # A constant series is not "autocorrelated".
     assert not any("autocorrelation" in w.lower() for w in r.warnings)
+
+
+# --------------------------------------------------------------------------
+# 3.25
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("correction", ["holm", "bonferroni", "fdr_bh"])
+def test_conclusion_agrees_with_is_significant_after_correction(correction):
+    """Four groups chosen so at least one pair is raw-significant but not
+    corrected-significant. The sentence must follow the corrected verdict."""
+    rng = np.random.default_rng(3)
+    groups = {
+        "a": pd.Series(rng.normal(0.0, 1, 20)),
+        "b": pd.Series(rng.normal(0.9, 1, 20)),
+        "c": pd.Series(rng.normal(0.4, 1, 20)),
+        "d": pd.Series(rng.normal(0.4, 1, 20)),
+    }
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = A.compare_multiple_models(groups, correction_method=correction)
+
+    flipped = [
+        t
+        for t in res.pairwise_comparisons.values()
+        if t.corrected_p_value is not None and t.p_value < 0.05 <= t.corrected_p_value
+    ]
+    if correction != "fdr_bh":  # BH is not conservative enough to flip this fixture
+        assert flipped, "fixture no longer produces a raw/corrected disagreement"
+
+    for t in res.pairwise_comparisons.values():
+        says_no = "no statistically significant" in t.conclusion.lower()
+        assert says_no == (not t.is_significant()), t.conclusion
+        # The printed p must be the one the verdict used.
+        shown = float(re.search(r"p=([0-9.]+)", t.conclusion).group(1))
+        assert shown == pytest.approx(t.corrected_p_value, abs=5e-5)
+        assert t.detailed_interpretation.startswith(t.conclusion)

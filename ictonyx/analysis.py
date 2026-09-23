@@ -2293,6 +2293,11 @@ def compare_multiple_models(
         for i, test in enumerate(pairwise_tests):
             test.corrected_p_value = corrected_p_values[i]
             test.correction_method = correction_method
+            # The generators read corrected_p_value when it is set; they ran
+            # before it was. Regenerate so the sentence and is_significant()
+            # cannot disagree (v16 3.25).
+            test.conclusion = _generate_mann_whitney_conclusion(test, alpha)
+            test.detailed_interpretation = _generate_detailed_interpretation(test, alpha)
 
         significant_comparisons = [
             name for name, test in pairwise_comparisons.items() if test.is_significant(alpha)

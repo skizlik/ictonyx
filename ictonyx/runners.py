@@ -300,12 +300,7 @@ class ExperimentRunner:
             raise RuntimeError(f"Failed to load data: {e}") from e
 
         # Initialize result storage
-        self.all_runs_metrics: List[pd.DataFrame] = []
-        self.final_metrics: Dict[str, List[float]] = {}
-        self.final_test_metrics: List[Dict[str, Any]] = []
-        self.failed_runs: List[int] = []
-        self.fallback_runs: List[int] = []  # isolated runs that executed in-process
-        self.metric_run_ids: Dict[str, List[int]] = {}
+        self._reset_state()
 
         # Validate process isolation if enabled
         if use_process_isolation:
@@ -378,6 +373,22 @@ class ExperimentRunner:
                 "Could not determine data size. Process isolation may have issues "
                 "with non-picklable data types like tf.data.Dataset"
             )
+
+    def _reset_state(self) -> None:
+        """Every per-study accumulator, in one place (0.4.12, v18 2.108).
+
+        Called from ``__init__`` and at the start of every ``run_study()`` so
+        the two lists cannot drift apart. Add new per-study state HERE.
+        """
+        self.all_runs_metrics: List[pd.DataFrame] = []
+        self.final_metrics: Dict[str, List[float]] = {}
+        self.final_test_metrics: List[Dict[str, Any]] = []
+        self.failed_runs: List[int] = []
+        self.fallback_runs: List[int] = []  # isolated runs that executed in-process
+        self.metric_run_ids: Dict[str, List[int]] = {}
+        self._last_run_error: Optional[BaseException] = None
+        self._mixed_seed = False
+        self._restored_run_seeds: List[int] = []
 
     def _split_sizes(self) -> Dict[str, int]:
         """Sample counts of the loaded splits, where they can be read cheaply."""
@@ -758,15 +769,10 @@ class ExperimentRunner:
             )
 
         # Reset state from any previous run — must happen BEFORE checkpoint load
-        self.all_runs_metrics.clear()
-        self.final_metrics.clear()
-        self.final_test_metrics.clear()
-        self.failed_runs.clear()
+        self._reset_state()
 
         # Resume from checkpoint if available
         completed_run_ids: set = set()
-        self._mixed_seed = False
-        self._restored_run_seeds: List[int] = []
         if checkpoint_dir is not None:
             import os
             import pickle as _pickle
@@ -1282,6 +1288,11 @@ class VariabilityStudyResults:
         values = self.final_metrics[metric_name]
         if with_run_ids:
             ids = self.metric_run_ids.get(metric_name) or self.run_ids[: len(values)]
+            if len(ids) != len(values):
+                raise RuntimeError(
+                    f"Internal inconsistency: {len(ids)} run ids for {len(values)} values of "
+                    f"'{metric_name}'. Please report this; results cannot be paired safely."
+                )
             return list(ids), values
         return values
 

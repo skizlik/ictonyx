@@ -632,13 +632,21 @@ class _CloneBuilder:
     clone now receives the run's child seed, exactly as the class path does.
     """
 
-    _warned: bool = False  # once per process, like _WARNED_FIT_KWARGS
+    # Two unrelated warnings, two once-per-process flags (0.4.12, v18 2.126a).
+    _warned_override: bool = False
+    _warned_unseeded: bool = False
 
     def __init__(self, model: Any):
         self.model = model
-        params = model.get_params() if hasattr(model, "get_params") else {}
-        self.has_random_state = "random_state" in params
-        self.user_random_state = params.get("random_state")
+        params = model.get_params(deep=True) if hasattr(model, "get_params") else {}
+        # 0.4.12 (v18 2.107): every random_state in the estimator tree -- the
+        # top level, Pipeline steps, ColumnTransformer members, meta-estimator
+        # base estimators -- is a seed the run must control.
+        self.seed_keys = sorted(
+            k for k in params if k == "random_state" or k.endswith("__random_state")
+        )
+        self.has_random_state = bool(self.seed_keys)
+        self.user_seeded_keys = [k for k in self.seed_keys if params.get(k) is not None]
 
     def __call__(self, conf: ModelConfig) -> BaseModelWrapper:
         from sklearn.base import clone
@@ -646,18 +654,19 @@ class _CloneBuilder:
         est = clone(self.model)
         run_seed = conf.get("run_seed")
         if self.has_random_state and run_seed is not None:
-            est.set_params(random_state=run_seed)
-            if self.user_random_state is not None and not _CloneBuilder._warned:
-                _CloneBuilder._warned = True
+            est.set_params(**{k: run_seed for k in self.seed_keys})
+            if self.user_seeded_keys and not _CloneBuilder._warned_override:
+                _CloneBuilder._warned_override = True
                 warnings.warn(
-                    f"{type(self.model).__name__} instance has random_state="
-                    f"{self.user_random_state}; it is overridden with the per-run child seed "
-                    "so runs vary and pair across models. Pass the class instead to silence this.",
+                    f"{type(self.model).__name__} instance has fixed seeds "
+                    f"({', '.join(self.user_seeded_keys)}); they are overridden with the per-run "
+                    "child seed so runs vary and pair across models. Pass the class instead to "
+                    "silence this.",
                     UserWarning,
                     stacklevel=4,
                 )
-        elif not self.has_random_state and not _CloneBuilder._warned:
-            _CloneBuilder._warned = True
+        elif not self.has_random_state and not _CloneBuilder._warned_unseeded:
+            _CloneBuilder._warned_unseeded = True
             warnings.warn(
                 f"{type(self.model).__name__} has no random_state parameter; per-run variation "
                 "depends on the global NumPy RNG only and results may be identical across runs.",

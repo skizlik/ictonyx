@@ -88,6 +88,23 @@ sentence.
   two deterministic sklearn models and now accepts the undefined result
   from both entry points.
 
+### Known issues
+
+- **Image-batch shuffle seeding under TensorFlow may not vary with the
+  seed on every TF build.** During this release's CI, the regression test
+  for that invariant (`test_shuffle_varies_across_global_seeds`, guarding
+  the shuffle-identical-across-runs bug fixed in 0.4.x) once produced
+  identical batch orderings for three distinct global seeds, then passed
+  on rerun with no code change. CI installs the current TensorFlow
+  unpinned, so this is most likely a TF-version interaction in
+  `Dataset.shuffle` seeding rather than a regression in this release;
+  nothing in 0.4.11 touches data handling or seeding. If you rely on
+  `ImageDataHandler` shuffling under TensorFlow, confirm that batch
+  orderings differ across runs in your environment. Tracked for 0.5.0:
+  the test gets a deterministic fixture and an explicit per-run shuffle
+  seed derived from the run seed, and CI records the TF version it ran
+  against.
+
 ---
 
 ## v0.4.10 — 2026-09-21

@@ -1723,7 +1723,9 @@ def paired_wilcoxon_test(
         random_state: Accepted and ignored (this test is deterministic);
             kept for backward compatibility, removed in v0.5.0.
         deterministic_tol: Differences with SD below this are treated as
-            constant and the test returns an inconclusive result.
+            constant and the test returns an inconclusive result (NaN p). A
+            constant difference, zero or not, does not vary with the seed, so
+            the runs are one observation of it (effective n = 1; 0.4.12).
         alternative: ``"two-sided"`` (default), ``"greater"`` or ``"less"``.
 
     Returns:
@@ -1740,83 +1742,59 @@ def paired_wilcoxon_test(
     n = int(keep.sum())
 
     if n >= 2 and np.std(differences, ddof=1) < deterministic_tol:
+        # 0.4.12 (v19 3.48, sec. 3.2). A difference that is the same on every run
+        # does not depend on the seed, so the n runs are ONE observation of it:
+        # effective n = 1 and no seed-level test exists. This holds whether
+        # both models are deterministic, or both vary with identical run-to-run
+        # variation. Zero and non-zero constants alike are undefined.
         common = float(np.median(differences))
+        sd_a = float(np.std(a[keep], ddof=1))
+        sd_b = float(np.std(b[keep], ddof=1))
+        zero_var = [g for g, sd in (("a", sd_a), ("b", sd_b)) if sd < deterministic_tol]
         if abs(common) < deterministic_tol:
-            # All differences zero: the two models are the same model on
-            # every run. The test is undefined (v13 C17 kept this branch).
-            warnings.warn(
-                "All paired differences are zero: both models produced "
-                "identical values on every run. The paired comparison is "
-                "undefined. If both models are deterministic under the fixed "
-                "data split, seed variation measures nothing here; use "
-                "resample_split (v0.5.x), a model with training-time "
-                "randomness, or VariabilityStudyResults.test_against_null() "
-                "on a single study.",
-                UserWarning,
-                stacklevel=2,
+            name = "Paired Wilcoxon Signed-Rank Test (inconclusive)"
+            msg = (
+                "All paired differences are zero: both models produced identical values "
+                "on every run. The paired comparison is undefined. If both models are "
+                "deterministic under the fixed data split, seed variation measures nothing "
+                "here; use resample_split (v0.5.1), a model with training-time randomness, "
+                "or VariabilityStudyResults.test_against_null() on a single study."
             )
-            result = StatisticalTestResult(
-                test_name="Paired Wilcoxon Signed-Rank Test (inconclusive)",
-                statistic=float("nan"),
-                p_value=float("nan"),
+            conclusion = (
+                "Inconclusive: the two models produced identical values on every run; "
+                "there is no difference to test on this split."
             )
-            result.sample_sizes = {"n_pairs": n, "non_zero_differences": 0}
-            result.conclusion = (
-                "Inconclusive: paired differences are all zero (identical model pair)."
-            )
-            result.warnings.append("All paired differences are zero; test undefined.")
-            return result
-
-        # Constant NON-zero differences (v16 3.26): every run favoured the
-        # same model by the same amount. That is the strongest possible
-        # paired evidence, not an inconclusive one. All ranks tie, so the
-        # signed-rank test reduces to the sign test; report its exact p.
-        a_is_higher = common > 0
-        p_one = 0.5**n
-        if alternative == "two-sided":
-            p_exact = min(1.0, 2.0 * p_one)
-        elif alternative == "greater":
-            p_exact = p_one if a_is_higher else 1.0 - p_one
-        elif alternative == "less":
-            p_exact = p_one if not a_is_higher else 1.0 - p_one
         else:
-            raise ValueError(
-                f"alternative must be 'two-sided', 'greater' or 'less'; got {alternative!r}"
+            name = "Paired Wilcoxon Signed-Rank Test (inconclusive: constant difference)"
+            why = (
+                "both models are deterministic under the fixed split"
+                if len(zero_var) == 2
+                else "the models' run-to-run variation is identical"
             )
-        warnings.warn(
-            f"All paired differences are constant ({common:+.4g} on every one of "
-            f"{n} runs). Both models are deterministic under the fixed split, so "
-            "the differences carry no seed variability; the signed-rank test "
-            "reduces to an exact sign test. p reflects the direction only.",
-            UserWarning,
-            stacklevel=2,
-        )
-        r_mp = 1.0 if a_is_higher else -1.0
-        result = StatisticalTestResult(
-            test_name="Paired Wilcoxon Signed-Rank Test (constant differences; exact sign test)",
-            statistic=float(n * (n + 1) / 2) if a_is_higher else 0.0,
-            p_value=float(p_exact),
-        )
-        result.sample_sizes = {"n_pairs": n, "non_zero_differences": n}
-        result.effect_size = r_mp
-        result.effect_size_name = "matched-pairs rank-biserial r"
-        result.effect_size_interpretation = _interpret_rank_biserial(1.0)
+            msg = (
+                f"The paired difference is {common:+.4g} on every one of {n} runs: {why}, "
+                "so the difference does not depend on the seed and the runs are one "
+                "observation of it (effective n = 1). No test is possible; the difference "
+                "is a property of this data split. Use resample_split (v0.5.1) to vary it, or "
+                "VariabilityStudyResults.test_against_null() on a single study."
+            )
+            higher = "A" if common > 0 else "B"
+            conclusion = (
+                f"Inconclusive: Model {higher} is higher by exactly {abs(common):.4g} on every "
+                f"one of {n} runs. Seed variation does not change this difference, so no "
+                "test is possible; the difference is a property of this split."
+            )
+        warnings.warn(msg, UserWarning, stacklevel=2)
+        result = StatisticalTestResult(test_name=name, statistic=float("nan"), p_value=float("nan"))
+        result.sample_sizes = {
+            "n_pairs": n,
+            "non_zero_differences": 0 if abs(common) < deterministic_tol else n,
+            "effective_n": 1,
+        }
         result.assumption_details["constant_difference"] = common
-        result.warnings.append(
-            f"Paired differences are constant ({common:+.4g}); p is the exact sign-test "
-            "p-value and carries no information about seed variability."
-        )
-        clause = _direction_sentence(metric, a_is_higher)
-        if p_exact < alpha:
-            result.conclusion = (
-                f"{clause} on every one of {n} runs by exactly {abs(common):.4g} "
-                f"(exact sign test, p={p_exact:.2e}, r={r_mp:+.1f})."
-            )
-        else:
-            result.conclusion = (
-                f"{clause} on every one of {n} runs, but {n} runs are too few for "
-                f"an exact sign test to reach alpha={alpha} (p={p_exact:.3f})."
-            )
+        result.assumption_details["zero_variance_groups"] = zero_var
+        result.conclusion = conclusion
+        result.warnings.append(msg)
         return result
 
     result = StatisticalTestResult(

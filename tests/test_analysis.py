@@ -1695,20 +1695,20 @@ def test_paired_wilcoxon_inconclusive_on_identical_pairs():
     assert np.isnan(result.statistic)
 
 
-def test_paired_wilcoxon_constant_offset_is_decisive():
-    """A constant NON-zero difference is the strongest paired evidence, not
-    an inconclusive result (v16 3.26; this test used to assert the bug).
-    The signed-rank test reduces to an exact sign test."""
+def test_paired_wilcoxon_constant_offset_is_undefined():
+    """A constant NON-zero difference is one observation replicated, not n
+    (v19 3.48, reversing 0.4.11's 3.26). Both series vary here, so neither is a
+    zero-variance group; the difference still has no seed variation."""
     a = pd.Series([0.9, 0.91, 0.89, 0.92, 0.88])
     b = a + 0.01
 
-    with pytest.warns(UserWarning, match="deterministic"):
+    with pytest.warns(UserWarning, match="effective n = 1"):
         result = paired_wilcoxon_test(a, b)
 
-    assert "inconclusive" not in result.test_name.lower()
-    assert result.p_value == pytest.approx(2 * 0.5**5)  # too few runs to reach alpha
-    assert result.effect_size == pytest.approx(-1.0)  # b > a on every run
+    assert "inconclusive" in result.test_name.lower()
+    assert np.isnan(result.p_value)
     assert not result.is_significant()
+    assert result.assumption_details["zero_variance_groups"] == []
 
 
 def test_paired_wilcoxon_normal_case_unchanged():

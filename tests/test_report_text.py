@@ -119,21 +119,24 @@ def test_forest_plot_colour_follows_metric_direction():
 # --------------------------------------------------------------------------
 # 3.26
 # --------------------------------------------------------------------------
-def test_constant_nonzero_paired_difference_is_decisive():
+def test_constant_nonzero_paired_difference_is_undefined():
+    """A difference identical on every run does not vary with the seed: the runs
+    are one observation of it (v19 3.48). This test asserted the opposite in
+    0.4.11 (and the opposite of that in 0.4.10); see Master Dev Guide v19 7.76."""
     a = pd.Series(np.linspace(0.80, 0.90, 20))
     b = a - 0.05  # A beats B by exactly 0.05 on every run
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         r = A.paired_wilcoxon_test(a, b)
-    assert "inconclusive" not in r.test_name.lower()
-    assert r.p_value == pytest.approx(2 * 0.5**20)
-    assert r.effect_size == pytest.approx(1.0)
-    assert r.is_significant()
-    assert any("constant" in w.lower() for w in r.warnings)
+    assert np.isnan(r.p_value)
+    assert not r.is_significant()
+    assert r.sample_sizes["effective_n"] == 1
+    assert "exactly 0.05" in r.conclusion
+    assert "no test is possible" in r.conclusion
 
-    # Sign is respected.
+    # The direction is still reported.
     r2 = A.paired_wilcoxon_test(b, a)
-    assert r2.effect_size == pytest.approx(-1.0)
+    assert "Model B is higher" in r2.conclusion
 
 
 def test_all_zero_paired_differences_stay_undefined():

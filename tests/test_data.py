@@ -1488,6 +1488,14 @@ class TestImageDataHandlerShuffleSeeding:
         return str(root)
 
     @pytest.mark.slow
+    @pytest.mark.xfail(
+        strict=False,
+        reason=(
+            "v19 2.101: iterating one dataset reshuffles every time regardless of the "
+            "global seed, so this cannot detect the per-run seeding regression it is "
+            "named for, and on ~3 batches it fails by chance (>=1/36). Replaced in 0.5.1."
+        ),
+    )
     def test_shuffle_varies_across_global_seeds(self, tiny_image_dataset):
         """Same cached dataset under different global TF seeds → different orderings."""
         tf = pytest.importorskip("tensorflow", reason="TensorFlow not installed")

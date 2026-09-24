@@ -297,3 +297,17 @@ def test_tuner_unknown_metric_requires_direction():
     with pytest.raises(ConfigurationError):
         _resolve_direction("auto", "val_wobble_index")
     assert _resolve_direction("maximize", "val_wobble_index") == "maximize"
+
+
+# ---- 2.129: one route for k = 2 unpaired (commit 10) -----------------------------
+def test_unpaired_k2_uses_compare_two_models_guard(wine):
+    X, y = wine
+    c = ix.compare_models(
+        [RandomForestClassifier, RandomForestClassifier(max_depth=2)],
+        data=(X, y),
+        runs=5,
+        seed=0,
+        verbose=False,
+        paired=False,
+    )
+    assert c.overall_test.test_name == "Insufficient Data"

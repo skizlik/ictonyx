@@ -557,18 +557,24 @@ def compare_models(
             f"produced '{metric}' data. Check that your metric name is correct."
         )
 
-    if paired and len(results_store) == 2:
+    if len(results_store) == 2:
         from .analysis import align_paired, compare_two_models
 
         names = list(results_store.keys())
-        # All models ran under one seed, so pairing is valid; align on run id in
-        # case either study lost a run.
-        run_ids, va, vb = align_paired(studies[names[0]], studies[names[1]], metric)
-        series_a = pd.Series(va, index=run_ids, name=names[0])
-        series_b = pd.Series(vb, index=run_ids, name=names[1])
+        if paired:
+            # All models ran under one seed, so pairing is valid; align on run
+            # id in case either study lost a run.
+            run_ids, va, vb = align_paired(studies[names[0]], studies[names[1]], metric)
+            series_a = pd.Series(va, index=run_ids, name=names[0])
+            series_b = pd.Series(vb, index=run_ids, name=names[1])
+        else:
+            # 0.4.12 (v19 2.129): k = 2 unpaired goes through the same function
+            # as compare_results(paired=False) -- same guard, same CI, same label.
+            series_a = pd.Series(results_store[names[0]], name=names[0])
+            series_b = pd.Series(results_store[names[1]], name=names[1])
         _warn_incomplete_studies(studies, metric)
         paired_result = compare_two_models(
-            series_a, series_b, paired=True, random_state=seed, metric=metric
+            series_a, series_b, paired=paired, random_state=seed, metric=metric
         )
         return ModelComparisonResults(
             overall_test=paired_result,

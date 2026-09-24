@@ -150,34 +150,27 @@ def test_variability_study_verbose_false_suppresses_output(capsys, sample_df):
 # --- Tests for compare_models ---
 
 
+@patch("ictonyx.analysis.compare_two_models")
 @patch("ictonyx.api._stat_compare")
 @patch("ictonyx.api.variability_study")
 def test_compare_models_flow(
     mock_var_study,
     mock_stat_compare,
+    mock_two,
     sample_df,
     dummy_model_func,
     dummy_model_func_2,
     mock_runner_results,
 ):
-    """Test that compare_models correctly orchestrates multiple studies."""
-    # Arrange
+    """compare_models orchestrates one study per model; with two models the
+    unpaired comparison goes through compare_two_models, exactly as
+    compare_results(paired=False) does (0.4.12, v19 2.129). Before 0.4.12 it
+    went through _stat_compare's k = 2 shortcut: no minimum-run guard, no CI."""
     mock_var_study.return_value = mock_runner_results
-    mock_stat_compare.return_value = ModelComparisonResults(
-        overall_test=MagicMock(spec=StatisticalTestResult),
-        raw_data={},
-        pairwise_comparisons={},
-        significant_comparisons=[],
-        correction_method="holm",
-        n_models=2,
-        metric=None,
-    )
+    mock_two.return_value = StatisticalTestResult(test_name="stub", statistic=0.0, p_value=0.5)
 
-    models = [dummy_model_func, dummy_model_func_2]
-
-    # Act
     result = api.compare_models(
-        models=models,
+        models=[dummy_model_func, dummy_model_func_2],
         data=sample_df,
         target_column="target",
         runs=5,
@@ -185,17 +178,13 @@ def test_compare_models_flow(
         paired=False,
     )
 
-    # Assert
-    # Should run study once for each model
     assert mock_var_study.call_count == 2
-
-    # Should call stats comparison once
-    mock_stat_compare.assert_called_once()
-
-    # Check that it extracted the metrics correctly
-    stats_call_args = mock_stat_compare.call_args[0][0]
-    assert len(stats_call_args) == 2
-    assert isinstance(stats_call_args[list(stats_call_args.keys())[0]], pd.Series)
+    mock_stat_compare.assert_not_called()
+    mock_two.assert_called_once()
+    args, kwargs = mock_two.call_args
+    assert kwargs["paired"] is False
+    assert all(isinstance(s, pd.Series) for s in args[:2])
+    assert result.n_models == 2
 
 
 @patch("ictonyx.api.variability_study")

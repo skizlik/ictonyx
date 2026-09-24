@@ -42,7 +42,6 @@ from .data import DataHandler
 from .exceptions import ConfigurationError
 from .runners import build_fit_kwargs, set_run_seeds
 
-_MAXIMIZE_KEYWORDS = ("accuracy", "precision", "recall", "r2", "f1", "auc")
 _METRIC_CANDIDATES = ("val_accuracy", "val_r2", "val_loss")
 
 
@@ -59,7 +58,20 @@ def _resolve_direction(direction: str, metric: Optional[str]) -> str:
             "direction='auto' cannot be resolved before the metric is known. "
             "Pass metric= to HyperparameterTuner, or direction='minimize'/'maximize'."
         )
-    return "maximize" if any(kw in metric.lower() for kw in _MAXIMIZE_KEYWORDS) else "minimize"
+    # 0.4.12 (v18 3.51): the library's one direction table. The former
+    # six-keyword list minimised iou/dice/map/ndcg/mcc/kappa/fbeta/... and
+    # maximised accuracy_loss.
+    from .analysis import metric_direction
+
+    d = metric_direction(metric)
+    if d == "higher":
+        return "maximize"
+    if d == "lower":
+        return "minimize"
+    raise ConfigurationError(
+        f"direction='auto' cannot tell whether higher or lower {metric!r} is better. "
+        "Pass direction='maximize' or direction='minimize'."
+    )
 
 
 def _resolve_metric(
@@ -321,7 +333,9 @@ class HyperparameterTuner:
         logger.info(f"Best parameters: {best}")
         return best
 
-    def _tune_hyperopt(self, param_space: Dict[str, Any], max_evals: int) -> Dict[str, Any]:
+    def _tune_hyperopt(
+        self, param_space: Dict[str, Any], max_evals: int, direction: str = "auto"
+    ) -> Dict[str, Any]:
         """Legacy Hyperopt backend. Deprecated — will be removed in v0.5.0."""
         warnings.warn(
             "The Hyperopt backend is deprecated in v0.4.0 and will be removed in v0.5.0. "
@@ -343,6 +357,9 @@ class HyperparameterTuner:
 
         # Load data if not already loaded
         self._ensure_data_loaded()
+        # 0.4.12 (v19 3.51): honour the caller's direction; previously this path
+        # always re-resolved "auto".
+        self._hyperopt_direction = _resolve_direction(direction, self.metric)
 
         logger.info(f"Starting hyperopt optimization with {max_evals} evaluations...")
 
@@ -375,8 +392,11 @@ class HyperparameterTuner:
                 eval_result = wrapped_model.evaluate(data=self.val_data)
                 name, final_value = _resolve_metric(self.metric, wrapped_model, eval_result)
                 self.metric = self.metric or name
-                direction = _resolve_direction("auto", self.metric)
-                loss = -float(final_value) if direction == "maximize" else float(final_value)
+                loss = (
+                    -float(final_value)
+                    if self._hyperopt_direction == "maximize"
+                    else float(final_value)
+                )
                 return {
                     "loss": loss,
                     "status": STATUS_OK,
@@ -438,7 +458,9 @@ class HyperparameterTuner:
             best_trial = self.trials.best_trial
             best_loss = best_trial["result"]["loss"]
             best_metric_value = (
-                -best_loss if _resolve_direction("auto", self.metric) == "maximize" else best_loss
+                -best_loss
+                if getattr(self, "_hyperopt_direction", None) == "maximize"
+                else best_loss
             )
             return {
                 "best_params": self.trials.argmin,

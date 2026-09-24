@@ -584,6 +584,10 @@ _LOWER_IS_BETTER = (
     "cross_entropy",
     "deviance",
     "regret",
+    "ece",
+    "wer",
+    "cer",
+    "bpc",
 )
 _HIGHER_IS_BETTER = (
     "accuracy",
@@ -603,6 +607,11 @@ _HIGHER_IS_BETTER = (
     "bleu",
     "rouge",
     "reward",
+    "fbeta",
+    "mcc",
+    "kappa",
+    "explained",
+    "miou",
 )
 
 
@@ -613,13 +622,19 @@ def metric_direction(name: Optional[str]) -> str:
     ``train_`` / ``val_`` / ``test_`` prefix, so ``val_loss`` is lower,
     ``test_f1_macro`` is higher and ``wobble_index`` is unknown. ``None``
     and empty strings are unknown. Lower-is-better wins when both match
-    (``accuracy_loss`` is a loss).
+    (``accuracy_loss`` is a loss). A leading ``neg`` token (sklearn scorer
+    names such as ``neg_log_loss``) inverts the direction of the rest.
     """
     if not name:
         return "unknown"
     tokens = [t for t in str(name).lower().replace("-", "_").split("_") if t]
     if tokens and tokens[0] in ("train", "val", "validation", "test", "final"):
         tokens = tokens[1:]
+    if tokens and tokens[0] == "neg":
+        # sklearn scorer names negate losses so that higher is better
+        # (neg_log_loss, neg_mean_squared_error). 0.4.12, v18 3.51.
+        inner = metric_direction("_".join(tokens[1:]))
+        return {"lower": "higher", "higher": "lower"}.get(inner, "unknown")
     joined = "_".join(tokens)
     if any(t in _LOWER_IS_BETTER for t in tokens) or any(
         k in joined for k in ("logloss", "log_loss")

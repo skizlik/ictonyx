@@ -1282,8 +1282,21 @@ class VariabilityStudyResults:
         Raises:
             KeyError: If metric was not tracked.
         """
+        if metric_name not in self.final_metrics and metric_name.startswith("test_"):
+            # 0.4.12 (v18 2.109): the one accessor routes test_* names to the
+            # test store, with the run ids stored beside each row.
+            bare = metric_name[len("test_") :]
+            rows = [m for m in self.final_test_metrics if bare in m]
+            if rows:
+                test_values = [float(m[bare]) for m in rows]
+                if with_run_ids:
+                    test_ids = [int(m.get("run_id", i + 1)) for i, m in enumerate(rows)]
+                    return test_ids, test_values
+                return test_values
         if metric_name not in self.final_metrics:
-            available = sorted(self.final_metrics.keys())
+            available = sorted(self.final_metrics.keys()) + sorted(
+                {f"test_{k}" for m in self.final_test_metrics for k in m if k != "run_id"}
+            )
             raise KeyError(f"Metric '{metric_name}' not found. Available: {available}")
         values = self.final_metrics[metric_name]
         if with_run_ids:

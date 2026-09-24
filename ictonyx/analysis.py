@@ -774,11 +774,30 @@ def apply_multiple_comparison_correction(
             (recommended), or ``'fdr_bh'`` (Benjamini-Hochberg).
             Default ``'holm'``.
 
-    Returns:
-        List of corrected p-values in the same order as the input.
-    """
+    Undefined tests (NaN p-values) are not members of the family: the finite
+    p-values are corrected among themselves (m = their count) and NaN is
+    returned in place (0.4.12, v18 3.50).
 
-    p_array = np.array(p_values)
+    Returns:
+        ``(corrected, description)``: the corrected p-values in the same order
+        as the input, and a one-line description of the correction.
+    """
+    full = np.asarray(p_values, dtype=float)
+    finite = np.isfinite(full)
+    if not finite.all():
+        out = np.full(full.shape, np.nan)
+        if finite.any():
+            sub_corrected, description = apply_multiple_comparison_correction(
+                full[finite].tolist(), method
+            )
+            out[finite] = sub_corrected
+        else:
+            _, description = apply_multiple_comparison_correction([], method)
+        n_excl = int((~finite).sum())
+        description += f"; {n_excl} undefined test(s) excluded from the family"
+        return out.tolist(), description
+
+    p_array = full
     n = len(p_array)
 
     if method == "bonferroni":

@@ -386,6 +386,7 @@ class ExperimentRunner:
         self.failed_runs: List[int] = []
         self.fallback_runs: List[int] = []  # isolated runs that executed in-process
         self.metric_run_ids: Dict[str, List[int]] = {}
+        self.retried_runs: List[int] = []
         self._last_run_error: Optional[BaseException] = None
         self._mixed_seed = False
         self._restored_run_seeds: List[int] = []
@@ -817,7 +818,11 @@ class ExperimentRunner:
                 self.all_runs_metrics = list(_prior_data["all_runs_metrics"])
                 self.final_metrics = dict(_prior_data["final_metrics"])
                 self.final_test_metrics = list(_prior_data["final_test_metrics"])
-                self.failed_runs = list(_prior_data.get("failed_runs", []))
+                # 0.4.12 (v18 2.110): a run that failed before the interruption is
+                # retried, not counted twice. It leaves failed_runs here and re-enters
+                # only if it fails again; retried_runs records that it was retried.
+                self.retried_runs = sorted(int(r) for r in _prior_data.get("failed_runs", []))
+                self.failed_runs = []
                 self.metric_run_ids = {
                     k: list(v) for k, v in _prior_data.get("metric_run_ids", {}).items()
                 }
@@ -1042,6 +1047,7 @@ class ExperimentRunner:
             seed=seed_out,
             run_seeds=run_seeds,
             failed_runs=sorted(self.failed_runs),
+            retried_runs=list(self.retried_runs),
             metric_run_ids={k: list(v) for k, v in self.metric_run_ids.items()},
             split_sizes=self._split_sizes(),
             _run_ids=[
@@ -1058,7 +1064,7 @@ class ExperimentRunner:
             _cp = os.path.join(checkpoint_dir, "checkpoint.pkl")
             if (
                 os.path.exists(_cp)
-                and len(self.all_runs_metrics) + len(self.failed_runs) >= num_runs
+                and len(set(results.run_ids) | set(self.failed_runs)) >= num_runs
             ):
                 os.replace(_cp, _cp[: -len(".pkl")] + ".done.pkl")
                 logger.info(f"Study complete; checkpoint retired to {_cp[: -4] + '.done.pkl'}")
@@ -1199,6 +1205,8 @@ class VariabilityStudyResults:
     failed_runs: List[int] = field(default_factory=list)
     metric_run_ids: Dict[str, List[int]] = field(default_factory=dict)
     split_sizes: Dict[str, int] = field(default_factory=dict)
+    # Runs that had failed before a checkpoint resume and were retried (0.4.12).
+    retried_runs: List[int] = field(default_factory=list)
     """Number of samples in the train / val / test splits, where known. Final
     metrics are the LAST-epoch values of each run (not best-epoch), so the
     reported spread includes any late-epoch drift."""

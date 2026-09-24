@@ -829,7 +829,8 @@ class TestCompareTwoModels:
         assert result.confidence_interval is not None
         lo, hi = result.confidence_interval
         assert lo < hi
-        assert result.ci_method == "bca"
+        # 0.4.12: the unpaired Hodges-Lehmann interval defaults to percentile.
+        assert result.ci_method == "percentile"
         assert result.ci_confidence_level == 0.95
 
     def test_paired_comparison_has_ci(self):

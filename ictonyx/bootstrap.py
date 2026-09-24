@@ -21,13 +21,26 @@ References:
 """
 
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from scipy.special import ndtri as _ndtri
 from scipy.stats import norm as _norm
+
+
+def _midrank_prop_below(boot_stats: np.ndarray, point_estimate: float) -> float:
+    """Share of replicates below the estimate, ties counted as half (0.4.12, v18 3.49).
+
+    Counting ties as "not below" biases z0 negative whenever the bootstrap
+    distribution has mass exactly at the estimate -- the normal case for
+    medians and Hodges-Lehmann shifts of quantised metrics. SciPy uses the
+    same mid-rank convention.
+    """
+    below = np.sum(boot_stats < point_estimate)
+    ties = np.sum(boot_stats == point_estimate)
+    return float((below + 0.5 * ties) / len(boot_stats))
 
 
 @dataclass
@@ -54,6 +67,22 @@ class BootstrapCIResult:
     n_bootstrap: int
     se_bootstrap: float
     bootstrap_distribution: Optional[np.ndarray] = None
+    notes: List[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # 0.4.12 (v19 2.136): a zero-width interval asserts a certainty no
+        # resampling design supports. Report "undefined" instead.
+        lo, hi = self.ci_lower, self.ci_upper
+        if np.isfinite(lo) and np.isfinite(hi):
+            if hi - lo < 1e-12 * max(1.0, abs(self.point_estimate)):
+                msg = (
+                    "Bootstrap interval has zero width (every resample gave the same "
+                    "statistic); it is reported as undefined (NaN)."
+                )
+                warnings.warn(msg, UserWarning, stacklevel=3)
+                self.notes.append(msg)
+                self.ci_lower = float("nan")
+                self.ci_upper = float("nan")
 
     def __str__(self) -> str:
         pct = self.confidence_level * 100
@@ -181,42 +210,37 @@ def _two_sample_bca_ci(
     n_boot = len(boot_stats)
 
     # --- Bias correction (z0) ---
-    prop_below = np.sum(boot_stats < point_estimate) / n_boot
+    prop_below = _midrank_prop_below(boot_stats, point_estimate)
     prop_below = np.clip(prop_below, 1 / (n_boot + 1), n_boot / (n_boot + 1))
     z0 = _ndtri(prop_below)
 
-    # --- Acceleration via combined jackknife ---
-    # Delete-one from each group in turn
-    n_total = n1 + n2
-    jackknife_stats = np.empty(n_total)
-
+    # --- Acceleration: multi-sample jackknife (0.4.12, v19 3.59) ---
+    # Efron & Tibshirani (1993) sec. 14.3; SciPy _bca_interval. Influence values
+    # are formed within each group around that group's jackknife mean and
+    # weighted by 1/n_g. The former pooled formula agreed only when n1 == n2.
+    jk1 = np.empty(n1)
     for i in range(n1):
-        jack1 = np.delete(group1, i)
         try:
-            jackknife_stats[i] = statistic_fn(jack1, group2)
+            jk1[i] = statistic_fn(np.delete(group1, i), group2)
         except Exception:
-            jackknife_stats[i] = np.nan
-
+            jk1[i] = np.nan
+    jk2 = np.empty(n2)
     for j in range(n2):
-        jack2 = np.delete(group2, j)
         try:
-            jackknife_stats[n1 + j] = statistic_fn(group1, jack2)
+            jk2[j] = statistic_fn(group1, np.delete(group2, j))
         except Exception:
-            jackknife_stats[n1 + j] = np.nan
-
-    valid_jack = jackknife_stats[np.isfinite(jackknife_stats)]
-
-    if len(valid_jack) < 2:
+            jk2[j] = np.nan
+    jk1, jk2 = jk1[np.isfinite(jk1)], jk2[np.isfinite(jk2)]
+    if len(jk1) < 2 or len(jk2) < 2:
         return _percentile_ci(boot_stats, alpha)
-
-    jack_mean = np.mean(valid_jack)
-    jack_diff = jack_mean - valid_jack
-    denom = np.sum(jack_diff**2)
-
-    if denom == 0:
-        a = 0.0
-    else:
-        a = np.sum(jack_diff**3) / (6 * denom**1.5)
+    num = 0.0
+    den = 0.0
+    for jk in (jk1, jk2):
+        m = len(jk)
+        u = (m - 1) * (jk.mean() - jk)
+        num += np.sum(u**3) / m**3
+        den += np.sum(u**2) / m**2
+    a = 0.0 if den == 0 else float(num / (6 * den**1.5))
 
     # --- Adjusted percentiles ---
     z_alpha_lower = _ndtri(alpha / 2)
@@ -412,7 +436,7 @@ def _bca_ci(
 
     # --- Bias correction factor (z0) ---
     # Proportion of bootstrap estimates below the point estimate
-    prop_below = np.sum(boot_stats < point_estimate) / n_boot
+    prop_below = _midrank_prop_below(boot_stats, point_estimate)
     # Clamp to avoid infinite z-scores at 0 or 1
     prop_below = np.clip(prop_below, 1 / (n_boot + 1), n_boot / (n_boot + 1))
     z0 = _ndtri(prop_below)
@@ -729,7 +753,7 @@ def bootstrap_hodges_lehmann_ci(
     group2: Union[np.ndarray, pd.Series, List[float]],
     n_bootstrap: int = 10000,
     confidence: float = 0.95,
-    method: str = "bca",
+    method: str = "percentile",
     random_state: Optional[int] = None,
     return_distribution: bool = False,
 ) -> BootstrapCIResult:
@@ -748,7 +772,9 @@ def bootstrap_hodges_lehmann_ci(
         group2: Metric values for model 2.
         n_bootstrap: Number of bootstrap resamples (default 10 000).
         confidence: Confidence level (default 0.95).
-        method: 'percentile' or 'bca' (default 'bca').
+        method: 'percentile' (default since 0.4.12) or 'bca'. BCa's jackknife
+            is inconsistent for median-type statistics and undercovers on
+            quantised metrics (v19 3.1).
         random_state: Seed for reproducibility.
         return_distribution: If True, store the full bootstrap distribution.
 

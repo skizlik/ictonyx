@@ -146,3 +146,51 @@ def test_inner_random_state_is_overridden_per_run(wine, model):
     X, y = wine
     r = ix.variability_study(model, data=(X, y), runs=5, seed=1, verbose=False)
     assert len(set(r.get_metric_values("val_accuracy"))) > 1
+
+
+# ---- 3.49 / 3.59 / 2.136: the interval contract (commit 06) ----------------------
+def test_hl_default_is_percentile_and_never_zero_width():
+    from ictonyx.bootstrap import bootstrap_hodges_lehmann_ci
+
+    rng = np.random.default_rng(0)
+    for s in range(30):
+        a = (30 + rng.binomial(6, 0.5, 20)) / 36
+        b = (29 + rng.binomial(6, 0.5, 20)) / 36
+        r = bootstrap_hodges_lehmann_ci(a, b, n_bootstrap=1000, random_state=s)
+        assert r.method == "percentile"
+        assert np.isnan(r.ci_lower) or r.ci_upper > r.ci_lower
+
+
+def test_bca_bias_term_counts_ties_as_half():
+    from ictonyx.bootstrap import _midrank_prop_below
+
+    boot = np.array([0.0] * 20 + [1.0] * 60 + [2.0] * 20)
+    assert _midrank_prop_below(boot, 1.0) == pytest.approx(0.5)
+
+
+def test_two_sample_acceleration_matches_multisample_formula():
+    from scipy.stats import norm
+
+    from ictonyx.bootstrap import _two_sample_bca_ci
+
+    rng = np.random.default_rng(1)
+    g1, g2 = rng.exponential(1, 30), rng.exponential(1, 8)
+
+    def f(x, y):
+        return float(x.mean() - y.mean())
+
+    num = den = 0.0
+    for jk in (
+        np.array([f(np.delete(g1, i), g2) for i in range(30)]),
+        np.array([f(g1, np.delete(g2, j)) for j in range(8)]),
+    ):
+        m = len(jk)
+        u = (m - 1) * (jk.mean() - jk)
+        num += (u**3).sum() / m**3
+        den += (u**2).sum() / m**2
+    a_ref = num / (6 * den**1.5)
+    boot = np.linspace(-1, 1, 2001) + f(g1, g2)  # symmetric: z0 = 0
+    lo, _ = _two_sample_bca_ci(g1, g2, f, boot, f(g1, g2), 0.05)
+    z = norm.ppf(0.025)
+    q = norm.cdf(z / (1 - a_ref * z))
+    assert lo == pytest.approx(np.percentile(boot, 100 * q), abs=2e-3)

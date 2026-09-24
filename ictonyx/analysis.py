@@ -2060,14 +2060,26 @@ def compare_two_models(
                 # Hodges-Lehmann bootstrap. Methodologically correct when
                 # Mann-Whitney is dispatched; valid (and robust) for
                 # parametric tests too.
+                # 0.4.12 (v19 3.1): percentile, not BCa. The jackknife is
+                # inconsistent for median-type statistics and BCa undercovers
+                # badly on quantised metrics; percentile is less biased but
+                # still approximate on coarse metrics, and says so.
                 ci_result = bootstrap_hodges_lehmann_ci(
                     clean1,
                     clean2,
                     n_bootstrap=10000,
                     confidence=1 - alpha,
-                    method="bca",
+                    method="percentile",
                     random_state=random_state,
                 )
+                _pooled = np.concatenate([np.asarray(clean1), np.asarray(clean2)])
+                _tie_fraction = 1.0 - len(np.unique(_pooled)) / max(len(_pooled), 1)
+                if _tie_fraction > 0.2:
+                    result.warnings.append(
+                        f"{_tie_fraction:.0%} of the values are ties (a coarse metric). "
+                        "Intervals for median-type statistics on coarse metrics are "
+                        "approximate and may cover less than their nominal level."
+                    )
             else:
                 # ci_target == "mean_difference"
                 ci_result = bootstrap_mean_difference_ci(
@@ -2080,6 +2092,7 @@ def compare_two_models(
                 )
             result.confidence_interval = (ci_result.ci_lower, ci_result.ci_upper)
             result.point_estimate = float(ci_result.point_estimate)
+            result.warnings.extend(ci_result.notes)
 
             result.ci_confidence_level = ci_result.confidence_level
             result.ci_method = ci_result.method

@@ -46,7 +46,10 @@ def paired_data():
     """Paired observations with a consistent small improvement."""
     rng = np.random.RandomState(42)
     base = rng.normal(0.80, 0.05, 15)
-    g1 = base + 0.03  # consistently ~3% better
+    # 0.4.12: the improvement varies a little run to run. An exactly constant
+    # difference is the degenerate case (zero-width interval -> NaN; v19 D-8),
+    # which this fixture was never meant to exercise.
+    g1 = base + 0.03 + rng.normal(0.0, 0.005, 15)  # consistently ~3% better
     g2 = base
     return g1, g2
 
@@ -453,23 +456,31 @@ class TestBootstrapCIResult:
 class TestEdgeCases:
 
     def test_constant_data(self):
-        """All identical values: CI should collapse to a point."""
+        """All identical values: no interval exists (0.4.12, v19 D-8).
+
+        0.4.11 returned the zero-width interval (5.0, 5.0). An interval of zero
+        width asserts a certainty no resampling design supports; it is now
+        reported as undefined, with a note (SciPy's bootstrap also returns NaN).
+        """
         data = np.array([5.0] * 20)
-        result = bootstrap_ci(
-            data, statistic_fn=np.mean, n_bootstrap=1000, method="percentile", random_state=42
-        )
-        assert result.ci_lower == pytest.approx(5.0)
-        assert result.ci_upper == pytest.approx(5.0)
+        with pytest.warns(UserWarning, match="zero width"):
+            result = bootstrap_ci(
+                data, statistic_fn=np.mean, n_bootstrap=1000, method="percentile", random_state=42
+            )
+        assert result.point_estimate == pytest.approx(5.0)
+        assert np.isnan(result.ci_lower) and np.isnan(result.ci_upper)
+        assert any("zero width" in n for n in result.notes)
 
     def test_constant_groups(self):
         g1 = np.array([0.9] * 10)
         g2 = np.array([0.8] * 10)
-        result = bootstrap_mean_difference_ci(
-            g1, g2, n_bootstrap=1000, method="percentile", random_state=42
-        )
+        with pytest.warns(UserWarning, match="zero width"):
+            result = bootstrap_mean_difference_ci(
+                g1, g2, n_bootstrap=1000, method="percentile", random_state=42
+            )
         assert result.point_estimate == pytest.approx(0.1)
-        assert result.ci_lower == pytest.approx(0.1)
-        assert result.ci_upper == pytest.approx(0.1)
+        # 0.4.12 (v19 D-8): constant groups have no interval.
+        assert np.isnan(result.ci_lower) and np.isnan(result.ci_upper)
 
     def test_minimum_sample_size(self):
         """Two observations is the minimum — should work, not crash."""

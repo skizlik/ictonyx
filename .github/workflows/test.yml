@@ -6,12 +6,15 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 0 * * 0'
+    - cron: '0 0 * * 0'   # weekly: full matrix
+    - cron: '0 3 * * *'   # nightly: slow (Monte-Carlo) job only
+  workflow_dispatch:
 
 jobs:
   test:
     name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    if: github.event_name != 'schedule' || github.event.schedule == '0 0 * * 0'
     strategy:
       fail-fast: false
       matrix:
@@ -80,11 +83,6 @@ jobs:
           --durations=15 \
           -q -rfEs
 
-    - name: Run slow (Monte-Carlo) tests
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
-      shell: bash
-      run: pytest tests/ -m slow --timeout=900 -q
-
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
@@ -92,6 +90,55 @@ jobs:
         file: ./coverage.xml
         fail_ci_if_error: false
         verbose: true
+
+  slow:
+    # Monte-Carlo tests (0.4.12, v19 2.132): nightly, on release branches and on
+    # demand -- no longer on every push, where they made one matrix cell ~45 min.
+    name: Slow (Monte-Carlo) tests
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 3 * * *') ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/'))
+    env:
+      MPLBACKEND: Agg
+      PYTHONIOENCODING: utf-8
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python '3.11'
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: "${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}"
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[sklearn,isolation,tuning]"
+        pip install pytest pytest-cov pytest-timeout mlflow-skinny
+
+    # Framework installs fail the job if they fail (v12 2.64g): a silent
+    # install failure used to turn ~100 framework tests into skips. macOS is
+    # the deliberately bare cell (sklearn path only).
+    - name: Install TensorFlow (Linux/Windows only)
+      if: runner.os != 'macOS'
+      run: pip install tensorflow
+
+    - name: Install PyTorch (CPU only, Linux/Windows only)
+      if: runner.os != 'macOS'
+      run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+    - name: Run slow (Monte-Carlo) tests
+      shell: bash
+      run: pytest tests/ -m slow --timeout=900 -q -rfEs
 
   lint:
     name: Code Quality Checks

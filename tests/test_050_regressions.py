@@ -239,3 +239,15 @@ def test_compare_models_deterministic_pipelines_not_significant(wine):
     )
     assert np.isnan(c.overall_test.p_value)
     assert c.significant_comparisons == []
+
+
+# ---- 3.50: NaN-aware correction (commit 08) --------------------------------------
+@pytest.mark.parametrize("method", ["holm", "bonferroni", "fdr_bh"])
+def test_correction_excludes_nan_from_family(method):
+    from ictonyx.analysis import apply_multiple_comparison_correction
+
+    got, desc = apply_multiple_comparison_correction([0.01, float("nan"), 0.02, 0.04], method)
+    ref, _ = apply_multiple_comparison_correction([0.01, 0.02, 0.04], method)
+    assert np.isnan(got[1])
+    assert [got[0], got[2], got[3]] == pytest.approx(ref)
+    assert "excluded" in desc

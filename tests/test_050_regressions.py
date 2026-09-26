@@ -194,3 +194,48 @@ def test_two_sample_acceleration_matches_multisample_formula():
     z = norm.ppf(0.025)
     q = norm.cdf(z / (1 - a_ref * z))
     assert lo == pytest.approx(np.percentile(boot, 100 * q), abs=2e-3)
+
+
+# ---- 3.48: constant paired differences are undefined (commit 07) -----------------
+@pytest.mark.parametrize(
+    "a,b,zero_var",
+    [
+        ([0.9167] * 20, [0.8889] * 20, ["a", "b"]),
+        (list(np.linspace(0.8, 0.9, 20)), list(np.linspace(0.8, 0.9, 20) - 0.05), []),
+        ([0.9] * 8, [0.9] * 8, ["a", "b"]),
+    ],
+    ids=["both_constant", "both_vary_offset", "identical"],
+)
+def test_paired_constant_difference_is_undefined(a, b, zero_var):
+    from ictonyx.analysis import compare_two_models
+
+    r = compare_two_models(pd.Series(a), pd.Series(b), paired=True)
+    assert np.isnan(r.p_value)
+    assert not r.is_significant()
+    assert r.confidence_interval is None
+    assert r.sample_sizes["effective_n"] == 1
+    assert r.assumption_details["zero_variance_groups"] == zero_var
+
+
+def test_paired_and_unpaired_agree_on_deterministic_pair():
+    from ictonyx.analysis import compare_two_models
+
+    a, b = pd.Series([0.9167] * 20), pd.Series([0.8889] * 20)
+    assert np.isnan(compare_two_models(a, b, paired=True).p_value)
+    assert np.isnan(compare_two_models(a, b, paired=False).p_value)
+
+
+def test_compare_models_deterministic_pipelines_not_significant(wine):
+    X, y = wine
+    c = ix.compare_models(
+        [
+            make_pipeline(StandardScaler(), DecisionTreeClassifier(random_state=0)),
+            make_pipeline(StandardScaler(), DecisionTreeClassifier(max_depth=1, random_state=0)),
+        ],
+        data=(X, y),
+        runs=20,
+        seed=42,
+        verbose=False,
+    )
+    assert np.isnan(c.overall_test.p_value)
+    assert c.significant_comparisons == []

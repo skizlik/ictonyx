@@ -97,3 +97,29 @@ def test_compare_models_accepts_test_metric(wine, k):
         models, data=(X, y), runs=6, seed=0, verbose=False, metric="test_accuracy"
     )
     assert c.metric == "test_accuracy"
+
+
+# ---- 2.110: resume retries failed runs (commit 03) -------------------------------
+def test_resume_retries_failed_run_once(wine):
+    X, y = wine
+    d = tempfile.mkdtemp()
+    st = {"n": 0, "fail": {3}, "ki": 5}
+    ExperimentRunner(
+        _builder_factory(st),
+        ArraysDataHandler(X, y),
+        ModelConfig({"epochs": 1}),
+        seed=1,
+        verbose=False,
+    ).run_study(num_runs=6, checkpoint_dir=d)
+    st.update(n=100, fail=set(), ki=None)
+    res = ExperimentRunner(
+        _builder_factory(st),
+        ArraysDataHandler(X, y),
+        ModelConfig({"epochs": 1}),
+        seed=1,
+        verbose=False,
+    ).run_study(num_runs=6, checkpoint_dir=d)
+    assert sorted(res.run_ids) == [1, 2, 3, 4, 5, 6]
+    assert res.failed_runs == []
+    assert res.retried_runs == [3]
+    assert res.n_requested == 6

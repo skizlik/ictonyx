@@ -42,7 +42,6 @@ from .data import DataHandler
 from .exceptions import ConfigurationError
 from .runners import build_fit_kwargs, set_run_seeds
 
-_MAXIMIZE_KEYWORDS = ("accuracy", "precision", "recall", "r2", "f1", "auc")
 _METRIC_CANDIDATES = ("val_accuracy", "val_r2", "val_loss")
 
 
@@ -59,7 +58,20 @@ def _resolve_direction(direction: str, metric: Optional[str]) -> str:
             "direction='auto' cannot be resolved before the metric is known. "
             "Pass metric= to HyperparameterTuner, or direction='minimize'/'maximize'."
         )
-    return "maximize" if any(kw in metric.lower() for kw in _MAXIMIZE_KEYWORDS) else "minimize"
+    # 0.5.0 (register 3.51): the library's one direction table. The former
+    # six-keyword list minimised iou/dice/map/ndcg/mcc/kappa/fbeta/... and
+    # maximised accuracy_loss.
+    from .analysis import metric_direction
+
+    d = metric_direction(metric)
+    if d == "higher":
+        return "maximize"
+    if d == "lower":
+        return "minimize"
+    raise ConfigurationError(
+        f"direction='auto' cannot tell whether higher or lower {metric!r} is better. "
+        "Pass direction='maximize' or direction='minimize'."
+    )
 
 
 def _resolve_metric(

@@ -251,3 +251,49 @@ def test_correction_excludes_nan_from_family(method):
     assert np.isnan(got[1])
     assert [got[0], got[2], got[3]] == pytest.approx(ref)
     assert "excluded" in desc
+
+
+# ---- 3.51: one metric-direction table (commit 09) --------------------------------
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("neg_log_loss", "higher"),
+        ("val_neg_mean_squared_error", "higher"),
+        ("val_mcc", "higher"),
+        ("val_kappa", "higher"),
+        ("val_fbeta", "higher"),
+        ("val_ece", "lower"),
+        ("val_wer", "lower"),
+        ("val_accuracy_loss", "lower"),  # preservation row: already "lower" in 0.4.11
+    ],
+)
+def test_metric_direction_extended(name, expected):
+    from ictonyx.analysis import metric_direction
+
+    assert metric_direction(name) == expected
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("val_iou", "maximize"),
+        ("val_dice", "maximize"),
+        ("val_map", "maximize"),
+        ("val_mcc", "maximize"),
+        ("val_accuracy_loss", "minimize"),
+        ("val_loss", "minimize"),  # preservation row
+    ],
+)
+def test_tuner_direction_uses_metric_direction(name, expected):
+    from ictonyx.tuning import _resolve_direction
+
+    assert _resolve_direction("auto", name) == expected
+
+
+def test_tuner_unknown_metric_requires_direction():
+    from ictonyx.exceptions import ConfigurationError
+    from ictonyx.tuning import _resolve_direction
+
+    with pytest.raises(ConfigurationError):
+        _resolve_direction("auto", "val_wobble_index")
+    assert _resolve_direction("maximize", "val_wobble_index") == "maximize"

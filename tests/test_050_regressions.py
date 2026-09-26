@@ -123,3 +123,26 @@ def test_resume_retries_failed_run_once(wine):
     assert res.failed_runs == []
     assert res.retried_runs == [3]
     assert res.n_requested == 6
+
+
+# ---- 2.107: every random_state in the estimator tree (commit 05) -----------------
+@pytest.mark.parametrize(
+    "model",
+    [
+        make_pipeline(StandardScaler(), DecisionTreeClassifier(splitter="random", random_state=0)),
+        # A meta-estimator with its own seed fixed too, inside a Pipeline: 0.4.11 saw
+        # no top-level random_state and left both fixed. (A bare BaggingClassifier is
+        # NOT a guard: its top-level random_state was already overridden in 0.4.11.)
+        make_pipeline(
+            StandardScaler(),
+            BaggingClassifier(
+                estimator=DecisionTreeClassifier(random_state=0), n_estimators=3, random_state=0
+            ),
+        ),
+    ],
+    ids=["pipeline", "pipeline_bagging"],
+)
+def test_inner_random_state_is_overridden_per_run(wine, model):
+    X, y = wine
+    r = ix.variability_study(model, data=(X, y), runs=5, seed=1, verbose=False)
+    assert len(set(r.get_metric_values("val_accuracy"))) > 1

@@ -53,12 +53,14 @@ def test_bad_config_key_raises_configuration_error(X, y):
     assert "bogus_kw" in str(exc.value.__cause__)
 
 
-def test_dropped_config_key_warns_once(X, y):
-    with pytest.warns(UserWarning, match="does not accept \\['bogus_kw'\\]") as rec:
+def test_dropped_config_key_raises(X, y):
+    """Promise ledger #11: an unknown constructor key is an error in v0.5.0 (was a warning)."""
+    from ictonyx.exceptions import ConfigurationError
+
+    with pytest.raises(ConfigurationError, match="does not accept \\['bogus_kw'\\]"):
         ix.variability_study(
             LogisticRegression, data=(X, y), runs=3, seed=0, verbose=False, bogus_kw=1
         )
-    assert sum("does not accept" in str(w.message) for w in rec) == 1
 
 
 @pytest.mark.skipif(not PYTORCH_AVAILABLE, reason="PyTorch not available")

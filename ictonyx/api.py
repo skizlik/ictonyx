@@ -743,7 +743,7 @@ def _build_from_class(conf: ModelConfig, _model_class: Type[Any]) -> BaseModelWr
     }
     dropped = sorted(set(candidate) - set(construction_kwargs))
     if dropped:
-        _warn_dropped_construction_kwargs(_model_class, dropped)
+        _reject_dropped_construction_kwargs(_model_class, dropped, accepted)
 
     passes_random_state = ("random_state" in accepted or accepts_var_keyword) and not issubclass(
         _model_class, BaseModelWrapper
@@ -778,20 +778,20 @@ def _build_from_class(conf: ModelConfig, _model_class: Type[Any]) -> BaseModelWr
         ) from e
 
 
-_WARNED_DROPPED_KWARGS: set = set()
+def _reject_dropped_construction_kwargs(
+    model_class: Type[Any], dropped: List[str], accepted: Any
+) -> None:
+    """Config keys the constructor cannot take are an error (v0.5.0, promise ledger #11).
 
-
-def _warn_dropped_construction_kwargs(model_class: Type[Any], dropped: List[str]) -> None:
-    """Warn once per (class, keys) that config keys the constructor cannot take were dropped."""
-    key = (model_class.__name__, tuple(dropped))
-    if key in _WARNED_DROPPED_KWARGS:
-        return
-    _WARNED_DROPPED_KWARGS.add(key)
-    warnings.warn(
-        f"{model_class.__name__} does not accept {dropped}; these ModelConfig keys were not "
-        "passed to its constructor. Check for typos. (This becomes an error in v0.5.0.)",
-        UserWarning,
-        stacklevel=4,
+    0.4.x warned and dropped them; a typo then silently trained a different model.
+    """
+    shown = sorted(accepted)[:25] if accepted else []
+    raise ConfigurationError(
+        f"{model_class.__name__} does not accept {dropped}: these ModelConfig keys cannot be "
+        f"passed to its constructor (accepted: {shown}{' ...' if len(accepted or []) > 25 else ''}). "
+        "Remove them; pass fit-time settings under a FIT_KWARG_KEYS key; or, when comparing "
+        "different model classes, pass configured instances instead of shared keyword "
+        "arguments. (This was a warning before v0.5.0.)"
     )
 
 

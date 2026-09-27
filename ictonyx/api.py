@@ -588,6 +588,18 @@ def compare_models(
         paired_result = compare_two_models(
             series_a, series_b, paired=paired, random_state=seed, metric=metric
         )
+        # 0.5.0 (register 3.48 / 3.56): state a constant difference in evaluation examples.
+        _c = paired_result.assumption_details.get("constant_difference")
+        if isinstance(_c, float) and paired_result.conclusion:
+            _split = "test" if str(metric).startswith("test_") else "val"
+            _n_eval = getattr(studies[names[0]], "split_sizes", {}).get(_split)
+            if _n_eval:
+                _k = abs(_c) * _n_eval
+                _txt = f"exactly {abs(_c):.4g}"
+                _unit = "example" if round(_k) == 1 else "examples"
+                paired_result.conclusion = paired_result.conclusion.replace(
+                    _txt, f"{_txt} ({_k:.0f} {_split} {_unit})", 1
+                )
         return ModelComparisonResults(
             overall_test=paired_result,
             # raw_data is the aligned pairs the test actually used (v12 2.33)

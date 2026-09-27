@@ -407,3 +407,55 @@ def test_mw_conclusion_on_nan_corrected_p():
     r.correction_method = "holm"
     text = _generate_mann_whitney_conclusion(r, 0.05)
     assert text.startswith("Undefined") and "p=nan" not in text
+
+
+# ---- 3.56 / 3.42: scope of inference (commit 12) ---------------------------------
+def test_every_harness_conclusion_is_scoped_to_split(wine):
+    from ictonyx.analysis import compare_multiple_models, compare_two_models
+
+    rng = np.random.default_rng(1)
+    a, b, c = (pd.Series(rng.normal(m, 0.02, 20)) for m in (0.80, 0.78, 0.75))
+    for r in (
+        compare_two_models(a, b, paired=True, metric="val_accuracy"),
+        compare_two_models(a, b, paired=False, metric="val_accuracy"),
+        compare_two_models(a, b, paired=False, test_method="welch_t", metric="val_accuracy"),
+    ):
+        assert "on this split" in r.conclusion, r.conclusion
+    m = compare_multiple_models({"a": a, "b": b, "c": c}, metric="val_accuracy")
+    assert "on this split" in m.overall_test.conclusion
+    assert all("on this split" in t.conclusion for t in m.pairwise_comparisons.values())
+    X, y = wine
+    s = ix.variability_study(RandomForestClassifier, data=(X, y), runs=10, seed=1, verbose=False)
+    assert "on this split" in s.test_against_null(null_value=0.5).conclusion
+
+
+def test_summarize_prints_evaluation_se_not_granularity_claim(wine):
+    X, y = wine
+    s = ix.variability_study(RandomForestClassifier, data=(X, y), runs=5, seed=1, verbose=False)
+    text = s.summarize()
+    assert "Evaluation-set sampling error" in text
+    assert "no number of runs resolves finer" not in text
+
+
+def test_constant_difference_stated_in_evaluation_examples(wine):
+    X, y = wine
+    c = ix.compare_models(
+        [
+            make_pipeline(StandardScaler(), DecisionTreeClassifier(random_state=0)),
+            make_pipeline(StandardScaler(), DecisionTreeClassifier(max_depth=1, random_state=0)),
+        ],
+        data=(X, y),
+        runs=6,
+        seed=42,
+        verbose=False,
+    )
+    assert "val examples)" in c.overall_test.conclusion
+
+
+def test_run_order_check_is_a_diagnostic_not_an_assumption():
+    from ictonyx.analysis import mann_whitney_test
+
+    rng = np.random.default_rng(2)
+    r = mann_whitney_test(pd.Series(rng.normal(0, 1, 20)), pd.Series(rng.normal(0, 1, 20)))
+    assert "independence" not in r.assumptions_met
+    assert "run_order_autocorrelation" in r.assumption_details

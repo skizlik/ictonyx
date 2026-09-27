@@ -1512,11 +1512,31 @@ class VariabilityStudyResults:
         if self.split_sizes:
             parts = [f"{k} {v}" for k, v in self.split_sizes.items() if v is not None]
             lines.append("Data split: " + " / ".join(parts))
-            n_eval = self.split_sizes.get("val") or self.split_sizes.get("test")
-            if n_eval:
+            # 0.5.0 (register 3.56): report the evaluation-set sampling error,
+            # which no number of runs reduces. (The former "granularity" line
+            # claimed a resolution limit that does not exist.)
+            from .analysis import metric_direction as _md
+
+            try:
+                _m = self.preferred_metric(context="scalar")
+                _vals = np.asarray(self.get_metric_values(_m), dtype=float)
+                _vals = _vals[np.isfinite(_vals)]
+                _n_eval = self.split_sizes.get("test" if _m.startswith("test_") else "val")
+            except Exception:
+                _m, _vals, _n_eval = None, np.array([]), None
+            if (
+                _n_eval
+                and _vals.size
+                and _md(_m) == "higher"
+                and _vals.min() >= 0.0
+                and _vals.max() <= 1.0
+            ):
+                _p = float(np.mean(_vals))
+                _se = 100.0 * np.sqrt(_p * (1.0 - _p) / _n_eval)
                 lines.append(
-                    f"Metric granularity: one evaluation sample = {100.0 / n_eval:.1f} pp "
-                    f"(n_eval = {n_eval}); no number of runs resolves finer than this."
+                    f"Evaluation-set sampling error: +/-{_se:.1f} pp (binomial SE of {_m} = "
+                    f"{_p:.3f} at n_eval = {_n_eval}). Seed variation cannot reduce this, and "
+                    "no seed-level test includes it."
                 )
 
         if self.failed_runs:
@@ -1727,7 +1747,7 @@ class VariabilityStudyResults:
             reliable inference — consistent with the library-wide minimum
             for Mann-Whitney U tests.
         """
-        from .analysis import _wilcoxon_signed_rank_impl
+        from .analysis import _scope_suffix, _wilcoxon_signed_rank_impl
 
         if metric is None:
             metric = self.preferred_metric("accuracy")
@@ -1751,12 +1771,14 @@ class VariabilityStudyResults:
                 raise ValueError(f"Metric '{metric}' not found. Available: {available}")
             values = pd.Series(self.get_metric_values(metric))
 
-        return _wilcoxon_signed_rank_impl(
+        result = _wilcoxon_signed_rank_impl(
             values,
             null_value=null_value,
             alpha=alpha,
             alternative=alternative,
         )
+        result.conclusion = _scope_suffix(result.conclusion)
+        return result
 
     def test_above_chance(
         self,

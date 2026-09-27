@@ -645,6 +645,24 @@ def metric_direction(name: Optional[str]) -> str:
     return "unknown"
 
 
+_SCOPE = "on this split"
+
+
+def _scope_suffix(sentence: Optional[str]) -> Optional[str]:
+    """Append the scope of inference to a conclusion, once (0.5.0, register 3.56).
+
+    Every run is scored on one fixed evaluation set, so every seed-level
+    conclusion holds on this split only. Applied by the comparison functions,
+    not by the low-level tests, which may be run on any arrays.
+    """
+    if not sentence:
+        return sentence
+    s = sentence.rstrip()
+    if "this split" in s or "this evaluation set" in s:
+        return sentence
+    return (s[:-1] if s.endswith(".") else s) + f", {_SCOPE}."
+
+
 def _direction_sentence(metric: Optional[str], a_is_higher: bool) -> str:
     """Wording for a significant two-model result.
 
@@ -962,22 +980,28 @@ def mann_whitney_test(
         # Explicitly False means the test ran and found autocorrelation.
         # None means the series was too short to test — not a violation.
         result.warnings.append(
-            "Data shows evidence of autocorrelation, violating independence assumption"
+            "Run-order autocorrelation detected across runs. Note: all runs share one evaluation set, a dependence this check cannot see"
         )
 
     if (is_indep1 is None and "group1" not in zero_var) or (
         is_indep2 is None and "group2" not in zero_var
     ):
         result.warnings.append(
-            "Independence could not be assessed: too few observations for "
+            "Run-order autocorrelation could not be assessed: too few observations for "
             "the autocorrelation test."
         )
 
-    # Record assumption only when the test actually ran.
-    if is_indep1 is not None and is_indep2 is not None:
-        result.assumptions_met["independence"] = is_indep1 and is_indep2
-    # If either was untestable, omit the key rather than recording False.
-    result.assumption_details["independence"] = {"group1": indep_details1, "group2": indep_details2}
+    # 0.5.0 (register 3.42): a run-order diagnostic, not an independence
+    # assumption. Runs share one evaluation set, which this check cannot see,
+    # so recording "independence: met" asserted the wrong thing.
+    result.assumption_details["run_order_autocorrelation"] = {
+        "flagged": (
+            None if is_indep1 is None or is_indep2 is None else not (is_indep1 and is_indep2)
+        ),
+        "group1": indep_details1,
+        "group2": indep_details2,
+        "note": "Diagnoses run-order autocorrelation only; runs share one evaluation set.",
+    }
 
     # Perform test
     try:
@@ -2159,6 +2183,7 @@ def compare_two_models(
             # Bootstrap is best-effort — never break an otherwise valid result
             pass
 
+    result.conclusion = _scope_suffix(result.conclusion)
     return result
 
 
@@ -2346,13 +2371,14 @@ def compare_multiple_models(
             # The generators read corrected_p_value when it is set; they ran
             # before it was. Regenerate so the sentence and is_significant()
             # cannot disagree (v16 3.25).
-            test.conclusion = _generate_mann_whitney_conclusion(test, alpha)
+            test.conclusion = _scope_suffix(_generate_mann_whitney_conclusion(test, alpha))
             test.detailed_interpretation = _generate_detailed_interpretation(test, alpha)
 
         significant_comparisons = [
             name for name, test in pairwise_comparisons.items() if test.is_significant(alpha)
         ]
 
+    overall_result.conclusion = _scope_suffix(overall_result.conclusion)
     return ModelComparisonResults(
         overall_test=overall_result,
         raw_data=model_results,

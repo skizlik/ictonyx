@@ -51,5 +51,8 @@ def test_summarize_reports_split_sizes(X, y):
     r = ix.variability_study(LogisticRegression, data=(X, y), runs=2, seed=0, verbose=False)
     s = r.summarize()
     assert "Data split: train" in s
-    assert "Metric granularity" in s
+    # 0.5.0 (register 3.56): the evaluation-set sampling error replaces the
+    # "Metric granularity" line, whose "no number of runs resolves finer" was false.
+    assert "Evaluation-set sampling error" in s
+    assert "Metric granularity" not in s
     assert r.split_sizes["train"] + r.split_sizes["val"] + r.split_sizes["test"] == len(X)

@@ -788,3 +788,13 @@ def test_rank_test_random_state_is_a_tombstone(fn):
     with pytest.raises(RemovedAPIError, match="deterministic"):
         getattr(A, fn)(a, b, random_state=0)
     assert np.isfinite(getattr(A, fn)(a, b).p_value)  # without it, unchanged
+
+
+# ---- P-05: sklearn fit() epochs/batch_size/verbose raise ---------------------------
+@pytest.mark.parametrize("kw", ["epochs", "batch_size", "verbose"])
+def test_sklearn_fit_legacy_kwargs_raise_type_error(wine, kw):
+    X, y = wine
+    w = ScikitLearnModelWrapper(RandomForestClassifier(n_estimators=3, random_state=0))
+    with pytest.raises(TypeError, match="removed in v0.5.0"):
+        w.fit((X, y), **{kw: 1})
+    w.fit((X, y))  # without it, unchanged

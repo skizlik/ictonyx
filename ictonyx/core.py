@@ -992,19 +992,19 @@ if SKLEARN_AVAILABLE:
             if isinstance(train_data, tuple) and len(train_data) == 2:
                 X_train, y_train = train_data
 
-                # Warn on deprecated explicit kwargs
+                # Removed in v0.5.0 (promise ledger #6): these raise, as announced.
+                # The runner never passes them to sklearn wrappers (build_fit_kwargs).
                 for _dep_kwarg, _dep_val in [
                     ("epochs", epochs),
                     ("batch_size", batch_size),
                     ("verbose", verbose),
                 ]:
                     if _dep_val is not None:
-                        warnings.warn(
-                            f"Passing '{_dep_kwarg}' to ScikitLearnModelWrapper.fit() "
-                            "is deprecated and will raise TypeError in v0.5.0. "
-                            "sklearn models ignore this parameter; remove it from your call.",
-                            DeprecationWarning,
-                            stacklevel=2,
+                        from .exceptions import _removed
+
+                        raise _removed(
+                            f"ScikitLearnModelWrapper.fit({_dep_kwarg}=...)",
+                            "no argument: sklearn models do not take it",
                         )
 
                 sklearn_kwargs = {}

@@ -459,3 +459,13 @@ def test_run_order_check_is_a_diagnostic_not_an_assumption():
     r = mann_whitney_test(pd.Series(rng.normal(0, 1, 20)), pd.Series(rng.normal(0, 1, 20)))
     assert "independence" not in r.assumptions_met
     assert "run_order_autocorrelation" in r.assumption_details
+
+
+# ---- 3.55: test_above_chance is scoped (commit 13) -------------------------------
+def test_above_chance_warns_conditional_scope(wine):
+    X, y = wine
+    s = ix.variability_study(RandomForestClassifier, data=(X, y), runs=10, seed=1, verbose=False)
+    with pytest.warns(UserWarning, match="not a test of population accuracy"):
+        r = s.test_above_chance()
+    assert "on this evaluation set" in r.conclusion
+    assert any("population accuracy" in w for w in r.warnings)

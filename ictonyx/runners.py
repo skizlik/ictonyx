@@ -1786,7 +1786,16 @@ class VariabilityStudyResults:
         alpha: float = 0.05,
         chance_level: float = 0.5,
     ) -> "StatisticalTestResult":
-        """Test whether a model's seed-distribution of a metric is above a chance level.
+        """Test whether the runs sit above chance ON THIS EVALUATION SET.
+
+        .. warning::
+            This is conditional on the one evaluation set every run is scored
+            on. A model at chance on the population passes whenever that set
+            happens to favour it (37.5% of null datasets in simulation at
+            alpha = 0.05). It is not a test of population accuracy; a binomial
+            replacement is planned (register 3.55).
+
+        Test whether a model's seed-distribution of a metric is above a chance level.
 
         All runs share one fixed evaluation set, so this is a statement about
         training randomness on this split. A model at chance on the population
@@ -1830,12 +1839,24 @@ class VariabilityStudyResults:
             >>> if outcome.is_significant():
             ...     print(f"Model above chance (p={outcome.p_value:.4f})")
         """
-        return self.test_against_null(
+        msg = (
+            "test_above_chance() tests whether this model's runs, all scored on ONE "
+            "evaluation set, sit above chance. A model at chance on the population passes "
+            "whenever this evaluation set happens to favour it (37.5% of null datasets in "
+            "simulation at alpha=0.05). It is not a test of population accuracy; a binomial "
+            "replacement is planned (register 3.55)."
+        )
+        warnings.warn(msg, UserWarning, stacklevel=2)
+        result = self.test_against_null(
             null_value=chance_level,
             metric=metric,
             alpha=alpha,
             alternative="greater",
         )
+        result.warnings.append(msg)
+        if result.conclusion:
+            result.conclusion = result.conclusion.replace("on this split", "on this evaluation set")
+        return result
 
     def compare_models_statistically(self, *args, **kwargs):
         """Removed in v0.3.10.

@@ -469,3 +469,16 @@ def test_above_chance_warns_conditional_scope(wine):
         r = s.test_above_chance()
     assert "on this evaluation set" in r.conclusion
     assert any("population accuracy" in w for w in r.warnings)
+
+
+# ---- 3.62: one-sample wording (commit 14) ----------------------------------------
+@pytest.mark.parametrize(
+    "alt,verb", [("two-sided", "differ from"), ("greater", "sit above"), ("less", "sit below")]
+)
+def test_one_sample_wording_follows_alternative(alt, verb):
+    from ictonyx.analysis import _wilcoxon_signed_rank_impl
+
+    rng = np.random.default_rng(8)
+    center = 0.9 if alt != "less" else 0.1
+    r = _wilcoxon_signed_rank_impl(pd.Series(rng.normal(center, 0.01, 20)), 0.5, alt)
+    assert verb in r.conclusion and "median" not in r.conclusion

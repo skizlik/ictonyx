@@ -1140,6 +1140,7 @@ def _wilcoxon_signed_rank_impl(
             result.p_value = float("nan")
             return result
     # Generate interpretation
+    result.assumption_details["alternative"] = alternative
     result.conclusion = _generate_wilcoxon_conclusion(result, null_value, alpha)
     result.detailed_interpretation = _generate_detailed_interpretation(result, alpha)
     return result
@@ -2419,15 +2420,24 @@ def _generate_mann_whitney_conclusion(result: StatisticalTestResult, alpha: floa
 def _generate_wilcoxon_conclusion(
     result: StatisticalTestResult, null_value: float, alpha: float
 ) -> str:
-    """Generate conclusion for Wilcoxon test."""
+    """Generate conclusion for the one-sample Wilcoxon test (0.5.0, register 3.62).
+
+    The wording follows the tested alternative, and makes no claim about the
+    median (that reading needs a symmetric distribution of runs).
+    """
     p_val = result.corrected_p_value if result.corrected_p_value is not None else result.p_value
+    alt = result.assumption_details.get("alternative", "two-sided")
+    verb = {"greater": "sit above", "less": "sit below"}.get(alt, "differ from")
 
     if p_val < alpha:
-        conclusion = f"Wilcoxon signed-rank test indicates the median differs significantly from {null_value} (p={p_val:.4f})"
+        conclusion = f"The runs {verb} {null_value} (Wilcoxon signed-rank, {alt}, p={p_val:.4f})"
         if result.effect_size is not None:
             conclusion += f" with {result.effect_size_interpretation} effect size ({result.effect_size_name}={result.effect_size:.3f})"
     else:
-        conclusion = f"Wilcoxon signed-rank test shows no significant difference from {null_value} (p={p_val:.4f})"
+        conclusion = (
+            f"No evidence that the runs {verb} {null_value} "
+            f"(Wilcoxon signed-rank, {alt}, p={p_val:.4f})"
+        )
         if result.effect_size is not None:
             conclusion += f". Effect size is {result.effect_size_interpretation} ({result.effect_size_name}={result.effect_size:.3f})"
 

@@ -120,21 +120,14 @@ class ModelConfig:
         raise _removed("ModelConfig.merge()", "ModelConfig.update()", since="0.3.9")
 
     def has(self, key: str) -> bool:
-        """Check if parameter exists.
+        """Removed in v0.5.0 (promise ledger #5); use ``key in config``.
 
-        .. deprecated:: 0.3.9
-            Use the ``in`` operator instead: ``'key' in config``.
-            Will be removed in v0.5.0.
+        Raises:
+            RemovedAPIError: Always. This tombstone is removed in v0.6.0.
         """
-        import warnings
+        from .exceptions import _removed
 
-        warnings.warn(
-            "ModelConfig.has() is deprecated and will be removed in "
-            "v0.5.0. Use the 'in' operator instead: 'key' in config.",
-            UserWarning,
-            stacklevel=2,
-        )
-        return key in self.params
+        raise _removed("ModelConfig.has()", "the 'in' operator: 'key' in config", since="0.3.9")
 
     def keys(self) -> KeysView[str]:
         """Get all parameter keys."""

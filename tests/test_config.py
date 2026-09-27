@@ -166,10 +166,14 @@ class TestModelConfigExtended:
             config.merge({"b": 2})
         assert config.update({"b": 2}).params == {"a": 1, "b": 2}
 
-    def test_has(self):
+    def test_has_is_a_tombstone(self):
+        """has() was removed in v0.5.0 (promise ledger #5); 'key' in config is the API."""
+        from ictonyx.exceptions import RemovedAPIError
+
         config = ModelConfig({"epochs": 10})
-        assert config.has("epochs") is True
-        assert config.has("missing") is False
+        with pytest.raises(RemovedAPIError, match="'key' in config"):
+            config.has("epochs")
+        assert "epochs" in config and "missing" not in config
 
     def test_for_xgboost_binary(self):
         config = ModelConfig.for_xgboost(num_classes=2)
@@ -231,20 +235,6 @@ class TestModelConfigDunderMethods:
     def test_to_dict_contents(self):
         cfg = ModelConfig({"epochs": 5, "lr": 0.01})
         assert cfg.to_dict() == {"epochs": 5, "lr": 0.01}
-
-
-class TestModelConfigDeprecations:
-    """Verify DeprecationWarning fires for merge() and has()."""
-
-    def test_has_emits_deprecation_warning(self):
-        import warnings
-
-        cfg = ModelConfig({"a": 1})
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            result = cfg.has("a")
-        assert any(issubclass(x.category, UserWarning) for x in w)
-        assert result is True  # still works
 
 
 class TestConfigSettersUncovered:

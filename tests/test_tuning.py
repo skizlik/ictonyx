@@ -2,7 +2,7 @@
 
 v0.4.10: this file was gated on shap (unrelated) and referenced a class that
 never existed, so it had never run on any machine (v12 2.73). It now requires
-optuna (the supported backend); hyperopt-specific tests skip without hyperopt.
+optuna (the only backend; Hyperopt was removed in v0.5.0).
 """
 
 import numpy as np
@@ -13,15 +13,6 @@ from ictonyx.core import BaseModelWrapper, TrainingResult
 from ictonyx.tuning import HyperparameterTuner, _resolve_direction
 
 pytest.importorskip("optuna", reason="optuna not installed")
-
-try:
-    import hyperopt  # noqa: F401
-
-    HAS_HYPEROPT = True
-except ImportError:
-    HAS_HYPEROPT = False
-
-needs_hyperopt = pytest.mark.skipif(not HAS_HYPEROPT, reason="hyperopt not installed")
 
 
 class SimpleRegressionWrapper(BaseModelWrapper):
@@ -131,43 +122,6 @@ def test_tuner_rejects_invalid_max_evals(regression_handler):
         )
 
 
-@needs_hyperopt
-def test_r2_is_negated_for_minimization(regression_handler):
-    """Hyperopt backend: r2 must be negated so the tuner maximises it."""
-    from unittest.mock import patch
-
-    from hyperopt import hp
-
-    config = ModelConfig({"learning_rate": 0.01, "epochs": 1})
-    tuner = HyperparameterTuner(
-        lambda c: SimpleRegressionWrapper(c), regression_handler, config, metric="val_r2"
-    )
-    with patch("ictonyx.tuning.HAS_OPTUNA", False), pytest.warns(DeprecationWarning):
-        result = tuner.tune({"learning_rate": hp.uniform("lr", 0.001, 0.5)}, max_evals=5)
-    assert result["best_metric_value"] > 0
-
-
-@needs_hyperopt
-def test_accuracy_best_value_positive():
-    """Hyperopt backend: accuracy is maximize-better; best_metric_value positive."""
-    from unittest.mock import patch
-
-    from hyperopt import hp
-
-    from ictonyx.data import ArraysDataHandler
-
-    X = np.random.rand(60, 3)
-    y = np.random.randint(0, 2, 60).astype(float)
-    handler = ArraysDataHandler(X, y)
-    config = ModelConfig({"learning_rate": 0.1, "epochs": 1})
-    tuner = HyperparameterTuner(
-        lambda c: SimpleClassificationWrapper(c), handler, config, metric="val_accuracy"
-    )
-    with patch("ictonyx.tuning.HAS_OPTUNA", False), pytest.warns(DeprecationWarning):
-        result = tuner.tune({"learning_rate": hp.uniform("lr", 0.01, 0.2)}, max_evals=3)
-    assert result["best_metric_value"] > 0
-
-
 class TestResolveDirection:
     """_resolve_direction() replaces the two former copies of the metric heuristic."""
 
@@ -192,32 +146,29 @@ class TestResolveDirection:
 class TestTuningImportErrors:
     """ImportError paths do not require hyperopt to be installed."""
 
-    def test_hyperparameter_tuner_raises_without_hyperopt(self):
+    def test_tune_without_optuna_raises_import_error(self):
+        """The Hyperopt fallback was removed in v0.5.0 (promise ledger #10)."""
         from unittest.mock import MagicMock, patch
 
         from ictonyx.data import ArraysDataHandler
 
         X = np.zeros((20, 2))
         y = np.zeros(20)
-
-        with patch("ictonyx.tuning.HAS_OPTUNA", False), patch("ictonyx.tuning.HAS_HYPEROPT", False):
+        with patch("ictonyx.tuning.HAS_OPTUNA", False):
             tuner = HyperparameterTuner(
                 model_builder=MagicMock(),
                 data_handler=ArraysDataHandler(X, y),
                 model_config=ModelConfig({}),
             )
-            with pytest.warns(DeprecationWarning):
-                with pytest.raises(ImportError, match="Hyperopt"):
-                    tuner.tune({"x": 1}, max_evals=1)
+            with pytest.raises(ImportError, match="Optuna"):
+                tuner.tune({"x": 1}, max_evals=1)
 
-    def test_create_search_space_raises_without_hyperopt(self):
-        from unittest.mock import patch
-
+    def test_create_search_space_is_a_tombstone(self):
+        from ictonyx.exceptions import RemovedAPIError
         from ictonyx.tuning import create_search_space
 
-        with patch("ictonyx.tuning.HAS_HYPEROPT", False):
-            with pytest.raises(ImportError, match="Hyperopt"):
-                create_search_space()
+        with pytest.raises(RemovedAPIError, match="Optuna"):
+            create_search_space()
 
 
 class TestStabilityWeightValidation:

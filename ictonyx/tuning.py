@@ -7,16 +7,6 @@ import pandas as pd
 
 from .settings import logger
 
-# Optional hyperopt dependency
-try:
-    from hyperopt import STATUS_OK, Trials, fmin, hp, space_eval, tpe
-    from hyperopt.pyll.base import scope
-
-    HAS_HYPEROPT = True
-except ImportError:
-    fmin = tpe = hp = Trials = STATUS_OK = scope = None
-    HAS_HYPEROPT = False
-
 # Optional Optuna dependency
 try:
     import optuna
@@ -124,8 +114,7 @@ class HyperparameterTuner:
 
     Requires optuna: ``pip install ictonyx[tuning]``
 
-    The legacy Hyperopt backend is still available but deprecated and will
-    be removed in v0.5.0.
+    The Hyperopt backend was removed in v0.5.0 (promise ledger #10).
     """
 
     def __init__(
@@ -186,8 +175,6 @@ class HyperparameterTuner:
         self.val_data = None
         self.best_params: Optional[Dict[str, Any]] = None
         self._optuna_study: Optional[Any] = None
-        # Legacy hyperopt trials object — populated only when using hyperopt backend
-        self.trials = Trials() if HAS_HYPEROPT else None
 
     def _ensure_data_loaded(self) -> None:
         """Load data lazily on first call. Validates val_data is present."""
@@ -237,14 +224,11 @@ class HyperparameterTuner:
             Dict of best hyperparameters found.
         """
         if not HAS_OPTUNA:
-            warnings.warn(
-                "The Hyperopt tuning backend is deprecated and will be removed "
-                "in v0.5.0. Install Optuna to use the supported backend: "
-                "pip install ictonyx[tuning]",
-                DeprecationWarning,
-                stacklevel=2,
+            # The Hyperopt fallback was removed in v0.5.0 (promise ledger #10).
+            raise ImportError(
+                "HyperparameterTuner.tune() requires Optuna: pip install ictonyx[tuning]. "
+                "The Hyperopt backend was removed in v0.5.0."
             )
-            return self._tune_hyperopt(param_space, max_evals)
 
         if not isinstance(param_space, dict) or not param_space:
             raise ValueError("param_space must be a non-empty dict of Optuna distributions.")
@@ -333,95 +317,6 @@ class HyperparameterTuner:
         logger.info(f"Best parameters: {best}")
         return best
 
-    def _tune_hyperopt(self, param_space: Dict[str, Any], max_evals: int) -> Dict[str, Any]:
-        """Legacy Hyperopt backend. Deprecated — will be removed in v0.5.0."""
-        warnings.warn(
-            "The Hyperopt backend is deprecated in v0.4.0 and will be removed in v0.5.0. "
-            "Switch to Optuna by passing Optuna distributions to tune(). "
-            "Install Optuna with: pip install ictonyx[tuning]",
-            DeprecationWarning,
-            stacklevel=3,
-        )
-        if not HAS_HYPEROPT:
-            raise ImportError(
-                "Hyperopt is required for the legacy backend. "
-                "Install with: pip install hyperopt, or switch to Optuna."
-            )
-
-        if not isinstance(param_space, dict) or not param_space:
-            raise ValueError("param_space must be a non-empty dictionary of hyperopt distributions")
-        if max_evals <= 0:
-            raise ValueError("max_evals must be positive")
-
-        # Load data if not already loaded
-        self._ensure_data_loaded()
-
-        logger.info(f"Starting hyperopt optimization with {max_evals} evaluations...")
-
-        def objective(params: Dict[str, Any]) -> Dict[str, Any]:
-            assert self.trials is not None
-            trial_num = len(self.trials.trials) + 1
-            logger.info(f"\nTrial {trial_num}/{max_evals}: {params}")
-            wrapped_model = None
-            try:
-                if HAS_TENSORFLOW:
-                    tf.keras.backend.clear_session()
-                base_seed = self.seed if self.seed is not None else 0
-                run_seed = int(np.random.SeedSequence([base_seed, trial_num]).generate_state(1)[0])
-                trial_config = self.model_config.copy(keep_frozen=False).update(params)
-                trial_config.set("run_seed", run_seed)
-                set_run_seeds(run_seed)
-                wrapped_model = self.model_builder(trial_config)
-                _start = time.time()
-                wrapped_model.fit(
-                    **build_fit_kwargs(
-                        trial_config,
-                        trial_config.get("epochs", 10),
-                        run_seed,
-                        wrapped_model,
-                        self.train_data,
-                        self.val_data,
-                    )
-                )
-                _elapsed = time.time() - _start
-                eval_result = wrapped_model.evaluate(data=self.val_data)
-                name, final_value = _resolve_metric(self.metric, wrapped_model, eval_result)
-                self.metric = self.metric or name
-                direction = _resolve_direction("auto", self.metric)
-                loss = -float(final_value) if direction == "maximize" else float(final_value)
-                return {
-                    "loss": loss,
-                    "status": STATUS_OK,
-                    "eval_time": _elapsed,
-                    "final_metric": final_value,
-                }
-            except ConfigurationError:
-                raise
-            except Exception as e:
-                logger.warning(f"  Trial failed: {e}")
-                return {"loss": float("inf"), "status": STATUS_OK, "error": str(e)}
-            finally:
-                if wrapped_model is not None:
-                    try:
-                        wrapped_model.release()
-                    except Exception:
-                        pass
-
-        try:
-            best_params = fmin(
-                fn=objective,
-                space=param_space,
-                algo=tpe.suggest,
-                max_evals=max_evals,
-                trials=self.trials,
-                verbose=False,
-            )
-            result = space_eval(param_space, best_params)
-            self.best_params = result
-            return result
-        except Exception as e:
-            raise RuntimeError(f"Hyperopt optimization failed: {e}")
-
     def get_best_trial(self) -> Dict[str, Any]:
         """Get details about the best trial after optimisation.
 
@@ -445,21 +340,6 @@ class HyperparameterTuner:
                     ]
                 ),
             }
-        elif self.trials is not None and self.trials.trials:
-            # Legacy hyperopt path
-            best_trial = self.trials.best_trial
-            best_loss = best_trial["result"]["loss"]
-            best_metric_value = (
-                -best_loss if _resolve_direction("auto", self.metric) == "maximize" else best_loss
-            )
-            return {
-                "best_params": self.trials.argmin,
-                "best_metric_value": best_metric_value,
-                "total_trials": len(self.trials.trials),
-                "successful_trials": len(
-                    [t for t in self.trials.trials if t["result"]["loss"] != float("inf")]
-                ),
-            }
         else:
             raise RuntimeError("No trials have been run yet. Call tune() first.")
 
@@ -474,58 +354,21 @@ class HyperparameterTuner:
         """
         if self._optuna_study is not None:
             return self._optuna_study.trials_dataframe()
-        elif self.trials is not None and self.trials.trials:
-            # Legacy hyperopt path
-            _trials = self.trials  # narrow type for mypy
-            trial_data = []
-            for i, trial in enumerate(_trials.trials):
-                row: Dict[str, Any] = {"trial_id": i}
-                if "misc" in trial and "vals" in trial["misc"]:
-                    for param_name, param_values in trial["misc"]["vals"].items():
-                        if param_values:
-                            row[param_name] = param_values[0]
-                result = trial.get("result", {})
-                row["loss"] = result.get("loss", float("inf"))
-                row["final_metric"] = result.get("final_metric", None)
-                row["status"] = result.get("status", "UNKNOWN")
-                if "error" in result:
-                    row["error"] = result["error"]
-                trial_data.append(row)
-            return pd.DataFrame(trial_data)
         else:
             raise RuntimeError("No trials have been run yet. Call tune() first.")
 
 
 # Utility function for common search spaces
-def create_search_space() -> Dict[str, Any]:
-    """
-    Creates common hyperparameter search spaces for different model types.
+def create_search_space(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    """Removed in v0.5.0 with the Hyperopt backend (promise ledger #10).
 
-    Returns:
-        Dictionary of example search space definitions
+    Raises:
+        RemovedAPIError: Always. This tombstone is removed in v0.6.0.
     """
-    if not HAS_HYPEROPT:
-        raise ImportError(
-            "Hyperopt required to create search spaces. Install with: pip install hyperopt"
-        )
+    from .exceptions import _removed
 
-    return {
-        "neural_network": {
-            "learning_rate": hp.loguniform("learning_rate", np.log(1e-5), np.log(1e-1)),
-            "batch_size": hp.choice("batch_size", [16, 32, 64, 128]),
-            "epochs": hp.choice("epochs", [10, 20, 50, 100]),
-            "dropout_rate": hp.uniform("dropout_rate", 0.0, 0.5),
-        },
-        "xgboost": {
-            "n_estimators": hp.choice("n_estimators", [50, 100, 200, 500]),
-            "max_depth": hp.choice("max_depth", [3, 5, 7, 9]),
-            "learning_rate": hp.loguniform("learning_rate", np.log(0.01), np.log(0.3)),
-            "subsample": hp.uniform("subsample", 0.6, 1.0),
-        },
-        "random_forest": {
-            "n_estimators": hp.choice("n_estimators", [50, 100, 200, 500]),
-            "max_depth": hp.choice("max_depth", [None, 5, 10, 15, 20]),
-            "min_samples_split": hp.choice("min_samples_split", [2, 5, 10]),
-            "min_samples_leaf": hp.choice("min_samples_leaf", [1, 2, 4]),
-        },
-    }
+    raise _removed(
+        "create_search_space() (Hyperopt search spaces)",
+        "an Optuna param_space: {name: optuna.distributions.*}",
+        since="0.4.0",
+    )

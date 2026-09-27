@@ -978,7 +978,17 @@ class TestPlotPairedDeltas:
         from unittest.mock import MagicMock
 
         fake = MagicMock()
-        fake.get_metric_values = MagicMock(return_value=list(values))
+
+        def _values(metric, with_run_ids=False):
+            v = list(values)
+            return (list(range(1, len(v) + 1)), v) if with_run_ids else v
+
+        # 0.5.0: plot_paired_deltas pairs through align_paired, which reads run
+        # ids and checks that both studies share a seed -- as a real study does.
+        fake.seed = 0
+        fake.get_metric_values = MagicMock(side_effect=_values)
+        _bare = metric_key[len("test_") :] if metric_key.startswith("test_") else metric_key
+        fake.final_test_metrics = [{_bare: v, "run_id": i + 1} for i, v in enumerate(values)]
         fake.get_test_metric_values = MagicMock(return_value=list(values))
         fake.preferred_metric = MagicMock(return_value=metric_key)
         return fake
@@ -993,13 +1003,16 @@ class TestPlotPairedDeltas:
         assert fig is not None
 
     @patch("matplotlib.pyplot.show")
-    def test_unequal_run_counts_raises(self, mock_show):
+    def test_unequal_run_counts_pair_on_common_run_ids(self, mock_show):
+        """0.5.0 (register 2.115): runs pair by id, as in every comparison; the
+        extra runs are dropped with a warning instead of refusing the plot."""
         from ictonyx.plotting import plot_paired_deltas
 
         a = self._make_results_with_values([0.85, 0.87, 0.86, 0.88, 0.84])
         b = self._make_results_with_values([0.83, 0.86, 0.85])
-        with pytest.raises(ValueError, match="equal run counts"):
-            plot_paired_deltas(a, b, metric="test_accuracy", show=False)
+        with pytest.warns(UserWarning, match="align_paired"):
+            fig = plot_paired_deltas(a, b, metric="test_accuracy", show=False)
+        assert list(fig.axes[0].collections[0].get_offsets()[:, 0]) == [1, 2, 3]
 
     @patch("matplotlib.pyplot.show")
     def test_metric_auto_resolved_when_none(self, mock_show):

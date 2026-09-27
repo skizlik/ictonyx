@@ -2014,28 +2014,23 @@ def plot_paired_deltas(
         enabled.
 
     Raises:
-        ValueError: If the two studies have different run counts.
+        ValueError: If fewer than two runs pair by run id.
     """
     _check_plotting()
 
     if metric is None:
         metric = results_a.preferred_metric(context="scalar")
 
-    # Dispatch to the correct accessor based on metric scope
-    def _fetch(res, m: str) -> np.ndarray:
-        if m.startswith("test_"):
-            # test_* metrics live in final_test_metrics; strip the prefix
-            return np.asarray(res.get_test_metric_values(m[len("test_") :]), dtype=float)
-        return np.asarray(res.get_metric_values(m), dtype=float)
+    # 0.5.0 (register 2.115): pair by run id, as every comparison does. Pairing
+    # by list position mis-filed runs when the two studies lost different runs.
+    from .analysis import align_paired
 
-    values_a = _fetch(results_a, metric)
-    values_b = _fetch(results_b, metric)
-
-    if len(values_a) != len(values_b):
+    run_ids, values_a, values_b = align_paired(results_a, results_b, metric)
+    values_a = np.asarray(values_a, dtype=float)
+    values_b = np.asarray(values_b, dtype=float)
+    if len(values_a) < 2:
         raise ValueError(
-            f"Paired delta requires equal run counts; got "
-            f"{len(values_a)} (A) and {len(values_b)} (B). "
-            f"Use an unpaired comparison for unequal runs."
+            f"Paired delta needs at least two runs present in both studies; got {len(values_a)}."
         )
 
     deltas = values_a - values_b
@@ -2047,7 +2042,13 @@ def plot_paired_deltas(
         from .bootstrap import bootstrap_ci
 
         try:
-            ci = bootstrap_ci(deltas, np.mean, confidence=ci_confidence, method="bca")
+            ci = bootstrap_ci(
+                deltas,
+                np.mean,
+                confidence=ci_confidence,
+                method="bca",
+                random_state=getattr(results_a, "seed", None),
+            )
             ci_lo, ci_hi = ci.ci_lower, ci.ci_upper
         except Exception:
             ci_lo, ci_hi = None, None
@@ -2057,7 +2058,7 @@ def plot_paired_deltas(
     else:
         fig = ax.figure  # type: ignore[assignment]
 
-    run_indices = np.arange(1, n + 1)
+    run_indices = np.asarray(run_ids)
     colors = [
         settings.THEME.get("significant", "C0") if d >= 0 else settings.THEME.get("val", "C1")
         for d in deltas

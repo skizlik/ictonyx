@@ -552,3 +552,29 @@ def test_grid_verbose_false_is_quiet(wine, caplog):
         r for r in caplog.records if r.name.startswith("ictonyx") and r.levelno == logging.INFO
     ]
     assert noisy == [], [r.getMessage() for r in noisy][:3]
+
+
+# ---- 2.115: paired deltas align on run id (commit 17) ----------------------------
+def test_paired_deltas_align_on_run_id():
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from ictonyx.runners import VariabilityStudyResults
+
+    def mk(ids, vals):
+        return VariabilityStudyResults(
+            all_runs_metrics=[],
+            final_metrics={"val_accuracy": list(vals)},
+            final_test_metrics=[],
+            seed=1,
+            metric_run_ids={"val_accuracy": list(ids)},
+            _run_ids=list(ids),
+        )
+
+    a = mk([1, 2, 4, 5], [0.90, 0.91, 0.92, 0.93])
+    b = mk([1, 2, 3, 5], [0.80, 0.81, 0.99, 0.83])
+    with pytest.warns(UserWarning, match="align_paired"):
+        fig = ix.plotting.plot_paired_deltas(a, b, metric="val_accuracy", show=False)
+    pts = fig.axes[0].collections[0].get_offsets()
+    assert list(pts[:, 0]) == [1, 2, 5]  # run ids present in both studies
+    assert list(pts[:, 1]) == pytest.approx([0.1, 0.1, 0.1])  # never run 4 against run 3

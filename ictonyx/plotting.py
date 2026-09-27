@@ -1906,71 +1906,18 @@ def plot_pacf_vs_lag(
     return _finalize_plot(fig, show)
 
 
-def plot_averaged_pacf(
-    lags: List[float],
-    mean_pacf: List[float],
-    std_pacf: List[float],
-    n_series: int = 0,
-    title: str = "Averaged Partial Autocorrelation of Loss",
-    conf_level: float = 0.95,
-    show: Optional[bool] = None,
-) -> Optional["Figure"]:
-    """Plot averaged partial autocorrelation with error bands across runs.
+def plot_averaged_pacf(*args: Any, **kwargs: Any) -> Any:
+    """Removed in v0.5.0 (promise ledger #8).
 
-    Shows the mean PACF at each lag with ±1 standard deviation shaded.
-
-    Args:
-        lags: List of integer lag values.
-        mean_pacf: Mean PACF at each lag.
-        std_pacf: Standard deviation of PACF at each lag.
-        title: Plot title. Default ``'Averaged Partial Autocorrelation of Loss'``.
-        conf_level: Confidence level for reference lines. Default 0.95.
-        show: Display behavior. See :func:`plot_confusion_matrix`.
-
-    Returns:
-        The ``matplotlib.figure.Figure``, or ``None`` if display is enabled.
-
-    deprecated::
-        ``plot_averaged_pacf`` is deprecated and will be removed in v0.5.0.
-        Use ``plot_run_independence_diagnostics()`` (v0.4.4) instead.
+    Raises:
+        RemovedAPIError: Always. This tombstone is removed in v0.6.0.
     """
+    from .exceptions import _removed
 
-    warnings.warn(
-        "plot_averaged_pacf() is deprecated and will be removed in v0.5.0. "
+    raise _removed(
+        "plot_averaged_pacf()",
         "Use plot_run_independence_diagnostics() (available in v0.4.4) instead.",
-        DeprecationWarning,
-        stacklevel=2,
     )
-
-    _check_plotting()
-    fig, ax = plt.subplots(figsize=settings.get_figsize((10, 6)), dpi=150)
-    ax.plot(lags, mean_pacf, color=settings.THEME["val"], label="Mean PACF", linewidth=2)
-    ax.fill_between(
-        lags,
-        np.array(mean_pacf) - np.array(std_pacf),
-        np.array(mean_pacf) + np.array(std_pacf),
-        color=settings.THEME["val"],
-        alpha=0.2,
-        label="±1 Standard Deviation",
-    )
-
-    if n_series > 0:
-        z = _scipy_stats.norm.ppf((1 + conf_level) / 2)
-        conf_bound = z / np.sqrt(n_series)
-        ax.axhline(
-            y=conf_bound,
-            color=settings.THEME["neutral"],
-            linestyle=":",
-            alpha=0.7,
-            label=f"{int(conf_level * 100)}% CI",
-        )
-        ax.axhline(y=-conf_bound, color=settings.THEME["neutral"], linestyle=":", alpha=0.7)
-
-    ax.set_title(title)
-    ax.legend()
-    _apply_style(ax)
-
-    return _finalize_plot(fig, show)
 
 
 def plot_paired_deltas(

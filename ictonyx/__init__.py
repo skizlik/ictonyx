@@ -309,7 +309,6 @@ try:
             "plot_autocorr_vs_lag",
             "plot_averaged_autocorr",
             "plot_pacf_vs_lag",
-            "plot_averaged_pacf",
             "plot_run_independence_diagnostics",
             "plot_pairwise_comparison_matrix",
             "plot_training_stability",

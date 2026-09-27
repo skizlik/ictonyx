@@ -783,19 +783,12 @@ class TestPACFPlots:
         result = plot_pacf_vs_lag(data, max_lag=10)
         assert result is None
 
-    @patch("matplotlib.pyplot.show")
-    def test_plot_averaged_pacf_returns_figure(self, mock_show):
-        lags = list(range(1, 6))
-        mean_pacf = [0.4, 0.2, 0.1, 0.05, 0.02]
-        std_pacf = [0.05, 0.04, 0.03, 0.02, 0.01]
-        fig = plot_averaged_pacf(lags, mean_pacf, std_pacf)
-        assert fig is not None
+    def test_plot_averaged_pacf_is_a_tombstone(self):
+        """plot_averaged_pacf was removed in v0.5.0 (promise ledger #8)."""
+        from ictonyx.exceptions import RemovedAPIError
 
-    @patch("matplotlib.pyplot.show")
-    def test_plot_averaged_pacf_custom_title(self, mock_show):
-        lags = [1, 2, 3]
-        fig = plot_averaged_pacf(lags, [0.3, 0.1, 0.05], [0.02, 0.01, 0.01], title="My PACF")
-        assert fig is not None
+        with pytest.raises(RemovedAPIError):
+            plot_averaged_pacf([1, 2, 3], [0.3, 0.1, 0.05], [0.02, 0.01, 0.01])
 
 
 class TestPlotTrainingStabilityPaths:

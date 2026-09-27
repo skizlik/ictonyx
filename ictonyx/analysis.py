@@ -121,6 +121,7 @@ class StatisticalTestResult:
     # Warnings and recommendations
     warnings: List[str] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
+    provenance: Dict[str, Any] = field(default_factory=dict)
 
     # Multiple comparison correction
     corrected_p_value: Optional[float] = None
@@ -645,6 +646,20 @@ def metric_direction(name: Optional[str]) -> str:
     return "unknown"
 
 
+def _provenance(**extra: Any) -> Dict[str, Any]:
+    """Versions that determine a result (0.5.0, register 3.61).
+
+    SciPy's ``method="auto"`` switched to exact permutation for tied samples
+    with n <= 13 in 1.15, so the same data give different p-values across
+    SciPy releases. Recorded, never read.
+    """
+    import scipy
+
+    from ._version import __version__ as _v
+
+    return {"ictonyx": _v, "scipy": scipy.__version__, "numpy": np.__version__, **extra}
+
+
 _SCOPE = "on this split"
 
 
@@ -1141,6 +1156,7 @@ def _wilcoxon_signed_rank_impl(
             return result
     # Generate interpretation
     result.assumption_details["alternative"] = alternative
+    result.provenance = _provenance(method="auto", n=int(len(model_metrics)))
     result.conclusion = _generate_wilcoxon_conclusion(result, null_value, alpha)
     result.detailed_interpretation = _generate_detailed_interpretation(result, alpha)
     return result
@@ -2194,6 +2210,20 @@ def compare_two_models(
             pass
 
     result.conclusion = _scope_suffix(result.conclusion)
+    _d = (
+        np.asarray(clean1, dtype=float) - np.asarray(clean2, dtype=float)
+        if paired
+        else np.concatenate([np.asarray(clean1, dtype=float), np.asarray(clean2, dtype=float)])
+    )
+    result.provenance = {
+        **_provenance(
+            method="auto",
+            n=int(len(clean1)),
+            has_ties=bool(len(np.unique(np.abs(_d) if paired else _d)) < len(_d)),
+            has_zeros=bool(paired and np.any(_d == 0)),
+        ),
+        **result.provenance,
+    }
     return result
 
 

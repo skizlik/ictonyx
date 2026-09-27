@@ -677,3 +677,16 @@ def _module_level_builder(conf):
     return ScikitLearnModelWrapper(
         RandomForestClassifier(n_estimators=5, random_state=conf.get("run_seed"))
     )
+
+
+# ---- 3.61: provenance (commit 20) ------------------------------------------------
+def test_result_records_scipy_provenance():
+    import scipy
+
+    from ictonyx.analysis import compare_two_models
+
+    rng = np.random.default_rng(10)
+    a, b = pd.Series(rng.normal(0.8, 0.02, 20)), pd.Series(rng.normal(0.78, 0.02, 20))
+    for paired in (True, False):
+        p = compare_two_models(a, b, paired=paired).provenance
+        assert p["scipy"] == scipy.__version__ and p["n"] == 20 and "has_ties" in p

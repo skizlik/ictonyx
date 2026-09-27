@@ -110,21 +110,14 @@ class ModelConfig:
         return self
 
     def merge(self, other_params: Dict[str, Any]) -> "ModelConfig":
-        """Alias for :meth:`update`.
+        """Removed in v0.5.0 (promise ledger #4); use :meth:`update`.
 
-        .. deprecated:: 0.3.9
-            ``merge()`` is identical to ``update()`` and will be removed
-            in v0.5.0. Use ``update()`` instead.
+        Raises:
+            RemovedAPIError: Always. This tombstone is removed in v0.6.0.
         """
-        import warnings
+        from .exceptions import _removed
 
-        warnings.warn(
-            "ModelConfig.merge() is deprecated and will be removed in "
-            "v0.5.0. Use ModelConfig.update() instead.",
-            UserWarning,
-            stacklevel=2,
-        )
-        return self.update(other_params)
+        raise _removed("ModelConfig.merge()", "ModelConfig.update()", since="0.3.9")
 
     def has(self, key: str) -> bool:
         """Check if parameter exists.

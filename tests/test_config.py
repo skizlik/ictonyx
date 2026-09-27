@@ -157,11 +157,14 @@ class TestModelConfigExtended:
         assert "epochs" in repr(config)
         assert "10" in repr(config)
 
-    def test_merge_is_alias_for_update(self):
+    def test_merge_is_a_tombstone(self):
+        """merge() was removed in v0.5.0 (promise ledger #4); update() is the API."""
+        from ictonyx.exceptions import RemovedAPIError
+
         config = ModelConfig({"a": 1})
-        result = config.merge({"b": 2})
-        assert result is config
-        assert config.params == {"a": 1, "b": 2}
+        with pytest.raises(RemovedAPIError, match="update"):
+            config.merge({"b": 2})
+        assert config.update({"b": 2}).params == {"a": 1, "b": 2}
 
     def test_has(self):
         config = ModelConfig({"epochs": 10})
@@ -232,16 +235,6 @@ class TestModelConfigDunderMethods:
 
 class TestModelConfigDeprecations:
     """Verify DeprecationWarning fires for merge() and has()."""
-
-    def test_merge_emits_deprecation_warning(self):
-        import warnings
-
-        cfg = ModelConfig({"a": 1})
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            result = cfg.merge({"b": 2})
-        assert any(issubclass(x.category, UserWarning) for x in w)
-        assert result["b"] == 2  # still works
 
     def test_has_emits_deprecation_warning(self):
         import warnings

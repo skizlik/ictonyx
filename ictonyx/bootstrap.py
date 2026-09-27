@@ -739,7 +739,7 @@ def bootstrap_paired_difference_ci(
 
     return bootstrap_ci(
         data=differences,
-        statistic_fn=lambda d: float(np.mean(d)),
+        statistic_fn=np.mean,  # recognised by the vectorised path (register 2.126b)
         n_bootstrap=n_bootstrap,
         confidence=confidence,
         method=method,

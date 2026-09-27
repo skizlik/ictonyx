@@ -1555,8 +1555,11 @@ class VariabilityStudyResults:
                     "no seed-level test includes it."
                 )
 
-        if self.failed_runs:
-            lines.insert(3, f"Failed runs: {self.failed_runs}")
+        # After "Seed", in the header block (register 2.125).
+        _hdr = [f"Failed runs: {self.failed_runs}"] if self.failed_runs else []
+        if self.retried_runs:
+            _hdr.append(f"Retried runs: {self.retried_runs}")
+        lines[4:4] = _hdr
 
         def _format_metric_block(metric_name: str, values: list) -> list:
             n = len(values)
@@ -1581,7 +1584,7 @@ class VariabilityStudyResults:
                 values = [m[key] for m in self.final_test_metrics if key in m]
                 if values:
                     lines.extend(_format_metric_block(key, values))
-            lines += ["", "Validation Metrics:", "-" * 20]
+            lines += ["", "Training & Validation Metrics:", "-" * 20]
         else:
             lines += [
                 "",
@@ -2252,7 +2255,7 @@ class GridStudyResults:
             param_combo = dict(key)
             try:
                 values = pd.Series(result.get_metric_values(metric))
-                n = len(values)
+                n = int(values.notna().sum())  # NaN runs are not counted (register 2.135)
                 row = {
                     **param_combo,
                     "mean": float(values.mean()),
@@ -2261,6 +2264,7 @@ class GridStudyResults:
                     "min": float(values.min()),
                     "max": float(values.max()),
                     "n": n,
+                    "n_nan": int(values.isna().sum()),
                 }
             except KeyError:
                 row = {

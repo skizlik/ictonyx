@@ -1411,7 +1411,7 @@ def kruskal_wallis_test(
             #
             #   η²_H = (H - k + 1) / (N - k)   — Tomczak & Tomczak (2014)
             #          variance-explained analog, bounded [0, 1]
-            #   ε²_R = H / (N - 1)             — Kelley (1935)
+            #   ε²_R = H / (N - 1)             — Tomczak & Tomczak (2014), after King & Minium
             #          rank-correlation analog, bounded [0, 1]
             #
             # Pre-v0.4.7, the library computed η²_H but labeled it
@@ -1438,7 +1438,7 @@ def kruskal_wallis_test(
             result.effect_size_name = "eta-squared-H"
             result.effect_size_interpretation = _interpret_variance_explained(eta_sq_h)
 
-            # Secondary: ε²_R (rank-correlation analog, Kelley 1935).
+            # Secondary: ε²_R (rank-correlation analog; Tomczak & Tomczak 2014).
             result.effect_size_secondary = epsilon_sq_r
             result.effect_size_secondary_name = "epsilon-squared-R"
             result.effect_size_secondary_interpretation = _interpret_epsilon_squared(epsilon_sq_r)
@@ -1952,8 +1952,8 @@ def compare_two_models(
         model2_results (pd.Series): A Series of metric results for model 2.
         paired (bool, optional): Whether the samples are paired (e.g.,
             results from the same k-folds). Defaults to False.
-        alpha (float, optional): Significance level used for assumption checks
-            (normality, variance). Defaults to 0.05.
+        alpha (float, optional): Significance level of the test (and of the
+            confidence interval, 1 - alpha). Defaults to 0.05.
         ci_target (str, optional): Which quantity the bootstrap CI should
             be computed on. Relevant only for unpaired comparisons; paired
             comparisons always use paired-difference bootstrap.
@@ -2205,9 +2205,13 @@ def compare_two_models(
                     )
                 result.ci_effect_size = (es_ci.ci_lower, es_ci.ci_upper)
 
-        except Exception:
-            # Bootstrap is best-effort — never break an otherwise valid result
-            pass
+        except Exception as e:
+            # Bootstrap is best-effort -- never break an otherwise valid result --
+            # but a missing interval is reported, not silent (register 2.126c).
+            result.ci_method = "failed"
+            result.warnings.append(
+                f"Confidence interval could not be computed ({type(e).__name__}: {e})."
+            )
 
     result.conclusion = _scope_suffix(result.conclusion)
     _d = (
@@ -2271,7 +2275,11 @@ class ModelComparisonResults:
             f"Model Comparison Results ({self.metric or 'unknown metric'})",
             "=" * 40,
             f"Models compared: {self.n_models}",
-            f"Omnibus test: {self.overall_test.get_summary()}",
+            (
+                f"Test: {self.overall_test.get_summary()}"
+                if self.n_models == 2
+                else f"Omnibus test: {self.overall_test.get_summary()}"
+            ),
         ]
 
         if self.pairwise_comparisons:

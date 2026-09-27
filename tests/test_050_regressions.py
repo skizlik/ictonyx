@@ -690,3 +690,66 @@ def test_result_records_scipy_provenance():
     for paired in (True, False):
         p = compare_two_models(a, b, paired=paired).provenance
         assert p["scipy"] == scipy.__version__ and p["n"] == 20 and "has_ties" in p
+
+
+# ---- small items (commit 21) -----------------------------------------------------
+def test_bootstrap_failure_is_reported(monkeypatch):
+    import ictonyx.analysis as A
+
+    def boom(*a, **k):
+        raise RuntimeError("no interval")
+
+    monkeypatch.setattr(A, "bootstrap_hodges_lehmann_ci", boom)
+    rng = np.random.default_rng(11)
+    r = A.compare_two_models(
+        pd.Series(rng.normal(0.8, 0.02, 20)), pd.Series(rng.normal(0.78, 0.02, 20)), paired=False
+    )
+    assert r.ci_method == "failed"
+    assert any("could not be computed" in w for w in r.warnings)
+
+
+def test_handler_kind_label_column_alone_is_tabular(tmp_path):
+    from ictonyx.api import _handler_kind
+
+    f = tmp_path / "d.csv"
+    f.write_text("a,label\n1,0\n")
+    assert _handler_kind(str(f), {"label_column": "label"}) == "tabular"
+    assert _handler_kind(str(f), {"text_column": "a"}) == "text"
+
+
+def test_summary_labels_and_grid_n(wine):
+    X, y = wine
+    s = ix.variability_study(RandomForestClassifier, data=(X, y), runs=3, seed=1, verbose=False)
+    text = s.summarize().splitlines()
+    assert text[3].startswith("Seed")
+    assert "Training & Validation Metrics:" in text
+    c = ix.compare_models(
+        [RandomForestClassifier, ExtraTreesClassifier],
+        data=(X, y),
+        runs=6,
+        seed=0,
+        verbose=False,
+    )
+    summary = c.get_summary()
+    assert "\nTest: " in summary and "Omnibus test" not in summary
+
+
+def test_mlflow_summary_keys_are_prefixed(wine, monkeypatch):
+    import ictonyx.loggers as L
+    from ictonyx.loggers import MLflowLogger
+
+    monkeypatch.setattr(L, "HAS_MLFLOW", True)  # exercise key names without mlflow
+
+    X, y = wine
+    s = ix.variability_study(RandomForestClassifier, data=(X, y), runs=3, seed=1, verbose=False)
+    logged = {}
+
+    class Stub:
+        def _ensure_run(self):
+            pass
+
+        def log_metric(self, k, v):
+            logged[k] = v
+
+    MLflowLogger.log_study_summary(Stub(), s)
+    assert "test_accuracy_mean" in logged and "accuracy_mean" not in logged

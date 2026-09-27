@@ -488,7 +488,8 @@ class MLflowLogger(BaseLogger):
         for metric_name, values in results.final_metrics.items():
             if values:
                 self.log_metric(f"{metric_name}_mean", float(np.mean(values)))
-                self.log_metric(f"{metric_name}_sd", float(np.std(values, ddof=1)))
+                if len(values) > 1:
+                    self.log_metric(f"{metric_name}_sd", float(np.std(values, ddof=1)))
                 self.log_metric(f"{metric_name}_min", float(np.min(values)))
                 self.log_metric(f"{metric_name}_max", float(np.max(values)))
 
@@ -497,8 +498,10 @@ class MLflowLogger(BaseLogger):
             for key in test_keys:
                 vals = [m[key] for m in results.final_test_metrics if key in m]
                 if vals:
-                    self.log_metric(f"{key}_mean", float(np.mean(vals)))
-                    self.log_metric(f"{key}_sd", float(np.std(vals, ddof=1)))
+                    # test_ prefix: bare keys collided in meaning with val_* (register 2.116)
+                    self.log_metric(f"test_{key}_mean", float(np.mean(vals)))
+                    if len(vals) > 1:
+                        self.log_metric(f"test_{key}_sd", float(np.std(vals, ddof=1)))
 
     def get_run_url(self) -> str:
         """Return the MLflow UI URL for this run.

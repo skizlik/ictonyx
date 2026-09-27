@@ -62,7 +62,7 @@ def _handler_kind(data: Any, kwargs: Dict[str, Any]) -> str:
     if isinstance(data, str):
         if os.path.isdir(data):
             return "image"
-        if "text_column" in kwargs or "label_column" in kwargs:
+        if "text_column" in kwargs:  # as auto_resolve_handler (register 2.124)
             return "text"
         if any(k in kwargs for k in _TS_TRIGGERS):
             return "timeseries"

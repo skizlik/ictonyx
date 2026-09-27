@@ -388,6 +388,7 @@ class ExperimentRunner:
         self.metric_run_ids: Dict[str, List[int]] = {}
         self.retried_runs: List[int] = []
         self._last_run_error: Optional[BaseException] = None
+        self._stopped_early: Optional[str] = None  # 'interrupted' | 'failure_rate'
         self._mixed_seed = False
         self._restored_run_seeds: List[int] = []
 
@@ -940,6 +941,7 @@ class ExperimentRunner:
                                     f"({len(self.failed_runs)}/{attempts}) >= {stop_on_failure_rate}",
                                     level="error",
                                 )
+                                self._stopped_early = "failure_rate"
                                 break
 
                         # Run single training
@@ -998,10 +1000,16 @@ class ExperimentRunner:
                                 )
 
                 except KeyboardInterrupt:
-                    if self.verbose:
-                        logger.warning(
-                            f"\n\nStudy interrupted after {len(self.all_runs_metrics)} runs"
-                        )
+                    # 0.5.0 (register 2.111): a partial study is never silent. The
+                    # single-study call returns what it has; multi-study callers
+                    # (compare_models, run_grid_study) re-raise.
+                    self._stopped_early = "interrupted"
+                    _msg = (
+                        f"Study interrupted after {len(self.all_runs_metrics)} of "
+                        f"{num_runs} runs; results are partial."
+                    )
+                    logger.warning(_msg)
+                    warnings.warn(_msg, UserWarning, stacklevel=2)
                 _completed = True
         finally:
             # --- Cleanup and end the tracker run however we got here (v12 2.61) ---
@@ -1048,6 +1056,8 @@ class ExperimentRunner:
             run_seeds=run_seeds,
             failed_runs=sorted(self.failed_runs),
             retried_runs=list(self.retried_runs),
+            num_runs_requested=num_runs,
+            stopped_early=self._stopped_early,
             metric_run_ids={k: list(v) for k, v in self.metric_run_ids.items()},
             split_sizes=self._split_sizes(),
             _run_ids=[
@@ -1207,6 +1217,8 @@ class VariabilityStudyResults:
     split_sizes: Dict[str, int] = field(default_factory=dict)
     # Runs that had failed before a checkpoint resume and were retried (0.5.0).
     retried_runs: List[int] = field(default_factory=list)
+    num_runs_requested: Optional[int] = None
+    stopped_early: Optional[str] = None
     """Number of samples in the train / val / test splits, where known. Final
     metrics are the LAST-epoch values of each run (not best-epoch), so the
     reported spread includes any late-epoch drift."""
@@ -1224,7 +1236,14 @@ class VariabilityStudyResults:
 
     @property
     def n_requested(self) -> int:
-        """Runs requested: successful plus failed. Equals ``len(run_seeds)`` for seeded studies."""
+        """Runs the caller requested.
+
+        Recorded by ``run_study`` (0.5.0, register 2.111), so an interrupted or
+        early-stopped study reports what was asked for, not what finished. For
+        results created before 0.5.0 it falls back to successful plus failed.
+        """
+        if self.num_runs_requested is not None:
+            return int(self.num_runs_requested)
         return self.n_runs + len(self.failed_runs)
 
     @property
@@ -1485,6 +1504,11 @@ class VariabilityStudyResults:
             f"Successful runs: {self.n_runs}",
             f"Seed: {self.seed}",
         ]
+        if self.stopped_early:
+            lines.append(
+                f"Stopped early ({self.stopped_early}): "
+                f"{self.n_runs + len(self.failed_runs)} of {self.n_requested} runs attempted"
+            )
         if self.split_sizes:
             parts = [f"{k} {v}" for k, v in self.split_sizes.items() if v is not None]
             lines.append("Data split: " + " / ".join(parts))
@@ -2436,6 +2460,10 @@ def run_grid_study(
             use_process_isolation=use_process_isolation,
             seed=config_seeds[i - 1],
         )
+
+        if getattr(result, "stopped_early", None) == "interrupted":
+            # Ctrl-C stops the whole grid, not just this configuration (register 2.111).
+            raise KeyboardInterrupt(f"run_grid_study interrupted during {param_combo}.")
 
         key = GridStudyResults._config_key(param_combo)
         results_dict[key] = result

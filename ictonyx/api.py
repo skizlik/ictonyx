@@ -318,6 +318,15 @@ def _warn_incomplete_studies(studies: Dict[str, VariabilityStudyResults], metric
                 UserWarning,
                 stacklevel=3,
             )
+        stopped = getattr(s, "stopped_early", None)
+        if isinstance(stopped, str):
+            done = s.n_runs + len(s.failed_runs)
+            warnings.warn(
+                f"{name}: study stopped early ({stopped}) after {done} of {s.n_requested} "
+                "runs; the comparison uses only the runs that completed.",
+                UserWarning,
+                stacklevel=3,
+            )
 
 
 def compare_models(
@@ -489,6 +498,9 @@ def compare_models(
             **runner_kwargs,
             **model_kwargs,
         )
+        if getattr(study_result, "stopped_early", None) == "interrupted":
+            # Ctrl-C stops the whole comparison, not just this model (register 2.111).
+            raise KeyboardInterrupt(f"compare_models interrupted while training {name}.")
         studies[name] = study_result
 
     # --- Resolve metric now that all studies are complete ---

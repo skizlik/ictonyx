@@ -328,3 +328,57 @@ def test_compare_multiple_models_k2_matches_compare_two_models():
     assert m.overall_test.test_name == t.test_name
     assert m.overall_test.p_value == pytest.approx(t.p_value)
     assert m.overall_test.confidence_interval == pytest.approx(t.confidence_interval)
+
+
+# ---- 2.111: interrupt semantics (commit 04) --------------------------------------
+def test_interrupted_study_reports_requested_count(wine, recwarn):
+    X, y = wine
+    st = {"n": 0, "fail": set(), "ki": 4}
+    runner = ExperimentRunner(
+        _builder_factory(st),
+        ArraysDataHandler(X, y),
+        ModelConfig({"epochs": 1}),
+        seed=1,
+        verbose=False,
+    )
+    res = runner.run_study(num_runs=10)
+    assert any("interrupted after 3 of 10" in str(w.message) for w in recwarn)
+    assert res.n_runs == 3
+    assert res.n_requested == 10
+    assert res.stopped_early == "interrupted"
+    assert "Stopped early (interrupted)" in res.summarize()
+
+
+def test_failure_rate_stop_is_recorded(wine):
+    X, y = wine
+    st = {"n": 0, "fail": set(range(2, 100))}  # first run succeeds, the rest fail
+    runner = ExperimentRunner(
+        _builder_factory(st),
+        ArraysDataHandler(X, y),
+        ModelConfig({"epochs": 1}),
+        seed=1,
+        verbose=False,
+    )
+    res = runner.run_study(num_runs=10)
+    assert res.stopped_early == "failure_rate"
+    assert res.n_requested == 10
+    assert res.n_runs + len(res.failed_runs) < 10
+
+
+def test_interrupt_in_compare_models_stops_the_call(wine):
+    X, y = wine
+    n = {"c": 0}
+
+    def a(conf):
+        n["c"] += 1
+        if n["c"] == 4:
+            raise KeyboardInterrupt
+        return ScikitLearnModelWrapper(
+            RandomForestClassifier(n_estimators=5, random_state=conf.get("run_seed"))
+        )
+
+    def b(conf):
+        pytest.fail("model B must not train after Ctrl-C in model A")
+
+    with pytest.raises(KeyboardInterrupt):
+        ix.compare_models([a, b], data=(X, y), runs=10, seed=0, verbose=False)

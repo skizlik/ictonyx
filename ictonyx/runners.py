@@ -1214,20 +1214,21 @@ class VariabilityStudyResults:
     run_seeds: List[int] = field(default_factory=list)
     failed_runs: List[int] = field(default_factory=list)
     metric_run_ids: Dict[str, List[int]] = field(default_factory=dict)
+    """Per metric, the run id each entry of ``final_metrics[metric]`` came from.
+    A metric absent from one run's history would otherwise shift every later
+    entry against ``run_ids`` (register 2.19)."""
     split_sizes: Dict[str, int] = field(default_factory=dict)
-    # Runs that had failed before a checkpoint resume and were retried (0.5.0).
-    retried_runs: List[int] = field(default_factory=list)
-    num_runs_requested: Optional[int] = None
-    stopped_early: Optional[str] = None
     """Number of samples in the train / val / test splits, where known. Final
     metrics are the LAST-epoch values of each run (not best-epoch), so the
     reported spread includes any late-epoch drift."""
+    retried_runs: List[int] = field(default_factory=list)
+    """Runs that had failed before a checkpoint resume and were retried (register 2.110)."""
+    num_runs_requested: Optional[int] = None
+    """Runs the caller requested (register 2.111). ``None`` for results made before 0.5.0."""
+    stopped_early: Optional[str] = None
+    """``"interrupted"`` or ``"failure_rate"`` when the study stopped early (register 2.111)."""
     _run_ids: Optional[List[int]] = field(default=None, repr=False)
-    """Per metric, the run id each entry of ``final_metrics[metric]`` came from.
-
-    A metric absent from one run's history would otherwise shift every later
-    entry against ``run_ids`` (v12 2.19).
-    """
+    """Ids of the successful runs, in ``all_runs_metrics`` order (see ``run_ids``)."""
 
     @property
     def n_runs(self) -> int:
@@ -1884,8 +1885,8 @@ class VariabilityStudyResults:
     def save(self, path: str) -> None:
         """Persist results to disk as a plain dict via pickle.
 
-        Preserves all_runs_metrics, final_metrics, final_test_metrics,
-        seed, and run_seeds. Restore with :meth:`load`.
+        Preserves every field, including run ids and split sizes, so reloaded
+        studies pair correctly (0.5.0, register 2.119). Restore with :meth:`load`.
 
         Args:
             path: File path. Recommended extension: ``.pkl``.
@@ -1900,6 +1901,12 @@ class VariabilityStudyResults:
             "seed": self.seed,
             "run_seeds": list(self.run_seeds),
             "failed_runs": list(self.failed_runs),
+            "metric_run_ids": {k: list(v) for k, v in self.metric_run_ids.items()},
+            "split_sizes": dict(self.split_sizes),
+            "retried_runs": list(self.retried_runs),
+            "num_runs_requested": self.num_runs_requested,
+            "stopped_early": self.stopped_early,
+            "_run_ids": None if self._run_ids is None else list(self._run_ids),
         }
         with open(path, "wb") as f:
             pickle.dump(data, f)
@@ -1945,6 +1952,12 @@ class VariabilityStudyResults:
             seed=data.get("seed"),
             run_seeds=list(data.get("run_seeds", [])),
             failed_runs=list(data.get("failed_runs", [])),
+            metric_run_ids={k: list(v) for k, v in data.get("metric_run_ids", {}).items()},
+            split_sizes=dict(data.get("split_sizes", {})),
+            retried_runs=list(data.get("retried_runs", [])),
+            num_runs_requested=data.get("num_runs_requested"),
+            stopped_early=data.get("stopped_early"),
+            _run_ids=None if data.get("_run_ids") is None else list(data["_run_ids"]),
         )
 
     def to_json(self) -> str:
@@ -1967,6 +1980,10 @@ class VariabilityStudyResults:
                 "run_ids": self.run_ids,
                 "run_seeds": list(self.run_seeds),
                 "metric_run_ids": self.metric_run_ids,
+                "split_sizes": dict(self.split_sizes),
+                "retried_runs": list(self.retried_runs),
+                "num_runs_requested": self.num_runs_requested,
+                "stopped_early": self.stopped_early,
                 "final_metrics": self.final_metrics,
                 "final_test_metrics": self.final_test_metrics,
             },
@@ -2027,6 +2044,10 @@ class VariabilityStudyResults:
             run_seeds=[int(x) for x in data.get("run_seeds", [])],
             failed_runs=list(data.get("failed_runs", [])),
             metric_run_ids={k: list(v) for k, v in data.get("metric_run_ids", {}).items()},
+            split_sizes={k: int(v) for k, v in data.get("split_sizes", {}).items()},
+            retried_runs=[int(x) for x in data.get("retried_runs", [])],
+            num_runs_requested=data.get("num_runs_requested"),
+            stopped_early=data.get("stopped_early"),
             _run_ids=[int(x) for x in data["run_ids"]] if data.get("run_ids") else None,
         )
 

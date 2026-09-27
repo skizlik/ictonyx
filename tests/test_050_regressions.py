@@ -578,3 +578,52 @@ def test_paired_deltas_align_on_run_id():
     pts = fig.axes[0].collections[0].get_offsets()
     assert list(pts[:, 0]) == [1, 2, 5]  # run ids present in both studies
     assert list(pts[:, 1]) == pytest.approx([0.1, 0.1, 0.1])  # never run 4 against run 3
+
+
+# ---- 2.119: persistence round-trips every field (commit 18) ----------------------
+def _full_results():
+    from ictonyx.runners import VariabilityStudyResults
+
+    return VariabilityStudyResults(
+        all_runs_metrics=[pd.DataFrame({"epoch": [1], "val_accuracy": [0.9], "run_num": [2]})],
+        final_metrics={"val_accuracy": [0.9]},
+        final_test_metrics=[{"accuracy": 0.8, "run_id": 2}],
+        seed=7,
+        run_seeds=[11, 12],
+        failed_runs=[1],
+        metric_run_ids={"val_accuracy": [2]},
+        split_sizes={"train": 100, "val": 20, "test": 30},
+        retried_runs=[1],
+        num_runs_requested=2,
+        stopped_early="interrupted",
+        _run_ids=[2],
+    )
+
+
+def _assert_same(a, b, skip=()):
+    import dataclasses
+
+    for f in dataclasses.fields(a):
+        if f.name in skip:
+            continue
+        va, vb = getattr(a, f.name), getattr(b, f.name)
+        if f.name == "all_runs_metrics":
+            assert len(va) == len(vb) and all(x.equals(y) for x, y in zip(va, vb))
+        else:
+            assert va == vb, f.name
+
+
+def test_pickle_round_trip_preserves_every_field(tmp_path):
+    from ictonyx.runners import VariabilityStudyResults
+
+    r = _full_results()
+    r.save(str(tmp_path / "r.pkl"))
+    _assert_same(r, VariabilityStudyResults.load(str(tmp_path / "r.pkl")))
+
+
+def test_json_round_trip_preserves_every_field_but_histories():
+    from ictonyx.runners import VariabilityStudyResults
+
+    r = _full_results()
+    back = VariabilityStudyResults.from_json(r.to_json())
+    _assert_same(r, back, skip=("all_runs_metrics",))

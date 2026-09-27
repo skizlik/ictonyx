@@ -753,3 +753,12 @@ def test_mlflow_summary_keys_are_prefixed(wine, monkeypatch):
 
     MLflowLogger.log_study_summary(Stub(), s)
     assert "test_accuracy_mean" in logged and "accuracy_mean" not in logged
+
+
+# ---- 3.52: power helpers document "less" (commit 22) -----------------------------
+def test_required_runs_less_documents_limitation():
+    from ictonyx.analysis import required_runs
+
+    assert "register 3.52" in required_runs.__doc__
+    with pytest.warns(UserWarning, match="swap the models"):
+        required_runs(0.5, alternative="less", n_sim=50)

@@ -3043,6 +3043,9 @@ def required_runs(
         power: Desired statistical power (0–1). Default 0.80.
         n_sim: Number of simulations per candidate n. Default 1000.
         alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            **Limitation:** ``'less'`` is not simulated correctly (the
+            simulated effect always favours A); use ``'greater'`` with the
+            models swapped. A fix is planned (register 3.52).
             Default ``'two-sided'``.
 
     Returns:
@@ -3095,7 +3098,8 @@ def required_runs(
     warnings.warn(
         f"required_runs(): target power {power} not achieved at n=200 for "
         f"effect_size={effect_size:.3f}. The effect may be too small to detect "
-        "at this power level. Returning 200 (search ceiling).",
+        "at this power level. Returning 200 (search ceiling). If alternative='less', "
+        "swap the models and use 'greater' (register 3.52).",
         UserWarning,
         stacklevel=2,
     )
@@ -3124,6 +3128,9 @@ def required_runs_paired(
         power: Desired statistical power (0–1). Default 0.80.
         n_sim: Number of simulations per candidate n. Default 1000.
         alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            **Limitation:** ``'less'`` is not simulated correctly (the
+            simulated effect always favours A); use ``'greater'`` with the
+            models swapped. A fix is planned (register 3.52).
             Default ``'two-sided'``.
         random_state: Seed for reproducibility. Default 42.
 
@@ -3192,7 +3199,8 @@ def required_runs_paired(
     warnings.warn(
         f"required_runs_paired(): target power {power} not achieved at n=200 "
         f"for effect_size={effect_size:.3f}. The effect may be too small to "
-        "detect at this power level. Returning 200 (search ceiling).",
+        "detect at this power level. Returning 200 (search ceiling). If "
+        "alternative='less', swap the models and use 'greater' (register 3.52).",
         UserWarning,
         stacklevel=2,
     )
@@ -3215,6 +3223,9 @@ def minimum_detectable_effect(
         power: Desired statistical power (0–1). Default 0.80.
         n_sim: Number of simulations per candidate effect size. Default 1000.
         alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
+            **Limitation:** ``'less'`` is not simulated correctly (the
+            simulated effect always favours A); use ``'greater'`` with the
+            models swapped. A fix is planned (register 3.52).
             Default ``'two-sided'``.
 
     Returns:

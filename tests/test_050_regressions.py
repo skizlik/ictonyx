@@ -721,7 +721,7 @@ def test_handler_kind_label_column_alone_is_tabular(tmp_path):
     from ictonyx.api import _handler_kind
 
     f = tmp_path / "d.csv"
-    f.write_text("a,label\n1,0\n")
+    f.write_text("a,label\n1,0\n", encoding="utf-8")
     assert _handler_kind(str(f), {"label_column": "label"}) == "tabular"
     assert _handler_kind(str(f), {"text_column": "a"}) == "text"
 
@@ -867,7 +867,7 @@ def test_no_forward_version_promises_in_code():
     hits = [
         f"{p.name}: {l.strip()}"
         for p in root.glob("*.py")
-        for l in p.read_text().splitlines()
+        for l in p.read_text(encoding="utf-8").splitlines()
         if pat.search(l)
     ]
     assert hits == []

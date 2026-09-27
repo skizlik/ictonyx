@@ -775,3 +775,16 @@ def test_removed_api_error_is_a_type_error_and_names_the_replacement():
     assert isinstance(err, RemovedAPIError)
     assert isinstance(err, TypeError) and isinstance(err, IctonyxError)
     assert "removed in v0.5.0 (deprecated since v0.4.0)" in str(err) and "Use g()" in str(err)
+
+
+# ---- P-02: removed random_state on the rank tests ----------------------------------
+@pytest.mark.parametrize("fn", ["mann_whitney_test", "paired_wilcoxon_test"])
+def test_rank_test_random_state_is_a_tombstone(fn):
+    import ictonyx.analysis as A
+    from ictonyx.exceptions import RemovedAPIError
+
+    rng = np.random.default_rng(12)
+    a, b = pd.Series(rng.normal(0.8, 0.02, 12)), pd.Series(rng.normal(0.78, 0.02, 12))
+    with pytest.raises(RemovedAPIError, match="deterministic"):
+        getattr(A, fn)(a, b, random_state=0)
+    assert np.isfinite(getattr(A, fn)(a, b).p_value)  # without it, unchanged

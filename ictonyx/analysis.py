@@ -646,6 +646,10 @@ def metric_direction(name: Optional[str]) -> str:
     return "unknown"
 
 
+_REMOVED: Any = object()
+"""Default of removed parameters; any other value raises RemovedAPIError."""
+
+
 def _provenance(**extra: Any) -> Dict[str, Any]:
     """Versions that determine a result (0.5.0, register 3.61).
 
@@ -896,13 +900,13 @@ def mann_whitney_test(
     model2_metrics: pd.Series,
     alternative: str = "two-sided",
     alpha: float = 0.05,
-    random_state: Optional[int] = None,
+    random_state: Any = _REMOVED,
 ) -> StatisticalTestResult:
     """Mann-Whitney U test for comparing two independent groups.
 
     A non-parametric test that does not assume normal distributions.
-    ``random_state`` is accepted and ignored (the test is deterministic);
-    it is kept for backward compatibility and removed in v0.5.0.
+    ``random_state`` was removed in v0.5.0 (the test is deterministic);
+    passing it raises RemovedAPIError until v0.6.0 (promise ledger #2).
     Includes sample-size validation, independence checks, rank-biserial
     effect size, and auto-generated interpretation text.
 
@@ -920,6 +924,12 @@ def mann_whitney_test(
     Raises:
         TypeError: If inputs are not ``pd.Series``.
     """
+    if random_state is not _REMOVED:
+        from .exceptions import _removed
+
+        raise _removed(
+            "mann_whitney_test(random_state=...)", "no argument: the test is deterministic"
+        )
 
     result = StatisticalTestResult(
         test_name="Mann-Whitney U Test", statistic=float("nan"), p_value=float("nan")
@@ -1740,7 +1750,7 @@ def paired_wilcoxon_test(
     series_a: pd.Series,
     series_b: pd.Series,
     alpha: float = 0.05,
-    random_state: Optional[int] = None,
+    random_state: Any = _REMOVED,
     deterministic_tol: float = 1e-10,
     alternative: str = "two-sided",
     metric: Optional[str] = None,
@@ -1775,8 +1785,8 @@ def paired_wilcoxon_test(
         series_a: Per-run metric values for model A.
         series_b: Per-run metric values for model B (same length).
         alpha: Significance threshold. Default 0.05.
-        random_state: Accepted and ignored (this test is deterministic);
-            kept for backward compatibility, removed in v0.5.0.
+        random_state: Removed in v0.5.0 (the test is deterministic); passing
+            it raises RemovedAPIError until v0.6.0 (promise ledger #3).
         deterministic_tol: Differences with SD below this are treated as
             constant and the test returns an inconclusive result (NaN p). A
             constant difference, zero or not, does not vary with the seed, so
@@ -1786,6 +1796,12 @@ def paired_wilcoxon_test(
     Returns:
         StatisticalTestResult with paired-comparison conclusion text.
     """
+    if random_state is not _REMOVED:
+        from .exceptions import _removed
+
+        raise _removed(
+            "paired_wilcoxon_test(random_state=...)", "no argument: the test is deterministic"
+        )
     from scipy.stats import wilcoxon
 
     a = np.asarray(pd.Series(series_a).to_numpy(), dtype=float).ravel()
@@ -2382,7 +2398,6 @@ def compare_multiple_models(
                     model_results[name1],
                     model_results[name2],
                     alpha=alpha,
-                    random_state=random_state,
                 )
                 pairwise_tests.append(pairwise_result)
                 pairwise_names.append(comparison_name)

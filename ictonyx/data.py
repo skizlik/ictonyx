@@ -51,6 +51,53 @@ except ImportError:
     TfidfVectorizer = None
 
 
+def _resolve_stratify(
+    stratify: Optional[bool],
+    y: Any,
+    test_size: float,
+    val_size: float,
+    random_state: Optional[int],
+) -> "Tuple[bool, str]":
+    """Resolve ``stratify=None`` (0.5.0, promise ledger #13, owner decision OD-9).
+
+    ``True``/``False`` are returned as given. ``None`` stratifies when the target
+    is binary or multiclass and a stratified split is possible; the check runs
+    sklearn's own stratified splits on an index array with the same labels,
+    sizes and seed as the real split (the partition depends only on those), so
+    the real split cannot then fail. Returns ``(stratify, reason)``.
+    """
+    if stratify is not None:
+        return bool(stratify), "explicit"
+    try:
+        from sklearn.utils.multiclass import type_of_target
+
+        kind = type_of_target(np.asarray(y))
+    except Exception as e:  # pragma: no cover - defensive
+        return False, f"auto: target type could not be determined ({e})"
+    if kind not in ("binary", "multiclass"):
+        return False, f"auto: target type is {kind!r}"
+    labels = np.asarray(y)
+    pool = np.arange(len(labels))
+    try:
+        if test_size and test_size > 0:
+            pool, _ = train_test_split(
+                pool, test_size=test_size, random_state=random_state, stratify=labels
+            )
+        if val_size and 0 < val_size < 1 and len(pool) > 1:
+            train_test_split(
+                pool, test_size=val_size, random_state=random_state, stratify=labels[pool]
+            )
+    except ValueError as e:
+        warnings.warn(
+            "stratify=None: the target is a classification target, but a stratified split "
+            f"is not possible ({e}). Splitting without stratification.",
+            UserWarning,
+            stacklevel=3,
+        )
+        return False, f"auto: stratified split not possible ({e})"
+    return True, "auto: classification target"
+
+
 class DataHandler(ABC):
     """Abstract base class for all data handlers.
 
@@ -646,10 +693,14 @@ class TabularDataHandler(FileDataHandler):
         if y.isnull().any():
             logger.warning(f"{y.isnull().sum()} missing values in target column")
 
-        # Split data
+        # Split data. stratify=None resolves per the target (promise ledger #13).
+        _strat, _why = _resolve_stratify(
+            self._stratify, y, _test, (_val / (1 - _test) if _test > 0 else _val), _rs
+        )
+        self.stratified, self.stratify_reason = _strat, _why
         if _test > 0:
             X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=_test, random_state=_rs, stratify=(y if self._stratify else None)
+                X, y, test_size=_test, random_state=_rs, stratify=(y if _strat else None)
             )
         else:
             X_train, X_test, y_train, y_test = X, None, y, None
@@ -663,7 +714,7 @@ class TabularDataHandler(FileDataHandler):
                     y_train,
                     test_size=adj_val_split,
                     random_state=_rs,
-                    stratify=(y_train if self._stratify else None),
+                    stratify=(y_train if _strat else None),
                 )
 
         def _out(a):
@@ -818,6 +869,16 @@ class TextDataHandler(FileDataHandler):
         texts = df[self.text_column].tolist()
         labels = df[self.label_column].values
 
+        # stratify=None resolves per the target (promise ledger #13).
+        _strat, _why = _resolve_stratify(
+            self._stratify,
+            labels,
+            _test_split,
+            (_val_split / (1.0 - _test_split) if _test_split > 0 else _val_split),
+            _rs,
+        )
+        self.stratified, self.stratify_reason = _strat, _why
+
         # First split: carve out test set
         if _test_split > 0:
             X_trainval, X_test, y_trainval, y_test = train_test_split(
@@ -825,7 +886,7 @@ class TextDataHandler(FileDataHandler):
                 labels,
                 test_size=_test_split,
                 random_state=_rs,
-                stratify=(labels if self._stratify else None),
+                stratify=(labels if _strat else None),
             )
         else:
             X_trainval, y_trainval = texts, labels
@@ -840,7 +901,7 @@ class TextDataHandler(FileDataHandler):
                     y_trainval,
                     test_size=adj_val,
                     random_state=_rs,
-                    stratify=(y_trainval if self._stratify else None),
+                    stratify=(y_trainval if _strat else None),
                 )
             else:
                 X_train, y_train = X_trainval, y_trainval
@@ -1153,9 +1214,12 @@ class ArraysDataHandler(DataHandler):
                 ``load()`` performs no validation split and ``val_split`` is ignored.
             y_val: Optional pre-held-out validation labels. Required if ``X_val`` is provided.
             stratify: ``True`` passes ``stratify=y`` to every internal
-                ``train_test_split``. ``None`` (default) never stratifies in
-                v0.4.9; v0.5.0 will auto-detect classification targets. ``False``
-                never stratifies.
+                ``train_test_split``. ``None`` (default) stratifies when the
+                target is binary or multiclass and a stratified split is possible
+                (otherwise not; a warning says why when a classification target
+                cannot be stratified). The choice and its reason are recorded as
+                ``stratified`` / ``stratify_reason`` (promise ledger #13).
+                ``False`` never stratifies.
 
         Raises:
             ValueError: If ``X`` and ``y`` have different lengths.
@@ -1245,10 +1309,21 @@ class ArraysDataHandler(DataHandler):
             raise ValueError("Sum of splits must be < 1.0")
 
         _rs = self.split_seed if random_state is None else random_state
-        strat_full = self.y if self._stratify else None
+        # stratify=None resolves per the target (promise ledger #13).
+        _internal_test = self.X_test_provided is None and _test_split > 0
+        if self.X_val_provided is not None:
+            _val_adj = 0.0
+        else:
+            _val_adj = _val_split / (1 - _test_split) if _internal_test else _val_split
+        _strat, _why = _resolve_stratify(
+            self._stratify, self.y, _test_split if _internal_test else 0.0, _val_adj, _rs
+        )
+        self.stratified, self.stratify_reason = _strat, _why
+        strat_full = self.y if _strat else None
         self._provenance: Dict[str, Any] = {
             "random_state": _rs,
-            "stratified": bool(self._stratify),
+            "stratified": _strat,
+            "stratify_reason": _why,
             "test": (
                 "provided"
                 if self.X_test_provided is not None
@@ -1289,7 +1364,7 @@ class ArraysDataHandler(DataHandler):
                     y_pool,
                     test_size=adj,
                     random_state=_rs,
-                    stratify=(y_pool if self._stratify else None),
+                    stratify=(y_pool if _strat else None),
                 )
             else:
                 X_train, y_train, X_val, y_val = X_pool, y_pool, None, None
@@ -1305,7 +1380,7 @@ class ArraysDataHandler(DataHandler):
             f"Array splits - Train: {len(X_train)}, "
             f"Val: {self._provenance['n_val']} ({self._provenance['val']}), "
             f"Test: {self._provenance['n_test']} ({self._provenance['test']})"
-            + (", stratified" if self._stratify else "")
+            + (", stratified" if _strat else "")
         )
         return {
             "train_data": (X_train, y_train),

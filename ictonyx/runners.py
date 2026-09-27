@@ -1073,6 +1073,7 @@ class ExperimentRunner:
             retried_runs=list(self.retried_runs),
             num_runs_requested=num_runs,
             stopped_early=self._stopped_early,
+            stratified=getattr(self.data_handler, "stratified", None),
             metric_run_ids={k: list(v) for k, v in self.metric_run_ids.items()},
             split_sizes=self._split_sizes(),
             _run_ids=[
@@ -1242,6 +1243,9 @@ class VariabilityStudyResults:
     """Runs the caller requested (register 2.111). ``None`` for results made before 0.5.0."""
     stopped_early: Optional[str] = None
     """``"interrupted"`` or ``"failure_rate"`` when the study stopped early (register 2.111)."""
+    stratified: Optional[bool] = None
+    """Whether the train/val/test split was stratified (promise ledger #13); ``None``
+    when the data handler does not report it."""
     _run_ids: Optional[List[int]] = field(default=None, repr=False)
     """Ids of the successful runs, in ``all_runs_metrics`` order (see ``run_ids``)."""
 
@@ -1519,6 +1523,8 @@ class VariabilityStudyResults:
         if self.split_sizes:
             parts = [f"{k} {v}" for k, v in self.split_sizes.items() if v is not None]
             lines.append("Data split: " + " / ".join(parts))
+        if self.stratified is not None:
+            lines.append(f"Stratified split: {'yes' if self.stratified else 'no'}")
             # 0.5.0 (register 3.56): report the evaluation-set sampling error,
             # which no number of runs reduces. (The former "granularity" line
             # claimed a resolution limit that does not exist.)
@@ -1915,6 +1921,7 @@ class VariabilityStudyResults:
             "retried_runs": list(self.retried_runs),
             "num_runs_requested": self.num_runs_requested,
             "stopped_early": self.stopped_early,
+            "stratified": self.stratified,
             "_run_ids": None if self._run_ids is None else list(self._run_ids),
         }
         with open(path, "wb") as f:
@@ -1966,6 +1973,7 @@ class VariabilityStudyResults:
             retried_runs=list(data.get("retried_runs", [])),
             num_runs_requested=data.get("num_runs_requested"),
             stopped_early=data.get("stopped_early"),
+            stratified=data.get("stratified"),
             _run_ids=None if data.get("_run_ids") is None else list(data["_run_ids"]),
         )
 
@@ -1993,6 +2001,7 @@ class VariabilityStudyResults:
                 "retried_runs": list(self.retried_runs),
                 "num_runs_requested": self.num_runs_requested,
                 "stopped_early": self.stopped_early,
+                "stratified": self.stratified,
                 "final_metrics": self.final_metrics,
                 "final_test_metrics": self.final_test_metrics,
             },
@@ -2057,6 +2066,7 @@ class VariabilityStudyResults:
             retried_runs=[int(x) for x in data.get("retried_runs", [])],
             num_runs_requested=data.get("num_runs_requested"),
             stopped_early=data.get("stopped_early"),
+            stratified=data.get("stratified"),
             _run_ids=[int(x) for x in data["run_ids"]] if data.get("run_ids") else None,
         )
 

@@ -10,7 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 from sklearn.datasets import load_wine
+from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import BaggingClassifier, ExtraTreesClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
@@ -229,8 +231,11 @@ def test_compare_models_deterministic_pipelines_not_significant(wine):
     X, y = wine
     c = ix.compare_models(
         [
-            make_pipeline(StandardScaler(), DecisionTreeClassifier(random_state=0)),
-            make_pipeline(StandardScaler(), DecisionTreeClassifier(max_depth=1, random_state=0)),
+            # No randomness at all: lbfgs logistic regression vs a majority-class
+            # baseline. (Decision trees break feature ties with their seed, so they
+            # are not deterministic under per-run seeding.)
+            make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
+            make_pipeline(StandardScaler(), DummyClassifier(strategy="most_frequent")),
         ],
         data=(X, y),
         runs=20,
@@ -441,8 +446,11 @@ def test_constant_difference_stated_in_evaluation_examples(wine):
     X, y = wine
     c = ix.compare_models(
         [
-            make_pipeline(StandardScaler(), DecisionTreeClassifier(random_state=0)),
-            make_pipeline(StandardScaler(), DecisionTreeClassifier(max_depth=1, random_state=0)),
+            # No randomness at all: lbfgs logistic regression vs a majority-class
+            # baseline. (Decision trees break feature ties with their seed, so they
+            # are not deterministic under per-run seeding.)
+            make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
+            make_pipeline(StandardScaler(), DummyClassifier(strategy="most_frequent")),
         ],
         data=(X, y),
         runs=6,
@@ -596,6 +604,7 @@ def _full_results():
         retried_runs=[1],
         num_runs_requested=2,
         stopped_early="interrupted",
+        stratified=True,
         _run_ids=[2],
     )
 
@@ -798,3 +807,46 @@ def test_sklearn_fit_legacy_kwargs_raise_type_error(wine, kw):
     with pytest.raises(TypeError, match="removed in v0.5.0"):
         w.fit((X, y), **{kw: 1})
     w.fit((X, y))  # without it, unchanged
+
+
+# ---- P-12: stratified splits by default (promise ledger #13, OD-9) ------------------
+def test_stratify_auto_on_classification_preserves_class_ratio():
+    rng = np.random.default_rng(13)
+    X = rng.normal(size=(200, 3))
+    y = np.r_[np.zeros(150, int), np.ones(50, int)]
+    h = ArraysDataHandler(X, y)
+    d = h.load()
+    assert h.stratified is True and h.stratify_reason == "auto: classification target"
+    for part in ("train_data", "val_data", "test_data"):
+        yy = d[part][1]
+        assert abs(yy.mean() - 0.25) <= 1.0 / len(yy) + 1e-12
+
+
+def test_stratify_auto_skips_regression_targets():
+    rng = np.random.default_rng(14)
+    h = ArraysDataHandler(rng.normal(size=(100, 2)), rng.normal(size=100))
+    h.load()
+    assert h.stratified is False and "continuous" in h.stratify_reason
+
+
+def test_stratify_auto_falls_back_with_warning_when_impossible():
+    rng = np.random.default_rng(15)
+    y = np.r_[np.zeros(59, int), [1]]  # one member in class 1
+    h = ArraysDataHandler(rng.normal(size=(60, 2)), y)
+    with pytest.warns(UserWarning, match="stratified split is not possible"):
+        h.load()
+    assert h.stratified is False and "not possible" in h.stratify_reason
+
+
+def test_stratify_explicit_true_still_raises():
+    rng = np.random.default_rng(16)
+    y = np.r_[np.zeros(59, int), [1]]
+    with pytest.raises(ValueError):
+        ArraysDataHandler(rng.normal(size=(60, 2)), y, stratify=True).load()
+
+
+def test_stratified_recorded_on_results_and_summary(wine):
+    X, y = wine
+    r = ix.variability_study(RandomForestClassifier, data=(X, y), runs=3, seed=1, verbose=False)
+    assert r.stratified is True
+    assert "Stratified split: yes" in r.summarize()

@@ -37,14 +37,21 @@ def test_instance_without_random_state_warns_once(X, y, recwarn):
 
 def test_readme_example_instances_are_seeded(X, y):
     """The README's headline example passes instances; on 0.4.9 it was unseeded."""
+    from sklearn.datasets import make_classification
     from sklearn.neural_network import MLPClassifier
 
+    # Noisy labels keep accuracy off its ceiling, so run-to-run variation from
+    # seeding is visible whatever the split (it saturated at 1.0 on the
+    # stratified split, promise ledger #13).
+    Xn, yn = make_classification(
+        n_samples=300, n_features=8, n_informative=3, flip_y=0.2, random_state=0
+    )
     r = ix.compare_models(
         [
             MLPClassifier(hidden_layer_sizes=(8,), max_iter=50),
             RandomForestClassifier(n_estimators=10, max_features=1),
         ],
-        data=(X, y),
+        data=(Xn, yn),
         runs=6,
         seed=1,
         verbose=False,

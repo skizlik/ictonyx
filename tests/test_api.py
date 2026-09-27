@@ -834,7 +834,10 @@ def test_compare_models_k2_paired_carries_ci():
 
     X, y = make_classification(n_samples=200, random_state=0)
     result = ix.compare_models(
-        models=[LogisticRegression(max_iter=1000), DecisionTreeClassifier()],
+        # splitter='random': a model that genuinely varies across seeds, so the
+        # paired difference has a spread and an interval (it must not rely on
+        # tie-breaking luck of a particular split).
+        models=[LogisticRegression(max_iter=1000), DecisionTreeClassifier(splitter="random")],
         data=(X, y),
         runs=10,
         seed=42,
@@ -860,7 +863,10 @@ def test_compare_models_k2_unpaired_carries_ci():
 
     X, y = make_classification(n_samples=200, random_state=0)
     result = ix.compare_models(
-        models=[LogisticRegression(max_iter=1000), DecisionTreeClassifier()],
+        # splitter='random': a model that genuinely varies across seeds, so the
+        # paired difference has a spread and an interval (it must not rely on
+        # tie-breaking luck of a particular split).
+        models=[LogisticRegression(max_iter=1000), DecisionTreeClassifier(splitter="random")],
         data=(X, y),
         runs=10,
         seed=42,

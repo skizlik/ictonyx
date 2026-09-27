@@ -1541,9 +1541,11 @@ def _xy(n=100, k=3):
     return X, y
 
 
-def test_arrays_default_split_identical_to_v0_4_8_internal_path():
+def test_arrays_unstratified_split_identical_to_v0_4_8_internal_path():
+    """With stratify=False the split is v0.4.8's. The default now stratifies
+    classification targets (promise ledger #13)."""
     X, y = _xy()
-    d = ArraysDataHandler(X, y).load()
+    d = ArraysDataHandler(X, y, stratify=False).load()
     Xtr, Xte, ytr, yte = _tts(X, y, test_size=0.2, random_state=42)
     Xtr, Xva, ytr, yva = _tts(Xtr, ytr, test_size=0.1 / 0.8, random_state=42)
     np.testing.assert_array_equal(d["train_data"][0], Xtr)
@@ -1551,10 +1553,12 @@ def test_arrays_default_split_identical_to_v0_4_8_internal_path():
     np.testing.assert_array_equal(d["test_data"][0], Xte)
 
 
-def test_arrays_default_split_identical_to_v0_4_8_provided_test_path():
+def test_arrays_unstratified_split_identical_to_v0_4_8_provided_test_path():
+    """With stratify=False the split is v0.4.8's. The default now stratifies
+    classification targets (promise ledger #13)."""
     X, y = _xy()
     Xt, yt = X[:10], y[:10]
-    d = ArraysDataHandler(X, y, X_test=Xt, y_test=yt, val_split=0.25).load()
+    d = ArraysDataHandler(X, y, X_test=Xt, y_test=yt, val_split=0.25, stratify=False).load()
     Xtr, Xva, ytr, yva = _tts(X, y, test_size=0.25, random_state=42)
     np.testing.assert_array_equal(d["train_data"][0], Xtr)
     np.testing.assert_array_equal(d["val_data"][0], Xva)
@@ -1601,7 +1605,10 @@ def test_get_data_info_provenance():
     h.load()
     prov = h.get_data_info()["split_provenance"]
     assert prov["test"] == "split" and prov["val"] == "split"
-    assert prov["random_state"] == 42 and prov["stratified"] is False
+    assert prov["random_state"] == 42
+    # stratify=None now stratifies a classification target (promise ledger #13).
+    assert prov["stratified"] is True
+    assert prov["stratify_reason"] == "auto: classification target"
 
 
 # ---------------------------------------------------------------------------

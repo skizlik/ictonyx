@@ -382,3 +382,28 @@ def test_interrupt_in_compare_models_stops_the_call(wine):
 
     with pytest.raises(KeyboardInterrupt):
         ix.compare_models([a, b], data=(X, y), runs=10, seed=0, verbose=False)
+
+
+# ---- 2.120 / 3.50 / 3.53: conclusions and the forest label (commit 11) -----------
+@pytest.mark.parametrize("method", ["student_t", "welch_t"])
+def test_t_paths_have_direction_aware_conclusion(method):
+    from ictonyx.analysis import compare_two_models
+
+    rng = np.random.default_rng(0)
+    a = pd.Series(rng.normal(0.90, 0.01, 20))
+    b = pd.Series(rng.normal(0.85, 0.01, 20))
+    r = compare_two_models(a, b, paired=False, test_method=method, metric="val_accuracy")
+    assert "Model A outperforms Model B" in r.conclusion
+    r2 = compare_two_models(a, b, paired=False, test_method=method, metric="val_loss")
+    assert "Model B outperforms Model A" in r2.conclusion
+    assert r.detailed_interpretation
+
+
+def test_mw_conclusion_on_nan_corrected_p():
+    from ictonyx.analysis import StatisticalTestResult, _generate_mann_whitney_conclusion
+
+    r = StatisticalTestResult(test_name="x", statistic=float("nan"), p_value=float("nan"))
+    r.corrected_p_value = float("nan")
+    r.correction_method = "holm"
+    text = _generate_mann_whitney_conclusion(r, 0.05)
+    assert text.startswith("Undefined") and "p=nan" not in text

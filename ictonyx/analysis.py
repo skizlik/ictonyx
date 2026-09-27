@@ -2052,6 +2052,22 @@ def compare_two_models(
             result.assumptions_met["equal_variances"] = equal_vars
             result.assumption_details["variance_test"] = var_details
 
+        # 0.5.0 (register 2.120): the t paths state a direction-aware conclusion
+        # like every other path (previously the conclusion was empty).
+        if test_method in ("student_t", "welch_t", "parametric") and not np.isnan(result.p_value):
+            _label = "Welch's t" if "Welch" in result.test_name else "Student's t"
+            if result.p_value < alpha:
+                result.conclusion = (
+                    f"{_direction_sentence(metric, result.statistic > 0)} "
+                    f"({_label}, p={result.p_value:.4f})"
+                )
+            else:
+                result.conclusion = (
+                    "No significant difference between the models "
+                    f"({_label}, p={result.p_value:.4f})"
+                )
+            result.detailed_interpretation = _generate_detailed_interpretation(result, alpha)
+
     # --- Bootstrap confidence intervals ---
     if HAS_BOOTSTRAP and not np.isnan(result.p_value):
         try:
@@ -2354,6 +2370,13 @@ def compare_multiple_models(
 def _generate_mann_whitney_conclusion(result: StatisticalTestResult, alpha: float) -> str:
     """Generate conclusion for Mann-Whitney test."""
     p_val = result.corrected_p_value if result.corrected_p_value is not None else result.p_value
+    if p_val is None or not np.isfinite(p_val):
+        # 0.5.0 (register 3.50): an undefined test says so; it never reads
+        # "no significant difference (p=nan)".
+        text = "Undefined: this comparison has no p-value (see warnings)."
+        if result.correction_method:
+            text += " It is excluded from the multiple-comparison family."
+        return text
 
     if p_val < alpha:
         conclusion = f"Mann-Whitney U test indicates a statistically significant difference between groups (p={p_val:.4f})"

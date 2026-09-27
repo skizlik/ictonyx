@@ -1318,7 +1318,9 @@ def plot_comparison_forest(
         ax.text(
             0.99,
             0.01,
-            "Welch t (unpaired) where no pairwise interval was available",
+            "Bars: Welch t (unpaired, unadjusted) where no pairwise interval was "
+            "available.\nColours: the corrected test's decision. They can disagree; "
+            "the colour is the test result.",
             transform=ax.transAxes,
             ha="right",
             va="bottom",

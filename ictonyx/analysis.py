@@ -667,7 +667,7 @@ def _provenance(**extra: Any) -> Dict[str, Any]:
 _SCOPE = "on this split"
 
 
-def _scope_suffix(sentence: Optional[str]) -> Optional[str]:
+def _scope_suffix(sentence: str) -> str:
     """Append the scope of inference to a conclusion, once (0.5.0, register 3.56).
 
     Every run is scored on one fixed evaluation set, so every seed-level

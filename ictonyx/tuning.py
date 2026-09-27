@@ -1,6 +1,6 @@
 import time
 import warnings
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Literal, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -306,7 +306,10 @@ class HyperparameterTuner:
             return mean_val
 
         sampler = optuna.samplers.TPESampler(seed=base_seed)
-        study = optuna.create_study(direction=resolved_direction, sampler=sampler)
+        study = optuna.create_study(
+            direction=cast(Literal["minimize", "maximize"], resolved_direction),
+            sampler=sampler,
+        )
         study.optimize(objective, n_trials=max_evals, timeout=timeout, n_jobs=n_jobs)
         self.metric = self.metric or resolved.get("metric")
 

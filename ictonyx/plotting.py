@@ -1050,7 +1050,7 @@ def plot_rank_correlation_over_epoch(
         )
         ax.annotate(
             f"ρ ≥ {threshold}\nat epoch {threshold_epoch}",
-            xy=(threshold_epoch, threshold),
+            xy=(float(threshold_epoch), float(threshold)),
             xytext=(threshold_epoch + max(1, min_epochs * 0.05), threshold - 0.08),
             fontsize=9,
             color=settings.THEME["significant"],
@@ -1977,9 +1977,9 @@ def plot_paired_deltas(
     # by list position mis-filed runs when the two studies lost different runs.
     from .analysis import align_paired
 
-    run_ids, values_a, values_b = align_paired(results_a, results_b, metric)
-    values_a = np.asarray(values_a, dtype=float)
-    values_b = np.asarray(values_b, dtype=float)
+    run_ids, raw_a, raw_b = align_paired(results_a, results_b, metric)
+    values_a = np.asarray(raw_a, dtype=float)
+    values_b = np.asarray(raw_b, dtype=float)
     if len(values_a) < 2:
         raise ValueError(
             f"Paired delta needs at least two runs present in both studies; got {len(values_a)}."

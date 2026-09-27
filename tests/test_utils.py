@@ -415,13 +415,14 @@ class TestSplitSemanticConsistency:
         assert len(X_val) == 20
         assert len(X_test) == 20
 
-    def test_auto_basis_emits_deprecation_warning(self):
-        """Default split_basis='auto' must emit a DeprecationWarning."""
-        X = np.random.rand(50, 3)
-        y = np.random.randint(0, 2, 50)
-
-        with pytest.warns(DeprecationWarning, match="split_basis"):
-            train_val_test_split(X, y)  # no split_basis → 'auto' default
+    def test_default_is_original_and_auto_is_removed(self):
+        """Promise ledger #12: the default is 'original'; 'auto' raises."""
+        X = np.random.rand(100, 3)
+        y = np.random.randint(0, 2, 100)
+        X_tr, X_v, X_te, *_ = train_val_test_split(X, y)  # default
+        assert (len(X_tr), len(X_v), len(X_te)) == (60, 20, 20)
+        with pytest.raises(ValueError, match="removed in v0.5.0"):
+            train_val_test_split(X, y, split_basis="auto")
 
     def test_invalid_basis_raises(self):
         """split_basis must be one of the three valid values."""

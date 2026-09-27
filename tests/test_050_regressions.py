@@ -850,3 +850,24 @@ def test_stratified_recorded_on_results_and_summary(wine):
     r = ix.variability_study(RandomForestClassifier, data=(X, y), runs=3, seed=1, verbose=False)
     assert r.stratified is True
     assert "Stratified split: yes" in r.summarize()
+
+
+# ---- P-13: no forward-looking version promises in code ------------------------------
+def test_no_forward_version_promises_in_code():
+    import pathlib
+    import re
+
+    import ictonyx
+
+    root = pathlib.Path(ictonyx.__file__).parent
+    pat = re.compile(
+        r"planned for v?0\.5|scheduled for v?0\.5|belongs in v?0\.5|v0\.5\.[1-9]"
+        r"|will be removed in v0\.5\.0|will raise TypeError in v0\.5\.0"
+    )
+    hits = [
+        f"{p.name}: {l.strip()}"
+        for p in root.glob("*.py")
+        for l in p.read_text().splitlines()
+        if pat.search(l)
+    ]
+    assert hits == []

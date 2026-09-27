@@ -2318,7 +2318,7 @@ class GridStudyResults:
         # is not preserved on a dry-run result in v0.4.7, so this
         # preview reports the planned configurations without a run
         # count. The architectural fix to carry num_runs through to
-        # the dry-run result object is scheduled for v0.5.0.
+        # the dry-run result object is planned (register 2.19).
         if not self.results:
             import itertools
 

@@ -462,7 +462,7 @@ class ImageDataHandler(FileDataHandler):
             # Trade-off: shuffling operates at batch granularity (cache is already
             # batched), not sample granularity. Runs see different sequences of
             # batches. Finer-grained shuffling requires a more elaborate pipeline
-            # and belongs in v0.5.0.
+            # is planned (register 2.101).
             if shuffle:
                 num_batches = (len(paths) + self.batch_size - 1) // self.batch_size
                 ds = ds.shuffle(

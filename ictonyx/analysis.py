@@ -2121,7 +2121,7 @@ def compare_two_models(
                 # Paired comparison: paired-difference bootstrap on the MEAN
                 # difference. Note this differs from the Wilcoxon test's location
                 # target (the pseudo-median of differences) under skew; a
-                # Walsh-average CI aligns them and is planned for 0.5.0.
+                # Walsh-average CI aligns them (planned; register 3.9).
                 ci_result = bootstrap_paired_difference_ci(
                     clean1,
                     clean2,
@@ -2314,7 +2314,7 @@ def compare_multiple_models(
     the omnibus gate is an additional, conservative convention that can
     suppress a pair Holm would have declared significant. For matched
     runs (shared seeds) a Friedman test with paired post-hoc tests is the
-    better design and is planned for 0.5.0.
+    better design and is planned (register 3.1 / 3.11).
 
     The procedure is:
     1.  **Omnibus Test:** First, it runs a single "overall" test
@@ -2653,7 +2653,7 @@ def check_convergence(
     null: on a steadily declining noisy series it declares convergence in
     the majority of cases (about 80% at slope -0.002/epoch, SD 0.02, with
     the default 10-point window). A criterion that tests for a slope inside
-    an equivalence margin is planned for 0.5.0.
+    an equivalence margin is planned (register 3.21).
 
     Fits a linear regression to the most recent ``window_size`` values.
     Convergence is declared when the absolute slope is below

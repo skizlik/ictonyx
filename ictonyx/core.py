@@ -923,7 +923,7 @@ if SKLEARN_AVAILABLE:
         _SKLEARN_FIT_KWARGS: frozenset = frozenset(
             {
                 "sample_weight",
-                "eval_set",  # XGBoost/LightGBM (ahead of v0.5.0 wrappers)
+                "eval_set",  # XGBoost/LightGBM (ahead of planned XGBoost/LightGBM wrappers)
                 "cat_features",  # CatBoost
             }
         )

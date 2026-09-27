@@ -424,3 +424,22 @@ def _deprecated(
         IctonyxFutureWarning,
         stacklevel=stacklevel,
     )
+
+
+class RemovedAPIError(IctonyxError, TypeError):
+    """An API removed in v0.5.0 was called (promise ledger, owner decision OD-11).
+
+    Removed functions, methods and parameters stay for one minor release as
+    tombstones that raise this error naming the replacement; the tombstones
+    are removed in v0.6.0. A ``TypeError`` subclass, so the promise "will
+    raise TypeError" holds literally and ``except TypeError`` still catches it.
+    """
+
+
+def _removed(what: str, use_instead: str, since: str = "") -> RemovedAPIError:
+    """Build the error a tombstone raises."""
+    dep = f" (deprecated since v{since})" if since else ""
+    return RemovedAPIError(
+        f"{what} was removed in v0.5.0{dep}. Use {use_instead}. "
+        "See the CHANGELOG for 0.5.0, 'Removed'."
+    )

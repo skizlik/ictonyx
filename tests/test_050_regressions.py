@@ -762,3 +762,16 @@ def test_required_runs_less_documents_limitation():
     assert "register 3.52" in required_runs.__doc__
     with pytest.warns(UserWarning, match="swap the models"):
         required_runs(0.5, alternative="less", n_sim=50)
+
+
+# ==== Part 3: the promise ledger ===================================================
+
+
+# ---- P-00: tombstone infrastructure ------------------------------------------------
+def test_removed_api_error_is_a_type_error_and_names_the_replacement():
+    from ictonyx.exceptions import IctonyxError, RemovedAPIError, _removed
+
+    err = _removed("f()", "g()", since="0.4.0")
+    assert isinstance(err, RemovedAPIError)
+    assert isinstance(err, TypeError) and isinstance(err, IctonyxError)
+    assert "removed in v0.5.0 (deprecated since v0.4.0)" in str(err) and "Use g()" in str(err)

@@ -311,3 +311,20 @@ def test_unpaired_k2_uses_compare_two_models_guard(wine):
         paired=False,
     )
     assert c.overall_test.test_name == "Insufficient Data"
+
+
+# ==== Part 2 ======================================================================
+
+
+# ---- 2.129: compare_multiple_models k = 2 (commit 10b) ---------------------------
+def test_compare_multiple_models_k2_matches_compare_two_models():
+    from ictonyx.analysis import compare_multiple_models, compare_two_models
+
+    rng = np.random.default_rng(3)
+    a = pd.Series(rng.normal(0.80, 0.02, 12))
+    b = pd.Series(rng.normal(0.78, 0.02, 12))
+    m = compare_multiple_models({"a": a, "b": b}, metric="val_accuracy", random_state=0)
+    t = compare_two_models(a, b, paired=False, metric="val_accuracy", random_state=0)
+    assert m.overall_test.test_name == t.test_name
+    assert m.overall_test.p_value == pytest.approx(t.p_value)
+    assert m.overall_test.confidence_interval == pytest.approx(t.confidence_interval)

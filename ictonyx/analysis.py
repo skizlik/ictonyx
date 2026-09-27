@@ -2273,7 +2273,16 @@ def compare_multiple_models(
     # chi-squared approximation gates out a result that MW would find significant.
     if n_models == 2:
         names = list(model_results.keys())
-        result = mann_whitney_test(model_results[names[0]], model_results[names[1]], alpha=alpha)
+        # 0.5.0 (register 2.129): the same function as compare_models /
+        # compare_results for two unpaired groups -- same guard, CI and label.
+        result = compare_two_models(
+            pd.Series(model_results[names[0]]),
+            pd.Series(model_results[names[1]]),
+            paired=False,
+            alpha=alpha,
+            metric=metric,
+            random_state=random_state,
+        )
         return ModelComparisonResults(
             overall_test=result,
             raw_data=model_results,

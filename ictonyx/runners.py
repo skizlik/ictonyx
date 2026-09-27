@@ -361,18 +361,30 @@ class ExperimentRunner:
         # Check data size and serialisability
         import sys
 
-        try:
-            data_size = sys.getsizeof(_serializer.dumps(self.train_data))
-            if data_size > 500_000_000:
-                warnings.warn(
-                    f"Training data is large ({data_size / 1e6:.0f}MB). "
-                    "Process isolation may use significant memory for serialization."
-                )
-        except Exception:
-            warnings.warn(
-                "Could not determine data size. Process isolation may have issues "
-                "with non-picklable data types like tf.data.Dataset"
-            )
+        # 0.5.0 (register 2.112): data that cannot be sent to a child process
+        # fails here, once, instead of in every isolated run.
+        for _attr in ("train_data", "val_data", "test_data"):
+            _data = getattr(self, _attr, None)
+            if _data is None:
+                continue
+            try:
+                _payload = _serializer.dumps(_data)
+            except Exception as e:
+                raise ValueError(
+                    f"use_process_isolation=True needs data that can be sent to a child "
+                    f"process, but {type(self.data_handler).__name__} produced "
+                    f"{type(_data).__name__} for {_attr}, which cannot be serialised: {e}. "
+                    "Use use_process_isolation=False, or pass in-memory arrays "
+                    "(ArraysDataHandler). Per-run data preparation in the child is "
+                    "planned (register 2.112)."
+                ) from e
+            if _attr == "train_data":
+                data_size = sys.getsizeof(_payload)
+                if data_size > 500_000_000:
+                    warnings.warn(
+                        f"Training data is large ({data_size / 1e6:.0f}MB). "
+                        "Process isolation may use significant memory for serialization."
+                    )
 
     def _reset_state(self) -> None:
         """Every per-study accumulator, in one place (0.5.0, register 2.108).
@@ -565,11 +577,14 @@ class ExperimentRunner:
 
             except Exception as e:
                 self._run_log(f" - Run {run_id}: Failed to process results: {e}", level="error")
+                self._last_run_error = e
                 self.failed_runs.append(run_id)
                 return None
         else:
             # Training failed
             error_msg = result.get("error", "Unknown error")
+            # Named in the first-run abort message (register 2.121).
+            self._last_run_error = RuntimeError(f"in the isolated child process: {error_msg}")
             self._run_log(f" - Run {run_id}: Failed - {error_msg}", level="error")
             if "traceback" in result:
                 self._run_log(f"   Traceback: {result['traceback'][:500]}...", level="error")

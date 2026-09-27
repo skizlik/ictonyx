@@ -627,3 +627,53 @@ def test_json_round_trip_preserves_every_field_but_histories():
     r = _full_results()
     back = VariabilityStudyResults.from_json(r.to_json())
     _assert_same(r, back, skip=("all_runs_metrics",))
+
+
+# ---- 2.112 / 2.121: isolation checks (commit 19) ---------------------------------
+def test_isolation_rejects_unpicklable_data_up_front(wine):
+    import threading
+
+    X, y = wine
+
+    class LockedHandler(ArraysDataHandler):
+        def load(self, *a, **k):
+            out = super().load(*a, **k)
+            out["train_data"] = (out["train_data"], threading.Lock())
+            return out
+
+    with pytest.raises(ValueError, match="cannot be serialised"):
+        ExperimentRunner(
+            _module_level_builder,
+            LockedHandler(X, y),
+            ModelConfig({"epochs": 1}),
+            seed=1,
+            verbose=False,
+            use_process_isolation=True,
+        )
+
+
+def test_isolated_first_run_error_is_named(wine, monkeypatch):
+    from ictonyx.exceptions import ExperimentError
+
+    X, y = wine
+    runner = ExperimentRunner(
+        _module_level_builder,
+        ArraysDataHandler(X, y),
+        ModelConfig({"epochs": 1}),
+        seed=1,
+        verbose=False,
+        use_process_isolation=True,
+    )
+    monkeypatch.setattr(
+        runner.memory_manager,
+        "run_isolated",
+        lambda *a, **k: {"success": False, "error": "ValueError: bad config"},
+    )
+    with pytest.raises(ExperimentError, match="bad config"):
+        runner.run_study(num_runs=3)
+
+
+def _module_level_builder(conf):
+    return ScikitLearnModelWrapper(
+        RandomForestClassifier(n_estimators=5, random_state=conf.get("run_seed"))
+    )

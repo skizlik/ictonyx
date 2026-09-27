@@ -482,3 +482,16 @@ def test_one_sample_wording_follows_alternative(alt, verb):
     center = 0.9 if alt != "less" else 0.1
     r = _wilcoxon_signed_rank_impl(pd.Series(rng.normal(center, 0.01, 20)), 0.5, alt)
     assert verb in r.conclusion and "median" not in r.conclusion
+
+
+# ---- 2.134 / 3.58: visible deprecations; "parametric" (commit 15) ----------------
+def test_parametric_is_deprecated_with_visible_warning():
+    from ictonyx.analysis import compare_two_models
+    from ictonyx.exceptions import IctonyxFutureWarning
+
+    rng = np.random.default_rng(9)
+    a, b = pd.Series(rng.normal(0.8, 0.02, 20)), pd.Series(rng.normal(0.78, 0.02, 20))
+    with pytest.warns(IctonyxFutureWarning, match="register 3.58") as rec:
+        compare_two_models(a, b, paired=False, test_method="parametric")
+    w = [x for x in rec if isinstance(x.message, IctonyxFutureWarning)][0].message
+    assert isinstance(w, FutureWarning) and isinstance(w, UserWarning)

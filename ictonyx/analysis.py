@@ -2068,7 +2068,16 @@ def compare_two_models(
 
         elif test_method == "parametric":
             # Analyst asserts normality; we only choose between Student
-            # and Welch based on variance equality.
+            # and Welch based on variance equality -- a data-driven pre-test,
+            # which inflates Type I error. Deprecated (register 3.58).
+            from .exceptions import _deprecated
+
+            _deprecated(
+                'test_method="parametric" (a variance pre-test chooses Student or Welch)',
+                "0.6.0",
+                'test_method="welch_t"',
+                "3.58",
+            )
             equal_vars, var_details = check_equal_variances(clean1, clean2, alpha=alpha)
             if equal_vars:
                 result = _run_student_t(clean1, clean2)

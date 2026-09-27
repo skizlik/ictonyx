@@ -400,3 +400,27 @@ def validate_statistical_input(data, name: str, min_samples: int = 3):
         raise StatisticalTestError.insufficient_data(
             "statistical test", len(valid_data), min_samples
         )
+
+
+class IctonyxFutureWarning(FutureWarning, UserWarning):
+    """A user-facing deprecation (0.5.0, register 2.134).
+
+    Subclasses FutureWarning, which Python shows by default (DeprecationWarning
+    is hidden outside ``__main__`` and test runners), and UserWarning, so
+    existing ``UserWarning`` filters and ``pytest.warns(UserWarning)`` still
+    catch it.
+    """
+
+
+def _deprecated(
+    what: str, removed_in: str, use_instead: str, register: str, stacklevel: int = 3
+) -> None:
+    """Warn that ``what`` is deprecated, naming the removal version and register ID."""
+    import warnings
+
+    warnings.warn(
+        f"{what} is deprecated and will be removed in v{removed_in} (register {register}); "
+        f"use {use_instead}.",
+        IctonyxFutureWarning,
+        stacklevel=stacklevel,
+    )

@@ -1352,24 +1352,15 @@ class VariabilityStudyResults:
             return list(ids), values
         return values
 
-    def get_final_metrics(self, metric_name: str = "val_accuracy") -> Dict[str, float]:
-        """Extract final metric values for each run (labeled run_1, run_2, ...).
+    def get_final_metrics(self, *args: Any, **kwargs: Any) -> Any:
+        """Removed in v0.5.0 (promise ledger #9); use :meth:`get_metric_values`.
 
-        .. deprecated::
-            Emits :class:`UserWarning`. Use :meth:`get_metric_values` instead.
-            ``get_final_metrics()`` will be removed in v0.5.0.
+        Raises:
+            RemovedAPIError: Always. This tombstone is removed in v0.6.0.
         """
-        warnings.warn(
-            "get_final_metrics() is deprecated and will be removed in v0.5.0. "
-            "Use get_metric_values() instead.",
-            UserWarning,
-            stacklevel=2,
-        )
-        metrics = {}
-        for i, df in enumerate(self.all_runs_metrics):
-            if metric_name in df.columns:
-                metrics[f"run_{i + 1}"] = float(df[metric_name].iloc[-1])
-        return metrics
+        from .exceptions import _removed
+
+        raise _removed("VariabilityStudyResults.get_final_metrics()", "get_metric_values(metric)")
 
     def get_available_metrics(self) -> List[str]:
         """Get list of all available metrics across all runs."""

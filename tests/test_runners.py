@@ -306,21 +306,17 @@ class TestVariabilityStudyResults:
         with pytest.raises(KeyError, match="not found"):
             results.get_metric_values("nonexistent")
 
-    def test_get_final_metrics(self):
-        """Test extracting final metrics per run from DataFrames."""
-        df1 = pd.DataFrame({"val_accuracy": [0.5, 0.6, 0.7], "val_loss": [0.5, 0.4, 0.3]})
-        df2 = pd.DataFrame({"val_accuracy": [0.6, 0.7, 0.8], "val_loss": [0.4, 0.3, 0.2]})
+    def test_get_final_metrics_is_a_tombstone(self):
+        """get_final_metrics was removed in v0.5.0 (promise ledger #9)."""
+        from ictonyx.exceptions import RemovedAPIError
 
+        df1 = pd.DataFrame({"val_accuracy": [0.5, 0.6, 0.7]})
         results = VariabilityStudyResults(
-            all_runs_metrics=[df1, df2],
-            final_metrics={"val_accuracy": [0.7, 0.8]},
-            final_test_metrics=[],
+            all_runs_metrics=[df1], final_metrics={"val_accuracy": [0.7]}, final_test_metrics=[]
         )
-
-        final = results.get_final_metrics("val_accuracy")
-        assert len(final) == 2
-        assert final["run_1"] == 0.7
-        assert final["run_2"] == 0.8
+        with pytest.raises(RemovedAPIError, match="get_metric_values"):
+            results.get_final_metrics("val_accuracy")
+        assert results.get_metric_values("val_accuracy") == [0.7]
 
     def test_get_available_metrics(self):
         """Test listing available metrics."""
@@ -702,16 +698,6 @@ class TestVariabilityStudyResultsExtended:
         assert "test_accuracy" in summary.columns
         assert "test_f1" in summary.columns
         assert summary.iloc[0]["test_accuracy"] == 0.78
-
-    def test_get_final_metrics_missing_metric(self):
-        """Test get_final_metrics with a metric not in the data."""
-        df1 = pd.DataFrame({"val_accuracy": [0.8]})
-        results = VariabilityStudyResults(
-            all_runs_metrics=[df1], final_metrics={"val_accuracy": [0.8]}, final_test_metrics=[]
-        )
-        # Asking for a metric that doesn't exist in the DataFrames
-        final = results.get_final_metrics("nonexistent")
-        assert final == {}
 
     def test_summarize_multiple_metrics(self):
         """Test summarize with several metrics."""

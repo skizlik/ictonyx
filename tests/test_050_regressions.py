@@ -495,3 +495,60 @@ def test_parametric_is_deprecated_with_visible_warning():
         compare_two_models(a, b, paired=False, test_method="parametric")
     w = [x for x in rec if isinstance(x.message, IctonyxFutureWarning)][0].message
     assert isinstance(w, FutureWarning) and isinstance(w, UserWarning)
+
+
+# ---- 2.113: grid keys and verbose (commit 16) ------------------------------------
+def test_grid_accepts_list_and_dict_values(wine):
+    from ictonyx.runners import GridStudyResults, run_grid_study
+
+    X, y = wine
+
+    def builder(conf):
+        return ScikitLearnModelWrapper(
+            RandomForestClassifier(n_estimators=5, random_state=conf.get("run_seed"))
+        )
+
+    grid = run_grid_study(
+        builder,
+        ArraysDataHandler(X, y),
+        ModelConfig({"epochs": 1}),
+        {"tags": [[1, 2], [3]], "opts": [{"a": 1}]},
+        num_runs=3,
+        use_process_isolation=False,
+        verbose=False,
+        seed=0,
+    )
+    assert grid.n_configurations == 2
+    assert grid.get_results_for_config({"tags": [1, 2], "opts": {"a": 1}}).n_runs == 3
+    assert GridStudyResults._config_key({"lr": 0.1, "bs": 8}) == (("bs", 8), ("lr", 0.1))
+
+
+def test_grid_verbose_false_is_quiet(wine, caplog):
+    import logging
+
+    from ictonyx.runners import run_grid_study
+
+    X, y = wine
+
+    def builder(conf):
+        return ScikitLearnModelWrapper(
+            RandomForestClassifier(n_estimators=5, random_state=conf.get("run_seed"))
+        )
+
+    # Pin the ictonyx logger at INFO so the result cannot depend on what earlier
+    # tests left behind; only run_grid_study's own verbose handling may quiet it.
+    with caplog.at_level(logging.INFO, logger="ictonyx"):
+        run_grid_study(
+            builder,
+            ArraysDataHandler(X, y),
+            ModelConfig({"epochs": 1}),
+            {"x": [1, 2]},
+            num_runs=3,
+            use_process_isolation=False,
+            verbose=False,
+            seed=0,
+        )
+    noisy = [
+        r for r in caplog.records if r.name.startswith("ictonyx") and r.levelno == logging.INFO
+    ]
+    assert noisy == [], [r.getMessage() for r in noisy][:3]

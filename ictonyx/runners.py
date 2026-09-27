@@ -2136,9 +2136,30 @@ class GridStudyResults:
     metric: str = "val_accuracy"
 
     @staticmethod
+    def _freeze(v: Any) -> Any:
+        """A hashable stand-in for a grid value (0.5.0, register 2.113).
+
+        Scalars are returned unchanged, so keys of scalar-valued grids are
+        identical to earlier versions. Lists and tuples become tuples, dicts
+        become sorted item tuples, sets become sorted tuples; anything else
+        unhashable is keyed by its ``repr``.
+        """
+        if isinstance(v, dict):
+            return tuple(sorted((k, GridStudyResults._freeze(x)) for k, x in v.items()))
+        if isinstance(v, (list, tuple)):
+            return tuple(GridStudyResults._freeze(x) for x in v)
+        if isinstance(v, (set, frozenset)):
+            return tuple(sorted((GridStudyResults._freeze(x) for x in v), key=repr))
+        try:
+            hash(v)
+            return v
+        except TypeError:
+            return repr(v)
+
+    @staticmethod
     def _config_key(param_combo: Dict[str, Any]) -> Tuple:
         """Convert a parameter combination dict to a hashable, sorted tuple key."""
-        return tuple(sorted(param_combo.items()))
+        return tuple((k, GridStudyResults._freeze(v)) for k, v in sorted(param_combo.items()))
 
     @property
     def n_configurations(self) -> int:
@@ -2451,7 +2472,15 @@ def run_grid_study(
     # Build Cartesian product of all parameter combinations
     param_names = list(param_grid.keys())
     param_values = list(param_grid.values())
+    # verbose governs the whole grid, as in variability_study / compare_models:
+    # forwarding it to the runner alone left handler and tracker INFO lines.
+    from .settings import set_verbose
+
+    set_verbose(verbose)
     combinations = [dict(zip(param_names, combo)) for combo in itertools.product(*param_values)]
+    # Key every configuration before any training, so an unkeyable grid fails
+    # at once rather than after the first configuration has trained (register 2.113).
+    config_keys = [GridStudyResults._config_key(c) for c in combinations]
 
     n_configs = len(combinations)
     total_runs = n_configs * num_runs
@@ -2502,13 +2531,14 @@ def run_grid_study(
             num_runs=num_runs,
             use_process_isolation=use_process_isolation,
             seed=config_seeds[i - 1],
+            verbose=verbose,
         )
 
         if getattr(result, "stopped_early", None) == "interrupted":
             # Ctrl-C stops the whole grid, not just this configuration (register 2.111).
             raise KeyboardInterrupt(f"run_grid_study interrupted during {param_combo}.")
 
-        key = GridStudyResults._config_key(param_combo)
+        key = config_keys[i - 1]
         results_dict[key] = result
 
         try:

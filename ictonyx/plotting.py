@@ -448,9 +448,10 @@ def _nanmean_curve(runs: List[pd.DataFrame], col: str) -> Optional[np.ndarray]:
 
 
 def plot_variability_summary(
-    all_runs_metrics_list: Optional[List[pd.DataFrame]] = None,
-    final_metrics_series: Optional[Union[pd.Series, List]] = None,
-    final_test_series: Optional[Union[pd.Series, List]] = None,
+    *legacy_args: Any,
+    all_runs_metrics_list: Any = None,
+    final_metrics_series: Any = None,
+    final_test_series: Any = None,
     metric: str = "accuracy",
     kind: Optional[str] = None,
     show_histogram: bool = True,
@@ -475,13 +476,9 @@ def plot_variability_summary(
       final-epoch values, showing the spread of outcomes across runs.
 
     Args:
-        all_runs_metrics_list: List of per-run DataFrames (one per
-            successful run), as stored in
-            :attr:`VariabilityStudyResults.all_runs_metrics`.
-        final_metrics_series: ``pd.Series`` of final-epoch validation
-            metric values across runs.
-        final_test_series: Optional ``pd.Series`` of test-set metric
-            values. If provided, a second distribution is added.
+        all_runs_metrics_list, final_metrics_series, final_test_series:
+            Removed in v0.5.0 (promise ledger #7); passing them raises
+            RemovedAPIError until v0.6.0. Pass ``results`` instead.
         metric: Base metric name for labeling (default ``'accuracy'``).
         show_histogram: Show histogram panel (default ``True``).
         show_boxplot: Show boxplot panel (default ``False``).
@@ -510,8 +507,26 @@ def plot_variability_summary(
     _check_plotting()
 
     # A results object passed positionally is the documented call shape; honour it.
-    if results is None and hasattr(all_runs_metrics_list, "all_runs_metrics"):
-        results, all_runs_metrics_list = all_runs_metrics_list, None
+    # The per-list legacy form was removed in v0.5.0 (promise ledger #7). Its three
+    # parameters are keyword-only tombstones until v0.6.0, and *legacy_args catches
+    # the old positional form, which would otherwise bind a list to ``metric``.
+    if len(legacy_args) == 1 and results is None and hasattr(legacy_args[0], "all_runs_metrics"):
+        results = legacy_args[0]
+    elif legacy_args or any(
+        x is not None for x in (all_runs_metrics_list, final_metrics_series, final_test_series)
+    ):
+        from .exceptions import _removed
+
+        raise _removed(
+            "plot_variability_summary(all_runs_metrics_list, final_metrics_series, "
+            "final_test_series)",
+            "plot_variability_summary(results=..., kind=...)",
+        )
+    if results is None:
+        raise TypeError(
+            "plot_variability_summary() needs a VariabilityStudyResults: pass it as the "
+            "first argument or as results=."
+        )
 
     # ── Dispatch path: results= + kind= ──────────────────────────────────
     if results is not None and kind is not None:
@@ -527,19 +542,6 @@ def plot_variability_summary(
             )
         return fn(results, metric=_resolve_results_metric(results, metric), show=show)
 
-    # ── Legacy positional-argument form deprecation ───────────────────────
-    if all_runs_metrics_list is not None or final_metrics_series is not None:
-        warnings.warn(
-            "Passing all_runs_metrics_list, final_metrics_series, or "
-            "final_test_series directly to plot_variability_summary() is "
-            "deprecated and will be removed in v0.5.0. "
-            "Pass a VariabilityStudyResults object via results= and use "
-            "kind= to select the plot type. Example: "
-            "ix.plot_variability_summary(results=my_results, kind='trajectories').",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
     # Allow passing a VariabilityStudyResults object directly via results=
     if results is not None:
         all_runs_metrics_list = results.all_runs_metrics
@@ -552,7 +554,10 @@ def plot_variability_summary(
         if results.has_test_data and final_test_series is None:
             test_key = f"test_{resolved_base}"
             try:
-                final_test_series = pd.Series(results.get_test_metric_values(test_key))
+                # get_metric_values resolves test_* names (register 2.109). The former
+                # get_test_metric_values("test_<m>") call always raised KeyError here,
+                # so the test distribution was silently never drawn.
+                final_test_series = pd.Series(results.get_metric_values(test_key))
             except KeyError:
                 pass
 

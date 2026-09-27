@@ -57,6 +57,21 @@ def _make_fake_runs(n_runs=5, n_epochs=10):
     return runs, final_vals, final_test
 
 
+def _as_results(runs, finals, tests=None, metric="accuracy"):
+    """The same fake data as a results object. plot_variability_summary's
+    per-list form was removed in v0.5.0 (promise ledger #7)."""
+    from ictonyx.runners import VariabilityStudyResults
+
+    final_test = (
+        [] if tests is None else [{metric: float(v), "run_id": i + 1} for i, v in enumerate(tests)]
+    )
+    return VariabilityStudyResults(
+        all_runs_metrics=list(runs),
+        final_metrics={f"val_{metric}": [float(v) for v in finals]},
+        final_test_metrics=final_test,
+    )
+
+
 # --- Fixtures ---
 
 
@@ -183,7 +198,7 @@ class TestBasicPlots:
     def test_plot_variability_summary(self, mock_show, sample_history_df):
         final_accs = pd.Series([0.6, 0.65, 0.62])
         # Must provide list of DFs
-        fig = plot_variability_summary([sample_history_df], final_accs)
+        fig = plot_variability_summary(_as_results([sample_history_df], final_accs))
         assert fig is not None
 
     @patch("matplotlib.pyplot.show")
@@ -351,7 +366,7 @@ class TestPlotStructure:
                 )
             )
         final_accs = pd.Series([0.6, 0.65, 0.62, 0.58, 0.63])
-        fig = plot_variability_summary(runs, final_accs)
+        fig = plot_variability_summary(_as_results(runs, final_accs))
         assert fig is not None
         # Should have multiple subplots
         assert len(fig.axes) >= 2
@@ -386,18 +401,20 @@ class TestPlotVariabilitySummaryOptions:
     def test_default_parameters_still_work(self):
         """Existing calls with no new params should produce a figure."""
         runs, finals, _ = _make_fake_runs()
-        fig = plot_variability_summary(runs, finals, show=False)
+        fig = plot_variability_summary(_as_results(runs, finals), show=False)
         assert fig is not None
         plt.close(fig)
 
     def test_show_mean_lines_false(self):
         """Disabling mean lines should still produce a valid figure."""
         runs, finals, _ = _make_fake_runs()
-        fig = plot_variability_summary(runs, finals, show_mean_lines=False, show=False)
+        fig = plot_variability_summary(_as_results(runs, finals), show_mean_lines=False, show=False)
         assert fig is not None
         # Check that the trajectory axes has fewer lines than with mean lines
         ax = fig.axes[0]
-        fig_with_mean = plot_variability_summary(runs, finals, show_mean_lines=True, show=False)
+        fig_with_mean = plot_variability_summary(
+            _as_results(runs, finals), show_mean_lines=True, show=False
+        )
         ax_with_mean = fig_with_mean.axes[0]
         assert len(ax.lines) < len(ax_with_mean.lines)
         plt.close(fig)
@@ -406,8 +423,10 @@ class TestPlotVariabilitySummaryOptions:
     def test_show_train_false(self):
         """Hiding training curves should produce fewer lines."""
         runs, finals, _ = _make_fake_runs()
-        fig_both = plot_variability_summary(runs, finals, show=False)
-        fig_val_only = plot_variability_summary(runs, finals, show_train=False, show=False)
+        fig_both = plot_variability_summary(_as_results(runs, finals), show=False)
+        fig_val_only = plot_variability_summary(
+            _as_results(runs, finals), show_train=False, show=False
+        )
         assert len(fig_val_only.axes[0].lines) < len(fig_both.axes[0].lines)
         plt.close(fig_both)
         plt.close(fig_val_only)
@@ -415,8 +434,10 @@ class TestPlotVariabilitySummaryOptions:
     def test_show_val_false(self):
         """Hiding validation curves should produce fewer lines."""
         runs, finals, _ = _make_fake_runs()
-        fig_both = plot_variability_summary(runs, finals, show=False)
-        fig_train_only = plot_variability_summary(runs, finals, show_val=False, show=False)
+        fig_both = plot_variability_summary(_as_results(runs, finals), show=False)
+        fig_train_only = plot_variability_summary(
+            _as_results(runs, finals), show_val=False, show=False
+        )
         assert len(fig_train_only.axes[0].lines) < len(fig_both.axes[0].lines)
         plt.close(fig_both)
         plt.close(fig_train_only)
@@ -424,7 +445,9 @@ class TestPlotVariabilitySummaryOptions:
     def test_horizontal_histogram(self):
         """Horizontal histogram should produce a valid figure."""
         runs, finals, _ = _make_fake_runs()
-        fig = plot_variability_summary(runs, finals, histogram_orientation="horizontal", show=False)
+        fig = plot_variability_summary(
+            _as_results(runs, finals), histogram_orientation="horizontal", show=False
+        )
         assert fig is not None
         plt.close(fig)
 
@@ -432,12 +455,14 @@ class TestPlotVariabilitySummaryOptions:
         """Invalid orientation should raise ValueError."""
         runs, finals, _ = _make_fake_runs()
         with pytest.raises(ValueError, match="histogram_orientation"):
-            plot_variability_summary(runs, finals, histogram_orientation="diagonal", show=False)
+            plot_variability_summary(
+                _as_results(runs, finals), histogram_orientation="diagonal", show=False
+            )
 
     def test_custom_alpha(self):
         """Explicit alpha should be accepted."""
         runs, finals, _ = _make_fake_runs()
-        fig = plot_variability_summary(runs, finals, alpha=0.1, show=False)
+        fig = plot_variability_summary(_as_results(runs, finals), alpha=0.1, show=False)
         assert fig is not None
         plt.close(fig)
 
@@ -445,14 +470,14 @@ class TestPlotVariabilitySummaryOptions:
         """Alpha outside (0, 1] should raise ValueError."""
         runs, finals, _ = _make_fake_runs()
         with pytest.raises(ValueError, match="alpha"):
-            plot_variability_summary(runs, finals, alpha=1.5, show=False)
+            plot_variability_summary(_as_results(runs, finals), alpha=1.5, show=False)
         with pytest.raises(ValueError, match="alpha"):
-            plot_variability_summary(runs, finals, alpha=0.0, show=False)
+            plot_variability_summary(_as_results(runs, finals), alpha=0.0, show=False)
 
     def test_custom_figsize(self):
         """Custom figsize should be applied to the figure."""
         runs, finals, _ = _make_fake_runs()
-        fig = plot_variability_summary(runs, finals, figsize=(20, 10), show=False)
+        fig = plot_variability_summary(_as_results(runs, finals), figsize=(20, 10), show=False)
         w, h = fig.get_size_inches()
         assert abs(w - 20) < 0.1
         assert abs(h - 10) < 0.1
@@ -461,7 +486,7 @@ class TestPlotVariabilitySummaryOptions:
     def test_custom_dpi(self):
         """Custom dpi should be applied to the figure."""
         runs, finals, _ = _make_fake_runs()
-        fig = plot_variability_summary(runs, finals, dpi=300, show=False)
+        fig = plot_variability_summary(_as_results(runs, finals), dpi=300, show=False)
         assert fig.dpi == 300
         plt.close(fig)
 
@@ -469,8 +494,8 @@ class TestPlotVariabilitySummaryOptions:
         """With 3 runs, auto alpha should be higher than with 30."""
         runs_3, finals_3, _ = _make_fake_runs(n_runs=3)
         runs_30, finals_30, _ = _make_fake_runs(n_runs=30)
-        fig_3 = plot_variability_summary(runs_3, finals_3, show=False)
-        fig_30 = plot_variability_summary(runs_30, finals_30, show=False)
+        fig_3 = plot_variability_summary(_as_results(runs_3, finals_3), show=False)
+        fig_30 = plot_variability_summary(_as_results(runs_30, finals_30), show=False)
         # Can't directly check alpha from the figure, but at least
         # verify both produce valid figures
         assert fig_3 is not None
@@ -482,9 +507,7 @@ class TestPlotVariabilitySummaryOptions:
         """All new options together should not crash."""
         runs, finals, test_finals = _make_fake_runs()
         fig = plot_variability_summary(
-            runs,
-            finals,
-            test_finals,
+            _as_results(runs, finals, test_finals),
             show_mean_lines=False,
             show_train=False,
             show_val=True,
@@ -504,9 +527,7 @@ class TestPlotVariabilitySummaryOptions:
         """Horizontal histogram with both val and test series."""
         runs, finals, test_finals = _make_fake_runs()
         fig = plot_variability_summary(
-            runs,
-            finals,
-            test_finals,
+            _as_results(runs, finals, test_finals),
             histogram_orientation="horizontal",
             show=False,
         )
@@ -567,15 +588,20 @@ class TestPlotVariabilitySummaryResultsInput:
         plot_variability_summary(results=sample_results, metric="val_accuracy")
 
     @patch("matplotlib.pyplot.show")
-    def test_results_equivalent_to_manual_extraction(self, mock_show, sample_results):
-        """Both call patterns must produce equivalent figures."""
-        fig1 = plot_variability_summary(results=sample_results)
-        fig2 = plot_variability_summary(
-            all_runs_metrics_list=sample_results.all_runs_metrics,
-            final_metrics_series=pd.Series(sample_results.get_metric_values("val_accuracy")),
-        )
-        assert fig1 is not None
-        assert fig2 is not None
+    def test_results_form_works_and_legacy_form_is_a_tombstone(self, mock_show, sample_results):
+        """The per-list form was removed in v0.5.0 (promise ledger #7)."""
+        from ictonyx.exceptions import RemovedAPIError
+
+        assert plot_variability_summary(results=sample_results) is not None
+        assert plot_variability_summary(sample_results) is not None  # positional results
+        with pytest.raises(RemovedAPIError, match="results="):
+            plot_variability_summary(
+                all_runs_metrics_list=sample_results.all_runs_metrics,
+                final_metrics_series=pd.Series(sample_results.get_metric_values("val_accuracy")),
+            )
+        with pytest.raises(RemovedAPIError):
+            # the old positional form must not silently bind a list to metric
+            plot_variability_summary(sample_results.all_runs_metrics, [0.9, 0.91])
 
 
 class TestPlotGridStudyHeatmap:
@@ -929,11 +955,12 @@ class TestNewVariabilityFunctions:
         with pytest.raises(ValueError, match="Unknown kind"):
             plot_variability_summary(results=small_results, kind="banana", show=False)
 
-    def test_dispatcher_legacy_form_warns(self, small_results):
+    def test_dispatcher_legacy_form_is_a_tombstone(self, small_results):
         matplotlib.use("Agg")
+        from ictonyx.exceptions import RemovedAPIError
         from ictonyx.plotting import plot_variability_summary
 
-        with pytest.warns(DeprecationWarning, match="deprecated"):
+        with pytest.raises(RemovedAPIError):
             plot_variability_summary(
                 all_runs_metrics_list=small_results.all_runs_metrics,
                 show=False,

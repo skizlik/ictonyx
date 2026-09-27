@@ -480,39 +480,14 @@ class TestTestAgainstNull:
             f"{[str(w.message) for w in offending]}"
         )
 
-    def test_public_wilcoxon_still_emits_deprecation(self):
-        """X-28 guard: the public wilcoxon_signed_rank_test must still
-        emit its DeprecationWarning. Protects against accidental warning
-        removal during the refactor that extracted _wilcoxon_signed_rank_impl."""
+    def test_public_wilcoxon_is_a_tombstone(self):
+        """X-28 guard, updated for v0.5.0: the public wilcoxon_signed_rank_test is
+        removed (promise ledger #1); test_against_null uses the implementation."""
         from ictonyx.analysis import wilcoxon_signed_rank_test
+        from ictonyx.exceptions import RemovedAPIError
 
-        values = pd.Series(
-            [
-                0.80,
-                0.82,
-                0.78,
-                0.85,
-                0.79,
-                0.83,
-                0.81,
-                0.84,
-                0.77,
-                0.86,
-                0.80,
-                0.82,
-                0.78,
-                0.85,
-                0.79,
-                0.83,
-                0.81,
-                0.84,
-                0.77,
-                0.86,
-            ]
-        )
-
-        with pytest.warns(DeprecationWarning, match="wilcoxon_signed_rank_test"):
-            wilcoxon_signed_rank_test(values, null_value=0.5)
+        with pytest.raises(RemovedAPIError):
+            wilcoxon_signed_rank_test(pd.Series([0.6, 0.62, 0.61, 0.63, 0.64, 0.6]), null_value=0.5)
 
     def test_alternative_parameter_greater(self):
         """X-28 extension: alternative='greater' is one-sided."""

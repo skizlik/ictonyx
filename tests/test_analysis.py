@@ -35,7 +35,7 @@ from ictonyx.analysis import (  # Dataclass; Validation; Effect sizes; Multiple 
     rank_biserial_correlation,
     shapiro_wilk_test,
     validate_sample_sizes,
-    wilcoxon_signed_rank_test,
+    _wilcoxon_signed_rank_impl,
 )
 
 # ---------------------------------------------------------------------------
@@ -486,7 +486,7 @@ class TestWilcoxonSignedRankTest:
 
     def test_significant_difference(self):
         data = pd.Series([0.6, 0.7, 0.8, 0.75, 0.65, 0.7, 0.8, 0.85])
-        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         assert isinstance(result, StatisticalTestResult)
         assert result.p_value < 0.05
         assert "Wilcoxon" in result.test_name
@@ -494,7 +494,7 @@ class TestWilcoxonSignedRankTest:
     def test_preserves_sample_sizes(self):
         """Regression test for B2: sample_sizes must survive the test."""
         data = pd.Series([0.6, 0.7, 0.8, 0.75, 0.65, 0.7, 0.8, 0.85])
-        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         assert result.sample_sizes is not None
         assert "total" in result.sample_sizes
         assert "non_zero" in result.sample_sizes
@@ -502,23 +502,23 @@ class TestWilcoxonSignedRankTest:
     def test_preserves_assumptions(self):
         """Regression test for B2: assumptions_met must survive the test."""
         data = pd.Series([0.6, 0.7, 0.8, 0.75, 0.65, 0.7, 0.8, 0.85])
-        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         assert "adequate_sample_size" in result.assumptions_met
         assert "symmetry" in result.assumptions_met
 
     def test_no_difference_from_null(self):
         rng = np.random.RandomState(42)
         data = pd.Series(rng.normal(0.5, 0.01, 20))
-        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         assert result.p_value > 0.05
 
     def test_invalid_input_type(self):
         with pytest.raises(TypeError):
-            wilcoxon_signed_rank_test([1, 2, 3])
+            _wilcoxon_signed_rank_impl([1, 2, 3])
 
     def test_insufficient_data(self):
         data = pd.Series([0.6, 0.7, 0.8])
-        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         # Should either warn or have NaN p-value due to small sample
         assert len(result.warnings) > 0 or np.isnan(result.p_value)
 
@@ -530,7 +530,7 @@ class TestWilcoxonSignedRankTest:
         when data is clearly above the null."""
         # All 6 values clearly above 0.5 — should be significant
         data = pd.Series([0.6, 0.65, 0.7, 0.62, 0.68, 0.71])
-        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         # With method='auto' (exact), minimum p at n=6 is 0.03125
         # All above null → W=0, exact p=0.03125 < 0.05: significant
         assert not np.isnan(result.p_value), "p_value must not be NaN for n=6"
@@ -544,7 +544,7 @@ class TestWilcoxonSignedRankTest:
         """For n <= 25, exact method does not compute zstatistic.
         Effect size should be None, not raise."""
         data = pd.Series([0.6, 0.7, 0.65, 0.72, 0.68])
-        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         # result.effect_size may be None (exact) or a float (if zstatistic present)
         # Either is acceptable; the test must not raise.
         assert result.effect_size is None or isinstance(result.effect_size, float)
@@ -555,7 +555,7 @@ class TestWilcoxonSignedRankTest:
         since scipy's method='auto' does not expose zstatistic directly."""
         rng = np.random.default_rng(42)
         data = pd.Series(rng.normal(0.6, 0.05, 30))
-        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         assert not np.isnan(result.p_value)
         assert result.effect_size is not None, (
             "effect_size must be computed for a valid result. "
@@ -568,7 +568,7 @@ class TestWilcoxonSignedRankTest:
         same underlying scipy method selection ('auto')."""
         # Both should give the same p-value direction for the same data
         data = pd.Series([0.55, 0.58, 0.52, 0.60, 0.53, 0.57])
-        result_single = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result_single = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         # paired_wilcoxon_test already used 'auto'; single should now match
         assert result_single.p_value > 0  # basic sanity
 
@@ -714,14 +714,14 @@ class TestWilcoxonTieCorrection:
 
     def test_effect_size_present_without_ties(self):
         data = pd.Series([0.6, 0.7, 0.75, 0.8, 0.72, 0.68, 0.78, 0.82])
-        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         assert result.effect_size is not None
         assert -1.0 <= result.effect_size <= 1.0
 
     def test_effect_size_present_with_ties(self):
         """Effect size must still be computed when tied values are present."""
         data = pd.Series([0.6, 0.7, 0.7, 0.8, 0.8, 0.75, 0.85, 0.9])
-        result = wilcoxon_signed_rank_test(data, null_value=0.5)
+        result = _wilcoxon_signed_rank_impl(data, null_value=0.5)
         # With ties, manual formula would give incorrect result.
         # We just verify effect size is present and in valid range.
         assert result.effect_size is not None
@@ -1455,14 +1455,14 @@ class TestPairedWilcoxonTest:
     def test_paired_wilcoxon_consistent_p_value_direction(self):
         """paired_wilcoxon_test and wilcoxon_signed_rank_test should agree
         on significance direction for the same data at n=6."""
-        from ictonyx.analysis import paired_wilcoxon_test, wilcoxon_signed_rank_test
+        from ictonyx.analysis import _wilcoxon_signed_rank_impl, paired_wilcoxon_test
 
         a = pd.Series([0.82, 0.84, 0.83, 0.85, 0.81, 0.86])
         b = pd.Series([0.70, 0.73, 0.71, 0.72, 0.68, 0.75])
         differences = a - b  # all positive
 
         paired_result = paired_wilcoxon_test(a, b)
-        single_result = wilcoxon_signed_rank_test(differences, null_value=0.0)
+        single_result = _wilcoxon_signed_rank_impl(differences, null_value=0.0)
 
         # Both should agree on whether the result is significant
         assert (paired_result.p_value < 0.05) == (single_result.p_value < 0.05), (
@@ -1616,44 +1616,27 @@ class TestAssumptionsMetNone:
         assert df["assumptions_untestable"].iloc[0] == 1
 
 
-class TestWilcoxonSignedRankDeprecation:
-    """wilcoxon_signed_rank_test must emit DeprecationWarning."""
+class TestWilcoxonSignedRankRemoved:
+    """wilcoxon_signed_rank_test was removed in v0.5.0 (promise ledger #1). It is a
+    tombstone raising RemovedAPIError that names the replacement until v0.6.0. Its
+    statistics live on in _wilcoxon_signed_rank_impl, tested above."""
 
-    def test_emits_deprecation_warning(self):
-        import pandas as pd
-
+    def test_raises_removed_api_error_naming_replacement(self):
         from ictonyx.analysis import wilcoxon_signed_rank_test
+        from ictonyx.exceptions import RemovedAPIError
 
-        with pytest.warns(DeprecationWarning, match="deprecated"):
+        with pytest.raises(RemovedAPIError, match="test_against_null"):
             wilcoxon_signed_rank_test(pd.Series([0.85, 0.87, 0.83, 0.86, 0.84, 0.88]))
 
-    def test_still_returns_result(self):
-        """Deprecated function must still work — only a warning, not an error."""
-        import warnings
-
-        import pandas as pd
-
-        from ictonyx.analysis import StatisticalTestResult, wilcoxon_signed_rank_test
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            result = wilcoxon_signed_rank_test(pd.Series([0.85, 0.87, 0.83, 0.86, 0.84, 0.88]))
-        assert isinstance(result, StatisticalTestResult)
-
-    def test_not_in_ictonyx_all(self):
-        """X-54: wilcoxon_signed_rank_test must not be in ictonyx.__all__.
-        Remains importable via ictonyx.analysis for legacy callers but
-        is no longer advertised via the top-level namespace, preparing
-        for v0.5.0 hard removal."""
+    def test_not_in_public_all(self):
         import ictonyx
 
         assert "wilcoxon_signed_rank_test" not in ictonyx.__all__
 
     def test_still_importable_from_submodule(self):
-        """X-54: the submodule import path must continue to work."""
         from ictonyx.analysis import wilcoxon_signed_rank_test
 
-        assert wilcoxon_signed_rank_test is not None
+        assert callable(wilcoxon_signed_rank_test)
 
 
 def test_paired_wilcoxon_warning_references_test_against_null():

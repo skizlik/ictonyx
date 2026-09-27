@@ -1162,40 +1162,20 @@ def _wilcoxon_signed_rank_impl(
     return result
 
 
-def wilcoxon_signed_rank_test(
-    model_metrics: pd.Series,
-    null_value: float = 0.5,
-    alternative: str = "two-sided",
-    alpha: float = 0.05,
-) -> StatisticalTestResult:
-    """Wilcoxon signed-rank test for a single sample against a null value.
+def wilcoxon_signed_rank_test(*args: Any, **kwargs: Any) -> "StatisticalTestResult":
+    """Removed in v0.5.0 (promise ledger #1).
 
-    Tests whether the median of the sample differs from ``null_value``.
-    Useful for testing whether a model's accuracy is significantly
-    different from chance.
+    Use :meth:`VariabilityStudyResults.test_against_null` for a study, or
+    :func:`paired_wilcoxon_test` for paired differences.
 
-    Args:
-        model_metrics: Metric values for the model.
-        null_value: Hypothesized median to test against. Default 0.5.
-        alternative: ``'two-sided'``, ``'less'``, or ``'greater'``.
-            Default ``'two-sided'``.
-        alpha: Significance level. Default 0.05.
-
-    Returns:
-        :class:`StatisticalTestResult` with test statistic, p-value,
-        effect size (Wilcoxon r), and interpretation.
+    Raises:
+        RemovedAPIError: Always. This tombstone is removed in v0.6.0.
     """
-    warnings.warn(
-        "wilcoxon_signed_rank_test() is deprecated and will be removed in "
-        "v0.5.0. Use compare_results() or test_against_null() instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return _wilcoxon_signed_rank_impl(
-        model_metrics,
-        null_value=null_value,
-        alternative=alternative,
-        alpha=alpha,
+    from .exceptions import _removed
+
+    raise _removed(
+        "wilcoxon_signed_rank_test()",
+        "results.test_against_null(null_value=...) on a VariabilityStudyResults",
     )
 
 

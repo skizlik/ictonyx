@@ -60,3 +60,20 @@ def test_summarize_reports_split_sizes(X, y):
     assert "Evaluation-set sampling error" in s
     assert "Metric granularity" not in s
     assert r.split_sizes["train"] + r.split_sizes["val"] + r.split_sizes["test"] == len(X)
+
+
+@pytest.mark.slow
+def test_readme_checked_example_matches_its_output():
+    """The README comparison example prints what the README shows (scripts/readme_check.py)."""
+    import subprocess
+    import sys
+
+    pytest.importorskip("sklearn")
+    run = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "readme_check.py")],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=1200,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr

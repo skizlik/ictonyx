@@ -198,6 +198,7 @@ Because of training variability, a single run is generally inadequate to make va
 
 Ictonyx also supports sklearn estimators — pass a class or a configured instance directly; no wrapper is required. Every `random_state` in an instance, including inside Pipelines and meta-estimators, is overridden with the per-run seed (a warning says so once).
 
+<!-- readme-check -->
 ```python
 import ictonyx as ix
 from sklearn.datasets import load_breast_cancer

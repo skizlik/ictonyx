@@ -82,30 +82,24 @@ Ictonyx does **not** currently measure **sampling variability** — which is cau
 
 ## Quick start
 
-Train a small feed-forward network on the wine data from sklearn twenty times and observe the distribution of outcomes.  Here, we'll use a simple Tensorflow model.
+Train a small feed-forward network on the digits data from sklearn twenty times and observe the distribution of outcomes.  Here, we'll use a simple TensorFlow model.
 
 ```python
 import tensorflow as tf
-from sklearn.datasets import load_wine
+from sklearn.datasets import load_digits
 import ictonyx as ix
 
-data = load_wine()
-X, y = data.data, data.target
-# Ictonyx splits X into train/val/test itself, so do not fit a scaler on the
-# full array here: validation and test statistics would leak into training.
-# Scale inside the model instead (BatchNormalization on the inputs), or use
-# an sklearn Pipeline as in the comparison example below.
+X, y = load_digits(return_X_y=True)  # 8x8 images, pixel values 0 to 16
 
 
 def build_model(config):
     model = tf.keras.Sequential([
-        # momentum=0.9: in ~80 training steps the default (0.99) leaves the
-        # moving statistics near their initial values, so the model would see
-        # effectively unscaled features at evaluation time.
-        tf.keras.layers.BatchNormalization(momentum=0.9),
-        tf.keras.layers.Dense(16, activation='relu'),
-        tf.keras.layers.Dense(16, activation='relu'),
-        tf.keras.layers.Dense(3, activation='softmax')
+        tf.keras.Input(shape=(64,)),
+        # A fixed rescaling, not fitted to the data, so nothing leaks from the
+        # validation or test examples that Ictonyx splits off.
+        tf.keras.layers.Rescaling(1 / 16),
+        tf.keras.layers.Dense(32, activation='relu'),
+        tf.keras.layers.Dense(10, activation='softmax')
     ])
     model.compile(optimizer='adam',
                   loss='sparse_categorical_crossentropy',
@@ -129,60 +123,60 @@ Variability Study Results
 ==============================
 Successful runs: 20
 Seed: 42
-Data split: train 124 / val 18 / test 36
+Data split: train 1257 / val 180 / test 360
 Stratified split: yes
-Evaluation-set sampling error: +/-5.2 pp (binomial SE of test_accuracy = 0.892 at n_eval = 36). Seed variation cannot reduce this, and no seed-level test includes it.
+Evaluation-set sampling error: +/-1.2 pp (binomial SE of test_accuracy = 0.946 at n_eval = 360). Seed variation cannot reduce this, and no seed-level test includes it.
 
 Test Set Metrics:
 --------------------
 accuracy:
   N:                20
-  Mean:             0.8917
-  SD (sample, N-1): 0.0422
-  SE:               0.0094
-  Min:              0.8333
-  Max:              0.9722
+  Mean:             0.9458
+  SD (sample, N-1): 0.0051
+  SE:               0.0011
+  Min:              0.9361
+  Max:              0.9528
 loss:
   N:                20
-  Mean:             0.4901
-  SD (sample, N-1): 0.1016
-  SE:               0.0227
-  Min:              0.3229
-  Max:              0.7102
+  Mean:             0.2049
+  SD (sample, N-1): 0.0104
+  SE:               0.0023
+  Min:              0.1937
+  Max:              0.2284
 
 Training & Validation Metrics:
 --------------------
 train_accuracy:
   N:                20
-  Mean:             0.9069
-  SD (sample, N-1): 0.0303
-  SE:               0.0068
-  Min:              0.8629
-  Max:              0.9597
+  Mean:             0.9613
+  SD (sample, N-1): 0.0032
+  SE:               0.0007
+  Min:              0.9554
+  Max:              0.9674
 train_loss:
   N:                20
-  Mean:             0.5038
-  SD (sample, N-1): 0.0940
-  SE:               0.0210
-  Min:              0.3792
-  Max:              0.7088
+  Mean:             0.1893
+  SD (sample, N-1): 0.0114
+  SE:               0.0026
+  Min:              0.1725
+  Max:              0.2110
 val_accuracy:
   N:                20
-  Mean:             0.9139
-  SD (sample, N-1): 0.0732
-  SE:               0.0164
-  Min:              0.7778
-  Max:              1.0000
+  Mean:             0.9517
+  SD (sample, N-1): 0.0081
+  SE:               0.0018
+  Min:              0.9333
+  Max:              0.9667
 val_loss:
   N:                20
-  Mean:             0.5041
-  SD (sample, N-1): 0.1083
-  SE:               0.0242
-  Min:              0.3387
-  Max:              0.7007
+  Mean:             0.2255
+  SD (sample, N-1): 0.0163
+  SE:               0.0036
+  Min:              0.2025
+  Max:              0.2599
 ```
 
-On a 178-sample dataset, the same architecture produces models with validation accuracy ranging from 78% to 100% depending solely on the random seed. The validation set has 18 examples, so one example is 5.6 percentage points. Averaging over runs resolves finer than that, but every run is scored on the same small evaluation sets, and their sampling error (the ±5.2 pp that `summarize()` reports for test accuracy on 36 examples) is shared by every run: no number of runs reduces it. Classification splits are stratified by default, so each split keeps the class proportions of the whole dataset.  Ictonyx also provides for plotting of training histories:
+On the same data and the same split, the same architecture produces models with validation accuracy from 93.3% to 96.7% (168 to 174 of the 180 validation examples), depending solely on the random seed. One validation example is 0.56 percentage points. Averaging over runs resolves finer than that, but every run is scored on the same evaluation sets, and their sampling error (the ±1.2 pp that `summarize()` reports for test accuracy on 360 examples) is shared by every run: no number of runs reduces it. Classification splits are stratified by default, so each split keeps the class proportions of the whole dataset.  Ictonyx also provides for plotting of training histories:
 
 ```python
 ix.plot_variability_summary(results=results, metric='accuracy')

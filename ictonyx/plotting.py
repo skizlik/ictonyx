@@ -410,6 +410,10 @@ def plot_precision_recall_curve(
 # --- Variability & Comparison Visualizations ---
 
 
+# Legend labels for the split a final-metric series comes from.
+_SPLIT_LABELS = {"val": "Validation", "test": "Test", "train": "Train"}
+
+
 def _resolve_results_metric(results: Any, metric: Optional[str]) -> str:
     """Full metric name for a results object from either a full or a base name.
 
@@ -542,6 +546,9 @@ def plot_variability_summary(
             )
         return fn(results, metric=_resolve_results_metric(results, metric), show=show)
 
+    # Legend label of the first histogram. The legacy path passes validation
+    # values; the results path sets it from the series it actually draws.
+    final_label = "Validation"
     # Allow passing a VariabilityStudyResults object directly via results=
     if results is not None:
         all_runs_metrics_list = results.all_runs_metrics
@@ -549,10 +556,20 @@ def plot_variability_summary(
         resolved_full = _resolve_results_metric(results, metric)
         resolved_base = resolved_full.replace("test_", "").replace("val_", "").replace("train_", "")
         metric = resolved_base  # column detection below works on the base name
-        final_metrics_series = pd.Series(results.get_metric_values(resolved_full))
-        # Also pull test series if available
-        if results.has_test_data and final_test_series is None:
-            test_key = f"test_{resolved_base}"
+        # The first histogram must hold what its label says. resolved_full is
+        # preferred_metric()'s choice, which is test_<m> whenever test data exists,
+        # so it drew the test values twice, once labelled "Validation" (0.5.1).
+        final_key = f"val_{resolved_base}"
+        try:
+            final_values = results.get_metric_values(final_key)
+        except KeyError:
+            final_key = resolved_full
+            final_values = results.get_metric_values(final_key)
+        final_label = _SPLIT_LABELS.get(final_key.split("_", 1)[0], final_label)
+        final_metrics_series = pd.Series(final_values)
+        # Also pull test series if available (and not already the series above)
+        test_key = f"test_{resolved_base}"
+        if results.has_test_data and final_test_series is None and test_key != final_key:
             try:
                 # get_metric_values resolves test_* names (register 2.109). The former
                 # get_test_metric_values("test_<m>") call always raised KeyError here,
@@ -662,7 +679,7 @@ def plot_variability_summary(
         ax = axes[plot_idx]
         if histogram_orientation == "horizontal":
             sns.histplot(
-                y=final_metrics_series, kde=True, ax=ax, color=colors["val"], label="Validation"
+                y=final_metrics_series, kde=True, ax=ax, color=colors["val"], label=final_label
             )
             if final_test_series is not None:
                 sns.histplot(
@@ -672,7 +689,7 @@ def plot_variability_summary(
             ax.set_ylabel(f"Final {metric_display}")
         else:
             sns.histplot(
-                final_metrics_series, kde=True, ax=ax, color=colors["val"], label="Validation"
+                final_metrics_series, kde=True, ax=ax, color=colors["val"], label=final_label
             )
             if final_test_series is not None:
                 sns.histplot(final_test_series, kde=True, ax=ax, color=colors["test"], label="Test")
@@ -685,11 +702,12 @@ def plot_variability_summary(
     # PANEL 3: Boxplot (independent of the histogram panel)
     if show_boxplot and len(final_metrics_series) > 0:
         ax = axes[plot_idx]
-        box_dict = {"Val": pd.Series(final_metrics_series)}
+        box_label = "Val" if final_label == "Validation" else final_label
+        box_dict = {box_label: pd.Series(final_metrics_series)}
         if final_test_series is not None:
             box_dict["Test"] = pd.Series(final_test_series)
         box_df = pd.DataFrame(box_dict).melt(var_name="Split", value_name=metric_display)
-        palette_map = {"Val": colors["val"]}
+        palette_map = {box_label: colors["val"]}
         if final_test_series is not None:
             palette_map["Test"] = colors["test"]
         sns.boxplot(

@@ -21,7 +21,7 @@ Choose your install depth depending on what you're working on:
     pip install -e ".[sklearn]"
     pip install tensorflow
     pip install torch --index-url https://download.pytorch.org/whl/cpu
-    pip install mlflow shap hyperopt jupyterlab tqdm cloudpickle psutil
+    pip install mlflow shap optuna jupyterlab tqdm cloudpickle psutil
 
 Then set up pre-commit hooks:
 
@@ -57,8 +57,7 @@ Notes:
 - Tests that need an optional framework (TensorFlow, PyTorch, transformers)
   are `skipif`-guarded and run on the Linux/Windows CI cells. macOS is the
   bare sklearn cell.
-- `tests/test_tuning.py` requires optuna; hyperopt-specific tests in it
-  skip without hyperopt.
+- `tests/test_tuning.py` requires optuna (the only tuning backend since 0.5.0).
 - Process-isolation tests spawn subprocesses. If your machine is
   memory-constrained, close other heavy applications before a full run.
 

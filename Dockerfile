@@ -64,7 +64,7 @@ RUN pip install --no-cache-dir \
     joblib \
     pillow \
     tqdm \
-    hyperopt \
+    optuna \
     shap \
     jupyterlab \
     ipywidgets \

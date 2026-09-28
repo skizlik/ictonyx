@@ -98,7 +98,7 @@ def check_optional_dependencies():
         'tensorflow': ('Deep learning support', 'pip install tensorflow'),
         'torch': ('PyTorch support', 'pip install torch'),
         'mlflow': ('Experiment tracking', 'pip install mlflow'),
-        'hyperopt': ('Hyperparameter tuning', 'pip install hyperopt'),
+        'optuna': ('Hyperparameter tuning', 'pip install optuna'),
         'shap': ('Model explainability', 'pip install shap'),
         'matplotlib': ('Plotting support', 'pip install matplotlib'),
         'seaborn': ('Enhanced plots', 'pip install seaborn'),

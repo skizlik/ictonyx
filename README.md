@@ -201,24 +201,24 @@ Ictonyx also supports sklearn estimators — pass a class or a configured instan
 <!-- readme-check -->
 ```python
 import ictonyx as ix
-from sklearn.datasets import load_breast_cancer
+from sklearn.datasets import load_digits
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-# Wine's 18-example validation set cannot separate two strong models: on it,
-# both score 100% on every run. The breast-cancer data is larger.
-X_bc, y_bc = load_breast_cancer(return_X_y=True)
+# 1,797 handwritten digits, 8x8 pixels, 10 classes. Ictonyx splits off 180
+# for validation and 360 for test.
+X, y = load_digits(return_X_y=True)
 
 # A Pipeline fits the scaler on each run's training data only. Ictonyx seeds
 # every random_state in the pipeline per run and names it by its final estimator.
 comparison = ix.compare_models(
     models=[
-        make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(64,), max_iter=200)),
+        make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(64,), max_iter=300)),
         make_pipeline(StandardScaler(), RandomForestClassifier(n_estimators=40)),
     ],
-    data=(X_bc, y_bc),
+    data=(X, y),
     runs=20,
     metric='val_accuracy',
     seed=42,
@@ -234,19 +234,19 @@ ix.plot_comparison_boxplots(comparison)
 Model Comparison Results (val_accuracy)
 ========================================
 Models compared: 2
-Test: Paired Wilcoxon Signed-Rank Test: 0.000, p=0.0001 ***, matched-pairs rank-biserial r=0.971, 95% CI [0.0123, 0.0202]
+Test: Paired Wilcoxon Signed-Rank Test: 74.000, p=0.2691 ns, matched-pairs rank-biserial r=-0.281, 95% CI [-0.0083, 0.0017]
 
 Pairwise comparisons (none correction):
-  Pipeline(MLPClassifier)_vs_Pipeline(RandomForestClassifier): Paired Wilcoxon Signed-Rank Test: 0.000, p=0.0001 ***, matched-pairs rank-biserial r=0.971, 95% CI [0.0123, 0.0202] *
-
-Significant pairs: Pipeline(MLPClassifier)_vs_Pipeline(RandomForestClassifier)
+  Pipeline(MLPClassifier)_vs_Pipeline(RandomForestClassifier): Paired Wilcoxon Signed-Rank Test: 74.000, p=0.2691 ns, matched-pairs rank-biserial r=-0.281, 95% CI [-0.0083, 0.0017]
 ```
 ![Comparison boxplots for model comparison](images/comparison_boxplots.png)
 
 
 Each model receives the same seed per run: each MLP run is directly paired with the corresponding Random Forest run.  This allows us to use the non-parametric paired Wilcoxon signed-rank test.
 
-Here the MLP classified 55 of the 57 validation examples correctly (96.5%) on every run, while the random forest ranged from 53 to 55 (93.0% to 96.5%). The MLP was never worse, so the paired test is decisive (p=0.0001; matched-pairs rank-biserial r=0.971; 95% CI for the mean paired difference 1.2 to 2.0 percentage points). That difference is about one validation example, smaller than the evaluation set's own sampling error at this accuracy (about ±2.4 pp). What a significant paired result establishes is that, **on this train/validation split**, MLP's seed-to-seed distribution is shifted relative to Random Forest's. It does not by itself establish that MLP is the more accurate model on new splits or new data; the sampling error of the fixed evaluation set is shared by every run and is not part of the test. Pairing on seed guarantees aligned samples; it does not make the test more powerful than an unpaired one, so plan `runs` accordingly.
+The validation set has 180 examples, so one example is 0.56 percentage points. Depending on the seed, the MLP classified 174 to 179 of them correctly (96.7% to 99.4%) and the random forest 175 to 179 (97.2% to 99.4%). **On this train/validation split**, the random forest averages slightly higher (98.25% against 97.86%) and did better in 13 of the 20 paired runs; the MLP did better in 5, and 2 were ties. The test finds no reliable difference: p=0.27, and the 95% CI for the mean paired difference (MLP minus random forest), −0.83 to +0.17 percentage points, includes zero. With a different study seed (`seed=0`, `1`, `7` or `123`) the MLP averages slightly higher instead, again with no significant difference. Trained once each, either model could look like the winner: here a single-run comparison would pick the random forest about two times in three, and the MLP about one time in four.
+
+Two limits apply to any comparison like this one. First, the validation set's own sampling error at this accuracy is about ±1.0 pp, larger than the difference between the models. Every run is scored on the same examples, so no number of runs reduces it, and it is not part of the test. Second, even a significant paired result establishes only that, on this train/validation split, one model's seed-to-seed distribution is shifted relative to the other's. It does not by itself establish which model is more accurate on new splits or new data. Pairing on seed guarantees aligned samples; it does not make the test more powerful than an unpaired one, so plan `runs` accordingly.
 
 The 'none correction' label is present because with only two models, no multiple-comparison correction is applied.
 

@@ -782,16 +782,19 @@ if TENSORFLOW_AVAILABLE:
             2.  A `tf.keras.utils.Sequence` object (a data generator).
             3.  A tuple of `(X, y)` numpy arrays.
 
-            It retrieves the metric names from `model.metrics_names` and
-            zips them with the results from `model.evaluate()` to create
-            a human-readable dictionary.
+            It calls `model.evaluate(..., return_dict=True)`, so each value
+            is keyed by the name Keras gives it, and passes `verbose=0`
+            unless the caller supplies `verbose`. A Keras version that
+            returns a list instead of a dict falls back to pairing the
+            values with `model.metrics_names`.
 
             Args:
                 data (Any): The data to evaluate on, including features
                     and true labels. Can be a `tf.data.Dataset`,
                     a `Sequence`, or a tuple of (X, y) numpy arrays.
                 **kwargs: Additional arguments passed directly to the
-                    `model.evaluate()` call.
+                    `model.evaluate()` call (for example `verbose=1` to
+                    show Keras's progress bar).
 
             Returns:
                 Dict[str, Any]: A dictionary of metrics, where keys are the

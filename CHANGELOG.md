@@ -7,18 +7,155 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned for v0.5.0
-- Deprecated API removal (Master Development Guide v5 §3, Phase 1)
-- `metric_fns` for `PyTorchModelWrapper`
-- Explicit `XGBoostModelWrapper` / `LightGBMModelWrapper`
-- `probability_of_superiority`, `reversal_rate`, `practical_significance_filter`
-- `ResamplingPolicy` / split-perturbation studies
-- Module split (`core/`, `runners/`, `analysis/`, `plotting/`, `data/`)
-- `VariabilityStudyResults.report()`
-- `VariabilityStudyResults.bootstrap_ci()` convenience method
-- Beta classifier
+Nothing yet.
 
----
+## v0.5.0 — 2026-09-28
+
+A correctness release. Several results that 0.4.11 reported were wrong or
+overstated, and 0.5.0 fixes them, so **numbers change**. It also keeps every
+removal and change that earlier releases announced for 0.5.0. Read the first
+section before upgrading.
+
+### Results that change (read these first)
+
+- **Classification splits are stratified by default.** `stratify=None` now
+  stratifies binary and multiclass targets in the tabular, text and array data
+  handlers, keeping each split's class proportions. When stratification is
+  impossible (e.g. a class with a single member), the split falls back to
+  unstratified with a warning. The choice and its reason are recorded
+  (`results.stratified`; a "Stratified split" line in `summarize()`). Every
+  classification study that relied on the default gets different splits, and
+  therefore different numbers. Pass `stratify=False` to reproduce 0.4.11's
+  splits.
+- **Deterministic model pairs are no longer "significant".** When two models'
+  paired difference is identical on every run (typical of deterministic models
+  such as logistic regression, SVMs, k-NN, or Pipelines with fixed seeds),
+  0.4.11 reported p-values that shrank with the number of runs (p ≈ 2e-6 at 20
+  runs) for what is a single observation. The comparison is now inconclusive,
+  states the fixed difference, and (in `compare_models`) gives it in evaluation
+  examples.
+- **Pipelines, ColumnTransformers and meta-estimators are seeded per run.**
+  Every `random_state` they contain receives the run's seed. 0.4.11's notes said
+  this already happened; it did not. Studies of such models now vary run to run
+  where 0.4.11 showed none.
+- **The default unpaired confidence interval is less biased.** The
+  Hodges–Lehmann interval was biased low on accuracy-type metrics and could have
+  zero width. It now uses percentile bounds with a corrected bias term, reports
+  a zero-width interval as undefined (NaN) with a note, and warns that intervals
+  for median-type statistics on coarse metrics are approximate. BCa intervals for
+  groups of unequal size use the correct acceleration. Any bootstrap interval of
+  zero width, including from the public `bootstrap_ci`, is now NaN with a
+  warning.
+- **Multiple-comparison correction ignores undefined comparisons.** One
+  undefined pair no longer turns every Benjamini–Hochberg value into NaN or
+  inflates Holm and Bonferroni.
+- **The tuner optimises in the right direction** for IoU, Dice, mAP, NDCG, BLEU,
+  ROUGE, MCC, kappa and F-beta (previously minimised) and `accuracy_loss`
+  (previously maximised). sklearn `neg_*` scorer names are higher-is-better.
+- **`train_val_test_split` defaults to `split_basis="original"`** (60/20/20 for
+  test 0.2 / val 0.2, instead of 64/16/20). Pass `split_basis="remainder"` for
+  the old sizes.
+
+### Removed
+
+Each removed name remains for one release as a stub that raises
+`RemovedAPIError` (a `TypeError`) naming its replacement; the stubs are removed
+in 0.6.0.
+
+| Removed | Use instead |
+|---|---|
+| `wilcoxon_signed_rank_test()` | `results.test_against_null(null_value=...)` |
+| `random_state=` on `mann_whitney_test` / `paired_wilcoxon_test` | omit it (the tests are deterministic) |
+| `ModelConfig.merge()` / `ModelConfig.has()` | `update()` / `'key' in config` |
+| `ScikitLearnModelWrapper.fit(epochs=, batch_size=, verbose=)` | omit them |
+| `plot_variability_summary(all_runs_metrics_list, final_metrics_series, final_test_series)` | `plot_variability_summary(results=..., kind=...)` (a positional results object still works) |
+| `plot_averaged_pacf()` | `plot_run_independence_diagnostics()` |
+| `VariabilityStudyResults.get_final_metrics()` | `get_metric_values(metric)` |
+| The Hyperopt tuning backend, `create_search_space()`, the `tuning_legacy` extra | Optuna (`pip install ictonyx[tuning]`); `tune()` without Optuna raises `ImportError` |
+| `train_val_test_split(split_basis="auto")` | the default `"original"`, or `"remainder"` |
+
+### Changed
+
+- **Errors that replace warnings.**
+  - Configuration keys a model's constructor does not accept raise
+    `ConfigurationError`. `compare_models` passes its keyword arguments to every
+    model, so pass configured instances when a key suits only some models.
+  - The tuner raises for a metric whose direction it cannot tell; pass
+    `direction=`.
+  - Process isolation refuses data that cannot be sent to a child process (such
+    as TensorFlow datasets from image directories) at construction, not in every
+    run.
+- **Ctrl-C** in `compare_models` or a grid study stops the whole call.
+  Interrupted studies warn, report the number of runs requested
+  (`num_runs_requested`, `stopped_early`), and say so in `summarize()`.
+- **Conclusions** say that they hold "on this split". `summarize()` reports the
+  evaluation-set sampling error, which no number of runs reduces, in place of a
+  misleading "granularity" line. The run-order check is reported as a diagnostic
+  (`assumption_details["run_order_autocorrelation"]`), not as an independence
+  assumption met.
+- **`test_above_chance()`** warns that it tests the runs on one evaluation set
+  and is not a test of population accuracy.
+- **Deprecation warnings are now visible by default** (`IctonyxFutureWarning`).
+  `test_method="parametric"` is deprecated (removal in 0.6.0); use `"welch_t"`.
+- **Student and Welch t results** include a conclusion. One-sample conclusions
+  state the tested direction. The k ≥ 3 forest plot notes that its bars and
+  colours come from different procedures. Two-model summaries say "Test:".
+- **`summarize()`** lists "Training & Validation Metrics", and puts failed and
+  retried runs after the seed.
+- **Test results record** the SciPy/NumPy versions that produced them
+  (`provenance`).
+- **MLflow study summaries** log test metrics as `test_<metric>_mean` /
+  `test_<metric>_sd`.
+
+### Fixed
+
+- Calling `run_study()` twice on one runner no longer mis-pairs runs. Resuming
+  a checkpoint retries failed runs instead of counting them twice.
+- `plot_variability_summary(results=..., metric="accuracy")`,
+  `plot_run_distribution`, `plot_run_strip` and
+  `compare_models(metric="test_...")` work on studies with a test split. The
+  summary plot now also draws the test-set distribution, which it had silently
+  never shown.
+- `compare_models(paired=False)` and `compare_multiple_models` with two models
+  give the same result as `compare_results(paired=False)`, including the
+  minimum-run check and the interval.
+- `plot_paired_deltas` pairs runs by run id. Saved and JSON studies keep run
+  ids, split sizes and the new fields.
+- Grid studies accept list- and dict-valued parameters and respect
+  `verbose=False`.
+- **Keras:**
+  - Test metrics are named correctly on Keras 3 (`accuracy`, not
+    `compile_metrics`);
+  - `evaluate()` no longer prints a progress bar per run.
+- A failed bootstrap interval is reported, not silently omitted. `label_column`
+  alone is routed to the tabular handler, as validated.
+
+### Documentation
+
+- The README examples were re-run.
+  - The quick start sets `BatchNormalization(momentum=0.9)`. With the default
+    momentum, recent Keras versions leave the moving statistics unconverged in
+    this short training, and validation accuracy collapses.
+  - The comparison example uses the breast-cancer data. On the stratified wine
+    split both models score 100% on every run of its 18-example validation set.
+- `scripts/readme_check.py` re-runs the comparison example and checks its
+  printed output (run by a slow test).
+
+### Corrections to earlier release notes
+
+- The 0.4.11 notes said Pipelines were seeded per run through their final
+  estimator. They were not; 0.5.0 seeds them.
+- The 0.4.11 notes said its changes altered no p-value on a path that already
+  ran. One did: paired comparisons of deterministic models reported a decisive
+  p-value where 0.4.10 had reported none. 0.5.0 reports them as inconclusive.
+
+### Known issues
+
+- Image data order in `ImageDataHandler` is not controlled by the run seed (the
+  pipeline is built once), and the related test is quarantined. Fix planned.
+- Power helpers do not simulate `alternative="less"`; swap the models and use
+  `"greater"`.
+- All inference is conditional on one data split; split resampling is planned.
 
 ## v0.4.11 — 2026-09-23
 

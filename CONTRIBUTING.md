@@ -46,6 +46,17 @@ A single file, or a subset that avoids subprocess-heavy tests:
     pytest tests/test_analysis.py
     pytest tests/test_api.py -k "not isolation and not parallel"
 
+After a change to how data are split or seeded, check that no test depends on
+the particular split it happens to get. `scripts/split_audit.py` is a pytest
+plugin that shuffles the rows of sklearn's toy datasets, so every study sees a
+different split; run it with two or three permutations:
+
+    PYTHONPATH=scripts SPLIT_AUDIT=1 pytest -p split_audit -m "not slow"
+    PYTHONPATH=scripts SPLIT_AUDIT=2 pytest -p split_audit -m "not slow"
+
+A test that passes normally but fails under a permutation needs a fixture built
+for the property it tests (see the plugin's docstring).
+
 Coverage is measured in CI; locally it is opt-in:
 
     pytest -m "not slow" --cov=ictonyx --cov-report=term

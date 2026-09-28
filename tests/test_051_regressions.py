@@ -122,3 +122,68 @@ def test_readme_examples_use_digits():
         assert "load_wine" not in section and "load_breast_cancer" not in section
     # The quick start no longer needs a BatchNormalization explanation.
     assert "BatchNormalization" not in quick
+
+
+# ---- split-luck audit tool ------------------------------------------------------
+PROBE_ROWS = """
+import json
+from sklearn.datasets import load_wine
+
+
+def rows():
+    import sklearn.datasets as D
+
+    return {
+        "wine_Xy": load_wine(return_X_y=True)[1][:12].tolist(),
+        "iris_bunch": D.load_iris().target[:12].tolist(),
+        "digits_frame": D.load_digits(as_frame=True).frame["target"][:12].tolist(),
+    }
+"""
+
+
+def test_split_audit_plugin_shuffles_every_loader_form(tmp_path):
+    import json
+    import os
+    import pathlib
+    import subprocess
+    import sys
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    probe_file = tmp_path / "test_probe.py"
+    probe_file.write_text(
+        PROBE_ROWS + '\n\ndef test_probe():\n    print("PROBE" + json.dumps(rows()))\n',
+        encoding="utf-8",
+    )
+    # A clean environment, so this test holds even when the suite itself runs
+    # under the audit (PYTEST_ADDOPTS="-p split_audit", SPLIT_AUDIT=k).
+    base_env = {k: v for k, v in os.environ.items() if k not in ("PYTEST_ADDOPTS", "SPLIT_AUDIT")}
+
+    def run(cmd, env):
+        done = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            cwd=str(tmp_path),
+            timeout=300,
+        )
+        assert done.returncode == 0, done.stdout + done.stderr
+        line = next(ln for ln in done.stdout.splitlines() if ln.startswith("PROBE"))
+        return json.loads(line[len("PROBE") :])
+
+    def probe(k):
+        env = dict(base_env, SPLIT_AUDIT=str(k))
+        env["PYTHONPATH"] = str(root / "scripts") + os.pathsep + env.get("PYTHONPATH", "")
+        cmd = [sys.executable, "-m", "pytest", "-q", "-s", "-p", "split_audit"]
+        return run(cmd + ["-p", "no:cacheprovider", str(probe_file)], env)
+
+    # The loaders' own output, from a plain interpreter with no plugin loaded.
+    code = PROBE_ROWS + '\nprint("PROBE" + json.dumps(rows()))\n'
+    original = run([sys.executable, "-c", code], base_env)
+    assert probe(0) == original  # SPLIT_AUDIT=0 leaves the loaders alone
+    shuffled = probe(1)
+    # Module-level imports, Bunch objects and DataFrames are all shuffled.
+    for form, rows in shuffled.items():
+        assert rows != original[form], form
+    assert probe(1) == shuffled  # a permutation is reproducible

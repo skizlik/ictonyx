@@ -76,7 +76,16 @@ CPU-only for macOS and non-NVIDIA systems.
 
 Ictonyx characterizes **training-derived randomness** under a fixed data split. Metrics are assessed across different seeds — isolating the random effects in initialization, batch order, augmentation, and dropout — while holding the train/val/test split constant. Repeated runs of the same model on the same data allow for a variety of plotting and analysis functions.
 
+This variation is easy to underestimate. Scanning up to 10,000 seeds for common computer-vision architectures, Picard (2021) concluded that "even if the variance is not very large, it is surprisingly easy to find an outlier that performs much better or much worse than the average."
+
 Ictonyx does **not** currently measure **sampling variability** — which is caused by the random nature of a train-validation-test split. Different splits produce different results.  At present, this can be addressed by using Ictonyx within an outer k-fold loop. In a later release, Ictonyx will ship ResamplingPolicy for nested (data × seed) designs with corrected comparison tests (Nadeau-Bengio, Bouckaert, Dietterich 5×2).
+
+Both sources matter. Modelling the whole benchmarking process, Bouthillier et al. (2021) found that variance due to data sampling, parameter initialization and hyperparameter choice all markedly affect benchmark results, and that randomizing more of these sources brings an affordable comparison closer to the ideal one, at 51 times less compute. An Ictonyx study today randomizes the training seed only, so its conclusions are about the split it was run on.
+
+**References**
+
+- Picard, D. (2021). *Torch.manual_seed(3407) is all you need: On the influence of random seeds in deep learning architectures for computer vision.* [arXiv:2109.08203](https://arxiv.org/abs/2109.08203).
+- Bouthillier, X., Delaunay, P., Bronzi, M., et al. (2021). *Accounting for variance in machine learning benchmarks.* MLSys 2021. [arXiv:2103.03098](https://arxiv.org/abs/2103.03098).
 
 ---
 

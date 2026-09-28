@@ -94,3 +94,31 @@ def test_variability_summary_labels_a_non_validation_series_by_its_split(monkeyp
     plt.close(ix.plot_variability_summary(results=r, metric="accuracy", show=False))
     assert [label for label, _ in calls] == ["Test"]
     assert calls[0][1] == pytest.approx(r.get_metric_values("test_accuracy"))
+
+
+# ---- README: citations and examples --------------------------------------------
+def test_readme_cites_seed_and_benchmark_variance_sources():
+    import pathlib
+
+    text = (pathlib.Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    measure = text[text.index("## What does Ictonyx measure?") : text.index("## Quick start")]
+    for ref in (
+        "Picard (2021)",
+        "arXiv:2109.08203",
+        "Bouthillier et al. (2021)",
+        "arXiv:2103.03098",
+    ):
+        assert ref in measure, ref
+
+
+def test_readme_examples_use_digits():
+    import pathlib
+
+    text = (pathlib.Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    quick = text[text.index("## Quick start") : text.index("## Comparing two models")]
+    compare = text[text.index("## Comparing two models") : text.index("## Process isolation")]
+    for section in (quick, compare):
+        assert "load_digits" in section
+        assert "load_wine" not in section and "load_breast_cancer" not in section
+    # The quick start no longer needs a BatchNormalization explanation.
+    assert "BatchNormalization" not in quick

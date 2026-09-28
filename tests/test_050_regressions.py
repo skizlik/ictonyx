@@ -889,3 +889,24 @@ def test_keras_evaluate_names_metrics_and_is_quiet(capsys):
     out = w.evaluate((X, y))
     assert {"loss", "accuracy"} <= set(out) and "compile_metrics" not in out
     assert "step" not in capsys.readouterr().out
+
+
+# ---- every text read and write names its encoding ----------------------------------
+def test_text_io_names_its_encoding():
+    """Windows defaults to cp1252; the sources are UTF-8 (0.5.0 Part 4a2)."""
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    bad = re.compile(
+        r"\.read_text\(\s*\)|\.write_text\((?![^)]*encoding=)[^)]*\)"
+        r"|\bopen\((?![^)]*encoding=)[^)]*['\"][rwa]t?['\"][^)]*\)"
+    )
+    hits = [
+        f"{p.relative_to(root)}:{i}: {line.strip()}"
+        for d in ("ictonyx", "tests", "scripts")
+        for p in sorted((root / d).rglob("*.py"))
+        for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+        if bad.search(line)
+    ]
+    assert hits == []

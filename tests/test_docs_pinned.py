@@ -35,13 +35,13 @@ def test_docstring_states_scope(obj, phrase):
 
 
 def test_no_internal_ids_in_readme():
-    text = (ROOT / "README.md").read_text()
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
     for bad in ("v12 ", "v11 ", "v10 ", "v9 ", "IX-EVAL", "(closes", "Master Dev Guide"):
         assert bad not in text, bad
 
 
 def test_readme_states_split_conditionality():
-    text = (ROOT / "README.md").read_text()
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "on this train/validation split" in text
     assert "strong statistical significance" not in text
     assert "one evaluation sample" in text

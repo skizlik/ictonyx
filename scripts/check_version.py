@@ -15,7 +15,7 @@ SITES = {
 }
 found = {}
 for rel, pat in SITES.items():
-    text = (ROOT / rel.split("#")[0]).read_text()
+    text = (ROOT / rel.split("#")[0]).read_text(encoding="utf-8")
     m = re.search(pat, text, flags=re.M)
     found[rel] = m.group(1) if m else "<missing>"
 versions = set(found.values())

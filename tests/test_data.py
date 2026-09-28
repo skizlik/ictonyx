@@ -376,7 +376,7 @@ class TestTabularDataHandlerFromDataFrame:
     def test_get_data_info_file_mode_has_path(self, tmp_path):
         """get_data_info() for file-backed handler still returns the real path."""
         csv = tmp_path / "data.csv"
-        csv.write_text("a,b,target\n1,2,0\n3,4,1\n5,6,0\n")
+        csv.write_text("a,b,target\n1,2,0\n3,4,1\n5,6,0\n", encoding="utf-8")
         handler = TabularDataHandler(data=str(csv), target_column="target")
         info = handler.get_data_info()
         assert info["data_path"] == str(csv)
@@ -743,7 +743,7 @@ class TestDataHandlerHierarchy:
         from ictonyx.data import DataHandler
 
         csv = tmp_path / "data.csv"
-        csv.write_text("a,b,target\n1,2,0\n3,4,1\n")
+        csv.write_text("a,b,target\n1,2,0\n3,4,1\n", encoding="utf-8")
         assert isinstance(TabularDataHandler(str(csv), target_column="target"), DataHandler)
 
     def test_file_handler_raises_on_missing_path(self):
@@ -1172,7 +1172,7 @@ class TestTabularDataHandlerCSVPaths:
 
     def test_empty_csv_raises(self, tmp_path):
         csv = tmp_path / "empty.csv"
-        csv.write_text("col1,col2,target\n")  # header only
+        csv.write_text("col1,col2,target\n", encoding="utf-8")  # header only
         handler = TabularDataHandler(str(csv), target_column="target")
         with pytest.raises(ValueError):
             handler.load()

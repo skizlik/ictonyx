@@ -871,3 +871,21 @@ def test_no_forward_version_promises_in_code():
         if pat.search(l)
     ]
     assert hits == []
+
+
+# ==== Part 4b ======================================================================
+
+
+# ---- Keras evaluate: named metrics, quiet by default ------------------------------
+def test_keras_evaluate_names_metrics_and_is_quiet(capsys):
+    tf = pytest.importorskip("tensorflow")
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(40, 4)).astype("float32")
+    y = (X[:, 0] > 0).astype(int)
+    m = tf.keras.Sequential([tf.keras.Input((4,)), tf.keras.layers.Dense(2, activation="softmax")])
+    m.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+    w = ix.KerasModelWrapper(m)
+    capsys.readouterr()
+    out = w.evaluate((X, y))
+    assert {"loss", "accuracy"} <= set(out) and "compile_metrics" not in out
+    assert "step" not in capsys.readouterr().out

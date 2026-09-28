@@ -802,15 +802,21 @@ if TENSORFLOW_AVAILABLE:
                 TypeError: If `data` is not in one of the three
                     supported formats.
             """
+            # Quiet unless asked (Keras prints progress bars by default), and ask
+            # Keras for named results: under Keras 3, model.metrics_names is
+            # ['loss', 'compile_metrics'], so zipping it mislabels metrics.
+            kwargs.setdefault("verbose", 0)
             if isinstance(data, (tf.data.Dataset, Sequence)):
-                results = self.model.evaluate(data, **kwargs)
+                results = self.model.evaluate(data, return_dict=True, **kwargs)
             elif isinstance(data, tuple) and len(data) == 2:
                 X_test, y_test = data
-                results = self.model.evaluate(X_test, y_test, **kwargs)
+                results = self.model.evaluate(X_test, y_test, return_dict=True, **kwargs)
             else:
                 raise TypeError(
                     "Evaluation data must be a tuple of (X, y), a tf.data.Dataset, or a Sequence."
                 )
+            if isinstance(results, dict):
+                return {str(k): float(v) for k, v in results.items()}
             metric_names = self.model.metrics_names
             # TF 2.x returns a plain float for loss-only models (no additional metrics).
             if not hasattr(results, "__iter__"):

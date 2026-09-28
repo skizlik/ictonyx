@@ -99,7 +99,10 @@ X, y = data.data, data.target
 
 def build_model(config):
     model = tf.keras.Sequential([
-        tf.keras.layers.BatchNormalization(),
+        # momentum=0.9: in ~80 training steps the default (0.99) leaves the
+        # moving statistics near their initial values, so the model would see
+        # effectively unscaled features at evaluation time.
+        tf.keras.layers.BatchNormalization(momentum=0.9),
         tf.keras.layers.Dense(16, activation='relu'),
         tf.keras.layers.Dense(16, activation='relu'),
         tf.keras.layers.Dense(3, activation='softmax')
@@ -126,51 +129,66 @@ Variability Study Results
 ==============================
 Successful runs: 20
 Seed: 42
+Data split: train 124 / val 18 / test 36
+Stratified split: yes
+Evaluation-set sampling error: +/-5.2 pp (binomial SE of test_accuracy = 0.892 at n_eval = 36). Seed variation cannot reduce this, and no seed-level test includes it.
 
 Test Set Metrics:
 --------------------
 accuracy:
-  Mean:             0.9097
-  SD (sample, N-1): 0.0467
+  N:                20
+  Mean:             0.8917
+  SD (sample, N-1): 0.0422
+  SE:               0.0094
   Min:              0.8333
   Max:              0.9722
 loss:
-  Mean:             0.5285
-  SD (sample, N-1): 0.1085
-  Min:              0.3791
-  Max:              0.7748
+  N:                20
+  Mean:             0.4901
+  SD (sample, N-1): 0.1016
+  SE:               0.0227
+  Min:              0.3229
+  Max:              0.7102
 
-Validation Metrics:
+Training & Validation Metrics:
 --------------------
 train_accuracy:
-  Mean:             0.8851
-  SD (sample, N-1): 0.0436
-  Min:              0.8065
-  Max:              0.9355
+  N:                20
+  Mean:             0.9069
+  SD (sample, N-1): 0.0303
+  SE:               0.0068
+  Min:              0.8629
+  Max:              0.9597
 train_loss:
-  Mean:             0.5507
-  SD (sample, N-1): 0.0987
-  Min:              0.4288
-  Max:              0.7760
+  N:                20
+  Mean:             0.5038
+  SD (sample, N-1): 0.0940
+  SE:               0.0210
+  Min:              0.3792
+  Max:              0.7088
 val_accuracy:
-  Mean:             0.9194
-  SD (sample, N-1): 0.0709
-  Min:              0.7222
+  N:                20
+  Mean:             0.9139
+  SD (sample, N-1): 0.0732
+  SE:               0.0164
+  Min:              0.7778
   Max:              1.0000
 val_loss:
-  Mean:             0.4981
-  SD (sample, N-1): 0.1105
-  Min:              0.3793
-  Max:              0.7476
+  N:                20
+  Mean:             0.5041
+  SD (sample, N-1): 0.1083
+  SE:               0.0242
+  Min:              0.3387
+  Max:              0.7007
 ```
 
-On a 178-sample dataset, the same architecture produces models with validation accuracy ranging from 72% to 100% depending solely on the random seed. Part of that spread is arithmetic: with the default splits the validation set has a few dozen examples, so one example is several percentage points, and no number of runs resolves a metric more finely than one evaluation sample.  Ictonyx also provides for plotting of training histories:
+On a 178-sample dataset, the same architecture produces models with validation accuracy ranging from 78% to 100% depending solely on the random seed. The validation set has 18 examples, so one example is 5.6 percentage points. Averaging over runs resolves finer than that, but every run is scored on the same small evaluation sets, and their sampling error (the ±5.2 pp that `summarize()` reports for test accuracy on 36 examples) is shared by every run: no number of runs reduces it. Classification splits are stratified by default, so each split keeps the class proportions of the whole dataset.  Ictonyx also provides for plotting of training histories:
 
 ```python
 ix.plot_variability_summary(results=results, metric='accuracy')
 ```
 
-![Variability summary for keras CNN across 20 runs](images/variability_summary.png)
+![Variability summary for a Keras dense network across 20 runs](images/variability_summary.png)
 
 ---
 
@@ -178,22 +196,28 @@ ix.plot_variability_summary(results=results, metric='accuracy')
 
 Because of training variability, a single run is generally inadequate to make valid comparisons between models with respect to a particular metric.  Ictonyx facilitates more statistically sound model comparison with its compare_models() function, which runs multiple models the same number of times, and applies an appropriate hypothesis test to the results.
 
-Ictonyx also supports sklearn estimators — pass a class or a configured instance directly; no wrapper is required. An instance's `random_state` is overridden with the per-run seed (a warning says so once).
+Ictonyx also supports sklearn estimators — pass a class or a configured instance directly; no wrapper is required. Every `random_state` in an instance, including inside Pipelines and meta-estimators, is overridden with the per-run seed (a warning says so once).
 
 ```python
+import ictonyx as ix
+from sklearn.datasets import load_breast_cancer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
+# Wine's 18-example validation set cannot separate two strong models: on it,
+# both score 100% on every run. The breast-cancer data is larger.
+X_bc, y_bc = load_breast_cancer(return_X_y=True)
+
 # A Pipeline fits the scaler on each run's training data only. Ictonyx seeds
-# the final estimator per run and names the pipeline by it.
+# every random_state in the pipeline per run and names it by its final estimator.
 comparison = ix.compare_models(
     models=[
         make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(64,), max_iter=200)),
         make_pipeline(StandardScaler(), RandomForestClassifier(n_estimators=40)),
     ],
-    data=(X, y),
+    data=(X_bc, y_bc),
     runs=20,
     metric='val_accuracy',
     seed=42,
@@ -209,10 +233,10 @@ ix.plot_comparison_boxplots(comparison)
 Model Comparison Results (val_accuracy)
 ========================================
 Models compared: 2
-Omnibus test: Paired Wilcoxon Signed-Rank Test: 5.500, p=0.0005 ***, r (effect size)=0.815
+Test: Paired Wilcoxon Signed-Rank Test: 0.000, p=0.0001 ***, matched-pairs rank-biserial r=0.971, 95% CI [0.0123, 0.0202]
 
 Pairwise comparisons (none correction):
-  Pipeline(MLPClassifier)_vs_Pipeline(RandomForestClassifier): Paired Wilcoxon Signed-Rank Test: 5.500, p=0.0005 ***, r (effect size)=0.815 *
+  Pipeline(MLPClassifier)_vs_Pipeline(RandomForestClassifier): Paired Wilcoxon Signed-Rank Test: 0.000, p=0.0001 ***, matched-pairs rank-biserial r=0.971, 95% CI [0.0123, 0.0202] *
 
 Significant pairs: Pipeline(MLPClassifier)_vs_Pipeline(RandomForestClassifier)
 ```
@@ -221,7 +245,7 @@ Significant pairs: Pipeline(MLPClassifier)_vs_Pipeline(RandomForestClassifier)
 
 Each model receives the same seed per run: each MLP run is directly paired with the corresponding Random Forest run.  This allows us to use the non-parametric paired Wilcoxon signed-rank test.
 
-Here, MLP outperformed Random Forest with a matched-pairs rank-biserial effect size of r=0.815 (p=0.0005). What a significant paired result establishes is that, **on this train/validation split**, MLP's seed-to-seed distribution is shifted relative to Random Forest's. It does not by itself establish that MLP is the more accurate model on new splits or new data; the sampling error of the fixed evaluation set is shared by every run and is not part of the test. Pairing on seed guarantees aligned samples; it does not make the test more powerful than an unpaired one, so plan `runs` accordingly.
+Here the MLP classified 55 of the 57 validation examples correctly (96.5%) on every run, while the random forest ranged from 53 to 55 (93.0% to 96.5%). The MLP was never worse, so the paired test is decisive (p=0.0001; matched-pairs rank-biserial r=0.971; 95% CI for the mean paired difference 1.2 to 2.0 percentage points). That difference is about one validation example, smaller than the evaluation set's own sampling error at this accuracy (about ±2.4 pp). What a significant paired result establishes is that, **on this train/validation split**, MLP's seed-to-seed distribution is shifted relative to Random Forest's. It does not by itself establish that MLP is the more accurate model on new splits or new data; the sampling error of the fixed evaluation set is shared by every run and is not part of the test. Pairing on seed guarantees aligned samples; it does not make the test more powerful than an unpaired one, so plan `runs` accordingly.
 
 The 'none correction' label is present because with only two models, no multiple-comparison correction is applied.
 

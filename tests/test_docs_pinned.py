@@ -44,7 +44,11 @@ def test_readme_states_split_conditionality():
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "on this train/validation split" in text
     assert "strong statistical significance" not in text
-    assert "one evaluation sample" in text
+    # The README states the limit that matters: the evaluation-set sampling error,
+    # which no number of runs reduces (0.5.0; the former "no number of runs
+    # resolves ... one evaluation sample" claim was false).
+    assert "no number of runs reduces it" in text
+    assert "resolves a metric more finely" not in text
 
 
 def test_summarize_reports_split_sizes(X, y):

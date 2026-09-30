@@ -1,5 +1,5 @@
 # ictonyx/__init__.py
-# v0.5.0
+# v0.5.1
 
 """
 Ictonyx: A Machine Learning Framework for Variability and Reproducibility Analysis

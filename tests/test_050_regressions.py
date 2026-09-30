@@ -864,11 +864,14 @@ def test_no_forward_version_promises_in_code():
         r"planned for v?0\.5|scheduled for v?0\.5|belongs in v?0\.5|v0\.5\.[1-9]"
         r"|will be removed in v0\.5\.0|will raise TypeError in v0\.5\.0"
     )
+    # The current version's own header ("# v0.5.1" in __init__.py, kept by
+    # scripts/check_version.py) states the present version, not a promise.
+    header = f"# v{ictonyx.__version__}"
     hits = [
         f"{p.name}: {l.strip()}"
         for p in root.glob("*.py")
         for l in p.read_text(encoding="utf-8").splitlines()
-        if pat.search(l)
+        if pat.search(l) and l.strip() != header
     ]
     assert hits == []
 

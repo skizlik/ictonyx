@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## v0.5.1 — 2026-09-30
+
+A documentation patch: better README examples, one plotting fix, and a
+test audit. No statistical result changes.
+
+### Fixed
+
+- **`plot_variability_summary` showed the test distribution twice.** With
+  `results=` and a study that has test data, the histogram labelled
+  "Validation" held the test values (the metric resolved to `test_<metric>`),
+  so the validation distribution never appeared; the boxplot's "Val" box had
+  the same defect. Both panels now show validation values under the
+  validation label. A study without validation metrics gets its series
+  labelled by its split ("Test", "Train"), drawn once. The README figure
+  shipped with 0.5.0 showed the defect.
+- **`KerasModelWrapper.evaluate` docstring** now describes what the method
+  does since 0.5.0 (`return_dict=True`, `verbose=0` by default) instead of
+  the former `metrics_names` zip.
+
+### Documentation
+
+- **README examples use the digits data.** The 0.5.0 examples were weak:
+  wine's validation set has 18 examples and breast cancer's 57, so the
+  comparison's "decisive" result was a one-example difference. The quick
+  start now trains a small Keras network (a fixed `Rescaling(1/16)` input, so
+  no BatchNormalization caveat); the comparison pits an MLP against a random
+  forest on 180 validation examples and finds no reliable difference, with
+  either model ahead depending on the study seed. Both outputs and figures
+  come from running the code shown; `scripts/readme_check.py` checks the
+  comparison.
+- **Citations.** "What does Ictonyx measure?" cites Picard (2021) on seed
+  variation and Bouthillier et al. (2021) on the sources of variance in
+  benchmarks.
+
+### Tests
+
+- **Split-luck audit.** The fast suite was run on shuffled copies of the
+  toy datasets, so every test saw different splits; none depended on its
+  split. The tool is kept as `scripts/split_audit.py` (a pytest plugin; see
+  CONTRIBUTING.md).
+
 ## v0.5.0 — 2026-09-28
 
 A correctness release. Several results that 0.4.11 reported were wrong or
